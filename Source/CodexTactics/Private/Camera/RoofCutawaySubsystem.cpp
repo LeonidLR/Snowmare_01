@@ -24,6 +24,9 @@ namespace
 	TAutoConsoleVariable<int32> CVarRoofCutawayStoreys(TEXT("Codex.RoofCutaway.Storeys"), 1,
 		TEXT("Designer bug 2026-11-22: 1 = in a building tagged building=<id> / floor=<n> (generated grey pieces, kit_dress per-storey components) every storey above the selected operative's is cut, the roof included, his own storey never; 0 = the head-clearance rule alone (A/B)"));
 
+	TAutoConsoleVariable<int32> CVarRoofCutawayHiddenShadow(TEXT("Codex.RoofCutaway.HiddenShadow"), 0,
+		TEXT("Designer 2026-11-22: 0 = a cut-away roof / storey casts no shadow (and no distance-field shadow / AO): the interior is lit; 1 = it keeps casting its shadow (the old rule). Applied when a piece is cut; its own setting comes back on restore"));
+
 	/** A building's slab tags (the level generator: build_levelgen_map.py floor / roof slabs). */
 	const FName FloorSlabTag(TEXT("floor_slab"));
 	const FName RoofSlabTag(TEXT("roof_slab"));
@@ -102,6 +105,11 @@ namespace RoofCutawayRules
 	bool ShouldRestore(double LastCoveredSeconds, double NowSeconds, float RestoreDelaySeconds)
 	{
 		return NowSeconds - LastCoveredSeconds >= RestoreDelaySeconds;
+	}
+
+	bool CastsShadowWhileCut(bool bOriginal, bool bHiddenShadow)
+	{
+		return bOriginal && bHiddenShadow;
 	}
 
 	bool ParseStoreyTags(TConstArrayView<FName> Tags, FString& OutBuilding, int32& OutStorey)
@@ -726,11 +734,23 @@ void URoofCutawaySubsystem::CutPiece(UPrimitiveComponent& Piece, double Now)
 	Cut.VisibilityResponse = Piece.GetCollisionResponseToChannel(ECC_Visibility);
 	Cut.bRenderInMainPass = Piece.bRenderInMainPass;
 	Cut.bRenderInDepthPass = Piece.bRenderInDepthPass;
+	Cut.bCastShadow = Piece.CastShadow;
+	Cut.bAffectDistanceFieldLighting = Piece.bAffectDistanceFieldLighting;
 	Cut.LastCoveredSeconds = Now;
-	// Not drawn (main + depth pass), still casting its shadow; clicks and the silhouette trace pass through.
+	// Not drawn (main + depth pass); its shadow per Codex.RoofCutaway.HiddenShadow; clicks and the silhouette trace pass through.
 	Piece.SetRenderInMainPass(false);
 	Piece.SetRenderInDepthPass(false);
 	Piece.SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
+	// Only on the state change (cut / restore), never per update.
+	const bool bHiddenShadow = CVarRoofCutawayHiddenShadow.GetValueOnGameThread() != 0;
+	if (RoofCutawayRules::CastsShadowWhileCut(Cut.bCastShadow, bHiddenShadow) != Cut.bCastShadow)
+	{
+		Piece.SetCastShadow(false);
+	}
+	if (RoofCutawayRules::CastsShadowWhileCut(Cut.bAffectDistanceFieldLighting, bHiddenShadow) != Cut.bAffectDistanceFieldLighting)
+	{
+		Piece.SetAffectDistanceFieldLighting(false);
+	}
 	UE_LOG(LogCodexTactics, Verbose, TEXT("[RoofCutaway] cut %s.%s"), Piece.GetOwner() ? *Piece.GetOwner()->GetName() : TEXT("-"), *Piece.GetName());
 	OnCutawayChanged.Broadcast(&Piece, true);
 }
@@ -745,6 +765,14 @@ void URoofCutawaySubsystem::RestorePiece(FCutPiece& Cut)
 	Piece->SetRenderInMainPass(Cut.bRenderInMainPass);
 	Piece->SetRenderInDepthPass(Cut.bRenderInDepthPass);
 	Piece->SetCollisionResponseToChannel(ECC_Visibility, Cut.VisibilityResponse);
+	if (Piece->CastShadow != Cut.bCastShadow)
+	{
+		Piece->SetCastShadow(Cut.bCastShadow);
+	}
+	if (Piece->bAffectDistanceFieldLighting != Cut.bAffectDistanceFieldLighting)
+	{
+		Piece->SetAffectDistanceFieldLighting(Cut.bAffectDistanceFieldLighting);
+	}
 	UE_LOG(LogCodexTactics, Verbose, TEXT("[RoofCutaway] restored %s.%s"), Piece->GetOwner() ? *Piece->GetOwner()->GetName() : TEXT("-"), *Piece->GetName());
 	OnCutawayChanged.Broadcast(Piece, false);
 }

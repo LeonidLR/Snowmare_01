@@ -104,6 +104,13 @@ namespace RoofCutawayRules
 	/** A cut piece no operative is under any more is restored once RestoreDelaySeconds have passed since he last was. */
 	CODEXTACTICS_API bool ShouldRestore(double LastCoveredSeconds, double NowSeconds, float RestoreDelaySeconds);
 
+	/**
+	 * Shadow of a cut piece (designer 2026-11-22: "interiors must not stay dark"): it keeps casting its shadow (and its distance-field
+	 * shadow / AO) only with bHiddenShadow (Codex.RoofCutaway.HiddenShadow 1, the old rule) and if it cast one at all; otherwise none.
+	 * Restored, a piece gets its own setting back (bOriginal).
+	 */
+	CODEXTACTICS_API bool CastsShadowWhileCut(bool bOriginal, bool bHiddenShadow);
+
 	// --- Storey rule (designer bug 2026-11-22: "the squad on the ground floor -> storeys 2, 3, 4 and the roof invisible; on storey 2 ->
 	// 3 and 4 invisible, 1 and 2 visible") ---
 
@@ -154,7 +161,8 @@ namespace RoofCutawayRules
  * above him); every piece of that actor whose bottom is above his head + 40 cm is cut away, and for graybox buildings made
  * of separate actors also every piece of other actors overlapping the roof's footprint above his head (ceilings, upper
  * floors). Cut away = not drawn in the main / depth pass (SetRenderInMainPass / SetRenderInDepthPass false) but still
- * casting its shadow (the interior does not turn sunlit) and ignored by visibility traces (clicks reach the floor inside, no
+ * casting its shadow only with Codex.RoofCutaway.HiddenShadow 1 (default 0 since the designer's decision 2026-11-22: the interior is
+ * lit, no shadow of the cut storeys / roof; set when a piece is cut, its own setting back on restore) and ignored by visibility traces (clicks reach the floor inside, no
  * silhouette through it); restored 0.5 s after no operative is under it. Skipped for an operative inside a camera zone whose
  * fixed camera is the view (the M outside view cuts as usual). Never cut: pawns (characters, vehicles), landscape, foliage,
  * anything tagged NoRoofCutaway; a piece tagged RoofCutaway is always cut with its roof. Instant hide / show now; the fade is
@@ -216,6 +224,8 @@ private:
 		ECollisionResponse VisibilityResponse = ECR_Block;
 		bool bRenderInMainPass = true;
 		bool bRenderInDepthPass = true;
+		bool bCastShadow = true;
+		bool bAffectDistanceFieldLighting = true;
 		double LastCoveredSeconds = 0.0;
 	};
 

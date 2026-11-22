@@ -84,6 +84,19 @@ bool FRoofCutawayZoneAndRestoreTest::RunTest(const FString&)
 	return true;
 }
 
+ROOF_CUTAWAY_TEST(FRoofCutawayHiddenShadowTest, "HiddenShadow")
+bool FRoofCutawayHiddenShadowTest::RunTest(const FString&)
+{
+	using namespace RoofCutawayRules;
+	// Designer 2026-11-22: interiors must not stay dark - a cut roof / storey casts no shadow (Codex.RoofCutaway.HiddenShadow 0).
+	TestFalse(TEXT("default: a cut piece casts no shadow"), CastsShadowWhileCut(true, false));
+	TestTrue(TEXT("HiddenShadow 1 (the old rule): it keeps its shadow"), CastsShadowWhileCut(true, true));
+	TestFalse(TEXT("a piece that never cast one does not start to"), CastsShadowWhileCut(false, true));
+	TestFalse(TEXT("... nor with the default"), CastsShadowWhileCut(false, false));
+	// Restore puts the piece's own setting back whatever it was while cut (URoofCutawaySubsystem::RestorePiece; RoofCutawaySmoke).
+	return true;
+}
+
 ROOF_CUTAWAY_TEST(FRoofCutawayFollowSelectedTest, "FollowSelected")
 bool FRoofCutawayFollowSelectedTest::RunTest(const FString&)
 {

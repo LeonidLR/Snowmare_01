@@ -7,7 +7,7 @@
 // middle); an upper floor slab at 4 m; a slab tagged NoRoofCutaway; a lamp tagged RoofCutaway hanging below the head clearance.
 //  0. nothing cut while the squad stands outside;
 //  1. the squad walks in (the leader to the middle): the roof slab is cut away - not in the main / depth pass, still visible
-//     and casting its shadow, ignored by visibility traces (a click from above reaches the floor) - the back wall of the same
+//     and casting its shadow only with Codex.RoofCutaway.HiddenShadow 1 (default 0: none; restored with its own), ignored by visibility traces (a click from above reaches the floor) - the back wall of the same
 //     actor stays; the ceiling + the upper floor (other actors over the footprint, above the head) cut; the NoRoofCutaway slab
 //     stays; the RoofCutaway lamp is cut; the separate walls stay;
 //  2. all walk out: everything restored after the hysteresis (>= 0.4 s after the last one left, within 2 s), visibility traces
@@ -112,16 +112,25 @@ namespace RoofCutawaySmoke
 		return Block;
 	}
 
-	/** Cut away the way the system does it: drawn neither in the main nor the depth pass, still visible + casting its shadow. */
+	/** Codex.RoofCutaway.HiddenShadow: a cut piece keeps its shadow (1) or casts none (0, the default since the designer's decision 2026-11-22). */
+	bool HiddenShadow()
+	{
+		const IConsoleVariable* Var = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.RoofCutaway.HiddenShadow"));
+		return Var && Var->GetInt() != 0;
+	}
+
+	/** Cut away the way the system does it: drawn neither in the main nor the depth pass, still visible, its shadow per HiddenShadow. */
 	bool IsCut(const URoofCutawaySubsystem* Roofs, const UPrimitiveComponent* Piece)
 	{
 		return Piece && Roofs->IsCutAway(Piece) && !Piece->bRenderInMainPass && !Piece->bRenderInDepthPass && Piece->IsVisible()
-			&& Piece->CastShadow && Piece->GetCollisionResponseToChannel(ECC_Visibility) == ECR_Ignore;
+			&& Piece->CastShadow == HiddenShadow() && Piece->bAffectDistanceFieldLighting == HiddenShadow()
+			&& Piece->GetCollisionResponseToChannel(ECC_Visibility) == ECR_Ignore;
 	}
 
+	/** Shown with its own settings back (the test blocks cast shadows and affect distance-field lighting). */
 	bool IsShown(const URoofCutawaySubsystem* Roofs, const UPrimitiveComponent* Piece)
 	{
-		return Piece && !Roofs->IsCutAway(Piece) && Piece->bRenderInMainPass && Piece->IsVisible();
+		return Piece && !Roofs->IsCutAway(Piece) && Piece->bRenderInMainPass && Piece->IsVisible() && Piece->CastShadow && Piece->bAffectDistanceFieldLighting;
 	}
 
 	UStaticMeshComponent* MeshOf(const TWeakObjectPtr<AStaticMeshActor>& Actor)
@@ -254,7 +263,7 @@ namespace RoofCutawaySmoke
 				return true; // a few updates under the roof
 			}
 			Check(State, FVector::Dist2D(Leader->GetActorLocation(), State.P) <= 120.f, TEXT("the leader stands in the middle of the building"));
-			Check(State, IsCut(Roofs, Roof), TEXT("the roof slab is cut away: not in the main / depth pass, still visible + casting its shadow, ignored by visibility traces"));
+			Check(State, IsCut(Roofs, Roof), FString::Printf(TEXT("the roof slab is cut away: not in the main / depth pass, still visible, shadow %s (HiddenShadow %d), ignored by visibility traces"), HiddenShadow() ? TEXT("kept") : TEXT("off"), HiddenShadow() ? 1 : 0));
 			Check(State, IsShown(Roofs, State.BackWall.Get()), TEXT("the back wall of the same actor (standing on the floor) stays"));
 			Check(State, IsCut(Roofs, MeshOf(State.Ceiling)), TEXT("the partial ceiling (another actor over the footprint, above the head) is cut"));
 			Check(State, IsCut(Roofs, MeshOf(State.Upper)), TEXT("the upper floor is cut"));
@@ -416,7 +425,7 @@ namespace RoofCutawaySmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.RoofCutawaySmoke"),
-		TEXT("Dev check (rev 5h): roofs / ceilings over operatives are cut away (shadow kept) and restored after they leave; not under a shown interior camera, cut in the M outside view. 'Shot' saves roof_cutaway.png."),
+		TEXT("Dev check (rev 5h): roofs / ceilings over operatives are cut away (no shadow unless Codex.RoofCutaway.HiddenShadow 1) and restored after they leave; not under a shown interior camera, cut in the M outside view. 'Shot' saves roof_cutaway.png."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 
