@@ -109,3 +109,43 @@ Verify whether an enemy fighter (hostile operative on Team 1, commander off) can
 - Run smokes: `powershell -ExecutionPolicy Bypass -File Scripts/smoke_parallel.ps1 -NoRetry -ExtraArgs -Multiprocess -Commands PmcTraversalSmoke,LevelGenRampSmoke,LevelGenLaddersSmoke`.
 - Run quality gate: `powershell -ExecutionPolicy Bypass -File Scripts/Tools/gemini_gate.ps1 -Task 095 -SonnetReview -Worktree "C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics-gemday" -Base main`.
 - Author Russian report: `docs/port/gemini/outbox/095-pmc-traversal-smoke.report.md`.
+
+---
+
+## 6. Rework Plan (Review #926 - 7 Must-Fix Points)
+
+1. **Strict Mantle Verification (Up/Over vs Down)**:
+   - Use `AOperativeCharacter::GetMantleCount()` and `IsMantling()` (`OperativeCharacter.h:564/513`).
+   - Distinguish `Link.bDown` (down hop off low top) vs climb up/over.
+   - Separate metrics: `mantles: X of Y crossed [up/over: A of B, down: C of D]`.
+   - A mantle leg ONLY counts as crossed if `IsMantling()` was observed OR `GetMantleCount() > InitialMantleCount`. Walk-arounds / ledge drops are classified as `bypassed mantle up` or `bypassed mantle down`.
+
+2. **Team 1 Mantle Permission & Squad Solo Mode Analysis**:
+   - `OperativeCharacterMovement.cpp:68` checks `MantleSquad->IsSoloMode()`.
+   - Log `MantleSquad->IsSoloMode()` and `Hostile->IsMantlePathAllowed()` on Setup and leg run.
+   - Support testing under both `-SquadStart=solo` and formation mode to document that Team 1 mantle availability currently couples to Player squad solo mode.
+   - Correct report sections 5.2 and 7 (smoke does not call `EnterSoloMode`).
+
+3. **Ladder / Stair Height-Scaled Timeout**:
+   - Tall ladders (24 rungs, 874 cm) require ~22-30s climb time, exceeding fixed 15s timeout.
+   - Scale timeout dynamically:
+     - Ladders: `FMath::Max(Config.LegTimeoutSeconds, 10.f + HeightCm / 40.f)`.
+     - Stairs: `FMath::Max(Config.LegTimeoutSeconds, 10.f + Dist / 80.f)`.
+
+4. **Team 0 (Player) Control Mode in Code**:
+   - After Team 1 legs complete, run the same links with Player operative (Team 0, `Squad->GetMembers()[0]`).
+   - Print a side-by-side comparison table in code: Team 1 (hostile) vs Team 0 (player control), proving whether failures are geometry bugs or AI filter / permission bugs.
+
+5. **`Scripts/test_map.json` Globs & Smokes Restoration**:
+   - Restore `"Source/**/Debug/Pmc*"` in `pmc-squad-ai-2026-11-03` (line 310).
+   - Retain `LevelGenRampSmoke` in `pmc-traversal-2026-11-22`.
+   - Document `LevelGenRampSmoke` in the report.
+
+6. **Drop Arrival Ground Settle & Zero Velocity**:
+   - After teleport, zero velocity immediately via `CharacterMovement->StopMovementImmediately()` and `Velocity = FVector::ZeroVector`.
+   - Drops arrival criterion requires: `bGrounded` (`CharacterMovement->IsMovingOnGround()`) and near-zero vertical velocity (`FMath::Abs(Velocity.Z) < 30.f`). Arrival cannot trigger in mid-air.
+
+7. **Programmatic Failure Grouping**:
+   - Aggregate failure reasons in code using `TMap<FString, int32>` and print sorted by frequency descending.
+   - Report must quote programmatic output directly.
+
