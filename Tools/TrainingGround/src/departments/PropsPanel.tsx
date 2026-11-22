@@ -50,6 +50,14 @@ import { setUnsaved } from '../utils/unsavedGuard.ts';
 import { FullWindowFrame, useFullWindow } from '../components/FullWindowFrame.tsx';
 import { PropsCanvas, type PropsCanvasHandle } from './PropsCanvas.tsx';
 import { RegionOverlay, type LayerAction, type LayerHit, type RegionMode } from './RegionOverlay.tsx';
+import {
+  acceptPropsLoad,
+  applyPropsLoad,
+  missingPropsHint,
+  propsLoadId,
+  propsMapMode,
+  propsSaveRequest,
+} from './propsPanelMap.ts';
 
 /** Props file the panel shows: the CURRENT MAP of the department (T-020; no file picker, no Depot default). */
 export interface PropsPanelProps {
@@ -57,6 +65,8 @@ export interface PropsPanelProps {
   mapName: string | null;
   /** The current map's props file id (`<id>.props.json`), '' / null when the map has none. */
   propsId: string | null;
+  /** Accepted layout id. Used only when «Сохранить» creates the map's first props file. */
+  layoutId?: string | null;
   /** The panel has unsaved props edits (the page asks before switching the map). */
   onDirtyChange?: (dirty: boolean) => void;
 }
@@ -64,7 +74,7 @@ export interface PropsPanelProps {
 const NO_LOCKS: never[] = [];
 const fmtM = (cm: number) => `${cm >= 0 ? '+' : ''}${(cm / 100).toFixed(2)}`;
 
-export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirtyChange }) => {
+export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, layoutId = null, onDirtyChange }) => {
   const selectedMap = propsId ?? '';
   // the props file with its undo / redo history (regenHistory.ts): every hand edit and re-roll is a step
   const [hist, setHist] = useState<History<LevelPropsFile> | null>(null);
@@ -144,27 +154,58 @@ export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirt
     setMoveNote(null);
   };
 
-  // 2. Load props file and associated layout when selectedMap changes
-  const loadMapProps = (mapName: string) => {
-    if (!mapName) return;
+  // 2. Load the CURRENT map's props. A map with no file stays empty. A late GET for the previous map is ignored (task 097).
+  const loadGen = useRef(0);
+  const clearLoadedProps = () => {
+    setHist(null);
+    setLayout(null);
+    setBalance(null);
+    setFilePath('');
+    setIsDirty(false);
+    setSelectedId(null);
+    setRerollNote(null);
+    setMoveNote(null);
+    setZone(null);
+    setView(FIT_VIEW);
+    setCheck(null);
+    setError('');
+    setConflict(null);
+    setSaveSuccess('');
+    setVisibleLayers({});
+    setBusy('');
+    baselineRef.current = null;
+    editedLayersRef.current = new Set();
+  };
+  const startLoad = useCallback((id: string, gen: number) => {
+    if (!id) return;
     setBusy('Загрузка пропсов...');
     setError('');
     setConflict(null);
     setSaveSuccess('');
     setSelectedId(null);
-
-    fetch(`/api/levelgen/props?map=${encodeURIComponent(mapName)}`)
+    const modeMap = mapName;
+    const modeProps = propsId;
+    fetch(`/api/levelgen/props?map=${encodeURIComponent(id)}`)
       .then(async (r) => {
         const data = await r.json();
+        // 404 is the empty-map case (no props file yet), not a failure that should keep the previous canvas.
+        if (r.status === 404) return null;
         if (!r.ok) throw new Error(data.error ?? r.statusText);
-        return data;
+        return data as { props?: LevelPropsFile; layout?: GenLayout | null; balance?: Record<string, unknown> | null; autogen?: PropsAutogenConfig | null; filePath?: string };
       })
       .then((data) => {
-        const loadedProps = data.props as LevelPropsFile;
-        setHist(historyInit(loadedProps));
+        if (!acceptPropsLoad(gen, loadGen.current)) return;
+        if (!data?.props || !Array.isArray(data.props.layers)) return;
+        const next = applyPropsLoad(
+          { mapName: modeMap, propsId: modeProps, file: null, loadGen: loadGen.current, hint: null },
+          gen,
+          data.props,
+        );
+        if (!next.file) return;
+        setHist(historyInit(next.file));
         setLayout(data.layout ?? null);
         setBalance(data.balance ?? null);
-        setAutogenCfg((data.autogen as PropsAutogenConfig | null) ?? DEFAULT_AUTOGEN_CONFIG);
+        setAutogenCfg(data.autogen ?? DEFAULT_AUTOGEN_CONFIG);
         setFilePath(data.filePath ?? '');
         setRerollNote(null);
         setMoveNote(null);
@@ -173,38 +214,30 @@ export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirt
         setCheck(null);
         baselineRef.current = null;
         editedLayersRef.current = new Set();
-
-        // Initialize visibility
         const vis: Record<string, boolean> = {};
-        loadedProps.layers.forEach((l) => {
-          vis[l.id] = l.enabled !== false;
-        });
+        next.file.layers.forEach((l) => { vis[l.id] = l.enabled !== false; });
         setVisibleLayers(vis);
         setIsDirty(false);
       })
       .catch((err) => {
-        setError(`Не удалось загрузить ${mapName}: ${err instanceof Error ? err.message : String(err)}`);
+        if (!acceptPropsLoad(gen, loadGen.current)) return;
+        setError(`Не удалось загрузить ${id}: ${err instanceof Error ? err.message : String(err)}`);
       })
       .finally(() => {
-        setBusy('');
+        if (acceptPropsLoad(gen, loadGen.current)) setBusy('');
       });
+  }, [mapName, propsId]);
+  const loadMapProps = (id: string) => {
+    if (!id) return;
+    startLoad(id, ++loadGen.current);
   };
-
   useEffect(() => {
-    if (selectedMap) {
-      loadMapProps(selectedMap);
-    } else {
-      setHist(null);
-      setLayout(null);
-      setFilePath('');
-      setIsDirty(false);
-      setSelectedId(null);
-      setRerollNote(null);
-      setMoveNote(null);
-      setZone(null);
-      setCheck(null);
-    }
-  }, [selectedMap]);
+    const gen = ++loadGen.current;
+    clearLoadedProps();
+    const id = propsLoadId(mapName, propsId);
+    if (!id) return;
+    startLoad(id, gen);
+  }, [mapName, propsId, startLoad]);
 
   // 3. Build geometry view for placement algorithms
   const layoutView = useMemo(() => {
@@ -417,23 +450,18 @@ export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirt
     return () => window.removeEventListener('keydown', key);
   }, []);
 
-  // 10. Save props with revision check (§4.1)
+  // 10. Save props with revision check (§4.1). Task 097: the target is always the current map.
+  // A map with no file sends base_revision 0 and the server creates props/<map>.props.json. Never map="".
   const handleSave = async () => {
-    if (!propsFile) return;
-
-    if (propsFile.frozen) {
+    if (propsFile?.frozen) {
       setError('Файл заморожен (frozen: true). Сохранение заблокировано.');
       return;
     }
-
-    // Designer bug 2026-11-20: the current map (L_Gen_BgenTest_X6) has no props file, the canvas still held another map's props
-    // (L_Gen_Depot_1_X6) and «Сохранить» sent map="" -> "Invalid props map name". Save into the file's OWN map, after asking.
-    const target = selectedMap || propsFile.map || '';
-    if (!target) {
-      setError('Не понятно, в какую карту сохранять: у текущей карты нет файла пропсов. Выберите карту с файлом пропсов сверху.');
+    const plan = propsSaveRequest({ mapName, propsId, file: propsFile, layoutId });
+    if ('error' in plan || !plan.map) {
+      setError('error' in plan ? plan.error : 'Не понятно, в какую карту сохранять.');
       return;
     }
-    if (target !== selectedMap && !window.confirm(`На экране пропсы карты ${target}, а у текущей карты ${mapName ?? ''} своего файла пропсов нет.\n\nСохранить правки в пропсы карты ${target}?`)) return;
 
     setBusy('Сохранение на диск...');
     setError('');
@@ -441,14 +469,10 @@ export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirt
     setSaveSuccess('');
 
     try {
-      const response = await fetch(`/api/levelgen/props?map=${encodeURIComponent(target)}`, {
+      const response = await fetch(`/api/levelgen/props?map=${encodeURIComponent(plan.map)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          base_revision: propsFile.revision,
-          layers: propsFile.layers,
-          overrides: propsFile.overrides,
-        }),
+        body: JSON.stringify(plan.body),
       });
 
       const data = await response.json();
@@ -466,8 +490,13 @@ export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirt
         throw new Error(data.error ?? response.statusText);
       }
 
-      // Success
-      patchPresent((f) => ({ ...f, revision: data.revision }));
+      // Success. A create has no history step yet: take the document the server wrote.
+      if (data.props && typeof data.props === 'object') {
+        setHist(historyInit(data.props as LevelPropsFile));
+        if (!propsId) setFilePath(`Content/Data/LevelGen/props/${plan.map}.props.json`);
+      } else {
+        patchPresent((f) => ({ ...f, revision: data.revision }));
+      }
       setIsDirty(false);
       setSaveSuccess(`Сохранено успешно (ревизия ${data.revision})`);
       setTimeout(() => setSaveSuccess(''), 4000);
@@ -493,8 +522,10 @@ export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirt
       <button type="button" onClick={() => stepHistory('redo')} disabled={!hist || !canRedo(hist) || !!busy} title={hist && canRedo(hist) ? `Вернуть: ${hist.future[0].label} (Ctrl+Y)` : ''} className={btn} data-props-redo><Redo2 size={13} />Вернуть ({hist?.future.length ?? 0})</button>
     </>
   );
+  const creatingFile = propsMapMode(mapName, propsId).kind === 'empty' && !propsFile;
+  const saveDisabled = !!propsFile?.frozen || !!busy || (!isDirty && !creatingFile) || !propsLoadId(mapName, propsId);
   const saveButton = (
-    <button type="button" onClick={handleSave} disabled={!propsFile || propsFile.frozen || !isDirty || !!busy} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-semibold disabled:opacity-50" data-props-save-header><Save size={12} />Сохранить{isDirty ? ' *' : ''}</button>
+    <button type="button" onClick={handleSave} disabled={saveDisabled} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-semibold disabled:opacity-50" data-props-save-header><Save size={12} />Сохранить{isDirty ? ' *' : ''}</button>
   );
   const issueMarks = useMemo(() => {
     if (!check || !propsFile) return [] as { id: string; pos: Vec2; fresh: boolean; reason: string }[];
@@ -556,14 +587,12 @@ export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirt
           <div className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-cyan-200 font-mono" data-testid="props-map-name">
             {mapName ?? 'карта не выбрана'}
           </div>
-          {propsId ? (
+          {propsId || propsFile ? (
             filePath && <p className="text-[10px] text-slate-500 font-mono mt-1 break-all">{filePath}</p>
+          ) : mapName ? (
+            <p className="text-[11px] text-amber-300 mt-1" data-testid="props-missing-hint">{missingPropsHint(mapName)}</p>
           ) : (
-            <p className="text-[11px] text-amber-300 mt-1">
-              {mapName
-                ? 'У этой карты нет файла пропсов (Content/Data/LevelGen/props/<карта>.props.json). Он появляется при «Принять» раскладки на странице «Управление картой».'
-                : 'Выберите карту в выпадающем списке сверху.'}
-            </p>
+            <p className="text-[11px] text-amber-300 mt-1">Выберите карту в выпадающем списке сверху.</p>
           )}
           <p className="text-[10px] text-slate-500 mt-1">Карту переключают сверху, одну на весь отдел «Генератор уровней».</p>
         </div>
@@ -614,7 +643,7 @@ export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirt
           </button>
           <button
             onClick={handleSave}
-            disabled={!propsFile || propsFile.frozen || !isDirty || !!busy}
+            disabled={saveDisabled}
             className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-semibold text-xs disabled:opacity-50 transition-colors"
           >
             <Save size={13} />
@@ -638,7 +667,7 @@ export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirt
             </div>
             <p>{conflict.message}</p>
             <button
-              onClick={() => loadMapProps(selectedMap)}
+              onClick={() => loadMapProps(propsLoadId(mapName, propsId))}
               className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded bg-rose-800 hover:bg-rose-700 text-white text-[11px]"
             >
               <RotateCcw size={12} />

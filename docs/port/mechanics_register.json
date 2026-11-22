@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-15",
+  "updated": "2026-11-22",
   "groups": [
     {
       "id": "squad",
@@ -194,6 +194,21 @@
           ],
           "since": "2026-11-02",
           "decision": "Баг-репорт 2026-11-02, пункт 7",
+          "status": "main",
+          "doc": "docs/systems/squad-and-orders.md"
+        },
+        {
+          "id": "squad-confined-compress",
+          "name": "Сжатие строя в тесноте",
+          "what": "В тесной прихожей / коридоре 2,5 м отряд сжимается: места внутри комнаты в 80 см, только по прямой от двери и не в проёме, место закрепляется за бойцом, толпа не расталкивает. Весь отряд входит в маленькую квартиру.",
+          "how": "автоматически (тесно = медиана свободного места <= 1,7 м)",
+          "off": "Codex.Formation.Confined 0",
+          "smoke": [
+            "LevelGenBuildingsWalkSmoke",
+            "FormationLabSmoke"
+          ],
+          "since": "2026-11-22",
+          "decision": "Дизайнер 2026-11-21: «все должны войти»; влить 2026-11-22: «Вливай»",
           "status": "main",
           "doc": "docs/systems/squad-and-orders.md"
         },

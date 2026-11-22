@@ -34,14 +34,25 @@ param(
     # Test farm (2026-11-17): auto = during 08:00-16:30 the batch runs on the second machine codex-worker (Tools\smoke_remote.ps1:
     # this checkout's HEAD + binaries go there, logs + result JSON come back to the usual places), otherwise / when not possible here.
     # on = worker or fail, off = always here. Default: env CODEX_SMOKE_REMOTE, else auto.
-    [ValidateSet("", "auto", "on", "off")][string]$Remote = ""
+    [ValidateSet("", "auto", "on", "off")][string]$Remote = "",
+    # Arguments appended to every smoke's console command in -ExecCmds, after that smoke's test_map.json smokeOptions "args"
+    # (e.g. "Seed=12" or "Rounds=1 Seed=42"). "{n}" = the run number of -Repeat (1..N; 1 without -Repeat): -Repeat 20 -SmokeArgs "Seed={n}"
+    # runs seeds 1..20 of a command that parses Seed= (the PmcArena smokes) - reproducible, unlike -RepeatSeeds.
+    [string]$SmokeArgs = "",
+    # Run each smoke N times to measure flakiness (Saved\Logs\Smoke-<Name>-r<k>.log). Duplicate names in -Commands also preserve count.
+    [int]$Repeat = 1,
+    # When repeating: drop -FixedSeed so FMath is seeded from the cycle counter (UE has no integer seed argument) - the runs
+    # differ but are NOT reproducible. For reproducible seeds use -SmokeArgs "Seed={n}" on smokes that parse Seed=.
+    # Without -RepeatSeeds: repeats keep -FixedSeed (measuring machine load / timing noise only).
+    [switch]$RepeatSeeds
 )
 
 $ErrorActionPreference = "Stop"
 if (-not $Remote) { $Remote = $(if ($env:CODEX_SMOKE_REMOTE) { $env:CODEX_SMOKE_REMOTE } else { "auto" }) }
 if ($Remote -ne "off" -and @($Commands | Where-Object { $_ }).Count) {
     & (Join-Path $PSScriptRoot "Tools\smoke_remote.ps1") -Mode $Remote -Commands $Commands -Jobs $Jobs -Map $Map -TimeoutSeconds $TimeoutSeconds `
-        -Serial:$Serial -NoRetry:$NoRetry -RealTime:$RealTime -ResultJson $ResultJson -PreCmds $PreCmds -ExtraArgs $ExtraArgs
+        -Serial:$Serial -NoRetry:$NoRetry -RealTime:$RealTime -ResultJson $ResultJson -PreCmds $PreCmds -ExtraArgs $ExtraArgs `
+        -Repeat $Repeat -RepeatSeeds:$RepeatSeeds -SmokeArgs $SmokeArgs
     if ($LASTEXITCODE -ne 99) { exit $LASTEXITCODE }
 }
 $EngineRoot = "C:\Program Files\Epic Games\UE_5.8"
@@ -53,10 +64,43 @@ $LogDir = Join-Path $ProjectDir "Saved\Logs"
 
 $TestMap = Get-TestMap
 # -File passes "a,b,c" as ONE string: split it ourselves.
-$Names = @($Commands | ForEach-Object { $_ -split '[,;\s]+' } | Where-Object { $_ } | ForEach-Object { $_ -replace '^CodexTactics\.', '' })
-if ($Names -contains "all") { $Names = @($TestMap.smokeRegistry) }
-$Names = @($Names | Select-Object -Unique)
-if ($Names.Count -eq 0) { Write-Host "No smokes given (-Commands a,b,c | all)."; exit 0 }
+$rawNames = @($Commands | ForEach-Object { $_ -split '[,;\s]+' } | Where-Object { $_ } | ForEach-Object { $_ -replace '^CodexTactics\.', '' })
+if ($rawNames -contains "all") { $rawNames = @($TestMap.smokeRegistry) }
+if ($rawNames.Count -eq 0) { Write-Host "No smokes given (-Commands a,b,c | all)."; exit 0 }
+if ($Repeat -lt 1) { $Repeat = 1 }
+
+# Expand by -Repeat and preserve duplicates (-Commands A,A,A)
+$allNames = @()
+foreach ($name in $rawNames) {
+    for ($i = 0; $i -lt $Repeat; $i++) {
+        $allNames += $name
+    }
+}
+
+$totalRunsPerName = @{}
+foreach ($name in $allNames) {
+    if (-not $totalRunsPerName.ContainsKey($name)) { $totalRunsPerName[$name] = 0 }
+    $totalRunsPerName[$name]++
+}
+
+$currentRunPerName = @{}
+$tasks = @()
+foreach ($name in $allNames) {
+    if (-not $currentRunPerName.ContainsKey($name)) { $currentRunPerName[$name] = 0 }
+    $currentRunPerName[$name]++
+    $k = $currentRunPerName[$name]
+    $tot = $totalRunsPerName[$name]
+    # Suffix is -r<k> when this smoke runs more than once (either via -Repeat or duplicate names in -Commands)
+    $suffix = if ($tot -gt 1 -or $Repeat -gt 1) { "-r$k" } else { "" }
+    $tasks += [pscustomobject]@{
+        Name = $name
+        Repeat = $k
+        Total = $tot
+        Suffix = $suffix
+    }
+}
+
+$Names = $allNames
 if ($Serial) { $Jobs = 1 }
 elseif ($Jobs -le 0) { $Jobs = [Math]::Max(1, [Math]::Min(4, [int]([Environment]::ProcessorCount / 4))) }
 
@@ -67,20 +111,24 @@ function Get-Option([string]$Name, [string]$Key, $Default) {
 }
 
 # Fixed game step arguments for a smoke ("" on the wall clock: -RealTime, the smoke's realTime option, or no smokeDefaults).
-function Get-ClockArgs([string]$Name) {
+function Get-ClockArgs([string]$Name, [int]$RepeatIndex = 0) {
     $defaults = $TestMap.PSObject.Properties["smokeDefaults"]
     if ($RealTime -or (Get-Option $Name "realTime" $false) -or -not $defaults) { return "" }
     $fps = [int](Get-Option $Name "fixedStepFps" $defaults.Value.fixedStepFps) # a smoke may need a finer step (per-frame metrics)
     if ($fps -le 0) { return "" }
     $clock = "-UseFixedTimeStep -FPS=$fps"
-    if ($defaults.Value.fixedSeed) { $clock += " -FixedSeed" }
+    # -RepeatSeeds drops -FixedSeed: FMath is seeded from the cycle counter (UE has no integer seed argument) - runs differ, NOT reproducible.
+    if ($defaults.Value.fixedSeed -and -not ($RepeatSeeds -and $RepeatIndex -gt 0)) { $clock += " -FixedSeed" }
     return $clock
 }
 
-function Start-SmokeProcess([string]$Name, [string]$Suffix) {
+function Start-SmokeProcess($Task) {
+    $Name = $Task.Name
+    $Suffix = $Task.Suffix
+    $RepeatIndex = $Task.Repeat
     $log = Join-Path $LogDir "Smoke-$Name$Suffix.log"
     Remove-Item $log -ErrorAction SilentlyContinue # a stale log must never pass for this run's result
-    $extra = (Get-Option $Name "extra" "") + " " + (Get-ClockArgs $Name) + " " + $ExtraArgs
+    $extra = (Get-Option $Name "extra" "") + " " + (Get-ClockArgs $Name $RepeatIndex) + " " + $ExtraArgs
     # 2026-11-09: levels start in Solo; smokes written for the formation start get -SquadStart=formation (smokeDefaults.squadStart),
     # a smoke's own "squadStart": "level" runs the level's real start mode.
     $startDefault = $(if ($TestMap.PSObject.Properties["smokeDefaults"] -and $TestMap.smokeDefaults.PSObject.Properties["squadStart"]) { $TestMap.smokeDefaults.squadStart } else { "level" })
@@ -90,25 +138,38 @@ function Start-SmokeProcess([string]$Name, [string]$Suffix) {
     # A "rendered" smoke (test_map smokeOptions, e.g. SnowTracksSmoke reads a render target back) needs a real RHI: offscreen instead of -nullrhi.
     $rhi = $(if (Get-Option $Name "rendered" $false) { "-RenderOffscreen -ResX=1280 -ResY=720" } else { "-nullrhi" })
     # Start-Process takes one argument string: quote the paths (the project path has a space).
-    $exec = $(if ($PreCmds) { "$PreCmds,CodexTactics.$Name" } else { "CodexTactics.$Name" })
+    $cmdArgs = (((Get-Option $Name "args" "") + " " + $SmokeArgs).Trim()) -replace '\{n\}', "$RepeatIndex"
+    $cmdWithArgs = $(if ($cmdArgs) { "CodexTactics.$Name $cmdArgs" } else { "CodexTactics.$Name" })
+    $exec = $(if ($PreCmds) { "$PreCmds,$cmdWithArgs" } else { $cmdWithArgs })
     $gameArgs = "`"$Project`" $map -game $rhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH -NoTelemetry `"-ExecCmds=$exec`" `"-abslog=$log`" $extra"
     Wait-DesignerPriority
     $proc = Start-Process "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" -ArgumentList $gameArgs -WindowStyle Hidden -PassThru
-    return [pscustomobject]@{ Name = $Name; Suffix = $Suffix; Proc = $proc; Log = $log; Started = Get-Date; Timeout = [int](Get-Option $Name "timeout" $TimeoutSeconds) }
+    return [pscustomobject]@{
+        Name = $Name
+        Repeat = $RepeatIndex
+        Total = $Task.Total
+        Suffix = $Suffix
+        Proc = $proc
+        Log = $log
+        Started = Get-Date
+        Timeout = [int](Get-Option $Name "timeout" $TimeoutSeconds)
+    }
 }
 
 function Get-Verdict($Job) {
     return ((Test-Path $Job.Log) -and (Select-String -Path $Job.Log -Pattern "Smoke RESULT: PASS" -Quiet))
 }
 
-# Runs the names with at most $Width engine processes at a time; returns {Name, Pass, Seconds, TimedOut, Log}.
-function Invoke-Batch([string[]]$Batch, [int]$Width, [string]$Suffix) {
-    $queue = [System.Collections.Generic.Queue[string]]::new()
+# Runs the tasks with at most $Width engine processes at a time; returns {Name, Repeat, Total, Pass, Seconds, TimedOut, Log}.
+function Invoke-Batch($Batch, [int]$Width) {
+    $queue = [System.Collections.Generic.Queue[object]]::new()
     $Batch | ForEach-Object { $queue.Enqueue($_) }
     $running = @()
     $done = @()
     while ($queue.Count -gt 0 -or $running.Count -gt 0) {
-        while ($running.Count -lt $Width -and $queue.Count -gt 0) { $running += Start-SmokeProcess $queue.Dequeue() $Suffix }
+        while ($running.Count -lt $Width -and $queue.Count -gt 0) {
+            $running += Start-SmokeProcess $queue.Dequeue()
+        }
         Start-Sleep -Milliseconds 400
         foreach ($job in @($running)) {
             $elapsed = ((Get-Date) - $job.Started).TotalSeconds
@@ -120,8 +181,18 @@ function Invoke-Batch([string[]]$Batch, [int]$Width, [string]$Suffix) {
             if ($job.Proc.HasExited -or $timedOut) {
                 $job.Proc.WaitForExit()
                 $running = @($running | Where-Object { $_ -ne $job })
-                $r = [pscustomobject]@{ Name = $job.Name; Pass = (Get-Verdict $job); Seconds = [Math]::Round($elapsed, 1); TimedOut = $timedOut; Log = $job.Log }
-                Write-Host ("  {0,-26} {1,-7} {2,6:N1}s{3}" -f $r.Name, $(if ($r.Pass) { "PASS" } else { "FAIL" }), $r.Seconds, $(if ($timedOut) { "  (TIMEOUT)" } else { "" }))
+                $pass = (Get-Verdict $job)
+                $r = [pscustomobject]@{
+                    Name = $job.Name
+                    Repeat = $job.Repeat
+                    Total = $job.Total
+                    Pass = $pass
+                    Seconds = [Math]::Round($elapsed, 1)
+                    TimedOut = $timedOut
+                    Log = $job.Log
+                }
+                $repTag = if ($job.Total -gt 1) { " (r$($job.Repeat))" } else { "" }
+                Write-Host ("  {0,-26}{1} {2,-7} {3,6:N1}s{4}" -f $r.Name, $repTag, $(if ($r.Pass) { "PASS" } else { "FAIL" }), $r.Seconds, $(if ($timedOut) { "  (TIMEOUT)" } else { "" }))
                 $done += $r
             }
         }
@@ -129,26 +200,29 @@ function Invoke-Batch([string[]]$Batch, [int]$Width, [string]$Suffix) {
     return $done
 }
 
-$Owned = Enter-AgentLock "smokes x$($Names.Count) (jobs $Jobs)"
+$Owned = Enter-AgentLock "smokes x$($tasks.Count) (jobs $Jobs)"
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
 $final = @()
 try {
-    $exclusive = @($Names | Where-Object { Get-Option $_ "exclusive" $false })
-    $shared = @($Names | Where-Object { $_ -notin $exclusive })
+    $exclusive = @($tasks | Where-Object { Get-Option $_.Name "exclusive" $false })
+    $shared = @($tasks | Where-Object { -not (Get-Option $_.Name "exclusive" $false) })
     $clockNote = $(if ($RealTime) { "wall clock" } else { $c = Get-ClockArgs ""; if ($c) { "fixed step ($c)" } else { "wall clock" } })
-    Write-Host ("[smoke_parallel] {0} smokes, {1} at a time, {2}{3}" -f $Names.Count, $Jobs, $clockNote, $(if ($exclusive.Count) { ", exclusive alone afterwards: " + ($exclusive -join ", ") } else { "" }))
+    $repNote = $(if ($Repeat -gt 1) { " (repeat $Repeat)" } else { "" })
+    Write-Host ("[smoke_parallel] {0} smokes{1}, {2} at a time, {3}{4}" -f $tasks.Count, $repNote, $Jobs, $clockNote, $(if ($exclusive.Count) { ", exclusive alone afterwards: " + ((@($exclusive | ForEach-Object Name | Select-Object -Unique)) -join ", ") } else { "" }))
     $results = @()
-    if ($shared.Count) { $results += Invoke-Batch $shared $Jobs "" }
+    if ($shared.Count) { $results += Invoke-Batch $shared $Jobs }
     $retried = @{}
-    if (-not $NoRetry -and $Jobs -gt 1) {
+    $isRepeatedRun = ($Repeat -gt 1) -or (@($tasks | Where-Object { $_.Total -gt 1 }).Count -gt 0)
+    if (-not $NoRetry -and $Jobs -gt 1 -and -not $isRepeatedRun) {
         $failed = @($results | Where-Object { -not $_.Pass } | ForEach-Object Name)
         if ($failed.Count) {
             Write-Host "[smoke_parallel] re-running alone: $($failed -join ', ')"
-            $again = Invoke-Batch $failed 1 "-alone"
+            $retryTasks = @($failed | ForEach-Object { [pscustomobject]@{ Name = $_; Repeat = 1; Total = 1; Suffix = "-alone" } })
+            $again = Invoke-Batch $retryTasks 1
             foreach ($a in $again) { $retried[$a.Name] = $a }
         }
     }
-    if ($exclusive.Count) { $results += Invoke-Batch $exclusive 1 "" }
+    if ($exclusive.Count) { $results += Invoke-Batch $exclusive 1 }
     foreach ($r in $results) {
         $state = $(if ($r.Pass) { "PASS" } else { "FAIL" })
         $secs = $r.Seconds
@@ -160,29 +234,65 @@ try {
             $state = $(if ($a.Pass) { "PASS*" } else { "FAIL" })
         }
         if ($state -eq "FAIL" -and (Get-Option $r.Name "knownFail" $false)) { $state = "KNOWN-FAIL" }
-        $final += [pscustomobject]@{ Name = $r.Name; State = $state; Seconds = $secs; Log = $log }
+        $row = [ordered]@{
+            Name = $r.Name
+        }
+        if ($isRepeatedRun) {
+            $row["Repeat"] = $r.Repeat
+        }
+        $row["State"] = $state
+        $row["Result"] = $state
+        $row["Seconds"] = $secs
+        $row["Log"] = $log
+        $final += [pscustomobject]$row
     }
 } finally {
     if ($Owned) { Exit-AgentLock }
 }
 $sw.Stop()
 
-Write-Host ""
-Write-Host ("{0,-26} {1,-11} {2,8}" -f "Smoke", "Result", "Seconds")
-foreach ($f in ($final | Sort-Object Name)) { Write-Host ("{0,-26} {1,-11} {2,8:N1}" -f $f.Name, $f.State, $f.Seconds) }
+$isRepeatedRun = ($Repeat -gt 1) -or (@($tasks | Where-Object { $_.Total -gt 1 }).Count -gt 0)
+if ($isRepeatedRun) {
+    Write-Host ""
+    Write-Host ("{0,-26} {1}" -f "Smoke", "Summary")
+    $grouped = $final | Group-Object Name
+    foreach ($g in $grouped) {
+        $tot = $g.Count
+        $passCount = @($g.Group | Where-Object { $_.State -like "PASS*" }).Count
+        $failedRepeats = @($g.Group | Where-Object { $_.State -notlike "PASS*" } | ForEach-Object { "r$($_.Repeat)" })
+        $summaryStr = if ($passCount -eq $tot) {
+            "PASS $passCount/$tot"
+        } else {
+            "PASS $passCount/$tot (FAIL $($failedRepeats -join ', '))"
+        }
+        $color = if ($passCount -eq $tot) { "Green" } else { "Red" }
+        Write-Host ("{0,-26} {1}" -f $g.Name, $summaryStr) -ForegroundColor $color
+    }
+    Write-Host ""
+    Write-Host ("{0,-26} {1,-8} {2,-11} {3,8}" -f "Smoke", "Repeat", "Result", "Seconds")
+    foreach ($f in ($final | Sort-Object Name, Repeat)) {
+        Write-Host ("{0,-26} {1,-8} {2,-11} {3,8:N1}" -f $f.Name, "r$($f.Repeat)", $f.State, $f.Seconds)
+    }
+} else {
+    Write-Host ""
+    Write-Host ("{0,-26} {1,-11} {2,8}" -f "Smoke", "Result", "Seconds")
+    foreach ($f in ($final | Sort-Object Name)) { Write-Host ("{0,-26} {1,-11} {2,8:N1}" -f $f.Name, $f.State, $f.Seconds) }
+}
 $bad = @($final | Where-Object { $_.State -eq "FAIL" })
 $flaky = @($final | Where-Object { $_.State -eq "PASS*" })
-# Flakiness summary: which smokes needed the re-run, known (test_map.json knownFlaky) or new.
-$knownFlaky = $TestMap.PSObject.Properties["knownFlaky"]
-$knownFlakyNames = @(if ($knownFlaky) { $knownFlaky.Value.PSObject.Properties | Where-Object { $_.Name -notlike "_*" } | ForEach-Object Name })
-if ($flaky.Count) {
-    $newFlaky = @($flaky | Where-Object { $_.Name -notin $knownFlakyNames } | ForEach-Object Name)
-    $oldFlaky = @($flaky | Where-Object { $_.Name -in $knownFlakyNames } | ForEach-Object { "{0} ({1})" -f $_.Name, $knownFlaky.Value.($_.Name) })
-    Write-Host ("[smoke_parallel] needed a re-run: {0}" -f (($flaky | ForEach-Object Name) -join ", ")) -ForegroundColor Yellow
-    if ($newFlaky.Count) { Write-Host ("[smoke_parallel]   NEW flaky (not in test_map.json knownFlaky): {0}" -f ($newFlaky -join ", ")) -ForegroundColor Yellow }
-    if ($oldFlaky.Count) { Write-Host ("[smoke_parallel]   known flaky: {0}" -f ($oldFlaky -join "; ")) }
-} elseif (-not $NoRetry -and $Jobs -gt 1) {
-    Write-Host "[smoke_parallel] needed a re-run: none"
+if (-not $isRepeatedRun) {
+    # Flakiness summary: which smokes needed the re-run, known (test_map.json knownFlaky) or new.
+    $knownFlaky = $TestMap.PSObject.Properties["knownFlaky"]
+    $knownFlakyNames = @(if ($knownFlaky) { $knownFlaky.Value.PSObject.Properties | Where-Object { $_.Name -notlike "_*" } | ForEach-Object Name })
+    if ($flaky.Count) {
+        $newFlaky = @($flaky | Where-Object { $_.Name -notin $knownFlakyNames } | ForEach-Object Name)
+        $oldFlaky = @($flaky | Where-Object { $_.Name -in $knownFlakyNames } | ForEach-Object { "{0} ({1})" -f $_.Name, $knownFlaky.Value.($_.Name) })
+        Write-Host ("[smoke_parallel] needed a re-run: {0}" -f (($flaky | ForEach-Object Name) -join ", ")) -ForegroundColor Yellow
+        if ($newFlaky.Count) { Write-Host ("[smoke_parallel]   NEW flaky (not in test_map.json knownFlaky): {0}" -f ($newFlaky -join ", ")) -ForegroundColor Yellow }
+        if ($oldFlaky.Count) { Write-Host ("[smoke_parallel]   known flaky: {0}" -f ($oldFlaky -join "; ")) }
+    } elseif (-not $NoRetry -and $Jobs -gt 1) {
+        Write-Host "[smoke_parallel] needed a re-run: none"
+    }
 }
 $known = @($final | Where-Object { $_.State -eq "KNOWN-FAIL" })
 Write-Host ("[smoke_parallel] {0} run, {1} failed, {2} passed only on the re-run (PASS*), {3} known-fail; wall {4:N0} s, sum of checks {5:N0} s" -f
@@ -190,7 +300,7 @@ Write-Host ("[smoke_parallel] {0} run, {1} failed, {2} passed only on the re-run
 if (-not $ResultJson) { $ResultJson = Join-Path $LogDir "SmokeParallel-last.json" }
 @{ jobs = $Jobs; wallSeconds = [Math]::Round($sw.Elapsed.TotalSeconds, 1); rerunPassed = @($flaky | ForEach-Object Name); results = $final } | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 $ResultJson
 if ($bad.Count -gt 0) {
-    Write-Host ("FAILED: {0}  (logs: Saved\Logs\Smoke-<Name>[-alone].log)" -f (($bad | ForEach-Object Name) -join ", ")) -ForegroundColor Red
+    Write-Host ("FAILED: {0}  (logs: Saved\Logs\Smoke-<Name>[-alone|-rN].log)" -f (($bad | ForEach-Object Name | Select-Object -Unique) -join ", ")) -ForegroundColor Red
     exit 1
 }
 exit 0

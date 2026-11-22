@@ -15,6 +15,7 @@
 #include "CollisionQueryParams.h"
 #include "Engine/HitResult.h"
 #include "Engine/World.h"
+#include "Formation/FormationConfinedRules.h"
 #include "Formation/FormationCoverRules.h"
 #include "Formation/FormationGuardRuntimeRules.h"
 #include "Formation/FormationRuntimeRules.h"
@@ -756,6 +757,7 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 			EndFormationWallOrder(bIsSoloMode ? TEXT("Solo") : TEXT("no followers"));
 		}
 		EndFormationCornerPeek(bIsSoloMode ? TEXT("Solo") : TEXT("no followers"));
+		EndFormationConfined(bIsSoloMode ? TEXT("Solo") : TEXT("no followers")); // the 2026-11-21 compression: crowd separation back on
 		Sectors.bSlide = false;
 		Sectors.LeaderCorner.Reset();
 		return;
@@ -882,7 +884,15 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		// v1.2: at_wall fires only on arrival (within classify.arrive_dist of his destination) - that, or a short stand, is the arrival.
 		const bool bArrived = FormationTerrainRules::IsArriving(LeaderPos, LeaderDestination(LeaderRef), Config)
 			|| Sectors.LeaderStillSeconds >= WallArrivalStillSeconds;
-		const EFormationKind Terrain = FormationRuntime::ChooseFormation(Class, Count, bArrived, Sectors.MoveFormation, IsFormationBlizzard());
+		EFormationKind Terrain = FormationRuntime::ChooseFormation(Class, Count, bArrived, Sectors.MoveFormation, IsFormationBlizzard());
+		// Designer decision 2026-11-21 ("the whole squad must enter"): arriving in a confined pocket (a flat hall) the automatic wall layout is no
+		// layout - a hall wall is no cover line and its slots ran out of the room; the walking formation stays and its slots compress
+		// (ApplyFormationConfined). The player's wall order is untouched.
+		if (Terrain == EFormationKind::Wall && Confined.bActive)
+		{
+			Terrain = Sectors.MoveFormation != EFormationKind::Wall ? Sectors.MoveFormation
+				: FormationTerrainRules::FormationFor(EFormationTerrainClass::Corridor, Count, IsFormationBlizzard());
+		}
 		if (bLeaderMoving)
 		{
 			Sectors.MoveFormation = Terrain;
@@ -1034,6 +1044,9 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		}
 		Sectors.bSavedShape = bSaved;
 	}
+	// Designer decision 2026-11-21 ("the whole squad must enter"): in a confined pocket round his arrival (a flat hall) the follower places that
+	// lie outside it move inside (FormationConfinedRules; open ground: unchanged).
+	ApplyFormationConfined(LeaderRef, bLeaderMoving, DeltaTime);
 	// F-2 (2026-11-17): the leader takes the corner himself - no follower's place at it (any layout: the column / echelon behind his facing,
 	// the wall layout's end-side place, the corner stack's point); the looks were given for the places, the places go behind him.
 	ApplyFormationLeaderCorner();
@@ -1169,7 +1182,10 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] %s (rear guard) %s: %.0f cm behind his slot"), *Operative.DisplayName.ToString(),
 			Follower.bRearTurned ? TEXT("turns round to catch up facing forwards") : TEXT("is back - walks backwards again"), RearLag);
 	}
-	if (Sectors.Mode != EFormationMode::Run && !Follower.bRearTurned
+	// Designer decision 2026-11-21 (the whole squad enters a flat hall): walking to his compressed place he faces his walk until he is near it
+	// (the rear guard's backward walk into the hall was the slowest way in - FormationConfinedTuning face_walk_cm).
+	const bool bConfinedWalk = Confined.bActive && Distance > FormationConfinedTuning::Get().FaceWalkCm;
+	if (Sectors.Mode != EFormationMode::Run && !Follower.bRearTurned && !bConfinedWalk
 		&& (!bWall || Sectors.bSlide || bApproachLook || FormationRuntime::UseWallLayoutYaw(Distance, bMoving)))
 	{
 		float Look = Slot->Yaw;
@@ -1343,7 +1359,9 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 		}
 		else
 		{
-			Aside = FormationRuntime::YieldFromLeaderWay(LeaderPos, FVector2D(LeaderGoal), Here, MoveTarget);
+			// In a confined pocket his place is already off the leader's way (FormationConfinedRules): only his own body in it makes him yield
+			// (a place beside the leader's goal in a 2.5 m hall lies inside the yield corridor's 80 cm past the goal - he stepped aside into the wall).
+			Aside = FormationRuntime::YieldFromLeaderWay(LeaderPos, FVector2D(LeaderGoal), Here, Confined.bActive ? Here : MoveTarget);
 		}
 		const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 		for (const FVector2D& Point : Aside)
