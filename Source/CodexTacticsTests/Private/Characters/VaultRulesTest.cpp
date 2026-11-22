@@ -60,8 +60,10 @@ bool FVaultResumeRulesTest::RunTest(const FString&)
 	Facts.bRecrossing = true;
 	Facts.Goal = FVector(-600.f, 200.f, 90.f);
 	TestTrue(TEXT("Back over the same obstacle, goal behind it again: ping-pong stop"), DecideResume(Facts) == EVaultResume::PingPong);
-	Facts.Goal = FVector(320.f, 700.f, 90.f);
-	TestTrue(TEXT("Back over the same obstacle, goal on this side (overshoot corrected): resume"), DecideResume(Facts) == EVaultResume::Resume);
+	Facts.Goal = FVector(320.f, 700.f, 90.f); // dot 0.0995: the old gate's line still holds for a second crossing
+	TestTrue(TEXT("Back over the same obstacle, goal ~84+ deg to the side: ping-pong stop"), DecideResume(Facts) == EVaultResume::PingPong);
+	Facts.Goal = FVector(600.f, 500.f, 90.f);
+	TestTrue(TEXT("Back over the same obstacle, goal ahead on this side (overshoot corrected): resume"), DecideResume(Facts) == EVaultResume::Resume);
 	Facts.Start = Facts.Landing; // degenerate arc: no direction to judge by
 	Facts.Goal = FVector(-600.f, 0.f, 90.f);
 	TestTrue(TEXT("No arc direction: resume"), DecideResume(Facts) == EVaultResume::Resume);
