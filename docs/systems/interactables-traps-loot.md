@@ -59,6 +59,55 @@ sight / cover / paths, so R1 sits behind `Codex.Doors.Openable` (-1 = `Content/D
   closing a leafless (`open`) doorway.
 - Tests `CodexTactics.Doors.*`; smoke `DoorsSmoke` (L_Gen_StoryShowcase, sets the switch on).
 
+### Openable doors R2 (2026-11-22, designer decisions 2026-11-22; still behind `Codex.Doors.Openable`, off by default)
+
+Switch off = nothing of R2 runs (no doors, no breach, no clips); keys in loot are plain items (empty by default).
+- **Clips** (`DoorRules::ChooseHandSide` / `ChooseKickLeg` / `ChooseOpenClip` / `FindClipPath` / `GetContactSeconds`; the designer's pack
+  `/Game/Free_Interaction_Animation/Animations/Door`): open by hand = `anim_OpenDoor_L/R`; kick = `anim_OpenDoor_Kick_L/R`, the legs
+  ALTERNATE between attempts (the first on the lock's side); push = `anim_OpenDoor_Push_L/R` for a door that WAS locked and is opened after
+  the key or a shot lock (`ADoorActor::IsLockForced`). L / R = the side of him the handle is on as he faces the leaf (one leaf: its free
+  edge, a pair: the middle; `montage_swap_lr` flips it). He turns to the lock (`FaceAimAt`), the montage plays (`PlayAnimMontage`, or an
+  anim sequence as a dynamic montage on `FullBody`) and the leaf moves at the clip's contact time (`montage_contact_s` open / kick / push,
+  measured by the setup script; without a clip `hand_open_s` / `kick_s` / `push_s`); a held kick waits for the rest of its clip before the
+  next attempt. `doors.json` `montages`: skeleton name -> clip key -> path; `default` serves the operatives whose skeleton is not listed,
+  `SK_PmcOperator_Skeleton` the PMC body; monsters only their own listed skeleton (none: no clip). Assets (`Scripts/Editor/
+  setup_door_animation.py`, run with every editor closed): `/Game/Animations/Door/UE4/` = IK-retargeted copies (UE5 pack skeleton ->
+  `RTG_UE5Manny_UE4Manny`, Blend to Source off in memory, root motion off) + `AM_Door_{Open,Kick,Push}_{L,R}` (slot FullBody);
+  `/Game/Animations/Door/Pmc/AM_Door_*` = montages of the pack clips themselves (the PMC skeleton has the pack's UE5 hierarchy, played by
+  bone name). `/Game/Animations` is untracked: these assets derive from the untracked pack and are not committed; a missing asset logs a
+  warning and the timings hold.
+- **Push after a shot lock** (`lock_shot_push` 1): the burst breaks the lock (`ADoorActor::BreakLock`: Locked -> Closed, event
+  `DoorLockShot`), he walks up and pushes it open; 0 = R1 (it bursts open). After the key: unlock_s, then the push.
+- **Enemies breach LOCKED doors** (`doors.json` `breach`; designer: enemies do all the operatives' door actions): a path that stops short
+  (partial) within `detect_cm` 260 of a locked doorway with its goal behind it (`DoorRules::IsPathStoppedByDoor`, `UDoorSubsystem::
+  FindBlockingDoor`) starts a breach. Actions per archetype in ESCALATION order (`breach.archetypes`, `DoorRules::GetArchetypeKey` /
+  `NextBreachAction`): `pmc` key, shoot, kick, blast; `marksman` key, kick; `brute` kick; horde (`frostbitten`, `cutter`, `base`) and dogs
+  (`frost_hound`) none (they still auto-open UNLOCKED doors, as R1). A hostile operative (PMC fighter: the operative body) works the door
+  like an operative - walks up, the clips, his own key (`GiveKeyToPawn`), the lock burst (`OrderQuickFire`, up to `lock_shots` 2), the
+  kicks (noise, injury), a grenade from `blast_stand_cm` 650 (`UGrenadeSubsystem::ThrowAt`; the blast breaks the door), then walks on to
+  his goal (asked again 0.6 s later, after the doorway's nav box changed). Hook: `AOperativeCharacter::RequestMove` ->
+  `UDoorSubsystem::NotifyMoveRequested` for team != 0 (+ a 0.25 s poll); the PMC commander counts the breach as his walk going on
+  (`PmcSquadLocal::IsTraversingLink` -> `UDoorSubsystem::IsPawnBreaching`: no re-decision, no stall detour meanwhile). A monster bashes in
+  place once it stands at its path's end by the door (`FBash`, no clips; a key it carries opens it). Ran out of actions = it leaves that
+  door alone `give_up_s` 30.
+- **Deterministic rolls** (arena determinism): every kick / injury / lock roll is `DoorRules::DeterministicRoll(seed, RollSalt(door,
+  pawn name, attempt, what))` - seed = console `Codex.Doors.Seed` (>= 0), else `-DoorSeed=`, else `doors.json` `roll_seed`; no
+  `FMath::FRand` in the door code (the smokes' forced rolls stay).
+- **Keys are items**: `ELootItem::DoorKey` + `FLootContents::KeyIds` (a building id, an opening id, a `door_key=` tag, `*`). (a) a loot
+  container holding `KeyIds` (set per placed crate in the editor; the props generator does not place keys yet); (b) a searched body: an
+  enemy who carries keys (`UDoorSubsystem::GiveKeyToPawn`) leaves them as searchable remains when he dies (`TickKeyCarriers`: an
+  `ALootCrateActor` bound to his body, as a fallen operative's); (c) a mission goal's `grant_keys` (objectives json,
+  `MissionGoalsRules`). Taken = the squad's key ring (`UDoorSubsystem::AddKey`, kept for the level also across the switch); console
+  `Codex.Doors.GiveKey` stays for testing. Not saved yet (door states / keys in saves: open).
+- **Kit entrance leaf** (`Scripts/Editor/kit_dress_lib.py` `door_leaf_in_hole`, `kit_series.json` `entrance.leaf` / `balcony_door.leaf`):
+  a shut (closed / locked) entrance no longer gets the combined frame + leaf module `SM_SH_Ent_Door_*`; the bay's hole is the static frame
+  and a separate leaf fills it (`SM_SH_Door_Int` scaled to the 130 x 205 hole, `MI_SH_SteelDoor` / `MI_SH_Door`, part `entrance_leaf`); a
+  shut balcony / fire-escape door gets a leaf in its door hole (part `balcony_door_leaf`). `UDoorSubsystem::LiftKitLeaves` lifts both onto
+  the hinges (showcase plan: 12 entrance + 2 escape leaves = the 14 R1 doors without a kit leaf).
+- Tests `CodexTactics.Doors.Clips.*` / `Breach.*` / `Rolls.Deterministic` / `Keys.LootItem` / `Keys.MissionGoalGrant`; `test_kit_dress.py`
+  `test_entrance_and_escape_doors_get_separate_leaves`; smoke `DoorsSmoke` stages B / F / K / S (clips), P (a PMC fighter breaches S03 with
+  both doors locked, twice with the same seed: the same trace), KD (key from his body), KC (key from a container).
+
 ## Spotted trap -> the squad holds in Solo (old §5)
 
 - **Spotted trap -> the squad holds in Solo (rev 5h, game designer play-test 2026-10-15, every level):** a hidden level mine (`AProximityMineActor::HandleSpotted`) or PMC tripwire (`ATripwireActor::RevealBy`) spotted with a spotter calls `AInteractableActor::NotifyTrapSpotted` -> `USquadSubsystem::HoldForSpottedTrap(Spotter, TrapName)`: every member `StopOperative` (the Godot rule) and, by pure `Interactables/TrapSpotRules::DecideSquadResponse(bFormationActive, bAutonomy, LivingMembers)` (`HoldAndSolo` only exploring with the formation, AUTO off, 2+ alive; else `HoldOnly`), a box-selected group drops to the leader (`SetSelectedGroup`), `EnterSoloModeInternal(bForTrap)` (followers crouch except one in cover; no "[SOLO MODE: ON]" line) and the feed line "{Mine|Tripwire} spotted - squad holding. Move them one by one (B regroups)." (speaker SQUAD). `bTrapSolo` (`IsTrapSolo`): no 25 m leash in `Tick` until `ExitSoloMode`; saved as `is_trap_solo` (`RestoreTrapSolo` after the Solo state). Events: `TrapSpotted` (Subject = the spotter) for both kinds, besides `MineSpotted` / `TripwireSpotted`. AUTO keeps the old stop (its paths avoid known traps). Tests `CodexTactics.Interactables.TrapSpot.SquadResponse`; smoke `TrapSoloSmoke`.

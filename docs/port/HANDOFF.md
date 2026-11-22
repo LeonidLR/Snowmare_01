@@ -1,5 +1,34 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**Openable doors R2 (`claude/bgen-test`, 2026-11-22; designer decisions 2026-11-22): still behind `Codex.Doors.Openable` (off by default:
+nothing of R2 runs).** (1) CLIPS from the designer's pack `/Game/Free_Interaction_Animation/Animations/Door` (UE5 Manny skeleton): open by hand
+`anim_OpenDoor_L/R`, kick `..._Kick_L/R` (legs alternate per attempt), push `..._Push_L/R` after the key / a shot lock (a shot now breaks
+the lock - Locked -> Closed - and he walks up and pushes; `lock_shot_push`); L / R = the handle's side; per-skeleton montage sets in
+`doors.json` `montages`, the leaf moves at the measured contact time (`montage_contact_s` open 0.73 / kick 0.55 / push 0.80 s).
+`Scripts/Editor/setup_door_animation.py` made `/Game/Animations/Door/UE4/` (6 IK-retargeted copies via RTG_UE5Manny_UE4Manny + 6 AM_Door_*)
+and `/Game/Animations/Door/Pmc/` (6 AM_Door_* of the pack clips, PMC skeleton by bone name) - UNTRACKED (derived from the untracked pack;
+missing assets = a warning, the timings hold). Measured: the pack clips walk the pelvis forward with root motion OFF (open 74 cm, kick
+104 cm, push 195 cm) - in place they slide and snap back at the blend-out: open question below. (2) KIT ENTRANCE LEAF: kit_dress no longer
+places the combined `SM_SH_Ent_Door_*`; a shut entrance gets `SM_SH_Door_Int` scaled into the 130 x 205 hole (`MI_SH_SteelDoor` /
+`MI_SH_Door`, part `entrance_leaf`), a shut balcony / escape door a leaf in its door hole (`balcony_door_leaf`) - lifted onto the hinges
+(showcase plan: 12 + 2 = the 14 R1 doors without a kit leaf). (3) ENEMIES BREACH LOCKED DOORS (`doors.json` `breach`): a partial path that
+stops at a locked doorway (or a locked door right by the goal at its level) starts a breach in the archetype's escalation order - `pmc`
+key / shoot / kick / blast, `marksman` key / kick, `brute` kick, horde / dogs none; the PMC fighter works it as an operative (walk-up,
+clips, his key, the lock burst, kicks, a grenade from 6.5 m), then walks on; monsters bash in place. Hook `AOperativeCharacter::RequestMove`
+-> `UDoorSubsystem::NotifyMoveRequested` (team != 0) + a 0.25 s poll; the PMC commander counts a breach as the walk going on
+(`IsTraversingLink`). Rolls are deterministic (`DoorRules::DeterministicRoll`, `Codex.Doors.Seed` / `-DoorSeed=` / `roll_seed`; the
+arena sets it to the round seed). (4) KEYS ARE ITEMS: `ELootItem::DoorKey` + `FLootContents::KeyIds` (containers), a dead carrier's
+searchable remains (`GiveKeyToPawn`), mission goals' `grant_keys`; the squad's key ring (`AddKey`), `Codex.Doors.GiveKey` stays.
+Full rule: `docs/systems/interactables-traps-loot.md` "Openable doors R2".
+Checked 2026-11-22 (local): tests `CodexTactics.Doors.*` 22/22 (+ Loot 8, MissionGoals 11, Interactables 21), `test_kit_dress.py` 23;
+`DoorsSmoke` PASS on the grey showcase (montages AM_Door_Open_R / Kick_R + Kick_L / Push_R / Push_L played; the PMC fighter "shoot:gives
+push" through the locked S01 f1 flat door twice with seed 7 - the same trace; keys from his body and from a container).
+On the dressed `L_Gen_StoryShowcase_Kit` (rebuilt with the new leaves, LevelGenBuildingsSmoke 6/6): `DoorsSmoke` PASS, 56 / 56 hidden-proxy
+doors got kit leaves (98 instances; R1 42 / 56). Walk smoke (fixed 60, -SquadStart=formation, budget 1500) OFF vs ON: showcase walk legs 21/21, 21/21 vs 21/21, 21/21, flat entries 73, 73 vs 73, 73 of 84 (max ratio 2.54 both), path check 6/6 - doors on change nothing in the walk (the R1 S03 / S09 loss is gone with the vault-resume fix a129c671); the smoke verdict FAIL 0/6 is the known STUCK hall follower (one per building), identical on and off.
+Open (R2): the pack clips' forward travel without root motion (bake root motion from the pelvis, or start them farther back - designer
+call); the PMC commander does not price locked doors itself (it only learns at the partial path); monsters never shoot / blow locks; the
+props generator does not place keys in containers yet (KeyIds per placed crate in the editor works); keys / door states in saves.
+
 **Openable doors R1 (`claude/bgen-test`, 2026-11-22; designer 2026-11-21, Lead day plan row 5): behind `Codex.Doors.Openable`, OFF by default
 (`Content/Data/Interactables/doors.json` `"enabled": 0`; on in main only after the enemy-AI session's A/B).** Game C++ only, no builder / map
 change: at runtime `UDoorSubsystem` adopts the builder's `door_leaf` actors tagged `door_state=closed|locked` (ADR-0003: one leaf per opening,
