@@ -44,6 +44,14 @@ frame), no place beyond a throat on the line from the pocket centre (`throat_cle
 a 3.5 x 5 m living room, no longer compresses: 10.5 s -> 3.3 s). A place-swap rule for the blocker was tried and reverted (no effect on B_y).
 Final: showcase 98 and 100/120 (two runs), kit 99/120, L_Gen_BgenPlans 75/100; STUCK showcase / kit 16 -> 7, BgenPlans 12 (unchanged).
 Open: BgenPlans dropped 81 -> 75 (more legs just over 2 x solo); the door-side blocker ordering is the next step.
+Round 3 (2026-11-22): the BgenPlans 81 -> 75 drop was noise - bisected on B_x + B_y (only=, `hold_places` switch new in squad_confined.json,
+`confined_median_m` 1.7 / 2.0): 56 / 55 / 53 / 55 of 68 for hold+1.7 / no hold+1.7 / hold+2.0 / no hold+2.0, the earlier final 56; two full
+BgenPlans runs on the kept setting (hold + 1.7) both 81/100. Final: showcase 100/120, kit 100/120, BgenPlans 81 and 81/100 - no map below
+the previous final. NEXT STEP (not started, Lead 2026-11-22): the entry order at the door - the STUCK legs (6-9 per map) are a follower held
+at the door by his team-mate's body (78-80 cm apart, velocity 0) whose place lies on his way in. Design it as a queue: places ranked by depth
+from an entry point INSIDE the doorway (the leader's first position within the room radius; within the 160 cm pocket radius it lies on the
+landing and the door line test drops out), the man first through the door takes the deepest reachable place, the next the next; re-rank only
+when a man is blocked (no progress while a team-mate stands within two radii on his way). A plain place swap was tried and gave nothing.
 
 **Обновление за 2026-11-18, main `50c0f915`.** Ожидающие подъёма бойцы смотрят наружу даже рядом с пропсами (`ccdec8d3`), появление пропсов X6 и X4 стало плавнее (`13be5a16`), сгенерированные карты используют холод и погоду (`6dbc9e38`). G007 исправил атаки на пандусе (`e24a6d6f`). Из задачи 044 в main вошёл выстрел из приседа за высоким углом (`e4558688`). Ошибки PeekMines и Suppression остаются открытыми. Antigravity 083/083c расширили покрытие архива QD и проверку настроек тренера (`b41973d8`, `d72b9629`). В AgentChat компактнее сообщения об ожидании (`7e4715d9`), инструменты API поддерживают второй ключ (`b9170e47`). Загрузка, пауза у бочки и урок аптечки обновлены в `4db03229`. Подробности в разделе «Сделано (2026-11-18)» файла TASK_BOARD.
 
