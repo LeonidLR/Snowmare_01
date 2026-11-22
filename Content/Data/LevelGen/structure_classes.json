@@ -1,0 +1,167 @@
+{
+  "_comment": "ADR-0004 P0 structure classes and hp classes mapping. All values are PLACEHOLDERS marked _placeholder: true.",
+  "classes": {
+    "load_bearing.concrete_panel": "hp_heavy_concrete",
+    "load_bearing.brick": "hp_load_bearing_brick",
+    "load_bearing.sheet_metal": "hp_load_bearing_metal",
+    "load_bearing.plaster": "hp_load_bearing_plaster",
+    "load_bearing.wood": "hp_load_bearing_wood",
+    "facade.concrete_panel": "hp_facade_concrete",
+    "facade.brick": "hp_facade_brick",
+    "facade.sheet_metal": "hp_facade_metal",
+    "facade.plaster": "hp_facade_plaster",
+    "facade.wood": "hp_facade_wood",
+    "annex.concrete_panel": "hp_annex_concrete",
+    "annex.brick": "hp_annex_brick",
+    "annex.sheet_metal": "hp_annex_metal",
+    "annex.plaster": "hp_annex_plaster",
+    "annex.wood": "hp_annex_wood",
+    "partition.concrete_panel": "hp_partition_concrete",
+    "partition.brick": "hp_partition_brick",
+    "partition.sheet_metal": "hp_partition_metal",
+    "partition.plaster": "hp_partition_plaster",
+    "partition.wood": "hp_partition_wood"
+  },
+  "hp_classes": {
+    "hp_heavy_concrete": {
+      "_placeholder": true,
+      "hp_per_cell": 5000,
+      "min_breach_class": "heavy_explosive",
+      "noise_m": 50.0,
+      "rubble": "concrete_rubble"
+    },
+    "hp_load_bearing_brick": {
+      "_placeholder": true,
+      "hp_per_cell": 3500,
+      "min_breach_class": "medium_explosive",
+      "noise_m": 40.0,
+      "rubble": "brick_rubble"
+    },
+    "hp_load_bearing_metal": {
+      "_placeholder": true,
+      "hp_per_cell": 2800,
+      "min_breach_class": "medium_explosive",
+      "noise_m": 35.0,
+      "rubble": "scrap_metal"
+    },
+    "hp_load_bearing_plaster": {
+      "_placeholder": true,
+      "hp_per_cell": 1500,
+      "min_breach_class": "light_explosive",
+      "noise_m": 25.0,
+      "rubble": "plaster_dust"
+    },
+    "hp_load_bearing_wood": {
+      "_placeholder": true,
+      "hp_per_cell": 250,
+      "min_breach_class": "small_arms",
+      "noise_m": 12.0,
+      "rubble": "wood_splinters"
+    },
+    "hp_facade_concrete": {
+      "_placeholder": true,
+      "hp_per_cell": 3000,
+      "min_breach_class": "medium_explosive",
+      "noise_m": 35.0,
+      "rubble": "concrete_rubble"
+    },
+    "hp_facade_brick": {
+      "_placeholder": true,
+      "hp_per_cell": 2000,
+      "min_breach_class": "medium_explosive",
+      "noise_m": 30.0,
+      "rubble": "brick_rubble"
+    },
+    "hp_facade_metal": {
+      "_placeholder": true,
+      "hp_per_cell": 1400,
+      "min_breach_class": "light_explosive",
+      "noise_m": 25.0,
+      "rubble": "scrap_metal"
+    },
+    "hp_facade_plaster": {
+      "_placeholder": true,
+      "hp_per_cell": 600,
+      "min_breach_class": "light_explosive",
+      "noise_m": 18.0,
+      "rubble": "plaster_dust"
+    },
+    "hp_facade_wood": {
+      "_placeholder": true,
+      "hp_per_cell": 200,
+      "min_breach_class": "small_arms",
+      "noise_m": 10.0,
+      "rubble": "wood_splinters"
+    },
+    "hp_annex_concrete": {
+      "_placeholder": true,
+      "hp_per_cell": 1200,
+      "min_breach_class": "light_explosive",
+      "noise_m": 25.0,
+      "rubble": "concrete_rubble"
+    },
+    "hp_annex_brick": {
+      "_placeholder": true,
+      "hp_per_cell": 1000,
+      "min_breach_class": "light_explosive",
+      "noise_m": 22.0,
+      "rubble": "brick_rubble"
+    },
+    "hp_annex_metal": {
+      "_placeholder": true,
+      "hp_per_cell": 800,
+      "min_breach_class": "light_explosive",
+      "noise_m": 20.0,
+      "rubble": "scrap_metal"
+    },
+    "hp_annex_plaster": {
+      "_placeholder": true,
+      "hp_per_cell": 500,
+      "min_breach_class": "light_explosive",
+      "noise_m": 18.0,
+      "rubble": "plaster_dust"
+    },
+    "hp_annex_wood": {
+      "_placeholder": true,
+      "hp_per_cell": 180,
+      "min_breach_class": "small_arms",
+      "noise_m": 10.0,
+      "rubble": "wood_splinters"
+    },
+    "hp_partition_concrete": {
+      "_placeholder": true,
+      "hp_per_cell": 1000,
+      "min_breach_class": "light_explosive",
+      "noise_m": 20.0,
+      "rubble": "concrete_rubble"
+    },
+    "hp_partition_brick": {
+      "_placeholder": true,
+      "hp_per_cell": 800,
+      "min_breach_class": "light_explosive",
+      "noise_m": 18.0,
+      "rubble": "brick_rubble"
+    },
+    "hp_partition_metal": {
+      "_placeholder": true,
+      "hp_per_cell": 500,
+      "min_breach_class": "light_explosive",
+      "noise_m": 15.0,
+      "rubble": "scrap_metal"
+    },
+    "hp_partition_plaster": {
+      "_placeholder": true,
+      "hp_per_cell": 300,
+      "min_breach_class": "small_arms",
+      "noise_m": 12.0,
+      "rubble": "plaster_dust"
+    },
+    "hp_partition_wood": {
+      "_placeholder": true,
+      "hp_per_cell": 150,
+      "min_breach_class": "small_arms",
+      "noise_m": 8.0,
+      "rubble": "wood_splinters"
+    }
+  }
+}
