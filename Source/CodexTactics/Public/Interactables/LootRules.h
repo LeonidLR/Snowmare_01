@@ -34,7 +34,9 @@ enum class ELootItem : uint8
 	/** The medical bag (the game designer 2026-11-16, Survival/FirstAidRules). */
 	MedicalBag,
 	/** Diesel jerrycan for a level generator (TURRET_POWER.md phase 1). */
-	Diesel
+	Diesel,
+	/** Door keys (openable doors R2, designer 2026-11-22): FLootContents::KeyIds; taken = the squad's key ring (UDoorSubsystem::AddKey). */
+	DoorKey
 };
 
 /** One line of the loot dialog. */
@@ -136,6 +138,13 @@ struct CODEXTACTICS_API FLootContents
 	/** Diesel jerrycans (TURRET_POWER.md phase 1: the props loot table fuel_rare; none by default). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Power", meta = (ClampMin = "0"))
 	int32 DieselCans = 0;
+
+	/**
+	 * Door keys inside (openable doors R2): each a building id (every locked door of it), an opening id (one door), a door's door_key tag
+	 * value, or "*". Taking them gives the squad those keys (UDoorSubsystem::AddKey); a carrier's body holds his (searched remains).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Special")
+	TArray<FString> KeyIds;
 
 	/** Extra weapon id (e.g. "plasma_carbine"), empty for none. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Special")

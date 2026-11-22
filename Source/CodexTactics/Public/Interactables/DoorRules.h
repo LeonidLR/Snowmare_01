@@ -4,6 +4,7 @@
 #include "DoorRules.generated.h"
 
 class FJsonObject;
+enum class EEnemyArchetype : uint8;
 
 /**
  * State of a generated door leaf (docs/design/levelgen/gdd/opening-states.md section 1, ADR-0003). The builder writes it as the leaf
@@ -53,6 +54,37 @@ struct CODEXTACTICS_API FDoorKickOutcome
 	float InjuryChance = 0.f;
 	bool bOpens = false;
 	bool bInjures = false;
+};
+
+/** Which side of him the door's handle / the kicking leg is (R2 door clips: the _L / _R takes of the designer's pack). */
+enum class EDoorSide : uint8
+{
+	Left,
+	Right
+};
+
+/** The R2 door clips (designer 2026-11-22, /Game/Free_Interaction_Animation/Animations/Door). */
+enum class EDoorClip : uint8
+{
+	/** anim_OpenDoor_L / _R: an unlocked door opened by hand. */
+	Open,
+	/** anim_OpenDoor_Kick_L / _R: one kick attempt (the legs alternate between attempts). */
+	Kick,
+	/** anim_OpenDoor_Push_L / _R: the forced push-open of a door that WAS locked (after the key or a shot lock). */
+	Push
+};
+
+/** What a breaching pawn can do now (DoorRules::NextBreachAction). */
+struct CODEXTACTICS_API FDoorBreachAbility
+{
+	/** He carries a key that fits this door. */
+	bool bHasKey = false;
+	/** He holds a firearm with rounds (a hostile operative; monsters never shoot locks). */
+	bool bCanShoot = false;
+	/** He has a grenade to throw (a hostile operative). */
+	bool bHasGrenade = false;
+	/** He can kick / bash at all. */
+	bool bCanKick = true;
 };
 
 /** How the navmesh treats a doorway in a state (ADR-0003 "after R1" column). */
@@ -138,10 +170,45 @@ struct CODEXTACTICS_API FDoorTuning
 	float BlastReachCm = 300.f;
 	/** "start_keys": key ids the squad holds from the start (a building id, an opening id, a door_key tag, or "*"). */
 	TArray<FString> StartKeys;
-	/** Montage hooks (soft object paths, empty = no clip yet): "hand_open_montage", "kick_montage", "unlock_montage". */
+	/** Montage hooks (soft object paths, empty = no clip yet): "hand_open_montage", "kick_montage", "unlock_montage" (R1; the R2 "montages" first). */
 	FString HandOpenMontage;
 	FString KickMontage;
 	FString UnlockMontage;
+
+	// --- R2 (designer 2026-11-22) ---
+	/** "lock_shot_push": a shot lock breaks (the door unlocked, still shut) and he walks up and PUSHES it open (push clip); 0 = R1 (bursts open). */
+	bool bLockShotPush = true;
+	/** "push_s": the forced push-open (after the key / a shot lock) when no push clip plays: hand on the leaf, then the swing, s. */
+	float PushOpenSeconds = 0.7f;
+	/**
+	 * "montages": skeleton name -> clip key ("open_l", "open_r", "kick_l", "kick_r", "push_l", "push_r") -> montage (or anim sequence) path.
+	 * "default" serves the operatives whose skeleton is not listed; other pawns play only a set listed for their skeleton.
+	 */
+	TMap<FString, TMap<FString, FString>> MontageSets;
+	/** "montage_contact_s": per clip kind ("open" / "kick" / "push") the seconds from the clip start to the hand / foot on the leaf. */
+	TMap<FString, float> MontageContactSeconds;
+	/** "montage_swap_lr": 1 = the pack's L / R mean the other side (swap the pick). */
+	bool bMontageSwapLR = false;
+	/** "breach.enabled": enemies whose path ends at a LOCKED door breach it (their archetype's actions) instead of stopping. */
+	bool bBreachEnabled = true;
+	/** "breach.detect_cm": his (partial) path ends this close to the locked doorway, the goal behind it. */
+	float BreachDetectCm = 260.f;
+	/** "breach.goal_door_cm": a locked door at the goal's level this close to the goal (the goal behind it) is breached when the path stops short elsewhere. */
+	float BreachGoalDoorCm = 800.f;
+	/** "breach.interval_s": how often the paths are checked, s. */
+	float BreachIntervalSeconds = 0.25f;
+	/** "breach.blast_stand_cm": a grenade at the door is thrown from this far (out of its own blast). */
+	float BlastStandCm = 650.f;
+	/** "breach.lock_shots": bursts an enemy fires at one lock before his next action. */
+	int32 BreachLockShots = 2;
+	/** "breach.give_up_s": a pawn that ran out of actions on a door leaves it alone this long, s. */
+	float BreachGiveUpSeconds = 30.f;
+	/** "breach.archetypes": archetype key ("pmc", "marksman", "brute", ...) -> actions in escalation order ("key", "shoot", "kick", "blast"). */
+	TMap<FString, TArray<EDoorAction>> BreachActions;
+	/** "breach.default": an archetype not listed. */
+	TArray<EDoorAction> BreachDefault;
+	/** "roll_seed": the seed of every door roll (kick, injury, lock shot): deterministic per seed, door, pawn and attempt (Codex.Doors.Seed). */
+	int32 RollSeed = 0;
 };
 
 /**
@@ -229,6 +296,73 @@ namespace DoorRules
 
 	/** The value of a "key=value" actor tag (false when absent). */
 	CODEXTACTICS_API bool FindTagValue(const TArray<FName>& Tags, const TCHAR* Key, FString& OutValue);
+
+	// --- R2: door clips (designer 2026-11-22) ---
+
+	/**
+	 * Which side of him the handle is as he faces the leaf plane from LocalOperative (door frame: X along the wall, Y across); HandleLocalX =
+	 * the handle's X (one leaf: its free edge; a pair: 0). Right when it is to his right (or straight ahead); bSwap flips the pick.
+	 */
+	CODEXTACTICS_API EDoorSide ChooseHandSide(const FVector2D& LocalOperative, float HandleLocalX, bool bSwap = false);
+
+	/** The kicking leg of attempt AttemptIndex (0-based): the first on First, then the legs alternate. */
+	CODEXTACTICS_API EDoorSide ChooseKickLeg(EDoorSide First, int32 AttemptIndex);
+
+	/** The forced push after the key / a shot lock (bForced); the plain hand open otherwise. */
+	CODEXTACTICS_API EDoorClip ChooseOpenClip(bool bForced);
+
+	/** "open" / "kick" / "push". */
+	CODEXTACTICS_API const TCHAR* ClipKindName(EDoorClip Clip);
+
+	/** The montages key of a clip: "open_l", "kick_r", "push_l" ... */
+	CODEXTACTICS_API FString ClipKey(EDoorClip Clip, EDoorSide Side);
+
+	/**
+	 * The clip path for a skeleton: MontageSets[SkeletonName][key], else (bUseDefault: operatives) MontageSets["default"][key], else the R1
+	 * hook (hand_open_montage for open / push, kick_montage for the kick; operatives only). Empty = no clip (the doors.json timings hold).
+	 */
+	CODEXTACTICS_API FString FindClipPath(const FDoorTuning& Tuning, const FString& SkeletonName, bool bUseDefault, EDoorClip Clip, EDoorSide Side);
+
+	/** Seconds from the start of the work to the leaf moving / the kick landing: the clip's contact time when a clip plays, else hand_open_s / kick_s / push_s. */
+	CODEXTACTICS_API float GetContactSeconds(EDoorClip Clip, bool bClipPlays, const FDoorTuning& Tuning);
+
+	// --- R2: enemies breach locked doors (designer 2026-11-22) ---
+
+	/** "key" / "shoot" / "kick" / "blast" -> Unlock / ShootLock / Kick / Blast (case-insensitive). */
+	CODEXTACTICS_API bool ParseBreachAction(const FString& Text, EDoorAction& OutAction);
+
+	/** The breach list key of a pawn: "pmc" for a hostile operative, else its archetype ("brute", "frost_hound", "frostbitten", "cutter", "marksman", "base"). */
+	CODEXTACTICS_API FString GetArchetypeKey(bool bHostileOperative, EEnemyArchetype Archetype);
+
+	/** The actions of an archetype key in escalation order (breach.archetypes, else breach.default). */
+	CODEXTACTICS_API const TArray<EDoorAction>& GetBreachActions(const FDoorTuning& Tuning, const FString& ArchetypeKey);
+
+	/**
+	 * The next breach action: the first of Actions not in Tried that he can do now (key: bHasKey; shoot: bCanShoot; blast: bHasGrenade;
+	 * kick: bCanKick and kicks enabled). False when none is left (he gives up on the door).
+	 */
+	CODEXTACTICS_API bool NextBreachAction(const TArray<EDoorAction>& Actions, const TSet<EDoorAction>& Tried, const FDoorBreachAbility& Ability,
+		const FDoorTuning& Tuning, EDoorAction& OutAction);
+
+	/**
+	 * A path stopped by a locked door (door frame): its end lies near the doorway (|x| <= HalfWidth + DetectCm, |y| <= DetectCm) on the pawn's
+	 * side and its goal on the other side (|y| >= 30 cm): the path was cut short by the door.
+	 */
+	CODEXTACTICS_API bool IsPathStoppedByDoor(const FVector2D& LocalPawn, const FVector2D& LocalPathEnd, const FVector2D& LocalGoal, float HalfWidthCm,
+		float DetectCm);
+
+	/**
+	 * The goal lies right behind this door (door frame): within ReachCm of the doorway (|x| <= HalfWidth + ReachCm, 30 <= |y| <= ReachCm).
+	 * A partial path may end far from the door (the navmesh point nearest the goal is a storey below): a locked door next to the goal, at
+	 * its level, is the one to breach. Returns the side of the goal (+1 / -1), 0 when not behind it.
+	 */
+	CODEXTACTICS_API float GoalBehindDoorSide(const FVector2D& LocalGoal, float HalfWidthCm, float ReachCm);
+
+	/** A deterministic roll 0..1 of Seed and Salt (the same pair always gives the same value). */
+	CODEXTACTICS_API float DeterministicRoll(int32 Seed, uint32 Salt);
+
+	/** The salt of one door roll: the door's id, the pawn's id, the attempt and what is rolled ("kick", "injury", "lock"). */
+	CODEXTACTICS_API uint32 RollSalt(const FString& DoorId, const FString& PawnId, int32 Attempt, const TCHAR* What);
 }
 
 /** Loading of doors.json and the switch. */
@@ -253,4 +387,7 @@ namespace DoorTuning
 
 	/** The switch now: Codex.Doors.Openable (default -1 = doors.json "enabled", default 0). Off = the game exactly as before R1. */
 	CODEXTACTICS_API bool IsOpenableOn();
+
+	/** The roll seed now: Codex.Doors.Seed when >= 0, else -DoorSeed= on the command line, else doors.json roll_seed. */
+	CODEXTACTICS_API int32 GetRollSeed();
 }

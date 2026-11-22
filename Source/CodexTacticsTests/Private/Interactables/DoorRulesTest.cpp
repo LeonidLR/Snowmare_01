@@ -4,7 +4,10 @@
 
 #include "Misc/AutomationTest.h"
 #include "Dom/JsonObject.h"
+#include "Data/CombatTypes.h"
 #include "Interactables/DoorRules.h"
+#include "Interactables/LootRules.h"
+#include "LevelGen/MissionGoalsRules.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -319,6 +322,215 @@ bool FDoorsClickTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("locked, double click: kick"), DoorRules::ChooseClickAction(EDoorLeafState::Locked, true, false, false, false, Action) && Action == EDoorAction::Kick);
 	TestTrue(TEXT("locked, Ctrl + click: shoot the lock"), DoorRules::ChooseClickAction(EDoorLeafState::Locked, false, true, false, false, Action) && Action == EDoorAction::ShootLock);
 	TestFalse(TEXT("sealed: no click action"), DoorRules::ChooseClickAction(EDoorLeafState::Sealed, true, false, true, false, Action));
+	return true;
+}
+
+// --- R2 (designer 2026-11-22): door clips, enemies breach locked doors, keys as items, deterministic rolls -------------------------
+
+DOORS_TEST(FDoorsClipSideTest, "Clips.HandSide")
+bool FDoorsClipSideTest::RunTest(const FString& Parameters)
+{
+	// A single 90 cm leaf: hinge at -45, handle (free edge) at +33. He stands on +Y facing -Y: his right hand points to +X.
+	const float Handle = 33.f;
+	TestTrue(TEXT("+Y side, standing left of the handle: handle on his right"), DoorRules::ChooseHandSide(FVector2D(0.f, 100.f), Handle) == EDoorSide::Right);
+	TestTrue(TEXT("-Y side, same spot: the handle on his left"), DoorRules::ChooseHandSide(FVector2D(0.f, -100.f), Handle) == EDoorSide::Left);
+	TestTrue(TEXT("+Y side, standing past the handle: on his left"), DoorRules::ChooseHandSide(FVector2D(80.f, 100.f), Handle) == EDoorSide::Left);
+	TestTrue(TEXT("-Y side, past the handle: on his right"), DoorRules::ChooseHandSide(FVector2D(80.f, -100.f), Handle) == EDoorSide::Right);
+	TestTrue(TEXT("a pair (handle 0), +Y, left of the middle: right"), DoorRules::ChooseHandSide(FVector2D(-20.f, 120.f), 0.f) == EDoorSide::Right);
+	TestTrue(TEXT("straight in front of the handle: right"), DoorRules::ChooseHandSide(FVector2D(Handle, 90.f), Handle) == EDoorSide::Right);
+	TestTrue(TEXT("swap flips the pick"), DoorRules::ChooseHandSide(FVector2D(0.f, 100.f), Handle, true) == EDoorSide::Left);
+	return true;
+}
+
+DOORS_TEST(FDoorsClipKickLegsTest, "Clips.KickLegsAlternate")
+bool FDoorsClipKickLegsTest::RunTest(const FString& Parameters)
+{
+	TestTrue(TEXT("first kick: the first leg"), DoorRules::ChooseKickLeg(EDoorSide::Right, 0) == EDoorSide::Right);
+	TestTrue(TEXT("second: the other"), DoorRules::ChooseKickLeg(EDoorSide::Right, 1) == EDoorSide::Left);
+	TestTrue(TEXT("third: back"), DoorRules::ChooseKickLeg(EDoorSide::Right, 2) == EDoorSide::Right);
+	TestTrue(TEXT("fourth: other"), DoorRules::ChooseKickLeg(EDoorSide::Right, 3) == EDoorSide::Left);
+	TestTrue(TEXT("left first"), DoorRules::ChooseKickLeg(EDoorSide::Left, 0) == EDoorSide::Left && DoorRules::ChooseKickLeg(EDoorSide::Left, 1) == EDoorSide::Right);
+	TestEqual(TEXT("clip key kick_l"), DoorRules::ClipKey(EDoorClip::Kick, EDoorSide::Left), FString(TEXT("kick_l")));
+	TestEqual(TEXT("clip key push_r"), DoorRules::ClipKey(EDoorClip::Push, EDoorSide::Right), FString(TEXT("push_r")));
+	TestEqual(TEXT("clip key open_r"), DoorRules::ClipKey(EDoorClip::Open, EDoorSide::Right), FString(TEXT("open_r")));
+	return true;
+}
+
+DOORS_TEST(FDoorsClipPushTest, "Clips.PushAfterForcedLock")
+bool FDoorsClipPushTest::RunTest(const FString& Parameters)
+{
+	TestTrue(TEXT("a plain unlocked door: the hand open"), DoorRules::ChooseOpenClip(false) == EDoorClip::Open);
+	TestTrue(TEXT("after the key / a shot lock: the push"), DoorRules::ChooseOpenClip(true) == EDoorClip::Push);
+	// A shot lock with lock_shot_push breaks to an unlocked, still shut door (the Unlock transition), the push opens it.
+	FDoorTuning Tuning;
+	EDoorLeafState Next;
+	TestTrue(TEXT("the broken lock: locked -> closed"), DoorRules::ApplyAction(EDoorLeafState::Locked, EDoorAction::Unlock, Tuning, Next) && Next == EDoorLeafState::Closed);
+	TestTrue(TEXT("then it opens by hand (the push)"), DoorRules::ApplyAction(Next, EDoorAction::Open, Tuning, Next) && Next == EDoorLeafState::Open);
+	// The timings: the clip contact time when a clip plays, else the doors.json seconds.
+	Tuning.HandOpenSeconds = 0.5f;
+	Tuning.KickSeconds = 1.2f;
+	Tuning.PushOpenSeconds = 0.7f;
+	Tuning.MontageContactSeconds.Add(TEXT("kick"), 0.45f);
+	TestEqual(TEXT("kick with its clip: the impact frame"), DoorRules::GetContactSeconds(EDoorClip::Kick, true, Tuning), 0.45f);
+	TestEqual(TEXT("kick without a clip: kick_s"), DoorRules::GetContactSeconds(EDoorClip::Kick, false, Tuning), 1.2f);
+	TestEqual(TEXT("push without a measured contact: push_s"), DoorRules::GetContactSeconds(EDoorClip::Push, true, Tuning), 0.7f);
+	TestEqual(TEXT("open: hand_open_s"), DoorRules::GetContactSeconds(EDoorClip::Open, false, Tuning), 0.5f);
+	return true;
+}
+
+DOORS_TEST(FDoorsClipPathTest, "Clips.MontagePerSkeleton")
+bool FDoorsClipPathTest::RunTest(const FString& Parameters)
+{
+	FDoorTuning Tuning;
+	Tuning.HandOpenMontage = TEXT("/Game/R1/Hand");
+	TestEqual(TEXT("no sets: the R1 hook for operatives"), DoorRules::FindClipPath(Tuning, TEXT("UE4_Mannequin_Skeleton"), true, EDoorClip::Open, EDoorSide::Left),
+		FString(TEXT("/Game/R1/Hand")));
+	TestTrue(TEXT("no sets: nothing for a monster"), DoorRules::FindClipPath(Tuning, TEXT("SK_Brute"), false, EDoorClip::Open, EDoorSide::Left).IsEmpty());
+	Tuning.MontageSets.Add(TEXT("default")).Add(TEXT("kick_l"), TEXT("/Game/D/KickL"));
+	Tuning.MontageSets.Add(TEXT("SK_PmcOperator_Skeleton")).Add(TEXT("kick_l"), TEXT("/Game/P/KickL"));
+	TestEqual(TEXT("an operative skeleton not listed: default"), DoorRules::FindClipPath(Tuning, TEXT("UE4_Mannequin_Skeleton"), true, EDoorClip::Kick, EDoorSide::Left),
+		FString(TEXT("/Game/D/KickL")));
+	TestEqual(TEXT("the PMC body: its own set"), DoorRules::FindClipPath(Tuning, TEXT("SK_PmcOperator_Skeleton"), true, EDoorClip::Kick, EDoorSide::Left),
+		FString(TEXT("/Game/P/KickL")));
+	TestTrue(TEXT("a monster never takes the operatives default"), DoorRules::FindClipPath(Tuning, TEXT("SK_Brute"), false, EDoorClip::Kick, EDoorSide::Left).IsEmpty());
+	return true;
+}
+
+DOORS_TEST(FDoorsBreachChoiceTest, "Breach.ChoicePerArchetype")
+bool FDoorsBreachChoiceTest::RunTest(const FString& Parameters)
+{
+	FString Text;
+	TestTrue(TEXT("doors.json exists"), FFileHelper::LoadFileToString(Text, *DoorTuning::GetDefaultPath()));
+	TSharedPtr<FJsonObject> Json;
+	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid())
+	{
+		AddError(TEXT("doors.json does not parse"));
+		return false;
+	}
+	const FDoorTuning File = DoorTuning::FromJson(*Json);
+	TestTrue(TEXT("breach on in the data"), File.bBreachEnabled);
+	const TArray<EDoorAction>& Pmc = DoorRules::GetBreachActions(File, DoorRules::GetArchetypeKey(true, EEnemyArchetype::Base));
+	TestEqual(TEXT("PMC: the full set"), Pmc.Num(), 4);
+	TestTrue(TEXT("PMC: the key first"), Pmc.Num() > 0 && Pmc[0] == EDoorAction::Unlock);
+	TestTrue(TEXT("PMC: the grenade last"), Pmc.Num() > 0 && Pmc.Last() == EDoorAction::Blast);
+	TestTrue(TEXT("dogs leave locked doors alone"), DoorRules::GetBreachActions(File, DoorRules::GetArchetypeKey(false, EEnemyArchetype::FrostHound)).IsEmpty());
+	TestTrue(TEXT("the horde leaves locked doors alone"), DoorRules::GetBreachActions(File, DoorRules::GetArchetypeKey(false, EEnemyArchetype::Frostbitten)).IsEmpty());
+	const TArray<EDoorAction>& Brute = DoorRules::GetBreachActions(File, DoorRules::GetArchetypeKey(false, EEnemyArchetype::Brute));
+	TestTrue(TEXT("the Brute bashes"), Brute.Num() == 1 && Brute[0] == EDoorAction::Kick);
+	TestTrue(TEXT("an unlisted key: default (none)"), DoorRules::GetBreachActions(File, TEXT("nobody")).IsEmpty());
+
+	FDoorBreachAbility Ability;
+	TSet<EDoorAction> Tried;
+	EDoorAction Next = EDoorAction::Open;
+	Ability.bCanShoot = true;
+	Ability.bHasGrenade = true;
+	TestTrue(TEXT("no key: he shoots the lock first"), DoorRules::NextBreachAction(Pmc, Tried, Ability, File, Next) && Next == EDoorAction::ShootLock);
+	Ability.bHasKey = true;
+	TestTrue(TEXT("with a key: the key"), DoorRules::NextBreachAction(Pmc, Tried, Ability, File, Next) && Next == EDoorAction::Unlock);
+	Ability.bHasKey = false;
+	Tried.Add(EDoorAction::ShootLock);
+	TestTrue(TEXT("the lock held: the kick"), DoorRules::NextBreachAction(Pmc, Tried, Ability, File, Next) && Next == EDoorAction::Kick);
+	Tried.Add(EDoorAction::Kick);
+	TestTrue(TEXT("the kicks held: the grenade"), DoorRules::NextBreachAction(Pmc, Tried, Ability, File, Next) && Next == EDoorAction::Blast);
+	Ability.bHasGrenade = false;
+	TestFalse(TEXT("no grenade left: he gives up"), DoorRules::NextBreachAction(Pmc, Tried, Ability, File, Next));
+	FDoorTuning NoKicks = File;
+	NoKicks.bKickEnabled = false;
+	TestFalse(TEXT("kicks off: a Brute has nothing"), DoorRules::NextBreachAction(Brute, TSet<EDoorAction>(), FDoorBreachAbility(), NoKicks, Next));
+
+	EDoorAction Parsed = EDoorAction::Open;
+	TestTrue(TEXT("parse key"), DoorRules::ParseBreachAction(TEXT(" Key "), Parsed) && Parsed == EDoorAction::Unlock);
+	TestTrue(TEXT("parse blast"), DoorRules::ParseBreachAction(TEXT("blast"), Parsed) && Parsed == EDoorAction::Blast);
+	TestFalse(TEXT("unknown"), DoorRules::ParseBreachAction(TEXT("charm"), Parsed));
+	TestTrue(TEXT("the shipped file keeps the R1 switch OFF"), !File.bEnabled);
+	TestTrue(TEXT("shot locks are pushed open (R2)"), File.bLockShotPush);
+	TestTrue(TEXT("the operatives clip set"), File.MontageSets.Contains(TEXT("default")) && File.MontageSets[TEXT("default")].Num() == 6);
+	return true;
+}
+
+DOORS_TEST(FDoorsBreachPathTest, "Breach.PathStoppedByDoor")
+bool FDoorsBreachPathTest::RunTest(const FString& Parameters)
+{
+	const float Half = 65.f;
+	const float Detect = 260.f;
+	// Door frame: the pawn and the path end on -Y, the goal on +Y behind the door.
+	TestTrue(TEXT("a partial path ending at the door, the goal behind it"),
+		DoorRules::IsPathStoppedByDoor(FVector2D(0.f, -900.f), FVector2D(20.f, -110.f), FVector2D(0.f, 600.f), Half, Detect));
+	TestFalse(TEXT("the goal on his own side (the path just ends short)"),
+		DoorRules::IsPathStoppedByDoor(FVector2D(0.f, -900.f), FVector2D(20.f, -110.f), FVector2D(300.f, -500.f), Half, Detect));
+	TestFalse(TEXT("the path ends far from this door"),
+		DoorRules::IsPathStoppedByDoor(FVector2D(0.f, -900.f), FVector2D(900.f, -110.f), FVector2D(0.f, 600.f), Half, Detect));
+	TestFalse(TEXT("the goal right in the doorway (not beyond)"),
+		DoorRules::IsPathStoppedByDoor(FVector2D(0.f, -900.f), FVector2D(0.f, -110.f), FVector2D(0.f, 10.f), Half, Detect));
+	TestTrue(TEXT("mirrored: everything on +Y, the goal on -Y"),
+		DoorRules::IsPathStoppedByDoor(FVector2D(-50.f, 400.f), FVector2D(-30.f, 90.f), FVector2D(0.f, -700.f), Half, Detect));
+	// The path stops a storey below: the goal right behind a locked door at its level - work it from the other side.
+	TestEqual(TEXT("goal 250 cm behind the door on +Y"), DoorRules::GoalBehindDoorSide(FVector2D(0.f, 250.f), Half, 800.f), 1.f);
+	TestEqual(TEXT("goal on -Y"), DoorRules::GoalBehindDoorSide(FVector2D(100.f, -400.f), Half, 800.f), -1.f);
+	TestEqual(TEXT("goal in the doorway: not behind"), DoorRules::GoalBehindDoorSide(FVector2D(0.f, 10.f), Half, 800.f), 0.f);
+	TestEqual(TEXT("goal far away: another door's business"), DoorRules::GoalBehindDoorSide(FVector2D(0.f, 1200.f), Half, 800.f), 0.f);
+	TestEqual(TEXT("goal far along the wall"), DoorRules::GoalBehindDoorSide(FVector2D(1000.f, 200.f), Half, 800.f), 0.f);
+	return true;
+}
+
+DOORS_TEST(FDoorsDeterministicRollTest, "Rolls.Deterministic")
+bool FDoorsDeterministicRollTest::RunTest(const FString& Parameters)
+{
+	const uint32 Kick0 = DoorRules::RollSalt(TEXT("S03/S03_d19"), TEXT("BP_Operative_C_7"), 0, TEXT("kick"));
+	const uint32 Kick1 = DoorRules::RollSalt(TEXT("S03/S03_d19"), TEXT("BP_Operative_C_7"), 1, TEXT("kick"));
+	const uint32 Injury0 = DoorRules::RollSalt(TEXT("S03/S03_d19"), TEXT("BP_Operative_C_7"), 0, TEXT("injury"));
+	const float A = DoorRules::DeterministicRoll(42, Kick0);
+	TestEqual(TEXT("same seed + salt: the same roll"), DoorRules::DeterministicRoll(42, Kick0), A);
+	TestTrue(TEXT("0..1"), A >= 0.f && A < 1.f);
+	TestNotEqual(TEXT("the next attempt rolls anew"), Kick0, Kick1);
+	TestNotEqual(TEXT("kick and injury are separate rolls"), Kick0, Injury0);
+	int32 Differ = 0;
+	for (int32 Seed = 0; Seed < 16; ++Seed)
+	{
+		Differ += DoorRules::DeterministicRoll(Seed, Kick0) != DoorRules::DeterministicRoll(Seed + 1, Kick0) ? 1 : 0;
+	}
+	TestTrue(TEXT("another seed, another roll"), Differ >= 14);
+	// Spread: 200 rolls over the salts fall on both sides of 0.5.
+	int32 Low = 0;
+	for (int32 Attempt = 0; Attempt < 200; ++Attempt)
+	{
+		Low += DoorRules::DeterministicRoll(7, DoorRules::RollSalt(TEXT("D"), TEXT("P"), Attempt, TEXT("lock"))) < 0.5f ? 1 : 0;
+	}
+	TestTrue(TEXT("not all on one side"), Low > 60 && Low < 140);
+	return true;
+}
+
+DOORS_TEST(FDoorsKeyItemTest, "Keys.LootItem")
+bool FDoorsKeyItemTest::RunTest(const FString& Parameters)
+{
+	// Keys as items: a container or a searched body holds KeyIds; the window lists one "Key" entry; taking it empties them.
+	FLootContents Crate;
+	Crate.DestroyAll();
+	TestTrue(TEXT("an emptied crate is empty"), Crate.IsEmpty());
+	Crate.KeyIds = { TEXT("S09_broken_back_windows"), TEXT("boiler_room") };
+	TestFalse(TEXT("a key makes it not empty"), Crate.IsEmpty());
+	const TArray<FLootEntry> Items = Crate.GetItems();
+	TestEqual(TEXT("one key entry"), Items.Num(), 1);
+	TestTrue(TEXT("it is the door key"), Items.Num() == 1 && Items[0].Item == ELootItem::DoorKey && Items[0].Count == 2);
+	TestTrue(TEXT("the label names the keys"), Items.Num() == 1 && Items[0].GetLabel().ToString().Contains(TEXT("boiler_room")));
+	TestEqual(TEXT("taken: both"), Crate.Take(ELootItem::DoorKey), 2);
+	TestTrue(TEXT("then empty"), Crate.IsEmpty() && Crate.KeyIds.IsEmpty());
+	// The default crate has no keys (nothing changes without keys placed).
+	const FLootContents Default;
+	TestEqual(TEXT("no keys by default"), Default.GetCount(ELootItem::DoorKey), 0);
+	return true;
+}
+
+DOORS_TEST(FDoorsKeyGoalTest, "Keys.MissionGoalGrant")
+bool FDoorsKeyGoalTest::RunTest(const FString& Parameters)
+{
+	FMissionGoalsFile File;
+	TArray<FString> Errors;
+	TestTrue(TEXT("parses"), MissionGoalsRules::Parse(TEXT(R"({"schema":"codex.mission_goals/1","goals":[{"id":"A","pos":[0,0,0],"grant_keys":["S09_broken_back_windows",""]},{"id":"B","pos":[100,0,0]}]})"),
+		File, Errors));
+	TestTrue(TEXT("goal A grants the key (empty ids dropped)"), File.Goals.Num() == 2 && File.Goals[0].GrantKeys.Num() == 1
+		&& File.Goals[0].GrantKeys[0] == TEXT("S09_broken_back_windows"));
+	TestTrue(TEXT("goal B grants nothing"), File.Goals.Num() == 2 && File.Goals[1].GrantKeys.IsEmpty());
 	return true;
 }
 

@@ -19,7 +19,7 @@
   "interact_timeout_s": 20,
   "hand_open_s": 0.5,
   "hand_open_montage": "",
-  "_comment_key": "Keys: a key id is a building id (every locked door of that building), an opening id (one door), a door's door_key=<id> tag, or * (all). start_keys: what the squad holds from the start (stub until keys are loot items; console Codex.Doors.GiveKey <id>).",
+  "_comment_key": "Keys: a key id is a building id (every locked door of that building), an opening id (one door), a door's door_key=<id> tag, or * (all). start_keys: what the squad holds from the start. R2: keys are items - a loot container's KeyIds (FLootContents), a searched body (an enemy who carried one), a mission goal's grant_keys; console Codex.Doors.GiveKey <id> for testing.",
   "unlock_s": 1.2,
   "unlock_montage": "",
   "start_keys": [],
@@ -47,5 +47,43 @@
   "lock_shot_stand_cm": 250,
   "lock_shot_resolve_s": 0.6,
   "_comment_blast": "BLOW IT: any explosion (grenade, RPG-7, mine, barrel) within its own radius and blast_reach_cm of the doorway centre breaks the leaf (gone, the doorway open for good) - locked doors too.",
-  "blast_reach_cm": 300
+  "blast_reach_cm": 300,
+  "_comment_r2_clips": "R2 door clips (designer 2026-11-22, the pack /Game/Free_Interaction_Animation/Animations/Door): open by hand = anim_OpenDoor_L/R, kick = anim_OpenDoor_Kick_L/R (the legs ALTERNATE between attempts, the first on the lock's side), push = anim_OpenDoor_Push_L/R (a door that WAS locked, opened after the key or a shot lock). L / R: the side of him the handle is on as he faces the leaf (a pair: where the leaves meet); montage_swap_lr 1 flips it. montages: skeleton name -> clip key -> montage (or anim sequence, played on the FullBody slot); 'default' serves the operatives whose skeleton is not listed (other pawns only their own skeleton's set). Made by Scripts/Editor/setup_door_animation.py into /Game/Animations/Door (untracked: derived from the untracked pack). montage_contact_s: seconds from the clip start to the hand / foot on the leaf - the leaf starts its swing (open / push) or the kick lands then (measured by the setup script); without a clip the hand_open_s / kick_s / push_s timings hold. A missing asset logs a warning and the timings hold.",
+  "lock_shot_push": 1,
+  "push_s": 0.7,
+  "montage_swap_lr": 0,
+  "montages": {
+    "default": {
+      "open_l": "/Game/Animations/Door/UE4/AM_Door_Open_L", "open_r": "/Game/Animations/Door/UE4/AM_Door_Open_R",
+      "kick_l": "/Game/Animations/Door/UE4/AM_Door_Kick_L", "kick_r": "/Game/Animations/Door/UE4/AM_Door_Kick_R",
+      "push_l": "/Game/Animations/Door/UE4/AM_Door_Push_L", "push_r": "/Game/Animations/Door/UE4/AM_Door_Push_R"
+    },
+    "SK_PmcOperator_Skeleton": {
+      "open_l": "/Game/Animations/Door/Pmc/AM_Door_Open_L", "open_r": "/Game/Animations/Door/Pmc/AM_Door_Open_R",
+      "kick_l": "/Game/Animations/Door/Pmc/AM_Door_Kick_L", "kick_r": "/Game/Animations/Door/Pmc/AM_Door_Kick_R",
+      "push_l": "/Game/Animations/Door/Pmc/AM_Door_Push_L", "push_r": "/Game/Animations/Door/Pmc/AM_Door_Push_R"
+    }
+  },
+  "montage_contact_s": { "open": 0.73, "kick": 0.55, "push": 0.8 },
+  "_comment_r2_breach": "R2 enemies vs LOCKED doors (designer 2026-11-22: enemies do all the operatives' door actions). An enemy whose path (cut short: partial) ends within detect_cm of a locked doorway with its goal behind it - or, when the partial path stops elsewhere (a storey below the goal), a locked door at the goal's level within goal_door_cm of the goal, the goal behind it - breaches the door with its archetype's actions in this ESCALATION order: key (a key it carries: Codex/level data GiveKeyToPawn), shoot (a hostile operative's lock burst, lock_shot_chance of his weapon, up to lock_shots bursts), kick (kick_chance_*, up to kick_max_attempts, the noise, his injury rule), blast (a grenade thrown from blast_stand_cm, out of its own blast). Then it walks on to its goal. Ran out of actions = it leaves that door alone for give_up_s. pmc = the hostile operatives (the operative's own door work + clips); monsters bash in place (no clips) - shoot / blast are operative-only. An archetype not listed uses default. Rolls are deterministic: roll_seed (console Codex.Doors.Seed, -DoorSeed=) + door + pawn + attempt.",
+  "breach": {
+    "enabled": 1,
+    "detect_cm": 260,
+    "goal_door_cm": 800,
+    "interval_s": 0.25,
+    "blast_stand_cm": 650,
+    "lock_shots": 2,
+    "give_up_s": 30,
+    "archetypes": {
+      "pmc": ["key", "shoot", "kick", "blast"],
+      "marksman": ["key", "kick"],
+      "brute": ["kick"],
+      "frostbitten": [],
+      "cutter": [],
+      "frost_hound": [],
+      "base": []
+    },
+    "default": []
+  },
+  "roll_seed": 0
 }

@@ -178,6 +178,7 @@ bool ADoorActor::OpenDoor(AActor* InstigatorActor)
 	}
 	const EDoorLeafState Old = State;
 	State = Next;
+	bLockForced = false;
 	StartSwing(true, DoorRules::SwingSign(InstigatorActor ? ToLocal(InstigatorActor->GetActorLocation()).Y : 0.f));
 	NotifyChanged(Old, InstigatorActor, false);
 	return true;
@@ -217,9 +218,31 @@ bool ADoorActor::UnlockDoor(AActor* InstigatorActor)
 	}
 	const EDoorLeafState Old = State;
 	State = Next;
+	bLockForced = true; // R2: the next open is the forced push
 	ApplyNav(); // blocked -> priced
 	NotifyChanged(Old, InstigatorActor, false, FName(TEXT("DoorUnlocked")));
 	return true;
+}
+
+bool ADoorActor::BreakLock(AActor* InstigatorActor)
+{
+	EDoorLeafState Next;
+	if (State != EDoorLeafState::Locked || !DoorRules::ApplyAction(State, EDoorAction::Unlock, DoorTuning::Get(), Next))
+	{
+		return false;
+	}
+	const EDoorLeafState Old = State;
+	State = Next;
+	bLockShot = true;
+	bLockForced = true;
+	ApplyNav(); // blocked -> priced (the shut leaf still blocks sight and bodies)
+	NotifyChanged(Old, InstigatorActor, false, FName(TEXT("DoorLockShot")));
+	return true;
+}
+
+float ADoorActor::GetHandleLocalX() const
+{
+	return LeafCount > 1 ? 0.f : Setup_.WidthCm * 0.5f - 12.f;
 }
 
 bool ADoorActor::ShootLockOpen(AActor* InstigatorActor)

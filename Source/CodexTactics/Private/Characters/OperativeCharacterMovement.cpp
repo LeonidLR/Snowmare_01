@@ -37,6 +37,7 @@
 #include "TimerManager.h"
 #include "Tutorial/TutorialRules.h"
 #include "Tutorial/TutorialSubsystem.h"
+#include "Interactables/DoorSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
@@ -467,6 +468,12 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 		}
 	}
 	bHasMoveOrder = Result == EPathFollowingRequestResult::RequestSuccessful;
+	// Doors R2 (designer 2026-11-22): a hostile fighter whose path stops at a LOCKED door breaches it (kick / shot / key / grenade by his
+	// archetype in doors.json) instead of standing there. No-op while the doors switch is off.
+	if (bHasMoveOrder && !IsPlayerTeam())
+	{
+		UDoorSubsystem::NotifyMoveRequested(this);
+	}
 	if (CVarOperativeMoveTrace.GetValueOnGameThread() != 0)
 	{
 		const UPathFollowingComponent* TracedFollowing = AIController->GetPathFollowingComponent();

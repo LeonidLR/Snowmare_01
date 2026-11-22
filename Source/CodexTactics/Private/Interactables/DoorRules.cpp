@@ -1,9 +1,14 @@
 #include "Interactables/DoorRules.h"
 
 #include "CodexTactics.h"
+#include "Data/CombatTypes.h"
 #include "Dom/JsonObject.h"
 #include "HAL/IConsoleManager.h"
+#include "Math/RandomStream.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Crc.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -15,6 +20,10 @@ namespace DoorRulesLocal
 		TEXT("(default 0), 1 = closed / locked leaves of generated buildings become doors (open / close by click, auto-open on the way, locked ")
 		TEXT("blocks the navmesh, kick), 0 = the leaves stay decorative (walk-through, block sight) exactly as before R1. Read every tick: ")
 		TEXT("switching at runtime adopts / releases the leaves."));
+
+	TAutoConsoleVariable<int32> CVarDoorsSeed(TEXT("Codex.Doors.Seed"), -1,
+		TEXT("Openable doors R2: the seed of the door rolls (kick, injury, lock shot; deterministic per seed, door, pawn and attempt). ")
+		TEXT("-1 = -DoorSeed= on the command line, else Content/Data/Interactables/doors.json roll_seed."));
 
 	FDoorTuning DoorTuningCurrent;
 	bool bDoorTuningLoaded = false;
@@ -308,6 +317,178 @@ bool DoorRules::FindTagValue(const TArray<FName>& Tags, const TCHAR* Key, FStrin
 	return false;
 }
 
+EDoorSide DoorRules::ChooseHandSide(const FVector2D& LocalOperative, float HandleLocalX, bool bSwap)
+{
+	// Facing the leaf plane from side s (= sign of his Y) he looks along -s Y; his right hand points along +s X (UE: right = forward
+	// turned +90 deg yaw). The handle is to his right when (HandleX - his X) * s >= 0.
+	const float Side = LocalOperative.Y >= 0.f ? 1.f : -1.f;
+	const bool bRight = (HandleLocalX - LocalOperative.X) * Side >= 0.f;
+	return bRight != bSwap ? EDoorSide::Right : EDoorSide::Left;
+}
+
+EDoorSide DoorRules::ChooseKickLeg(EDoorSide First, int32 AttemptIndex)
+{
+	const bool bSame = (FMath::Max(0, AttemptIndex) % 2) == 0;
+	return bSame ? First : (First == EDoorSide::Left ? EDoorSide::Right : EDoorSide::Left);
+}
+
+EDoorClip DoorRules::ChooseOpenClip(bool bForced)
+{
+	return bForced ? EDoorClip::Push : EDoorClip::Open;
+}
+
+const TCHAR* DoorRules::ClipKindName(EDoorClip Clip)
+{
+	switch (Clip)
+	{
+	case EDoorClip::Kick: return TEXT("kick");
+	case EDoorClip::Push: return TEXT("push");
+	default: return TEXT("open");
+	}
+}
+
+FString DoorRules::ClipKey(EDoorClip Clip, EDoorSide Side)
+{
+	return FString::Printf(TEXT("%s_%s"), ClipKindName(Clip), Side == EDoorSide::Left ? TEXT("l") : TEXT("r"));
+}
+
+FString DoorRules::FindClipPath(const FDoorTuning& Tuning, const FString& SkeletonName, bool bUseDefault, EDoorClip Clip, EDoorSide Side)
+{
+	const FString Key = ClipKey(Clip, Side);
+	if (const TMap<FString, FString>* Set = Tuning.MontageSets.Find(SkeletonName))
+	{
+		if (const FString* Path = Set->Find(Key))
+		{
+			return *Path;
+		}
+	}
+	if (!bUseDefault)
+	{
+		return FString();
+	}
+	if (const TMap<FString, FString>* Set = Tuning.MontageSets.Find(TEXT("default")))
+	{
+		if (const FString* Path = Set->Find(Key))
+		{
+			return *Path;
+		}
+	}
+	return Clip == EDoorClip::Kick ? Tuning.KickMontage : Tuning.HandOpenMontage;
+}
+
+float DoorRules::GetContactSeconds(EDoorClip Clip, bool bClipPlays, const FDoorTuning& Tuning)
+{
+	if (bClipPlays)
+	{
+		if (const float* Seconds = Tuning.MontageContactSeconds.Find(ClipKindName(Clip)))
+		{
+			return *Seconds;
+		}
+	}
+	switch (Clip)
+	{
+	case EDoorClip::Kick: return Tuning.KickSeconds;
+	case EDoorClip::Push: return Tuning.PushOpenSeconds;
+	default: return Tuning.HandOpenSeconds;
+	}
+}
+
+bool DoorRules::ParseBreachAction(const FString& Text, EDoorAction& OutAction)
+{
+	static const TPair<const TCHAR*, EDoorAction> Names[] = {
+		{ TEXT("key"), EDoorAction::Unlock }, { TEXT("shoot"), EDoorAction::ShootLock }, { TEXT("kick"), EDoorAction::Kick },
+		{ TEXT("blast"), EDoorAction::Blast } };
+	const FString Trimmed = Text.TrimStartAndEnd();
+	for (const TPair<const TCHAR*, EDoorAction>& Name : Names)
+	{
+		if (Trimmed.Equals(Name.Key, ESearchCase::IgnoreCase))
+		{
+			OutAction = Name.Value;
+			return true;
+		}
+	}
+	return false;
+}
+
+FString DoorRules::GetArchetypeKey(bool bHostileOperative, EEnemyArchetype Archetype)
+{
+	if (bHostileOperative)
+	{
+		return TEXT("pmc");
+	}
+	switch (Archetype)
+	{
+	case EEnemyArchetype::FrostHound: return TEXT("frost_hound");
+	case EEnemyArchetype::Brute: return TEXT("brute");
+	case EEnemyArchetype::Frostbitten: return TEXT("frostbitten");
+	case EEnemyArchetype::Cutter: return TEXT("cutter");
+	case EEnemyArchetype::Marksman: return TEXT("marksman");
+	case EEnemyArchetype::Base: return TEXT("base");
+	default: return TEXT("default");
+	}
+}
+
+const TArray<EDoorAction>& DoorRules::GetBreachActions(const FDoorTuning& Tuning, const FString& ArchetypeKey)
+{
+	const TArray<EDoorAction>* Found = Tuning.BreachActions.Find(ArchetypeKey.ToLower());
+	return Found ? *Found : Tuning.BreachDefault;
+}
+
+bool DoorRules::NextBreachAction(const TArray<EDoorAction>& Actions, const TSet<EDoorAction>& Tried, const FDoorBreachAbility& Ability,
+	const FDoorTuning& Tuning, EDoorAction& OutAction)
+{
+	for (const EDoorAction Action : Actions)
+	{
+		if (Tried.Contains(Action))
+		{
+			continue;
+		}
+		const bool bCan = (Action == EDoorAction::Unlock && Ability.bHasKey) || (Action == EDoorAction::ShootLock && Ability.bCanShoot)
+			|| (Action == EDoorAction::Blast && Ability.bHasGrenade) || (Action == EDoorAction::Kick && Ability.bCanKick && Tuning.bKickEnabled);
+		if (bCan)
+		{
+			OutAction = Action;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool DoorRules::IsPathStoppedByDoor(const FVector2D& LocalPawn, const FVector2D& LocalPathEnd, const FVector2D& LocalGoal, float HalfWidthCm,
+	float DetectCm)
+{
+	constexpr float GoalBeyondCm = 30.f;
+	const bool bEndNear = FMath::Abs(LocalPathEnd.X) <= HalfWidthCm + DetectCm && FMath::Abs(LocalPathEnd.Y) <= DetectCm;
+	const float EndSide = LocalPathEnd.Y >= 0.f ? 1.f : -1.f;
+	const bool bPawnSide = LocalPawn.Y * EndSide >= -GoalBeyondCm; // he stands on the path end's side (or in the doorway)
+	const bool bGoalBeyond = LocalGoal.Y * EndSide <= -GoalBeyondCm;
+	return bEndNear && bPawnSide && bGoalBeyond;
+}
+
+float DoorRules::GoalBehindDoorSide(const FVector2D& LocalGoal, float HalfWidthCm, float ReachCm)
+{
+	constexpr float GoalBeyondCm = 30.f;
+	if (FMath::Abs(LocalGoal.X) > HalfWidthCm + ReachCm || FMath::Abs(LocalGoal.Y) < GoalBeyondCm || FMath::Abs(LocalGoal.Y) > ReachCm)
+	{
+		return 0.f;
+	}
+	return LocalGoal.Y > 0.f ? 1.f : -1.f;
+}
+
+float DoorRules::DeterministicRoll(int32 Seed, uint32 Salt)
+{
+	const FRandomStream Stream(static_cast<int32>(HashCombine(GetTypeHash(Seed), Salt)));
+	return Stream.GetFraction();
+}
+
+uint32 DoorRules::RollSalt(const FString& DoorId, const FString& PawnId, int32 Attempt, const TCHAR* What)
+{
+	uint32 Hash = FCrc::StrCrc32(*DoorId);
+	Hash = HashCombine(Hash, FCrc::StrCrc32(*PawnId));
+	Hash = HashCombine(Hash, GetTypeHash(Attempt));
+	return HashCombine(Hash, FCrc::StrCrc32(What));
+}
+
 FString DoorTuning::GetDefaultPath()
 {
 	return FPaths::ProjectContentDir() / TEXT("Data/Interactables/doors.json");
@@ -391,6 +572,96 @@ FDoorTuning DoorTuning::FromJson(const FJsonObject& Json, const FDoorTuning& Bas
 	Json.TryGetStringField(TEXT("hand_open_montage"), Tuning.HandOpenMontage);
 	Json.TryGetStringField(TEXT("kick_montage"), Tuning.KickMontage);
 	Json.TryGetStringField(TEXT("unlock_montage"), Tuning.UnlockMontage);
+	// R2 (designer 2026-11-22): clips, the push after a forced lock, enemies vs locked doors, deterministic rolls.
+	ReadDoorFlag(Json, TEXT("lock_shot_push"), Tuning.bLockShotPush);
+	ReadDoorNumber(Json, TEXT("push_s"), Tuning.PushOpenSeconds, 0.f, 10.f);
+	ReadDoorFlag(Json, TEXT("montage_swap_lr"), Tuning.bMontageSwapLR);
+	const TSharedPtr<FJsonObject>* Sets = nullptr;
+	if (Json.TryGetObjectField(TEXT("montages"), Sets) && Sets && Sets->IsValid())
+	{
+		Tuning.MontageSets.Reset();
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Set : (*Sets)->Values)
+		{
+			const TSharedPtr<FJsonObject>* Clips = nullptr;
+			if (Set.Key.StartsWith(TEXT("_")) || !Set.Value.IsValid() || !Set.Value->TryGetObject(Clips) || !Clips || !Clips->IsValid())
+			{
+				continue;
+			}
+			TMap<FString, FString>& Out = Tuning.MontageSets.Add(Set.Key);
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Clip : (*Clips)->Values)
+			{
+				FString Path;
+				if (!Clip.Key.StartsWith(TEXT("_")) && Clip.Value.IsValid() && Clip.Value->TryGetString(Path) && !Path.IsEmpty())
+				{
+					Out.Add(Clip.Key.ToLower(), Path);
+				}
+			}
+		}
+	}
+	const TSharedPtr<FJsonObject>* Contacts = nullptr;
+	if (Json.TryGetObjectField(TEXT("montage_contact_s"), Contacts) && Contacts && Contacts->IsValid())
+	{
+		Tuning.MontageContactSeconds.Reset();
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*Contacts)->Values)
+		{
+			double Seconds = 0.0;
+			if (!Entry.Key.StartsWith(TEXT("_")) && Entry.Value.IsValid() && Entry.Value->TryGetNumber(Seconds))
+			{
+				Tuning.MontageContactSeconds.Add(Entry.Key.ToLower(), FMath::Clamp(static_cast<float>(Seconds), 0.f, 10.f));
+			}
+		}
+	}
+	const TSharedPtr<FJsonObject>* Breach = nullptr;
+	if (Json.TryGetObjectField(TEXT("breach"), Breach) && Breach && Breach->IsValid())
+	{
+		const FJsonObject& B = **Breach;
+		ReadDoorFlag(B, TEXT("enabled"), Tuning.bBreachEnabled);
+		ReadDoorNumber(B, TEXT("detect_cm"), Tuning.BreachDetectCm, 50.f, 1000.f);
+		ReadDoorNumber(B, TEXT("interval_s"), Tuning.BreachIntervalSeconds, 0.05f, 5.f);
+		ReadDoorNumber(B, TEXT("goal_door_cm"), Tuning.BreachGoalDoorCm, 0.f, 3000.f);
+		ReadDoorNumber(B, TEXT("blast_stand_cm"), Tuning.BlastStandCm, 100.f, 3000.f);
+		float LockShots = static_cast<float>(Tuning.BreachLockShots);
+		ReadDoorNumber(B, TEXT("lock_shots"), LockShots, 1.f, 10.f);
+		Tuning.BreachLockShots = FMath::RoundToInt32(LockShots);
+		ReadDoorNumber(B, TEXT("give_up_s"), Tuning.BreachGiveUpSeconds, 0.f, 600.f);
+		const auto ReadList = [](const TArray<TSharedPtr<FJsonValue>>& Values)
+		{
+			TArray<EDoorAction> Actions;
+			for (const TSharedPtr<FJsonValue>& Value : Values)
+			{
+				FString Text;
+				EDoorAction Action;
+				if (Value.IsValid() && Value->TryGetString(Text) && DoorRules::ParseBreachAction(Text, Action))
+				{
+					Actions.AddUnique(Action);
+				}
+			}
+			return Actions;
+		};
+		const TArray<TSharedPtr<FJsonValue>>* Default = nullptr;
+		if (B.TryGetArrayField(TEXT("default"), Default) && Default)
+		{
+			Tuning.BreachDefault = ReadList(*Default);
+		}
+		const TSharedPtr<FJsonObject>* Archetypes = nullptr;
+		if (B.TryGetObjectField(TEXT("archetypes"), Archetypes) && Archetypes && Archetypes->IsValid())
+		{
+			Tuning.BreachActions.Reset();
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*Archetypes)->Values)
+			{
+				const TArray<TSharedPtr<FJsonValue>>* List = nullptr;
+				if (!Entry.Key.StartsWith(TEXT("_")) && Entry.Value.IsValid() && Entry.Value->TryGetArray(List) && List)
+				{
+					Tuning.BreachActions.Add(Entry.Key.ToLower(), ReadList(*List));
+				}
+			}
+		}
+	}
+	double Seed = 0.0;
+	if (Json.TryGetNumberField(TEXT("roll_seed"), Seed))
+	{
+		Tuning.RollSeed = static_cast<int32>(Seed);
+	}
 	return Tuning;
 }
 
@@ -438,4 +709,19 @@ bool DoorTuning::ResolveSwitch(int32 Console, const FDoorTuning& Tuning)
 bool DoorTuning::IsOpenableOn()
 {
 	return ResolveSwitch(DoorRulesLocal::CVarDoorsOpenable.GetValueOnGameThread(), Get());
+}
+
+int32 DoorTuning::GetRollSeed()
+{
+	const int32 Console = DoorRulesLocal::CVarDoorsSeed.GetValueOnGameThread();
+	if (Console >= 0)
+	{
+		return Console;
+	}
+	int32 CommandLine = 0;
+	if (FParse::Value(FCommandLine::Get(), TEXT("DoorSeed="), CommandLine))
+	{
+		return CommandLine;
+	}
+	return Get().RollSeed;
 }

@@ -94,6 +94,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Doors")
 	bool ShootLockOpen(AActor* InstigatorActor);
 
+	/**
+	 * R2 (lock_shot_push): a shot broke the lock - a locked door becomes an unlocked one that is still shut (he pushes it open next,
+	 * the push clip). Event DoorLockShot. True when it changed.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Doors")
+	bool BreakLock(AActor* InstigatorActor);
+
+	/** It was locked and its lock was opened (the key or a shot) and it has not been opened since: the next open is the forced push (R2). */
+	bool IsLockForced() const { return bLockForced; }
+
+	/** The handle's X in the door frame (one leaf: its free edge; a pair: 0 - where the leaves meet). */
+	float GetHandleLocalX() const;
+
 	/** An explosion: the leaf is gone (hidden, no collision), the doorway open for good. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Doors")
 	bool BlastDoor(AActor* InstigatorActor);
@@ -214,5 +227,6 @@ private:
 	bool bKicked = false;
 	bool bLockShot = false;
 	bool bBroken = false;
+	bool bLockForced = false;
 	TArray<FLiftedInstance> Lifted;
 };

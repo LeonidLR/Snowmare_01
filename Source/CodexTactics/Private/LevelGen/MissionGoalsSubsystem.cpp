@@ -15,6 +15,7 @@
 #include "Engine/World.h"
 #include "GameFlow/LevelExitSubsystem.h"
 #include "HAL/IConsoleManager.h"
+#include "Interactables/DoorSubsystem.h"
 #include "LevelGen/MissionGoalMarkerActor.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -368,6 +369,11 @@ void UMissionGoalsSubsystem::HandleReached(int32 GoalIndex, AOperativeCharacter*
 	Context.Radius = Goal.RadiusCm;
 	GameplayEvents::RaiseWithContext(this, FName(*(GameplayEvents::MissionGoalReached.ToString() + TEXT(".") + Goal.Id)), Context);
 	GameplayEvents::RaiseWithContext(this, GameplayEvents::MissionGoalReached, Context);
+	// Openable doors R2: a goal may hand the squad door keys (a quest item).
+	for (const FString& Key : Goal.GrantKeys)
+	{
+		UDoorSubsystem::GrantSquadKey(GetWorld(), Key);
+	}
 	OnGoalReached.Broadcast(Goal.Id, Operative, Count);
 }
 
