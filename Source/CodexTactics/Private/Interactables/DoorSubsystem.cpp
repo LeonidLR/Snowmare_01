@@ -47,6 +47,9 @@
 namespace DoorSubsystemLocal
 {
 	/** Dev: 1 = log why a closed door near a walker does not auto-open (designer 2026-11-22: the squad stuck behind shut kit doors). */
+	/** -1 = doors.json start_interior_locked_share; 0..1 overrides it (smokes: 0 = no locked inner doors for the walk check). Read at the adoption. */
+	TAutoConsoleVariable<float> CVarDoorsInnerLockedShare(TEXT("Codex.Doors.InnerLockedShare"), -1.f,
+		TEXT("Share of the inner doors locked at the start: -1 = doors.json start_interior_locked_share (0.25), 0..1 = this share (0 for walk smokes). Read when the doors are adopted."));
 	TAutoConsoleVariable<int32> CVarDoorsDebugAutoOpen(TEXT("Codex.Doors.DebugAutoOpen"), 0,
 		TEXT("1 = log every closed door with a pawn within 2.5 m that does not auto-open (local x / y, level dz, heading, path)"));
 
@@ -513,7 +516,9 @@ int32 UDoorSubsystem::CloseInteriorDoors()
 			const FVector At = Door->GetActorLocation();
 			const uint32 Salt = FCrc::StrCrc32(*FString::Printf(TEXT("inner_lock_%s_%d_%d_%d"), *Door->GetBuildingId(), FMath::RoundToInt(At.X / 10.f),
 				FMath::RoundToInt(At.Y / 10.f), FMath::RoundToInt(At.Z / 10.f)));
-			if (DoorRules::DeterministicRoll(DoorTuning::GetRollSeed(), Salt) < DoorTuning::Get().StartInteriorLockedShare
+			const float LockedShare = DoorSubsystemLocal::CVarDoorsInnerLockedShare.GetValueOnGameThread() >= 0.f
+				? DoorSubsystemLocal::CVarDoorsInnerLockedShare.GetValueOnGameThread() : DoorTuning::Get().StartInteriorLockedShare;
+			if (DoorRules::DeterministicRoll(DoorTuning::GetRollSeed(), Salt) < LockedShare
 				&& Door->ForceState(EDoorLeafState::Locked, nullptr))
 			{
 				++InnerLocked;
