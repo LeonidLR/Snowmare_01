@@ -42,7 +42,7 @@ namespace FormationConfinedTestLocal
 	}
 
 	/** The navmesh agent radius (DefaultEngine.ini): an eroded room's real walls lie this much farther out (a door-ward place may use it), cm. */
-	constexpr float AgentRadiusCm = 35.f;
+	constexpr float ConfinedTestAgentRadiusCm = 35.f;
 
 	FFormationConfinedSlot Slot(const FVector2D& Desired, const FVector2D& Occupant)
 	{
@@ -200,7 +200,7 @@ bool FFormationConfinedSmallHallTest::RunTest(const FString&)
 	int32 InsideWalls = 0;
 	for (const FVector2D& Place : Squad4.Places)
 	{
-		InsideWalls += InRoom(Place, 65.f + AgentRadiusCm, 90.f + AgentRadiusCm) ? 1 : 0;
+		InsideWalls += InRoom(Place, 65.f + ConfinedTestAgentRadiusCm, 90.f + ConfinedTestAgentRadiusCm) ? 1 : 0;
 		TestTrue(*FString::Printf(TEXT("(%.0f, %.0f) inside the pocket (squad of four)"), Place.X, Place.Y), FormationConfinedRules::IsInside(Pocket, Place, Tuning));
 	}
 	TestTrue(*FString::Printf(TEXT("%d of 3 inside the hall's walls"), InsideWalls), InsideWalls >= 2);
