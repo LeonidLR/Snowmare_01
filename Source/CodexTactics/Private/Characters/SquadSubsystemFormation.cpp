@@ -1257,6 +1257,12 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	}
 	Follower.PrevSectorSlot = Raw;
 	Follower.PrevSectorSlotTime = TimeSeconds;
+	// Entry order 2026-11-22: a confined place stands still - its jump from the trail slot into the hall is no slot velocity (the feed-forward
+	// sent the first move 120 cm past the place, into the far wall: a 7 m way round through the flat).
+	if (Confined.bActive)
+	{
+		SlotVelocity = FVector2D::ZeroVector;
+	}
 
 	const float Jitter = bLeaderMoving ? 1.f + FMath::Sin(TimeSeconds * 0.9f + static_cast<float>(Follower.Slot + 1) * 1.7f) * FormationConfig.SpeedJitter : 1.f;
 	// Running - or crawling (prone: no sector look, he crawls facing his way) - there is no walking backwards to cap.
@@ -1334,6 +1340,46 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 			}
 			MoveTarget = Step.GetValue();
 			SlotVelocity = FVector2D::ZeroVector;
+		}
+	}
+	// Entry order 2026-11-22: walking to his confined place he steps round a standing body on his straight way there - the leader standing just
+	// inside a hall door, a team-mate at his place (the navmesh ignores bodies, his crowd avoidance is off while compressed: he pushed into him
+	// for good, the walk smoke's STUCK legs) - by a point beside it on the navmesh (FormationConfinedRules::StepRoundBody).
+	if (Confined.bActive && !bWall && Distance > FormationRuntime::StopRadiusCm)
+	{
+		TArray<FVector2D> Bodies{ FVector2D(LeaderRef.GetActorLocation()) };
+		for (const FFollowerState& Other : Followers)
+		{
+			const AOperativeCharacter* Mate = Other.Operative.Get();
+			if (Mate && Mate != &Operative && Mate->GetVelocity().Size2D() < FormationConfinedTuning::Get().BlockSpeedCmS)
+			{
+				Bodies.Add(FVector2D(Mate->GetActorLocation()));
+			}
+		}
+		const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+		const FVector Feet = Operative.GetActorLocation();
+		const auto Walkable = [this, Nav, &Feet](const FVector2D& Point)
+		{
+			FNavLocation OnNav;
+			FVector Hit;
+			return Nav && Nav->ProjectPointToNavigation(FVector(Point.X, Point.Y, Feet.Z), OnNav, FVector(FormationYieldNavSnapCm, FormationYieldNavSnapCm, 250.f))
+				&& FVector2D::Distance(FVector2D(OnNav.Location), Point) <= FormationYieldNavSnapCm
+				&& !UNavigationSystemV1::NavigationRaycast(GetWorld(), Feet, OnNav.Location, Hit);
+		};
+		if (const TOptional<FVector2D> Step = FormationConfinedRules::StepRoundBody(Here, MoveTarget, Bodies, FormationConfinedTuning::Get(), Walkable); Step.IsSet())
+		{
+			if (!Follower.bConfinedStepping)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[Formation] confined: %s steps round a body on his way: at (%.0f, %.0f) -> (%.0f, %.0f) first, his place (%.0f, %.0f)"),
+					*Operative.DisplayName.ToString(), Here.X, Here.Y, Step->X, Step->Y, MoveTarget.X, MoveTarget.Y);
+			}
+			Follower.bConfinedStepping = true;
+			MoveTarget = Step.GetValue();
+			SlotVelocity = FVector2D::ZeroVector;
+		}
+		else
+		{
+			Follower.bConfinedStepping = false;
 		}
 	}
 	// Bug 2026-10-28 (CoverSmoke, the formation stays on in the fight): the leader's own walk (a cover / move order) ended Blocked at
