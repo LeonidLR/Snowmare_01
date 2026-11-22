@@ -50,6 +50,10 @@ public:
 	bool IsChokepoint(TConstArrayView<FVector> Path, int32* OutIndex = nullptr) const { return TacticalMapRules::IsChokepoint(File, Config, Path, OutIndex); }
 	FTacticalDetour SafeDetour(const FVector& From, const FVector& To) const { return TacticalMapRules::SafeDetour(File, Config, From, To); }
 	TArray<int32> PickLadderOnlyRoofs(int32 Seed, float Factor = -1.f) const { return TacticalMapRules::PickLadderOnlyRoofs(File, Seed, Factor); }
+	const TArray<FTacticalWalkableRoof>& GetWalkableRoofs() const { return File.WalkableRoofs; }
+	const TArray<FTacticalOpenCrossing>& GetOpenCrossings() const { return File.OpenCrossings; }
+	const TArray<FTacticalGoalSite>& GetGoalSites() const { return File.GoalSites; }
+	TArray<FTacticalGoalSite> GetGoalSitesForGoal(const FString& GoalId) const { return TacticalMapRules::GetGoalSitesForGoal(File, GoalId); }
 
 	/** Loads a tactical file instead of the map's (smokes / tools). False (and an empty map) when it is missing or invalid. */
 	bool LoadFromFile(const FString& Path);
