@@ -29,6 +29,8 @@
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "HAL/IConsoleManager.h"
+#include "Interactables/DoorActor.h"
+#include "Interactables/DoorSubsystem.h"
 #include "HAL/PlatformMisc.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CoreDelegates.h"
@@ -152,6 +154,8 @@ namespace CutawayClickSmoke
 		int32 Miss = 0;
 		int32 Clicks = 0;
 		int32 BadGoals = 0;
+		/** Clicks behind a LOCKED door redirected to try that door (UDoorSubsystem::RedirectMoveToLockedDoor; doors on by default on the showcase). */
+		int32 LockedRedirects = 0;
 		int32 CoverOrders = 0;
 		FString Examples;
 	};
@@ -241,7 +245,30 @@ namespace CutawayClickSmoke
 						const FVector Goal = Leader.GetLastMoveDestination();
 						const float GoalFeetZ = static_cast<float>(Goal.Z);
 						const bool bGoalOk = FVector::Dist2D(Goal, Hit.ImpactPoint) <= GoalCm && GoalFeetZ >= BaseZ - 60.f && GoalFeetZ <= FMath::Min(CeilZ - 60.f, BaseZ + 200.f); // feet or capsule centre, never the storey above
-						if (!bGoalOk)
+						// Doors on (Lead 2026-11-22): a click into a room behind a LOCKED door is sent to try that door - expected when the goal is by
+						// a locked door at the clicked level with the click on its far side; any other redirect is a bad goal.
+						UDoorSubsystem* Doors = World->GetSubsystem<UDoorSubsystem>();
+						bool bLockedRedirect = false;
+						if (!bGoalOk && Doors && Doors->HasPendingInteraction(&Leader))
+						{
+							const ADoorActor* Door = Doors->FindNearestDoor(Goal, 250.f);
+							bLockedRedirect = Door && Door->GetDoorState() == EDoorLeafState::Locked && Door->IsAtDoorLevel(Hit.ImpactPoint)
+								&& Door->ToLocal(Hit.ImpactPoint).Y * Door->ToLocal(Goal).Y < 0.f;
+							if (bLockedRedirect)
+							{
+								++T.LockedRedirects;
+								if (T.Examples.Len() < 900)
+								{
+									T.Examples += FString::Printf(TEXT(" [LOCKED %s %s: goal %s for a click at %s]"), *Door->GetBuildingId(), *Door->GetOpeningId(),
+										*Goal.ToCompactString(), *Hit.ImpactPoint.ToCompactString());
+								}
+							}
+						}
+						if (Doors)
+						{
+							Doors->CancelInteraction(&Leader);
+						}
+						if (!bGoalOk && !bLockedRedirect)
 						{
 							++T.BadGoals;
 							if (T.Examples.Len() < 900)
@@ -260,16 +287,16 @@ namespace CutawayClickSmoke
 				}
 			}
 		}
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s storey %d (base %.0f, ceiling %.0f), ThroughCutaway %d: %d targets, %d rays - room floor %d, other floor of his storey %d, occluded by his storey %d, pawn %d, miss %d, UPPER STOREY %d, WALL TOP %d; clicks %d, bad goals %d, cover orders %d%s"),
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s storey %d (base %.0f, ceiling %.0f), ThroughCutaway %d: %d targets, %d rays - room floor %d, other floor of his storey %d, occluded by his storey %d, pawn %d, miss %d, UPPER STOREY %d, WALL TOP %d; clicks %d, bad goals %d, locked-door redirects %d, cover orders %d%s"),
 			*Runner->BuildingId, Storey, BaseZ, CeilZ, bJudge ? 1 : 0, Targets.Num(), T.Rays, T.RoomFloor, T.OtherFloor, T.Occluded, T.Pawn, T.Miss, T.Upper, T.WallTop,
-			T.Clicks, T.BadGoals, T.CoverOrders, *T.Examples);
+			T.Clicks, T.BadGoals, T.LockedRedirects, T.CoverOrders, *T.Examples);
 		if (bJudge)
 		{
 			Check(Targets.Num() > 0, FString::Printf(TEXT("%s storey %d: far floor points to click (%d)"), *Runner->BuildingId, Storey, Targets.Num()));
 			Check(T.Upper == 0 && T.WallTop == 0, FString::Printf(TEXT("%s storey %d: no ray stops on a hidden storey / a wall top under it (%d upper, %d wall tops of %d rays)"),
 				*Runner->BuildingId, Storey, T.Upper, T.WallTop, T.Rays));
-			Check(T.BadGoals == 0 && T.CoverOrders == 0, FString::Printf(TEXT("%s storey %d: every floor click moves him on his storey to the clicked point (%d clicks, %d bad goals, %d cover orders)"),
-				*Runner->BuildingId, Storey, T.Clicks, T.BadGoals, T.CoverOrders));
+			Check(T.BadGoals == 0 && T.CoverOrders == 0, FString::Printf(TEXT("%s storey %d: every floor click moves him on his storey to the clicked point or to the locked door in its way (%d clicks, %d bad goals, %d locked-door redirects, %d cover orders)"),
+				*Runner->BuildingId, Storey, T.Clicks, T.BadGoals, T.LockedRedirects, T.CoverOrders));
 			Check(T.RoomFloor * 4 >= T.Rays, FString::Printf(TEXT("%s storey %d: at least a quarter of the rays reach the clicked room's floor (%d of %d)"),
 				*Runner->BuildingId, Storey, T.RoomFloor, T.Rays));
 		}
