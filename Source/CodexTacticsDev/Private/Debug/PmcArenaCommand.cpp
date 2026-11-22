@@ -491,6 +491,8 @@ namespace PmcArena
 		bool bWeightsBLoaded = false;
 		float Time = 0.f;
 		float StageTime = 0.f;
+		/** Determinism (2026-11-22): the world time the first round starts at, fixed once the navigation is ready (-1 = not yet). */
+		double StartGateWorldSeconds = -1.0;
 		int32 Stage = 0;
 		int32 Round = 0;
 		int32 Failures = 0;
@@ -3784,7 +3786,27 @@ namespace PmcArena
 				Check(State, false, TEXT("navigation ready within bounded setup timeout"));
 				return Finish(State, World, false);
 			}
-			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArenaNav] ready stage=%d waited=%.1fs nav=%s"), State.Stage, State.StageTime, *NavData->GetPathName());
+			// Determinism (2026-11-22): the navmesh finishes after a load-dependent number of frames, and a round started 0.1 s of world
+			// time earlier plays out differently (world-time intervals shift against the arena's steps). The first round therefore starts
+			// on a fixed world-time grid: the next multiple of StartGateQuantumSeconds after the navigation is ready, never before
+			// StartGateMinSeconds - one seed, one start time, one fight.
+			if (State.Stage == 0)
+			{
+				constexpr double StartGateQuantumSeconds = 2.0;
+				constexpr double StartGateMinSeconds = 4.0;
+				const double Now = World->GetTimeSeconds();
+				if (State.StartGateWorldSeconds < 0.0)
+				{
+					State.StartGateWorldSeconds = FMath::Max(StartGateMinSeconds, FMath::CeilToDouble(Now / StartGateQuantumSeconds) * StartGateQuantumSeconds);
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcArenaNav] ready at world %.3f s - the first round starts at world %.1f s"), Now, State.StartGateWorldSeconds);
+				}
+				if (Now + KINDA_SMALL_NUMBER < State.StartGateWorldSeconds)
+				{
+					return true;
+				}
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArenaNav] ready stage=%d waited=%.1fs nav=%s world=%.4f"), State.Stage, State.StageTime, *NavData->GetPathName(),
+				World->GetTimeSeconds());
 		}
 		switch (State.Stage)
 		{
