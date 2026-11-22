@@ -60,6 +60,11 @@ namespace SniperRules
 		return RoundsLeftAfterShot > 0;
 	}
 
+	bool YieldsToMontage(bool bMontageIsOwn, bool bMontageHasRootMotion)
+	{
+		return !bMontageIsOwn && bMontageHasRootMotion;
+	}
+
 	float PlayRateToFit(float ClipSeconds, float Seconds)
 	{
 		return ClipSeconds > KINDA_SMALL_NUMBER && Seconds > KINDA_SMALL_NUMBER ? ClipSeconds / Seconds : 1.f;

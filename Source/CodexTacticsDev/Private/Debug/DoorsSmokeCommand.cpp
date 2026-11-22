@@ -33,6 +33,9 @@
 #if !UE_BUILD_SHIPPING
 
 #include "AI/PmcSquadSubsystem.h"
+#include "AIController.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Animation/Skeleton.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/FirePostureRules.h"
@@ -51,6 +54,8 @@
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/DoorActor.h"
 #include "Interactables/DoorRules.h"
@@ -109,6 +114,10 @@ namespace DoorsSmoke
 		/** The fighter's name (his clip moves are told apart by it) and whether his set moves him (retargeted onto SK_PmcOperator_Skeleton). */
 		FString FighterName;
 		bool bFighterRootClips = false;
+		/** RM-P diagnostics: the last door-montage sample time of the fighter (one line per 0.15 s while a door clip plays). */
+		double FighterSampleAt = -1.0;
+		double FighterSampleUntil = -1.0;
+		int32 FighterMontagesSeen = 0;
 		FVector FighterStart = FVector::ZeroVector;
 		FVector FighterGoal = FVector::ZeroVector;
 		int32 BreachOpensBefore = 0;
@@ -1004,6 +1013,42 @@ namespace DoorsSmoke
 			}
 			Crate->Contents.DestroyAll();
 			Crate->Contents.KeyIds = { TEXT("S10_snow_drift") };
+			// RM-P diagnostics: for 1.2 s after a door clip starts on him, every montage instance on his anim instance (an interrupted clip
+			// shows here) + why a clip would not move him (root motion mode / instance, movement mode, controller, path following, tick option).
+			if (const USkeletalMeshComponent* Body = Fighter->GetMesh())
+			{
+				UAnimInstance* Anim = Body->GetAnimInstance();
+				const double Now = World->GetTimeSeconds();
+				if (Doors->GetMontagesPlayed() != State->FighterMontagesSeen)
+				{
+					State->FighterMontagesSeen = Doors->GetMontagesPlayed();
+					State->FighterSampleUntil = Doors->GetLastMontageName().StartsWith(TEXT("AM_Door_")) ? Now + 1.2 : -1.0;
+				}
+				if (Anim && Now <= State->FighterSampleUntil && Now - State->FighterSampleAt >= 0.1)
+				{
+					State->FighterSampleAt = Now;
+					FString Instances;
+					for (const FAnimMontageInstance* Instance : Anim->MontageInstances)
+					{
+						if (Instance && Instance->Montage)
+						{
+							Instances += FString::Printf(TEXT("%s[%s %s active %d playing %d w %.2f pos %.2f rm %d]"), Instances.IsEmpty() ? TEXT("") : TEXT(" "),
+								*Instance->Montage->GetName(), *Instance->Montage->GetGroupName().ToString(),
+								Instance->IsActive() ? 1 : 0, Instance->IsPlaying() ? 1 : 0, Instance->GetWeight(), Instance->GetPosition(), Instance->Montage->HasRootMotion() ? 1 : 0);
+						}
+					}
+					const UCharacterMovementComponent* Move = Fighter->GetCharacterMovement();
+					const AAIController* Ai = Cast<AAIController>(Fighter->GetController());
+					const UPathFollowingComponent* Follow = Ai ? Ai->GetPathFollowingComponent() : nullptr;
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: RM-P diag %s: montages {%s}; anim %s mode %d, root motion instance %d, mesh playing root motion %d, movement mode %d, anim root motion %d, velocity %s, rvo %d, controller %s yaw %d, path following %d, tick option %d, URO %d, feet %s"),
+						*Fighter->GetName(), *Instances, *Anim->GetClass()->GetName(), static_cast<int32>(Anim->RootMotionMode.GetValue()),
+						Anim->GetRootMotionMontageInstance() ? 1 : 0, Body->IsPlayingRootMotion() ? 1 : 0, Move ? static_cast<int32>(Move->MovementMode.GetValue()) : -1,
+						Move && Move->HasAnimRootMotion() ? 1 : 0, Move ? *Move->Velocity.ToCompactString() : TEXT("-"), Move && Move->bUseRVOAvoidance ? 1 : 0,
+						Fighter->GetController() ? *Fighter->GetController()->GetClass()->GetName() : TEXT("none"), Fighter->bUseControllerRotationYaw ? 1 : 0,
+						Follow ? static_cast<int32>(Follow->GetStatus()) : -1, static_cast<int32>(Body->VisibilityBasedAnimTickOption),
+						Body->bEnableUpdateRateOptimizations ? 1 : 0, *Feet(*Fighter).ToCompactString());
+				}
+			}
 			Crate->FinishSpawning(FTransform(At + FVector(0.f, 0.f, 40.f)));
 			const TArray<FLootEntry> CrateItems = Crate->GetItems();
 			Check(*State, CrateItems.Num() == 1 && CrateItems[0].Item == ELootItem::DoorKey, TEXT("KC: the container lists the key"));
