@@ -101,7 +101,7 @@ struct FKnockdownHit
 	float ExplosionDistance = 0.f;
 	/**
 	 * The knockdown chance roll in [0, 1) for HeavyHit (passed in so the rules stay pure; the component rolls
-	 * FMath::FRand). Knocked down when ChanceRoll < KnockdownChance. Default 0 = the roll always succeeds.
+	 * CodexRandom::FRand, the Combat stream). Knocked down when ChanceRoll < KnockdownChance. Default 0 = the roll always succeeds.
 	 */
 	float ChanceRoll = 0.f;
 };

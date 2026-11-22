@@ -4,6 +4,7 @@
 // shoot_at_crate, set_manual_priority_target).
 
 #include "Characters/OperativeCharacter.h"
+#include "Core/CodexGameplayRandom.h"
 #include "Combat/EncounterQueries.h"
 
 #include "Characters/EnemyCharacter.h"
@@ -235,7 +236,7 @@ bool AOperativeCharacter::FireObjectShotNow(AActor* Target, ETargetedShotKind Ki
 	{
 		DistanceM = FVector::Dist(GetActorLocation(), Target->GetActorLocation()) / 100.f;
 		MineShot = TargetedShotRules::ComputeMineShotChance(Accuracy, ColdLevel, Stance, DistanceM);
-		bHit = bForceHitForTesting || FMath::FRand() * 100.f <= MineShot.Chance;
+		bHit = bForceHitForTesting || CodexRandom::FRand(ECodexRandomStream::Combat, this) * 100.f <= MineShot.Chance;
 	}
 	NoteShotAim(Target, Target->GetActorLocation(), false);
 	OnWeaponFired.Broadcast(this, Target, bHit);
@@ -260,8 +261,8 @@ bool AOperativeCharacter::FireObjectShotNow(AActor* Target, ETargetedShotKind Ki
 		}
 		else if (Kind == ETargetedShotKind::Mine)
 		{
-			const float Angle = FMath::FRandRange(0.f, 2.f * PI);
-			End += FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * FMath::FRandRange(80.f, 180.f);
+			const float Angle = CodexRandom::FRandRange(ECodexRandomStream::Cosmetic, this, 0.f, 2.f * PI);
+			End += FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * CodexRandom::FRandRange(ECodexRandomStream::Cosmetic, this, 80.f, 180.f);
 			Color = FLinearColor(0.7f, 0.7f, 0.8f, 0.65f);
 			Style = EDamageType::Kinetic;
 		}

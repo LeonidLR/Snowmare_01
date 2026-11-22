@@ -16,6 +16,7 @@
 // Rules: Characters/InjuredLocomotionRules.
 
 #include "Characters/OperativeAnimInstance.h"
+#include "Core/CodexGameplayRandom.h"
 
 #include "Animation/AnimSequence.h"
 #include "AnimationRuntime.h"
@@ -178,7 +179,7 @@ void UOperativeAnimInstance::StepInjuredIdle(FInjuredIdleCycle& Cycle, int32 Set
 		if (Cycle.Time >= ClipLength)
 		{
 			// The loop's end: the next variant (alternating, or a random other one), cross-faded - the pack's idles start / end in one stance.
-			const int32 Next = InjuredLocomotionRules::NextIdleVariant(Cycle.Variant, Clips.Num(), bRandom, FMath::FRand());
+			const int32 Next = InjuredLocomotionRules::NextIdleVariant(Cycle.Variant, Clips.Num(), bRandom, CodexRandom::FRand(ECodexRandomStream::Cosmetic, nullptr));   // free function, no world: the unseeded FMath draw (cosmetic)
 			if (Next != Cycle.Variant && Clips.IsValidIndex(Next))
 			{
 				Cycle.Prev = Cycle.Clip;

@@ -135,9 +135,9 @@ bool UTacticalMapSubsystem::LoadFromFile(const FString& Path)
 	File = MoveTemp(Parsed);
 	LoadedPath = Path;
 	bLoaded = true;
-	UE_LOG(LogCodexTactics, Display, TEXT("[TacticalMap] %s: %d places, %d drop spots, %d windows, %d overwatch roofs, %d hiding spots, %d ladder-only roofs (%s, hash %s)"),
+	UE_LOG(LogCodexTactics, Display, TEXT("[TacticalMap] %s: %d places, %d drop spots, %d windows, %d overwatch roofs, %d hiding spots, %d ladder-only roofs, %d walkable roofs, %d open crossings, %d goal sites (%s, hash %s)"),
 		*FPaths::GetCleanFilename(Path), File.Chokepoints.Num(), File.DropSpots.Num(), File.Windows.Num(), File.OverwatchRoofs.Num(), File.HidingSpots.Num(),
-		File.LadderOnlyRoofs.Num(), *File.Layout, *File.GeometryHash);
+		File.LadderOnlyRoofs.Num(), File.WalkableRoofs.Num(), File.OpenCrossings.Num(), File.GoalSites.Num(), *File.Layout, *File.GeometryHash);
 	return true;
 }
 
@@ -157,8 +157,9 @@ void UTacticalMapSubsystem::Dump() const
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[TacticalMap] %s (layout %s, hash %s, %s / %s, ladder-only factor %.2f)"), *LoadedPath, *File.Layout, *File.GeometryHash,
 		*File.Weather, *File.TimeOfDay, File.Thresholds.LadderOnlyFactor);
-	UE_LOG(LogCodexTactics, Display, TEXT("  places %d, drop spots %d, windows %d, overwatch roofs %d, hiding spots %d, ladder-only roofs %d"),
-		File.Chokepoints.Num(), File.DropSpots.Num(), File.Windows.Num(), File.OverwatchRoofs.Num(), File.HidingSpots.Num(), File.LadderOnlyRoofs.Num());
+	UE_LOG(LogCodexTactics, Display, TEXT("  places %d, drop spots %d, windows %d, overwatch roofs %d, hiding spots %d, ladder-only roofs %d, walkable roofs %d, open crossings %d, goal sites %d"),
+		File.Chokepoints.Num(), File.DropSpots.Num(), File.Windows.Num(), File.OverwatchRoofs.Num(), File.HidingSpots.Num(), File.LadderOnlyRoofs.Num(),
+		File.WalkableRoofs.Num(), File.OpenCrossings.Num(), File.GoalSites.Num());
 	for (int32 Index = 0; Index < FMath::Min(10, File.Chokepoints.Num()); ++Index)
 	{
 		const FTacticalChokepoint& Zone = File.Chokepoints[Index];

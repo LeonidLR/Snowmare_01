@@ -4,6 +4,7 @@
 // wall-behind / closed-room / prone refusals.
 
 #include "Characters/OperativeCharacter.h"
+#include "Core/CodexGameplayRandom.h"
 
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeAnimInstance.h"
@@ -78,9 +79,12 @@ bool AOperativeCharacter::FireLauncherAt(AActor* Target, bool bRagingShot)
 		HitChance = FMath::Min(1.f, HitChance + 0.1f);
 	}
 	LastShotHitChance = HitChance;
-	const bool bHit = bForceHitForTesting || FMath::FRand() <= HitChance;
+	const bool bHit = bForceHitForTesting || CodexRandom::FRand(ECodexRandomStream::Combat, this) <= HitChance;
 	const FVector AimDir = (AimPoint - Muzzle).GetSafeNormal();
-	const FVector Point = bHit ? AimPoint : LauncherRules::MissPoint(AimPoint, AimDir, FMath::FRand(), FMath::FRand());
+	// Sequenced draws (argument evaluation order is unspecified): the seeded arena replays the same miss point.
+	const float MissRollA = bHit ? 0.f : CodexRandom::FRand(ECodexRandomStream::Combat, this);
+	const float MissRollB = bHit ? 0.f : CodexRandom::FRand(ECodexRandomStream::Combat, this);
+	const FVector Point = bHit ? AimPoint : LauncherRules::MissPoint(AimPoint, AimDir, MissRollA, MissRollB);
 
 	FProjectileLaunch Launch;
 	Launch.From = Muzzle;

@@ -52,3 +52,33 @@ bool VaultRules::IsVaultableLevelObject(FName Kind, float HeightCm, float ThinSi
 {
 	return IsVaultableCoverKind(Kind) && HeightCm >= MinHeight && HeightCm <= MaxHeight && ThinSideCm > 0.f && ThinSideCm <= MaxVaultableDepthCm;
 }
+
+VaultRules::EVaultResume VaultRules::DecideResume(const FVaultResumeFacts& Facts)
+{
+	if (!Facts.bHasOrder)
+	{
+		return EVaultResume::NoOrder;
+	}
+	const FVector ToGoal = Facts.Goal - Facts.Landing;
+	if (ToGoal.Size2D() <= ResumeArrivedCm)
+	{
+		return EVaultResume::AtGoal;
+	}
+	if (Facts.bRecrossing)
+	{
+		const FVector Direction = (Facts.Landing - Facts.Start).GetSafeNormal2D();
+		if (!Direction.IsNearlyZero() && FVector::DotProduct(Direction, ToGoal.GetSafeNormal2D()) < ResumeBehindDot)
+		{
+			return EVaultResume::PingPong;
+		}
+	}
+	return EVaultResume::Resume;
+}
+
+bool VaultRules::IsRecrossing(bool bSameObstacle, bool bPreviousResumed, const FVector& PreviousDirection, const FVector& Direction,
+	const FVector& PreviousGoal, const FVector& Goal, float SecondsSincePrevious)
+{
+	return bSameObstacle && bPreviousResumed && SecondsSincePrevious >= 0.f && SecondsSincePrevious <= RecrossWindowSeconds
+		&& FVector::DotProduct(PreviousDirection.GetSafeNormal2D(), Direction.GetSafeNormal2D()) < 0.f
+		&& FVector::Dist2D(PreviousGoal, Goal) <= RecrossGoalToleranceCm;
+}

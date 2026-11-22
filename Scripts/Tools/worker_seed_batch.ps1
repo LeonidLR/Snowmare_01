@@ -39,6 +39,7 @@ param(
     [string]$Map = "",
     [string]$LevelJson = "",
     [string]$ExtraCmdArgs = "",
+    [string]$EngineArgs = "",   # appended to the engine command line as is (e.g. "-onethread" for the determinism checks)
     [int[]]$Seeds = @(),
     [int]$Repeat = 0,
     [int]$Jobs = 5,
@@ -112,7 +113,7 @@ function Get-EngineArgs($Run) {
     $extra = $ExtraCmdArgs.Replace("{seed}", "$($Run.Seed)").Replace("{n}", "$($Run.N)").Replace("{out}", (Get-OutArg $Run.Tag))
     $exec = $(if ($extra.Trim()) { "$Command $($extra.Trim())" } else { $Command })
     $lj = $(if ($LevelJson) { " -LevelJson=$LevelJson" } else { "" })
-    return "`"$Project`" $Map -game -nullrhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH -NoTelemetry `"-ExecCmds=$exec`" `"-abslog=$log`"$lj -UseFixedTimeStep -FPS=60 -FixedSeed -SquadStart=formation -Multiprocess"
+    return "`"$Project`" $Map -game -nullrhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH -NoTelemetry `"-ExecCmds=$exec`" `"-abslog=$log`"$lj -UseFixedTimeStep -FPS=60 -FixedSeed -SquadStart=formation -Multiprocess$(if ($EngineArgs) { ' ' + $EngineArgs.Trim() })"
 }
 
 Write-Host ("[seed_batch] {0}: {1} runs, {2} at a time, timeout {3} s, out {4}" -f $Command, $Runs.Count, $Jobs, $TimeoutSeconds, $OutDir)

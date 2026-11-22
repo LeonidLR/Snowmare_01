@@ -4,6 +4,7 @@
 // Pure rules: Combat/QuickFireRules. UE-only, no Godot reference. Cluster map: docs/port/REFACTOR_OPERATIVE_2026-10.md.
 
 #include "Characters/OperativeCharacter.h"
+#include "Core/CodexGameplayRandom.h"
 
 #include "Combat/CombatCheats.h"
 
@@ -358,7 +359,7 @@ void AOperativeCharacter::FireAreaRound(const FVector& Aim, const FOperativeArea
 		CurrentClip = FMath::Max(0, CurrentClip - 1);
 	}
 	// Cold misfire, as every rifle shot (ShootAtTarget).
-	if (bForceMisfireForTesting || (ColdSurvival && FMath::FRand() < ColdSurvival->GetMisfireChance()))
+	if (bForceMisfireForTesting || (ColdSurvival && CodexRandom::FRand(ECodexRandomStream::Combat, this) < ColdSurvival->GetMisfireChance()))
 	{
 		MisfireCooldownTimer = ColdSurvival ? ColdSurvival->Config.MisfireDelay : 0.45f;
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("❄️ MISFIRE! (Bolt jammed)"), FLinearColor(0.4f, 0.85f, 1.f));
@@ -395,7 +396,7 @@ void AOperativeCharacter::FireAreaRound(const FVector& Aim, const FOperativeArea
 	if (!bForceHitForTesting && Length > KINDA_SMALL_NUMBER)
 	{
 		const float SpreadRad = FMath::DegreesToRadians(FMath::Clamp(Spec.SpreadDeg * Suppressed.SpreadMultiplier, 0.f, 45.f));
-		Direction = FMath::VRandCone(Direction / Length, SpreadRad) * Length;
+		Direction = CodexRandom::VRandCone(ECodexRandomStream::Combat, this, Direction / Length, SpreadRad) * Length;
 	}
 	const float Range = CurrentWeapon ? CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
 	const FVector End = QuickFireRules::ComputeRoundEnd(Muzzle, Muzzle + Direction, Range, Config);
@@ -458,7 +459,7 @@ void AOperativeCharacter::FireAreaRound(const FVector& Aim, const FOperativeArea
 		{
 			Chance = FMath::Clamp(Chance - ColdSurvival->GetAimPenalty(), 0.05f, 0.99f);
 		}
-		bHit = bForceHitForTesting || FMath::FRand() <= FMath::Clamp(Chance * Spec.HitMultiplier * Suppressed.HitMultiplier, 0.f, 1.f);
+		bHit = bForceHitForTesting || CodexRandom::FRand(ECodexRandomStream::Combat, this) <= FMath::Clamp(Chance * Spec.HitMultiplier * Suppressed.HitMultiplier, 0.f, 1.f);
 		if (bHit)
 		{
 			ApplyRangedHit(EnemyHit, 1.f, DistCells, IsRaging());

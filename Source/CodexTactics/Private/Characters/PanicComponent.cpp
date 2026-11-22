@@ -1,4 +1,5 @@
 #include "Characters/PanicComponent.h"
+#include "Core/CodexGameplayRandom.h"
 #include "Combat/EncounterQueries.h"
 
 #include "Characters/OperativeCharacter.h"
@@ -208,7 +209,7 @@ void UPanicComponent::TriggerPanic(const FString& Reason, bool bForce)
 	bPanicking = true;
 	Phase = EPanicPhase::Fleeing;
 	FleePhaseTimer = 0.f;
-	PanicTimer = FMath::FRandRange(Config.MinDuration, Config.MaxDuration);
+	PanicTimer = CodexRandom::FRandRange(ECodexRandomStream::Combat, this, Config.MinDuration, Config.MaxDuration);
 	Stress = 100.f;
 	WarmthTimer = 0.f;
 	PanicOrigin = Operative->GetActorLocation();
@@ -221,7 +222,7 @@ void UPanicComponent::TriggerPanic(const FString& Reason, bool bForce)
 		TEXT("😱 Fall back, fall back! They'll overrun us!"),
 		TEXT("😱 Weapon jammed! I'm leaving the sector!"),
 		TEXT("😱 Back to the warmth! Run!") };
-	PanicLinePost(Operative, Phrases[FMath::RandRange(0, UE_ARRAY_COUNT(Phrases) - 1)]);
+	PanicLinePost(Operative, Phrases[CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, 0, UE_ARRAY_COUNT(Phrases) - 1)]);
 	UE_LOG(LogCodexTactics, Display, TEXT("%s panics (%s)"), *Operative->DisplayName.ToString(), *Reason);
 	UpdateAura(true);
 	OnPanicChanged.Broadcast(true);
@@ -274,7 +275,7 @@ void UPanicComponent::RecoverFromPanic(const FString& Reason, bool bSilent)
 				TEXT("😮‍💨 Got a grip! Back in formation!"),
 				TEXT("😮‍💨 Warmed up, breathing steady, ready to fight!"),
 				TEXT("😮‍💨 Panic's gone. Sector clear, holding position!") };
-			PanicLinePost(Operative, Phrases[FMath::RandRange(0, UE_ARRAY_COUNT(Phrases) - 1)]);
+			PanicLinePost(Operative, Phrases[CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, 0, UE_ARRAY_COUNT(Phrases) - 1)]);
 			UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("😮‍💨 COMPOSED"), FLinearColor(0.3f, 1.f, 0.5f));
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("%s recovers from panic (%s)"), *Operative->DisplayName.ToString(), *Reason);

@@ -104,6 +104,7 @@
 #include "Combat/ProjectileSubsystem.h"
 #include "Combat/SightRules.h"
 #include "Combat/SuppressionRules.h"
+#include "Core/CodexGameplayRandom.h"
 #include "Containers/Ticker.h"
 #include "Data/LevelJsonRules.h"
 #include "Environment/EnvironmentSubsystem.h"
@@ -150,6 +151,8 @@
 namespace PmcArena
 {
 	constexpr float StepSeconds = 0.1f;
+	/** The ai.nav.GNavmeshSynchronousTileGeneration value before an arena run forced it on (INDEX_NONE: not forced). */
+	int32 SavedSyncNavTiles = INDEX_NONE;
 	constexpr int32 TeamA = 1;
 	constexpr int32 TeamB = 2;
 
@@ -531,6 +534,8 @@ namespace PmcArena
 		bool bWeightsBLoaded = false;
 		float Time = 0.f;
 		float StageTime = 0.f;
+		/** Determinism (2026-11-22): the world time the first round starts at, fixed once the navigation is ready (-1 = not yet). */
+		double StartGateWorldSeconds = -1.0;
 		int32 Stage = 0;
 		int32 Round = 0;
 		int32 Failures = 0;
@@ -3112,12 +3117,30 @@ namespace PmcArena
 	}
 
 	void ClearZoneCover(FState& State, UWorld* World);
+	/** Puts ai.nav.GNavmeshSynchronousTileGeneration back to its value before the arena forced it on (no-op when it did not). */
+	void RestoreSyncNavTiles()
+	{
+		if (SavedSyncNavTiles == INDEX_NONE)
+		{
+			return;
+		}
+		if (IConsoleVariable* SyncNav = IConsoleManager::Get().FindConsoleVariable(TEXT("ai.nav.GNavmeshSynchronousTileGeneration")))
+		{
+			SyncNav->Set(SavedSyncNavTiles, ECVF_SetByConsole);
+		}
+		SavedSyncNavTiles = INDEX_NONE;
+	}
 
 	bool Finish(FState& State, UWorld* World, bool bComplete)
 	{
+		RestoreSyncNavTiles(); // also for a world already gone
 		if (World)
 		{
 			ClearZoneCover(State, World);
+			if (UCodexGameplayRandom* Random = UCodexGameplayRandom::Get(World))
+			{
+				Random->Unseed(); // back to the global draws (an arena run in a PIE / editor world)
+			}
 			if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
 			{
 				Pmc->DestroyTeam(TeamA);
@@ -3557,6 +3580,13 @@ namespace PmcArena
 		// The round's own seed (base + round - 1, the trainer's convention): Rounds=1 Seed=<it> replays this round - its spawns, looks,
 		// weapons AND its attacker (by the seed's parity, not the round index).
 		const int32 Seed = State.Options.Seed + State.Round - 1;
+		// ai/arena-determinism: the gameplay random streams (combat / AI / cosmetic) restart from the round seed, so the round's hit,
+		// crit, dodge and knockdown rolls replay too - not only its setup. Seeded before the spawns (their anim picks draw already).
+		if (UCodexGameplayRandom* Random = UCodexGameplayRandom::Get(World))
+		{
+			Random->Seed(static_cast<uint32>(Seed));
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] rng seeded seed=%d round=%d"), Seed, State.Round);
+		}
 		State.AreaRejects = 0;
 		for (FSide& Side : State.Sides)
 		{
@@ -4119,6 +4149,7 @@ namespace PmcArena
 		UWorld* World = WeakWorld.Get();
 		if (!World)
 		{
+			RestoreSyncNavTiles(); // the world went away mid-arena (PIE stopped): no Finish runs
 			return false;
 		}
 		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
@@ -4144,7 +4175,35 @@ namespace PmcArena
 				Check(State, false, TEXT("navigation ready within bounded setup timeout"));
 				return Finish(State, World, false);
 			}
-			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArenaNav] ready stage=%d waited=%.1fs nav=%s"), State.Stage, State.StageTime, *NavData->GetPathName());
+			// Determinism (2026-11-22): the navmesh finishes after a load-dependent number of frames, and a round started 0.1 s of world
+			// time earlier plays out differently (world-time intervals shift against the arena's steps). The first round therefore starts
+			// on a fixed world-time grid: the next multiple of StartGateQuantumSeconds after the navigation is ready, never before
+			// StartGateMinSeconds - one seed, one start time, one fight.
+			if (State.Stage == 0)
+			{
+				constexpr double StartGateQuantumSeconds = 2.0;
+				constexpr double StartGateMinSeconds = 4.0;
+				const double Now = World->GetTimeSeconds();
+				if (State.StartGateWorldSeconds < 0.0)
+				{
+					State.StartGateWorldSeconds = FMath::Max(StartGateMinSeconds, FMath::CeilToDouble(Now / StartGateQuantumSeconds) * StartGateQuantumSeconds);
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcArenaNav] ready at world %.3f s - the first round starts at world %.1f s"), Now, State.StartGateWorldSeconds);
+				}
+				if (Now + KINDA_SMALL_NUMBER < State.StartGateWorldSeconds)
+				{
+					// Bounded: the grid is at most one quantum ahead of world time; a world whose clock stops (paused) fails the setup.
+					constexpr float StartGateTimeoutSeconds = 10.f;
+					if (State.StageTime < NavReadyTimeoutSeconds + StartGateTimeoutSeconds)
+					{
+						return true;
+					}
+					UE_LOG(LogCodexTactics, Error, TEXT("[PmcArenaNav] start-grid timeout: world %.3f s never reached %.1f s"), Now, State.StartGateWorldSeconds);
+					Check(State, false, TEXT("world time reaches the first round's start grid"));
+					return Finish(State, World, false);
+				}
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArenaNav] ready stage=%d waited=%.1fs nav=%s world=%.4f"), State.Stage, State.StageTime, *NavData->GetPathName(),
+				World->GetTimeSeconds());
 		}
 		switch (State.Stage)
 		{
@@ -4433,6 +4492,17 @@ namespace PmcArena
 			// T-03 merged: scenario smokes are judged against the scripted opponent (GDD Acceptance Criteria), not self-play, so
 			// every seed sees the same attacker walk (the navmesh path from B's spawn to the point). script=run until T-07.
 			State->Options.Opponent = EOpponent::Script;
+		}
+		// Determinism (2026-11-22): navmesh tiles rebuilt during the fight land on a load-dependent frame when generated in the background,
+		// and a 1 cm path difference grows into another fight (Jobs 4 split 3/10). Synchronous tile generation for the arena's life makes
+		// one seed one fight (RoofDefence x20 at Jobs 4: 20/20 identical tracks); Finish restores the previous value.
+		if (IConsoleVariable* SyncNav = IConsoleManager::Get().FindConsoleVariable(TEXT("ai.nav.GNavmeshSynchronousTileGeneration")))
+		{
+			if (SavedSyncNavTiles == INDEX_NONE)
+			{
+				SavedSyncNavTiles = SyncNav->GetInt();
+			}
+			SyncNav->Set(1, ECVF_SetByConsole);
 		}
 		State->bWeightsALoaded = PmcCommanderRules::LoadWeightsFile(State->Options.WeightsA, State->WeightsA);
 		State->bWeightsBLoaded = PmcCommanderRules::LoadWeightsFile(State->Options.WeightsB, State->WeightsB);
