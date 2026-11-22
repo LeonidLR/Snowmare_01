@@ -13,6 +13,8 @@
 //   -TraversalDropSample=N   (default 80)
 //   -TraversalKinds=stairs,ladders,mantles,drops
 //   -TraversalOnly=<id>
+//   -TraversalControlSample=N (default 5 of each kind)
+//   -TraversalNoControl
 //
 // powershell -ExecutionPolicy Bypass -File Scripts/smoke_parallel.ps1 -NoRetry -ExtraArgs -Multiprocess -Commands PmcTraversalSmoke
 
@@ -33,6 +35,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Falls/DropLinkSubsystem.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Interactables/MantleNavigation.h"
@@ -71,7 +74,11 @@ namespace PmcTraversalSmoke
 		static FPmcTraversalConfig Load()
 		{
 			FPmcTraversalConfig Config;
-			const FString Path = FPaths::ProjectDir() / TEXT("docs/port/gemini/pmc_traversal_config.json");
+			FString Path = FPaths::ProjectContentDir() / TEXT("Data/AI/pmc_traversal.json");
+			if (!FPaths::FileExists(Path))
+			{
+				Path = FPaths::ProjectDir() / TEXT("docs/port/gemini/pmc_traversal_config.json");
+			}
 			FString JsonText;
 			TSharedPtr<FJsonObject> Obj;
 			if (FFileHelper::LoadFileToString(JsonText, *Path) &&
@@ -154,12 +161,16 @@ namespace PmcTraversalSmoke
 		FVector LinkStart = FVector::ZeroVector;
 		FVector LinkMid = FVector::ZeroVector;
 		FVector LinkEnd = FVector::ZeroVector;
+		bool bMantleDown = false;
+		float TimeoutSeconds = 15.f;
 	};
 
 	struct FFailure
 	{
 		FString Id;
 		FString Reason;
+		FVector Start = FVector::ZeroVector;
+		FVector End = FVector::ZeroVector;
 	};
 
 	struct FKindStats
@@ -167,6 +178,10 @@ namespace PmcTraversalSmoke
 		int32 TotalInMap = 0;
 		int32 Sampled = 0;
 		int32 Crossed = 0;
+		int32 MantlesUpSampled = 0;
+		int32 MantlesUpCrossed = 0;
+		int32 MantlesDownSampled = 0;
+		int32 MantlesDownCrossed = 0;
 		TArray<FFailure> Failures;
 	};
 
@@ -196,11 +211,20 @@ namespace PmcTraversalSmoke
 		bool bLadderClimbed = false;
 		bool bLinkStartPassed = false;
 		bool bLinkMidPassed = false;
+		int32 InitialMantleCount = 0;
+		bool bSawMantling = false;
 		FKindStats Stats[static_cast<int32>(ELinkKind::Count)];
 		FString OnlyFilter;
 		TSet<FString> KindsFilter;
 		int32 MantleSampleCount = 0;
 		int32 DropSampleCount = 0;
+
+		// Control run (Team 0 Player operative)
+		bool bIsControlRun = false;
+		bool bRunControl = true;
+		int32 ControlSamplePerKind = 5;
+		TArray<FLeg> ControlLegs;
+		FKindStats ControlStats[static_cast<int32>(ELinkKind::Count)];
 	};
 
 	FVector2D ReadPoint(const TSharedPtr<FJsonObject>& Object, const TCHAR* Field)
@@ -253,17 +277,23 @@ namespace PmcTraversalSmoke
 		return static_cast<float>(Operative.GetActorLocation().Z) - Operative.GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	}
 
-	void RecordFailure(FState& State, ELinkKind Kind, const FString& Id, const FString& Reason)
+	void RecordFailure(FState& State, ELinkKind Kind, const FString& Id, const FString& Reason, const FVector& Start = FVector::ZeroVector, const FVector& End = FVector::ZeroVector)
 	{
-		FKindStats& KStats = State.Stats[static_cast<int32>(Kind)];
-		KStats.Failures.Add({ Id, Reason });
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s %s FAIL (%s)"), KindName(Kind), *Id, *Reason);
+		FKindStats& KStats = State.bIsControlRun ? State.ControlStats[static_cast<int32>(Kind)] : State.Stats[static_cast<int32>(Kind)];
+		KStats.Failures.Add({ Id, Reason, Start, End });
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s[%s] %s FAIL (%s) Start=(%.0f,%.0f,%.0f) Goal=(%.0f,%.0f,%.0f)"),
+			State.bIsControlRun ? TEXT("Team0") : TEXT("Team1"), KindName(Kind), *Id, *Reason, Start.X, Start.Y, Start.Z, End.X, End.Y, End.Z);
 	}
 
 	void BuildLegs(FState& State, UWorld* World)
 	{
 		FString LayoutError;
 		const TSharedPtr<FJsonObject> Layout = LoadLayout(State.MapName, LayoutError);
+		if (!Layout.IsValid())
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("Smoke: Layout load error: %s"), *LayoutError);
+		}
+
 		float GroundZ = 0.f;
 		if (Layout.IsValid() && Layout->HasField(TEXT("ground_z")))
 		{
@@ -298,6 +328,7 @@ namespace PmcTraversalSmoke
 						{
 							continue;
 						}
+
 						const FVector2D Foot2D = ReadPoint(S, TEXT("pos"));
 						const FVector2D Top2D = ReadPoint(S, TEXT("top"));
 						const FVector2D Mid2D = S->HasField(TEXT("mid")) ? ReadPoint(S, TEXT("mid")) : Top2D;
@@ -319,6 +350,8 @@ namespace PmcTraversalSmoke
 						Leg.LinkStart = FVector(Foot2D.X, Foot2D.Y, LowZ);
 						Leg.LinkMid = FVector(Mid2D.X, Mid2D.Y, (LowZ + HighZ) * 0.5f);
 						Leg.LinkEnd = FVector(Top2D.X, Top2D.Y, HighZ);
+						const float StairDist = FVector::Dist(Leg.StartSpot, Leg.Goal);
+						Leg.TimeoutSeconds = FMath::Max(State.Config.LegTimeoutSeconds, 10.f + (StairDist / 80.f));
 						State.Legs.Add(Leg);
 						State.Stats[static_cast<int32>(ELinkKind::Stair)].Sampled++;
 					}
@@ -367,6 +400,8 @@ namespace PmcTraversalSmoke
 					Leg.LinkStart = FVector(Foot.X, Foot.Y, LowZ);
 					Leg.LinkMid = FVector((Pos.X + Foot.X) * 0.5f, (Pos.Y + Foot.Y) * 0.5f, (LowZ + HighZ) * 0.5f);
 					Leg.LinkEnd = FVector(Top.X, Top.Y, HighZ);
+					const float LadderHeightCm = FMath::Abs(HighZ - LowZ);
+					Leg.TimeoutSeconds = FMath::Max(State.Config.LegTimeoutSeconds, 10.f + (LadderHeightCm / 40.f));
 					State.Legs.Add(Leg);
 					State.Stats[static_cast<int32>(ELinkKind::Ladder)].Sampled++;
 				}
@@ -425,8 +460,18 @@ namespace PmcTraversalSmoke
 					Leg.LinkStart = Link.Start;
 					Leg.LinkMid = (Link.Start + Link.End) * 0.5f;
 					Leg.LinkEnd = Link.End;
+					Leg.bMantleDown = Link.bDown;
+					Leg.TimeoutSeconds = State.Config.LegTimeoutSeconds;
 					State.Legs.Add(Leg);
 					State.Stats[static_cast<int32>(ELinkKind::Mantle)].Sampled++;
+					if (Link.bDown)
+					{
+						State.Stats[static_cast<int32>(ELinkKind::Mantle)].MantlesDownSampled++;
+					}
+					else
+					{
+						State.Stats[static_cast<int32>(ELinkKind::Mantle)].MantlesUpSampled++;
+					}
 				}
 			}
 		}
@@ -483,17 +528,63 @@ namespace PmcTraversalSmoke
 					Leg.LinkStart = Link.Start;
 					Leg.LinkMid = (Link.Start + Link.End) * 0.5f;
 					Leg.LinkEnd = Link.End;
+					Leg.TimeoutSeconds = State.Config.LegTimeoutSeconds;
 					State.Legs.Add(Leg);
 					State.Stats[static_cast<int32>(ELinkKind::Drop)].Sampled++;
 				}
 			}
 		}
 
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: Traversal plan built: %d total legs (%d stairs of %d, %d ladders of %d, %d mantles of %d, %d drops of %d)"),
+		// Build ControlLegs for Team 0 comparison (balanced subsample across kinds)
+		if (State.bRunControl)
+		{
+			TMap<ELinkKind, int32> SampleCounts;
+			int32 ControlMantlesUp = 0;
+			int32 ControlMantlesDown = 0;
+			for (const FLeg& Leg : State.Legs)
+			{
+				if (Leg.Kind == ELinkKind::Mantle)
+				{
+					if (Leg.bMantleDown && ControlMantlesDown < State.ControlSamplePerKind)
+					{
+						State.ControlLegs.Add(Leg);
+						State.ControlStats[static_cast<int32>(ELinkKind::Mantle)].Sampled++;
+						State.ControlStats[static_cast<int32>(ELinkKind::Mantle)].MantlesDownSampled++;
+						ControlMantlesDown++;
+					}
+					else if (!Leg.bMantleDown && ControlMantlesUp < State.ControlSamplePerKind)
+					{
+						State.ControlLegs.Add(Leg);
+						State.ControlStats[static_cast<int32>(ELinkKind::Mantle)].Sampled++;
+						State.ControlStats[static_cast<int32>(ELinkKind::Mantle)].MantlesUpSampled++;
+						ControlMantlesUp++;
+					}
+				}
+				else
+				{
+					int32& Count = SampleCounts.FindOrAdd(Leg.Kind);
+					if (Count < State.ControlSamplePerKind)
+					{
+						State.ControlLegs.Add(Leg);
+						State.ControlStats[static_cast<int32>(Leg.Kind)].Sampled++;
+						Count++;
+					}
+				}
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: Built %d Control Legs for Team 0 comparison (%d stairs, %d ladders, %d mantles (%d up, %d down), %d drops)"),
+				State.ControlLegs.Num(),
+				SampleCounts.FindRef(ELinkKind::Stair),
+				SampleCounts.FindRef(ELinkKind::Ladder),
+				ControlMantlesUp + ControlMantlesDown, ControlMantlesUp, ControlMantlesDown,
+				SampleCounts.FindRef(ELinkKind::Drop));
+		}
+
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: Traversal plan built: %d total legs (%d stairs of %d, %d ladders of %d, %d mantles of %d [%d up, %d down], %d drops of %d)"),
 			State.Legs.Num(),
 			State.Stats[static_cast<int32>(ELinkKind::Stair)].Sampled, State.Stats[static_cast<int32>(ELinkKind::Stair)].TotalInMap,
 			State.Stats[static_cast<int32>(ELinkKind::Ladder)].Sampled, State.Stats[static_cast<int32>(ELinkKind::Ladder)].TotalInMap,
 			State.Stats[static_cast<int32>(ELinkKind::Mantle)].Sampled, State.Stats[static_cast<int32>(ELinkKind::Mantle)].TotalInMap,
+			State.Stats[static_cast<int32>(ELinkKind::Mantle)].MantlesUpSampled, State.Stats[static_cast<int32>(ELinkKind::Mantle)].MantlesDownSampled,
 			State.Stats[static_cast<int32>(ELinkKind::Drop)].Sampled, State.Stats[static_cast<int32>(ELinkKind::Drop)].TotalInMap);
 	}
 
@@ -511,8 +602,19 @@ namespace PmcTraversalSmoke
 			const bool bKindPass = bFilterExcluded ? (KS.Sampled == 0 || Rate >= 95.0) : (KS.Sampled > 0 && Rate >= 95.0);
 			bAllPassed &= bKindPass;
 
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke summary: %s: %d of %d crossed (%.1f%%) [total in map: %d] - %s"),
-				KindName(Kind), KS.Crossed, KS.Sampled, Rate, KS.TotalInMap, bKindPass ? TEXT("PASS") : TEXT("FAIL"));
+			if (Kind == ELinkKind::Mantle)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke summary: %s: %d of %d crossed (%.1f%%) [up/over: %d of %d, down: %d of %d] [total in map: %d] - %s"),
+					KindName(Kind), KS.Crossed, KS.Sampled, Rate,
+					KS.MantlesUpCrossed, KS.MantlesUpSampled,
+					KS.MantlesDownCrossed, KS.MantlesDownSampled,
+					KS.TotalInMap, bKindPass ? TEXT("PASS") : TEXT("FAIL"));
+			}
+			else
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke summary: %s: %d of %d crossed (%.1f%%) [total in map: %d] - %s"),
+					KindName(Kind), KS.Crossed, KS.Sampled, Rate, KS.TotalInMap, bKindPass ? TEXT("PASS") : TEXT("FAIL"));
+			}
 
 			if (!KS.Failures.IsEmpty())
 			{
@@ -526,6 +628,48 @@ namespace PmcTraversalSmoke
 					FailSummary += FString::Printf(TEXT("[%s: %s]"), *KS.Failures[i].Id, *KS.Failures[i].Reason);
 				}
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s failed %d: %s"), KindName(Kind), KS.Failures.Num(), *FailSummary);
+			}
+		}
+
+		// Programmatic failure grouping
+		UE_LOG(LogCodexTactics, Display, TEXT("=== FAILURE GROUPS (Programmatic) ==="));
+		TMap<FString, int32> GroupCounts;
+		for (int32 k = 0; k < static_cast<int32>(ELinkKind::Count); ++k)
+		{
+			for (const FFailure& Fail : State.Stats[k].Failures)
+			{
+				const FString Key = FString::Printf(TEXT("%s: %s"), KindName(static_cast<ELinkKind>(k)), *Fail.Reason);
+				GroupCounts.FindOrAdd(Key)++;
+			}
+		}
+		GroupCounts.ValueSort([](int32 A, int32 B) { return A > B; });
+		int32 TotalFailures = 0;
+		for (const auto& Pair : GroupCounts)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("  %s -> %d"), *Pair.Key, Pair.Value);
+			TotalFailures += Pair.Value;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("Total failures: %d"), TotalFailures);
+
+		// Side-by-Side Control Comparison
+		if (State.bRunControl && !State.ControlLegs.IsEmpty())
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("=== TRAVERSAL COMPARISON (Team 1 Hostile vs Team 0 Player Control) ==="));
+			UE_LOG(LogCodexTactics, Display, TEXT("%-10s | %-16s | %-12s | %-16s | %-12s"),
+				TEXT("Kind"), TEXT("Team 1 Crossed"), TEXT("Team 1 Rate"), TEXT("Team 0 Crossed"), TEXT("Team 0 Rate"));
+			for (int32 k = 0; k < static_cast<int32>(ELinkKind::Count); ++k)
+			{
+				const ELinkKind Kind = static_cast<ELinkKind>(k);
+				const FKindStats& T1 = State.Stats[k];
+				const FKindStats& T0 = State.ControlStats[k];
+				const double R1 = T1.Sampled > 0 ? (100.0 * static_cast<double>(T1.Crossed) / static_cast<double>(T1.Sampled)) : 0.0;
+				const double R0 = T0.Sampled > 0 ? (100.0 * static_cast<double>(T0.Crossed) / static_cast<double>(T0.Sampled)) : 0.0;
+				FString T1Str = FString::Printf(TEXT("%d / %d"), T1.Crossed, T1.Sampled);
+				FString T0Str = FString::Printf(TEXT("%d / %d"), T0.Crossed, T0.Sampled);
+				FString R1Str = FString::Printf(TEXT("%.1f%%"), R1);
+				FString R0Str = FString::Printf(TEXT("%.1f%%"), R0);
+				UE_LOG(LogCodexTactics, Display, TEXT("%-10s | %-16s | %-12s | %-16s | %-12s"),
+					KindName(Kind), *T1Str, *R1Str, *T0Str, *R0Str);
 			}
 		}
 
@@ -644,8 +788,35 @@ namespace PmcTraversalSmoke
 		}
 		case EPhase::PrepareLeg:
 		{
-			if (State.LegIndex >= State.Legs.Num())
+			TArray<FLeg>& CurrentLegs = State.bIsControlRun ? State.ControlLegs : State.Legs;
+			if (State.LegIndex >= CurrentLegs.Num())
 			{
+				if (!State.bIsControlRun && State.bRunControl && !State.ControlLegs.IsEmpty())
+				{
+					USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+					if (Squad && !Squad->GetMembers().IsEmpty() && Squad->GetMembers()[0])
+					{
+						State.bIsControlRun = true;
+						State.LegIndex = 0;
+						State.Hostile = Squad->GetMembers()[0];
+						AOperativeCharacter* PlayerOp = State.Hostile.Get();
+						if (PlayerOp)
+						{
+							if (PlayerOp->ColdSurvival) { PlayerOp->ColdSurvival->SetComponentTickEnabled(false); }
+							if (PlayerOp->HealthComponent) { PlayerOp->HealthComponent->SetMaxHealth(100000.f, true); }
+							if (PlayerOp->KnockdownComponent)
+							{
+								PlayerOp->KnockdownComponent->bCanBeKnockedDown = false;
+								PlayerOp->KnockdownComponent->ResetForLoad();
+							}
+							PlayerOp->bTacticalCeaseFire = true;
+						}
+						UE_LOG(LogCodexTactics, Display, TEXT("Smoke: === STARTING TEAM 0 CONTROL RUN (%d legs) ==="), State.ControlLegs.Num());
+						State.Phase = EPhase::PrepareLeg;
+						State.PhaseTime = 0.f;
+						return true;
+					}
+				}
 				State.Phase = EPhase::Done;
 				return Finish(State);
 			}
@@ -653,21 +824,33 @@ namespace PmcTraversalSmoke
 			AOperativeCharacter* Hostile = State.Hostile.Get();
 			if (!Hostile || Hostile->IsKilledInAction() || !Hostile->GetController() || (Hostile->HealthComponent && !Hostile->HealthComponent->IsAlive()))
 			{
-				UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
-				if (Pmc)
+				if (State.bIsControlRun)
 				{
-					const FVector SpawnOrigin(2356.f, -8700.f, 50.f);
-					FVector NavSpawn = SpawnOrigin;
-					ProjectNav(World, SpawnOrigin, NavSpawn);
-					const TArray<AOperativeCharacter*> Spawned = Pmc->SpawnSquad(1, NavSpawn, FRotator::ZeroRotator, 1, 1);
-					if (!Spawned.IsEmpty() && Spawned[0])
+					USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+					if (Squad && !Squad->GetMembers().IsEmpty() && Squad->GetMembers()[0])
 					{
-						State.Hostile = Spawned[0];
-						Hostile = Spawned[0];
-						if (Hostile->ColdSurvival)
+						State.Hostile = Squad->GetMembers()[0];
+						Hostile = State.Hostile.Get();
+					}
+				}
+				else
+				{
+					UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+					if (Pmc)
+					{
+						const FVector SpawnOrigin(2356.f, -8700.f, 50.f);
+						FVector NavSpawn = SpawnOrigin;
+						ProjectNav(World, SpawnOrigin, NavSpawn);
+						const TArray<AOperativeCharacter*> Spawned = Pmc->SpawnSquad(1, NavSpawn, FRotator::ZeroRotator, 1, 1);
+						if (!Spawned.IsEmpty() && Spawned[0])
 						{
-							Hostile->ColdSurvival->Deactivate();
-							Hostile->ColdSurvival->SetComponentTickEnabled(false);
+							State.Hostile = Spawned[0];
+							Hostile = Spawned[0];
+							if (Hostile->ColdSurvival)
+							{
+								Hostile->ColdSurvival->Deactivate();
+								Hostile->ColdSurvival->SetComponentTickEnabled(false);
+							}
 						}
 					}
 				}
@@ -675,7 +858,7 @@ namespace PmcTraversalSmoke
 
 			if (!Hostile)
 			{
-				UE_LOG(LogCodexTactics, Error, TEXT("Smoke FAIL: hostile operative is gone"));
+				UE_LOG(LogCodexTactics, Error, TEXT("Smoke FAIL: operative is gone"));
 				return Finish(State);
 			}
 
@@ -697,11 +880,11 @@ namespace PmcTraversalSmoke
 			Hostile->SetActorEnableCollision(true);
 			Hostile->SetStance(EOperativeStance::Standing);
 
-			const FLeg& Leg = State.Legs[State.LegIndex];
+			const FLeg& Leg = CurrentLegs[State.LegIndex];
 			FVector NavStart = Leg.StartSpot;
 			if (!ProjectNav(World, Leg.StartSpot, NavStart))
 			{
-				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("no path (start off navmesh)"));
+				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("no path (start off navmesh)"), Leg.LinkStart, Leg.LinkEnd);
 				State.LegIndex++;
 				return true;
 			}
@@ -709,17 +892,36 @@ namespace PmcTraversalSmoke
 			FVector NavGoal = Leg.Goal;
 			if (!ProjectNav(World, Leg.Goal, NavGoal))
 			{
-				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("no path (goal off navmesh)"));
+				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("no path (goal off navmesh)"), Leg.LinkStart, Leg.LinkEnd);
 				State.LegIndex++;
 				return true;
 			}
-			State.Legs[State.LegIndex].NavGoal = NavGoal;
+			CurrentLegs[State.LegIndex].NavGoal = NavGoal;
 
 			const float HalfHeight = Hostile->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 			Hostile->TeleportTo(NavStart + FVector(0.f, 0.f, HalfHeight + 5.f), Leg.StartFacing, false, true);
+			if (UCharacterMovementComponent* MoveComp = Hostile->GetCharacterMovement())
+			{
+				MoveComp->StopMovementImmediately();
+				MoveComp->Velocity = FVector::ZeroVector;
+			}
 			if (AAIController* AI = Cast<AAIController>(Hostile->GetController()))
 			{
 				AI->StopMovement();
+			}
+
+			State.InitialMantleCount = Hostile->GetMantleCount();
+			State.bSawMantling = false;
+
+			USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+			if (Leg.Kind == ELinkKind::Mantle)
+			{
+				UE_LOG(LogCodexTactics, Log, TEXT("Smoke: Leg %s[%s] (%s) - SquadSolo=%d, IsMantlePathAllowed=%d, InitialMantleCount=%d"),
+					State.bIsControlRun ? TEXT("Team0") : TEXT("Team1"),
+					*Leg.Id, Leg.bMantleDown ? TEXT("down") : TEXT("up/over"),
+					Squad ? (Squad->IsSoloMode() ? 1 : 0) : -1,
+					Hostile->IsMantlePathAllowed() ? 1 : 0,
+					State.InitialMantleCount);
 			}
 
 			State.Phase = EPhase::OrderLeg;
@@ -731,22 +933,23 @@ namespace PmcTraversalSmoke
 			AOperativeCharacter* Hostile = State.Hostile.Get();
 			if (!Hostile)
 			{
-				UE_LOG(LogCodexTactics, Error, TEXT("Smoke FAIL: hostile operative is gone"));
+				UE_LOG(LogCodexTactics, Error, TEXT("Smoke FAIL: operative is gone"));
 				return Finish(State);
 			}
 
-			const FLeg& Leg = State.Legs[State.LegIndex];
+			TArray<FLeg>& CurrentLegs = State.bIsControlRun ? State.ControlLegs : State.Legs;
+			const FLeg& Leg = CurrentLegs[State.LegIndex];
 			const EOperativeOrderResult OrderRes = Hostile->OrderMoveTo(Leg.NavGoal, false);
 			if (OrderRes == EOperativeOrderResult::Unreachable || OrderRes == EOperativeOrderResult::NoController)
 			{
-				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("no path"));
+				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("no path"), Leg.LinkStart, Leg.LinkEnd);
 				State.LegIndex++;
 				State.Phase = EPhase::PrepareLeg;
 				return true;
 			}
 			if (OrderRes == EOperativeOrderResult::Refused)
 			{
-				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("refused"));
+				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("refused"), Leg.LinkStart, Leg.LinkEnd);
 				State.LegIndex++;
 				State.Phase = EPhase::PrepareLeg;
 				return true;
@@ -757,6 +960,8 @@ namespace PmcTraversalSmoke
 			State.bLadderClimbed = false;
 			State.bLinkStartPassed = false;
 			State.bLinkMidPassed = false;
+			State.bSawMantling = false;
+			State.InitialMantleCount = Hostile->GetMantleCount();
 			State.Phase = EPhase::RunLeg;
 			State.PhaseTime = 0.f;
 			return true;
@@ -766,15 +971,16 @@ namespace PmcTraversalSmoke
 			AOperativeCharacter* Hostile = State.Hostile.Get();
 			if (!Hostile)
 			{
-				UE_LOG(LogCodexTactics, Error, TEXT("Smoke FAIL: hostile operative is gone"));
+				UE_LOG(LogCodexTactics, Error, TEXT("Smoke FAIL: operative is gone"));
 				return Finish(State);
 			}
 
-			const FLeg& Leg = State.Legs[State.LegIndex];
+			TArray<FLeg>& CurrentLegs = State.bIsControlRun ? State.ControlLegs : State.Legs;
+			const FLeg& Leg = CurrentLegs[State.LegIndex];
 			const bool bAlive = !Hostile->IsKilledInAction() && Hostile->HealthComponent && Hostile->HealthComponent->IsAlive();
 			if (!bAlive)
 			{
-				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("died"));
+				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("died"), Leg.LinkStart, Leg.LinkEnd);
 				State.LegIndex++;
 				State.Phase = EPhase::PrepareLeg;
 				State.PhaseTime = 0.f;
@@ -795,6 +1001,10 @@ namespace PmcTraversalSmoke
 				if (FVector::Dist(CurrentPos, Leg.LinkMid) <= 150.f)
 				{
 					State.bLinkMidPassed = true;
+				}
+				if (Hostile->IsMantling())
+				{
+					State.bSawMantling = true;
 				}
 			}
 			else if (Leg.Kind == ELinkKind::Stair)
@@ -820,7 +1030,15 @@ namespace PmcTraversalSmoke
 			const float Dist2D = static_cast<float>(FVector::Dist2D(CurrentPos, Leg.NavGoal));
 			const float DistZ = FMath::Abs(CurrentFeetZ - Leg.NavGoal.Z);
 			const float Radius = (Leg.Kind == ELinkKind::Ladder) ? State.Config.LadderArriveRadiusCm : State.Config.ArriveRadiusCm;
-			const bool bArrived = (Dist2D <= Radius) && (DistZ <= State.Config.LevelToleranceCm);
+			bool bArrived = (Dist2D <= Radius) && (DistZ <= State.Config.LevelToleranceCm);
+
+			if (Leg.Kind == ELinkKind::Drop)
+			{
+				UCharacterMovementComponent* MoveComp = Hostile->GetCharacterMovement();
+				const bool bGrounded = MoveComp && MoveComp->IsMovingOnGround();
+				const bool bNearZeroZVel = MoveComp && FMath::Abs(MoveComp->Velocity.Z) < 30.f;
+				bArrived = bArrived && bGrounded && bNearZeroZVel;
+			}
 
 			if (bArrived)
 			{
@@ -829,7 +1047,7 @@ namespace PmcTraversalSmoke
 				{
 					if (!State.bLadderClimbed)
 					{
-						RecordFailure(State, Leg.Kind, Leg.Id, TEXT("bypassed ladder"));
+						RecordFailure(State, Leg.Kind, Leg.Id, TEXT("bypassed ladder"), Leg.LinkStart, Leg.LinkEnd);
 						State.LegIndex++;
 						State.Phase = EPhase::PrepareLeg;
 						State.PhaseTime = 0.f;
@@ -839,9 +1057,11 @@ namespace PmcTraversalSmoke
 				}
 				else if (Leg.Kind == ELinkKind::Mantle)
 				{
-					if (!State.bLinkMidPassed)
+					const bool bDidMantle = State.bSawMantling || (Hostile->GetMantleCount() > State.InitialMantleCount);
+					if (!bDidMantle)
 					{
-						RecordFailure(State, Leg.Kind, Leg.Id, TEXT("bypassed mantle"));
+						const FString BypassReason = Leg.bMantleDown ? TEXT("bypassed mantle down") : TEXT("bypassed mantle up");
+						RecordFailure(State, Leg.Kind, Leg.Id, BypassReason, Leg.LinkStart, Leg.LinkEnd);
 						State.LegIndex++;
 						State.Phase = EPhase::PrepareLeg;
 						State.PhaseTime = 0.f;
@@ -853,7 +1073,7 @@ namespace PmcTraversalSmoke
 				{
 					if (!State.bLinkMidPassed)
 					{
-						RecordFailure(State, Leg.Kind, Leg.Id, TEXT("bypassed drop"));
+						RecordFailure(State, Leg.Kind, Leg.Id, TEXT("bypassed drop"), Leg.LinkStart, Leg.LinkEnd);
 						State.LegIndex++;
 						State.Phase = EPhase::PrepareLeg;
 						State.PhaseTime = 0.f;
@@ -865,7 +1085,7 @@ namespace PmcTraversalSmoke
 				{
 					if (!State.bLinkMidPassed)
 					{
-						RecordFailure(State, Leg.Kind, Leg.Id, TEXT("bypassed stair"));
+						RecordFailure(State, Leg.Kind, Leg.Id, TEXT("bypassed stair"), Leg.LinkStart, Leg.LinkEnd);
 						State.LegIndex++;
 						State.Phase = EPhase::PrepareLeg;
 						State.PhaseTime = 0.f;
@@ -876,7 +1096,19 @@ namespace PmcTraversalSmoke
 
 				if (bVerifiedLink)
 				{
-					State.Stats[static_cast<int32>(Leg.Kind)].Crossed++;
+					FKindStats& KStats = State.bIsControlRun ? State.ControlStats[static_cast<int32>(Leg.Kind)] : State.Stats[static_cast<int32>(Leg.Kind)];
+					KStats.Crossed++;
+					if (Leg.Kind == ELinkKind::Mantle)
+					{
+						if (Leg.bMantleDown)
+						{
+							KStats.MantlesDownCrossed++;
+						}
+						else
+						{
+							KStats.MantlesUpCrossed++;
+						}
+					}
 					State.LegIndex++;
 					State.Phase = EPhase::PrepareLeg;
 					State.PhaseTime = 0.f;
@@ -886,16 +1118,16 @@ namespace PmcTraversalSmoke
 
 			if (State.Progress.IsStuck(Now, CurrentPos, State.Config.StuckMoveCm, State.Config.StuckSeconds))
 			{
-				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("stuck"));
+				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("stuck"), Leg.LinkStart, Leg.LinkEnd);
 				State.LegIndex++;
 				State.Phase = EPhase::PrepareLeg;
 				State.PhaseTime = 0.f;
 				return true;
 			}
 
-			if (Now - State.LegStartTime > State.Config.LegTimeoutSeconds)
+			if (Now - State.LegStartTime > Leg.TimeoutSeconds)
 			{
-				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("stuck (timed out)"));
+				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("stuck (timed out)"), Leg.LinkStart, Leg.LinkEnd);
 				State.LegIndex++;
 				State.Phase = EPhase::PrepareLeg;
 				State.PhaseTime = 0.f;
@@ -946,6 +1178,14 @@ namespace PmcTraversalSmoke
 			{
 				State->DropSampleCount = FCString::Atoi(*Arg.Mid(11));
 			}
+			else if (Arg.StartsWith(TEXT("controlsample=")))
+			{
+				State->ControlSamplePerKind = FCString::Atoi(*Arg.Mid(14));
+			}
+			else if (Arg == TEXT("nocontrol"))
+			{
+				State->bRunControl = false;
+			}
 		}
 
 		int32 MantleCli = 0;
@@ -957,6 +1197,15 @@ namespace PmcTraversalSmoke
 		if (FParse::Value(FCommandLine::Get(), TEXT("-TraversalDropSample="), DropCli) && DropCli > 0)
 		{
 			State->DropSampleCount = DropCli;
+		}
+		int32 ControlSampleCli = 0;
+		if (FParse::Value(FCommandLine::Get(), TEXT("-TraversalControlSample="), ControlSampleCli) && ControlSampleCli > 0)
+		{
+			State->ControlSamplePerKind = ControlSampleCli;
+		}
+		if (FParse::Param(FCommandLine::Get(), TEXT("TraversalNoControl")))
+		{
+			State->bRunControl = false;
 		}
 		FString KindsCli;
 		if (FParse::Value(FCommandLine::Get(), TEXT("-TraversalKinds="), KindsCli))
