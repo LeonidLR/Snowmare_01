@@ -28,6 +28,12 @@
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Interactables/WindowBreakage.h"
+#include "Tactics/CoverGhostActor.h"
+#include "Camera/CameraActor.h"
+#include "Camera/CameraComponent.h"
+#include "GameFramework/HUD.h"
+#include "UnrealClient.h"
+#include "Misc/Paths.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CoreDelegates.h"
 #include "NavigationSystem.h"
@@ -38,7 +44,7 @@ namespace WindowStairHoverSmoke
 	constexpr int32 SettleFrames = 90;
 	constexpr int32 MaxFrames = 60 * 240;
 
-	enum class EStep : uint8 { Warmup, WindowPlace, WindowHover, WindowWalk, StairPlace, StairHover, StairWalk, Done };
+	enum class EStep : uint8 { Warmup, WindowPlace, WindowHover, WindowShot, WindowWalk, StairPlace, StairHover, StairShot, StairWalk, Done };
 
 	struct FRunner
 	{
@@ -55,6 +61,9 @@ namespace WindowStairHoverSmoke
 		float Storey1Z = 0.f;
 		TWeakObjectPtr<UPrimitiveComponent> Stair;
 		TArray<TWeakObjectPtr<UPrimitiveComponent>> TriedStairs;
+		bool bShots = false;
+		FHitResult PendingClick;
+		TWeakObjectPtr<ACameraActor> ShotCamera;
 		FDelegateHandle EndFrameHandle;
 	};
 
@@ -106,6 +115,44 @@ namespace WindowStairHoverSmoke
 	{
 		const URoofCutawaySubsystem* Roofs = World.GetSubsystem<URoofCutawaySubsystem>();
 		return Roofs && Roofs->TraceCursorRay(Eye, Aim + (Aim - Eye).GetSafeNormal() * 2000.f, ECC_Visibility, &Leader, OutHit);
+	}
+
+
+	/** Logs where a hover silhouette stands and whether it is visible (designer: "no silhouette" though the hover logic said shown). */
+	void DescribeGhost(const TCHAR* Label, const ACoverGhostActor* Ghost, const FVector& Expected)
+	{
+		if (!Ghost)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s silhouette: none"), Label);
+			return;
+		}
+		const FBox Body = Ghost->GetComponentsBoundingBox(true);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s silhouette at %s (body %s), hidden %d, shown %d; expected near %s (%.0f cm)"), Label,
+			*Ghost->GetActorLocation().ToCompactString(), *Body.ToString(), Ghost->IsHidden() ? 1 : 0, Ghost->IsShown() ? 1 : 0, *Expected.ToCompactString(),
+			FVector::Dist(Body.GetCenter(), Expected));
+	}
+
+	/** shots=1 (needs rendering): a camera at Eye looking at Aim, a screenshot to Saved/StoryShowcase/hover/<Name>.png. */
+	void Shot(UWorld& World, APlayerController& PC, const FVector& Eye, const FVector& Aim, const FString& Name)
+	{
+		if (!Runner->bShots)
+		{
+			return;
+		}
+		if (!Runner->ShotCamera.IsValid())
+		{
+			Runner->ShotCamera = World.SpawnActor<ACameraActor>(Eye, (Aim - Eye).Rotation());
+		}
+		if (ACameraActor* Camera = Runner->ShotCamera.Get())
+		{
+			Camera->SetActorLocationAndRotation(Eye, (Aim - Eye).Rotation());
+			Camera->GetCameraComponent()->SetFieldOfView(55.f);
+			Camera->GetCameraComponent()->bConstrainAspectRatio = false;
+			PC.SetViewTarget(Camera);
+		}
+		const FString File = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("StoryShowcase/hover") / (Name + TEXT(".png")));
+		FScreenshotRequest::RequestScreenshot(File, /*bInShowUI*/ false, /*bAddFilenameSuffix*/ false);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: shot %s"), *File);
 	}
 
 	bool Tick()
@@ -211,15 +258,28 @@ namespace WindowStairHoverSmoke
 			AActor* Found = bHit ? WindowBreakage::FindWindowSillAt(*World, Hit) : nullptr;
 			Check(Found == Sill, FString::Printf(TEXT("W: the cursor on the window (hit %s %s at %s, normal z %.2f) resolves to its sill (%s)"), bHit ? *GetNameSafe(Hit.GetActor()) : TEXT("-"),
 				bHit ? *GetNameSafe(Hit.GetComponent()) : TEXT(""), *Hit.ImpactPoint.ToCompactString(), Hit.ImpactNormal.Z, *GetNameSafe(Found)));
+			PC->bFreezeMantleHoverForTesting = true; // the real (off-window) cursor must not clear the hover the smoke sets
 			Check(bHit && PC->UpdateWindowHover(Leader, &Hit) && PC->IsWindowHoverShown(), TEXT("W: the hover silhouette shows past the window"));
-			PC->UpdateWindowHover(nullptr, nullptr);
-			if (bHit)
+			DescribeGhost(TEXT("W"), PC->GetWindowHoverGhost(), R.SillCenter + FVector(0.f, 0.f, 60.f));
+			Shot(*World, *PC, Eye, Glass, TEXT("window_hover"));
+			R.PendingClick = Hit;
+			Go(EStep::WindowShot);
+			return true;
+		}
+		case EStep::WindowShot:
+			if (R.StepFrame < (R.bShots ? 20 : 1))
 			{
-				PC->HandlePlayerClick(Hit);
+				return true;
+			}
+			DescribeGhost(TEXT("W (after the shot)"), PC->GetWindowHoverGhost(), R.SillCenter + FVector(0.f, 0.f, 60.f));
+			PC->bFreezeMantleHoverForTesting = false;
+			PC->UpdateWindowHover(nullptr, nullptr);
+			if (R.PendingClick.bBlockingHit)
+			{
+				PC->HandlePlayerClick(R.PendingClick);
 			}
 			Go(EStep::WindowWalk);
 			return true;
-		}
 		case EStep::WindowWalk:
 		{
 			AActor* Sill = R.Sill.Get();
@@ -297,15 +357,27 @@ namespace WindowStairHoverSmoke
 			Check(bTarget, FString::Printf(TEXT("S: the cursor on the flight (hit %s %s at %s, stair %d) gives the stair-up target (%s)"), bHit ? *GetNameSafe(Hit.GetActor()) : TEXT("-"),
 				bHit ? *GetNameSafe(Hit.GetComponent()) : TEXT(""), *Hit.ImpactPoint.ToCompactString(), bHit && Hit.GetComponent() && IsStair(*Hit.GetComponent()) ? 1 : 0,
 				bTarget ? *Target.ToCompactString() : *Why));
+			PC->bFreezeMantleHoverForTesting = true;
 			Check(bHit && PC->UpdateStairHover(Leader, &Hit) && PC->IsStairHoverShown(), TEXT("S: the hover silhouette shows on the storey above"));
-			PC->UpdateStairHover(nullptr, nullptr);
-			if (bHit)
+			DescribeGhost(TEXT("S"), PC->GetStairHoverGhost(), Target + FVector(0.f, 0.f, 90.f));
+			Shot(*World, *PC, Eye, Aim, TEXT("stair_hover"));
+			R.PendingClick = Hit;
+			Go(EStep::StairShot);
+			return true;
+		}
+		case EStep::StairShot:
+			if (R.StepFrame < (R.bShots ? 20 : 1))
 			{
-				PC->HandlePlayerClick(Hit);
+				return true;
+			}
+			PC->bFreezeMantleHoverForTesting = false;
+			PC->UpdateStairHover(nullptr, nullptr);
+			if (R.PendingClick.bBlockingHit)
+			{
+				PC->HandlePlayerClick(R.PendingClick);
 			}
 			Go(EStep::StairWalk);
 			return true;
-		}
 		case EStep::StairWalk:
 		{
 			const bool bUp = FeetZ(*Leader) >= R.Storey1Z - 15.f;
@@ -325,6 +397,10 @@ namespace WindowStairHoverSmoke
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		Runner = MakeShared<FRunner>();
+		for (const FString& Arg : Args)
+		{
+			Runner->bShots |= Arg == TEXT("shots=1");
+		}
 		if (IConsoleVariable* Pressure = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.Enabled")))
 		{
 			Pressure->Set(0, ECVF_SetByConsole);

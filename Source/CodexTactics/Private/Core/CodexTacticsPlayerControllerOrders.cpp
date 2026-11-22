@@ -846,6 +846,13 @@ bool ACodexTacticsPlayerController::CanOrderMantleClick(const FHitResult& Hit) c
 		&& !UTutorialSubsystem::FilterCommand(const_cast<ACodexTacticsPlayerController*>(this), PlayerCommands::Move).IsNone();
 }
 
+namespace WindowHoverLocal
+{
+	/** 1 = the window hover silhouette in the climbing frame on the sill; 0 (default until that pose renders) = standing past the window. */
+	TAutoConsoleVariable<int32> CVarClimbSilhouette(TEXT("Codex.Window.ClimbSilhouette"), 0,
+		TEXT("Window hover silhouette: 1 = the climbing frame on the sill (WIP: not drawn yet), 0 = standing past the window (default)"));
+}
+
 bool ACodexTacticsPlayerController::FindWindowSillTarget(const AActor& Sill, const AOperativeCharacter& Operative, FVector& OutFeet, float& OutYaw) const
 {
 	const FBox Local = Sill.CalculateComponentsBoundingBoxInLocalSpace(false);
@@ -974,7 +981,9 @@ bool ACodexTacticsPlayerController::UpdateWindowHover(AOperativeCharacter* Opera
 		FVector PoseLocation = FVector::ZeroVector;
 		FName AnchorBone = NAME_None;
 		FVector AnchorTarget = FVector::ZeroVector;
-		const bool bPosed = Plan.ClipIndex != INDEX_NONE && Operative->PlanMantleGhostPose(Plan, PoseClip, PoseSeconds, PoseLocation, AnchorBone, AnchorTarget);
+		const bool bPosed = WindowHoverLocal::CVarClimbSilhouette.GetValueOnGameThread() != 0 && Plan.ClipIndex != INDEX_NONE
+			&& Operative->PlanMantleGhostPose(Plan, PoseClip, PoseSeconds, PoseLocation, AnchorBone, AnchorTarget);
+		UE_LOG(LogCodexTactics, Verbose, TEXT("[Window] hover silhouette: clip %d posed %d at %s"), Plan.ClipIndex, bPosed ? 1 : 0, *PoseLocation.ToCompactString());
 		WindowGhost->ShowMantleFor(*Operative, Feet, Yaw, /*bCrouched*/ false, bPosed ? PoseClip : nullptr, PoseSeconds, PoseLocation, AnchorBone, AnchorTarget);
 	}
 	return WindowGhost != nullptr;

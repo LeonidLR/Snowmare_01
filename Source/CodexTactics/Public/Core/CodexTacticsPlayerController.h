@@ -548,6 +548,9 @@ public:
 	/** Designer 2026-11-22: over a stair flight in his building, the silhouette on the hidden storey's landing above (a click walks the squad up). */
 	bool UpdateStairHover(AOperativeCharacter* Operative, const FHitResult* Hit);
 	bool IsStairHoverShown() const;
+	/** The window / stair-up hover silhouettes (smokes; null before the first hover). */
+	const class ACoverGhostActor* GetWindowHoverGhost() const { return WindowGhost; }
+	const class ACoverGhostActor* GetStairHoverGhost() const { return StairGhost; }
 	/** Where a click on window sill Sill sends Operative: the navmesh point past the window on the side away from him (feet) and the yaw through it. */
 	bool FindWindowSillTarget(const AActor& Sill, const AOperativeCharacter& Operative, FVector& OutFeet, float& OutYaw) const;
 	/** The mantle hover ghost (smokes); null before the first hover. */

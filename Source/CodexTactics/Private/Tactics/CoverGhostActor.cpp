@@ -30,6 +30,11 @@ ACoverGhostActor::ACoverGhostActor()
 	Placeholder->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Placeholder->SetCastShadow(false);
 	Placeholder->SetVisibility(false);
+	// The hologram is drawn through walls (depth test off), but the renderer's occlusion culling still dropped a ghost whose bounds lay wholly
+	// behind a wall - the window silhouette inside the room past the window was never drawn (designer 2026-11-22, WindowStairHoverSmoke
+	// shots). Grown bounds keep a part of them in view, so the ghost is not culled.
+	Body->SetBoundsScale(4.f);
+	Placeholder->SetBoundsScale(4.f);
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cylinder(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	if (Cylinder.Succeeded())
 	{
