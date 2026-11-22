@@ -26,6 +26,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/KnockdownComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Containers/Ticker.h"
 #include "Dom/JsonObject.h"
@@ -150,6 +151,9 @@ namespace PmcTraversalSmoke
 		FVector Goal = FVector::ZeroVector;
 		FVector NavGoal = FVector::ZeroVector;
 		float GoalZ = 0.f;
+		FVector LinkStart = FVector::ZeroVector;
+		FVector LinkMid = FVector::ZeroVector;
+		FVector LinkEnd = FVector::ZeroVector;
 	};
 
 	struct FFailure
@@ -190,6 +194,8 @@ namespace PmcTraversalSmoke
 		int32 LegIndex = 0;
 		FProgress Progress;
 		bool bLadderClimbed = false;
+		bool bLinkStartPassed = false;
+		bool bLinkMidPassed = false;
 		FKindStats Stats[static_cast<int32>(ELinkKind::Count)];
 		FString OnlyFilter;
 		TSet<FString> KindsFilter;
@@ -310,6 +316,9 @@ namespace PmcTraversalSmoke
 						Leg.StartFacing = FVector(Dir.X, Dir.Y, 0.f).Rotation();
 						Leg.Goal = FVector(Top2D.X + Inward.X * State.Config.StairInwardCm, Top2D.Y + Inward.Y * State.Config.StairInwardCm, HighZ + 50.f);
 						Leg.GoalZ = HighZ;
+						Leg.LinkStart = FVector(Foot2D.X, Foot2D.Y, LowZ);
+						Leg.LinkMid = FVector(Mid2D.X, Mid2D.Y, (LowZ + HighZ) * 0.5f);
+						Leg.LinkEnd = FVector(Top2D.X, Top2D.Y, HighZ);
 						State.Legs.Add(Leg);
 						State.Stats[static_cast<int32>(ELinkKind::Stair)].Sampled++;
 					}
@@ -355,6 +364,9 @@ namespace PmcTraversalSmoke
 					Leg.StartFacing = (-FVector(Out.X, Out.Y, 0.f)).Rotation();
 					Leg.Goal = FVector(Above.X, Above.Y, HighZ + 50.f);
 					Leg.GoalZ = HighZ;
+					Leg.LinkStart = FVector(Foot.X, Foot.Y, LowZ);
+					Leg.LinkMid = FVector((Pos.X + Foot.X) * 0.5f, (Pos.Y + Foot.Y) * 0.5f, (LowZ + HighZ) * 0.5f);
+					Leg.LinkEnd = FVector(Top.X, Top.Y, HighZ);
 					State.Legs.Add(Leg);
 					State.Stats[static_cast<int32>(ELinkKind::Ladder)].Sampled++;
 				}
@@ -382,7 +394,10 @@ namespace PmcTraversalSmoke
 					const int64 Aex = FMath::RoundToInt64(A.End.X);
 					const int64 Bex = FMath::RoundToInt64(B.End.X);
 					if (Aex != Bex) return Aex < Bex;
-					return FMath::RoundToInt64(A.End.Y) < FMath::RoundToInt64(B.End.Y);
+					const int64 Aey = FMath::RoundToInt64(A.End.Y);
+					const int64 Bey = FMath::RoundToInt64(B.End.Y);
+					if (Aey != Bey) return Aey < Bey;
+					return FMath::RoundToInt64(A.End.Z) < FMath::RoundToInt64(B.End.Z);
 				});
 
 				const int32 Total = Mantles.Num();
@@ -407,6 +422,9 @@ namespace PmcTraversalSmoke
 					Leg.StartFacing = Link.Dir.Rotation();
 					Leg.Goal = Link.End + Link.Dir * State.Config.MantleGoalOffsetCm;
 					Leg.GoalZ = Link.End.Z;
+					Leg.LinkStart = Link.Start;
+					Leg.LinkMid = (Link.Start + Link.End) * 0.5f;
+					Leg.LinkEnd = Link.End;
 					State.Legs.Add(Leg);
 					State.Stats[static_cast<int32>(ELinkKind::Mantle)].Sampled++;
 				}
@@ -434,7 +452,10 @@ namespace PmcTraversalSmoke
 					const int64 Aex = FMath::RoundToInt64(A.End.X);
 					const int64 Bex = FMath::RoundToInt64(B.End.X);
 					if (Aex != Bex) return Aex < Bex;
-					return FMath::RoundToInt64(A.End.Y) < FMath::RoundToInt64(B.End.Y);
+					const int64 Aey = FMath::RoundToInt64(A.End.Y);
+					const int64 Bey = FMath::RoundToInt64(B.End.Y);
+					if (Aey != Bey) return Aey < Bey;
+					return FMath::RoundToInt64(A.End.Z) < FMath::RoundToInt64(B.End.Z);
 				});
 
 				const int32 Total = Drops.Num();
@@ -459,6 +480,9 @@ namespace PmcTraversalSmoke
 					Leg.StartFacing = Link.Dir.Rotation();
 					Leg.Goal = Link.End + Link.Dir * State.Config.DropGoalOffsetCm;
 					Leg.GoalZ = Link.End.Z;
+					Leg.LinkStart = Link.Start;
+					Leg.LinkMid = (Link.Start + Link.End) * 0.5f;
+					Leg.LinkEnd = Link.End;
 					State.Legs.Add(Leg);
 					State.Stats[static_cast<int32>(ELinkKind::Drop)].Sampled++;
 				}
@@ -516,6 +540,8 @@ namespace PmcTraversalSmoke
 		UWorld* World = State.World.Get();
 		if (!World)
 		{
+			UE_LOG(LogCodexTactics, Error, TEXT("Smoke FAIL: World is null during Step"));
+			FPlatformMisc::RequestExit(true, TEXT("PmcTraversalSmokeWorldNull"));
 			return false;
 		}
 
@@ -604,6 +630,10 @@ namespace PmcTraversalSmoke
 			{
 				State.Hostile->ColdSurvival->SetComponentTickEnabled(false);
 			}
+			if (State.Hostile->KnockdownComponent)
+			{
+				State.Hostile->KnockdownComponent->bCanBeKnockedDown = false;
+			}
 			State.Hostile->bTacticalCeaseFire = true;
 
 			BuildLegs(State, World);
@@ -621,6 +651,28 @@ namespace PmcTraversalSmoke
 			}
 
 			AOperativeCharacter* Hostile = State.Hostile.Get();
+			if (!Hostile || Hostile->IsKilledInAction() || !Hostile->GetController() || (Hostile->HealthComponent && !Hostile->HealthComponent->IsAlive()))
+			{
+				UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+				if (Pmc)
+				{
+					const FVector SpawnOrigin(2356.f, -8700.f, 50.f);
+					FVector NavSpawn = SpawnOrigin;
+					ProjectNav(World, SpawnOrigin, NavSpawn);
+					const TArray<AOperativeCharacter*> Spawned = Pmc->SpawnSquad(1, NavSpawn, FRotator::ZeroRotator, 1, 1);
+					if (!Spawned.IsEmpty() && Spawned[0])
+					{
+						State.Hostile = Spawned[0];
+						Hostile = Spawned[0];
+						if (Hostile->ColdSurvival)
+						{
+							Hostile->ColdSurvival->Deactivate();
+							Hostile->ColdSurvival->SetComponentTickEnabled(false);
+						}
+					}
+				}
+			}
+
 			if (!Hostile)
 			{
 				UE_LOG(LogCodexTactics, Error, TEXT("Smoke FAIL: hostile operative is gone"));
@@ -635,7 +687,12 @@ namespace PmcTraversalSmoke
 			}
 			if (Hostile->HealthComponent)
 			{
-				Hostile->HealthComponent->Heal(1000.f);
+				Hostile->HealthComponent->SetMaxHealth(100000.f, true);
+			}
+			if (Hostile->KnockdownComponent)
+			{
+				Hostile->KnockdownComponent->bCanBeKnockedDown = false;
+				Hostile->KnockdownComponent->ResetForLoad();
 			}
 			Hostile->SetActorEnableCollision(true);
 			Hostile->SetStance(EOperativeStance::Standing);
@@ -698,6 +755,8 @@ namespace PmcTraversalSmoke
 			State.Progress.Reset(World->GetTimeSeconds(), Hostile->GetActorLocation());
 			State.LegStartTime = World->GetTimeSeconds();
 			State.bLadderClimbed = false;
+			State.bLinkStartPassed = false;
+			State.bLinkMidPassed = false;
 			State.Phase = EPhase::RunLeg;
 			State.PhaseTime = 0.f;
 			return true;
@@ -712,28 +771,117 @@ namespace PmcTraversalSmoke
 			}
 
 			const FLeg& Leg = State.Legs[State.LegIndex];
+			const bool bAlive = !Hostile->IsKilledInAction() && Hostile->HealthComponent && Hostile->HealthComponent->IsAlive();
+			if (!bAlive)
+			{
+				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("died"));
+				State.LegIndex++;
+				State.Phase = EPhase::PrepareLeg;
+				State.PhaseTime = 0.f;
+				return true;
+			}
+
 			const double Now = World->GetTimeSeconds();
 			const FVector CurrentPos = Hostile->GetActorLocation();
 			const float CurrentFeetZ = FeetZ(*Hostile);
-			const float Dist2D = static_cast<float>(FVector::Dist2D(CurrentPos, Leg.NavGoal));
-			const float DistZ = FMath::Abs(CurrentFeetZ - Leg.NavGoal.Z);
-			const float Radius = (Leg.Kind == ELinkKind::Ladder) ? State.Config.LadderArriveRadiusCm : State.Config.ArriveRadiusCm;
+
+			// Track link traversal to verify the physical link was actually traversed
+			if (FVector::Dist2D(CurrentPos, Leg.LinkStart) <= 150.f)
+			{
+				State.bLinkStartPassed = true;
+			}
+			if (Leg.Kind == ELinkKind::Mantle)
+			{
+				if (FVector::Dist(CurrentPos, Leg.LinkMid) <= 150.f)
+				{
+					State.bLinkMidPassed = true;
+				}
+			}
+			else if (Leg.Kind == ELinkKind::Stair)
+			{
+				if (FVector::Dist2D(CurrentPos, Leg.LinkMid) <= 180.f)
+				{
+					State.bLinkMidPassed = true;
+				}
+			}
+			else if (Leg.Kind == ELinkKind::Drop)
+			{
+				if (State.bLinkStartPassed && CurrentFeetZ <= Leg.LinkEnd.Z + State.Config.LevelToleranceCm)
+				{
+					State.bLinkMidPassed = true;
+				}
+			}
 
 			if (Hostile->LadderClimb && Hostile->LadderClimb->IsClimbing())
 			{
 				State.bLadderClimbed = true;
 			}
 
+			const float Dist2D = static_cast<float>(FVector::Dist2D(CurrentPos, Leg.NavGoal));
+			const float DistZ = FMath::Abs(CurrentFeetZ - Leg.NavGoal.Z);
+			const float Radius = (Leg.Kind == ELinkKind::Ladder) ? State.Config.LadderArriveRadiusCm : State.Config.ArriveRadiusCm;
 			const bool bArrived = (Dist2D <= Radius) && (DistZ <= State.Config.LevelToleranceCm);
-			const bool bSuccess = (Leg.Kind == ELinkKind::Ladder) ? (bArrived && State.bLadderClimbed) : bArrived;
 
-			if (bSuccess)
+			if (bArrived)
 			{
-				State.Stats[static_cast<int32>(Leg.Kind)].Crossed++;
-				State.LegIndex++;
-				State.Phase = EPhase::PrepareLeg;
-				State.PhaseTime = 0.f;
-				return true;
+				bool bVerifiedLink = false;
+				if (Leg.Kind == ELinkKind::Ladder)
+				{
+					if (!State.bLadderClimbed)
+					{
+						RecordFailure(State, Leg.Kind, Leg.Id, TEXT("bypassed ladder"));
+						State.LegIndex++;
+						State.Phase = EPhase::PrepareLeg;
+						State.PhaseTime = 0.f;
+						return true;
+					}
+					bVerifiedLink = true;
+				}
+				else if (Leg.Kind == ELinkKind::Mantle)
+				{
+					if (!State.bLinkMidPassed)
+					{
+						RecordFailure(State, Leg.Kind, Leg.Id, TEXT("bypassed mantle"));
+						State.LegIndex++;
+						State.Phase = EPhase::PrepareLeg;
+						State.PhaseTime = 0.f;
+						return true;
+					}
+					bVerifiedLink = true;
+				}
+				else if (Leg.Kind == ELinkKind::Drop)
+				{
+					if (!State.bLinkMidPassed)
+					{
+						RecordFailure(State, Leg.Kind, Leg.Id, TEXT("bypassed drop"));
+						State.LegIndex++;
+						State.Phase = EPhase::PrepareLeg;
+						State.PhaseTime = 0.f;
+						return true;
+					}
+					bVerifiedLink = true;
+				}
+				else // Stair
+				{
+					if (!State.bLinkMidPassed)
+					{
+						RecordFailure(State, Leg.Kind, Leg.Id, TEXT("bypassed stair"));
+						State.LegIndex++;
+						State.Phase = EPhase::PrepareLeg;
+						State.PhaseTime = 0.f;
+						return true;
+					}
+					bVerifiedLink = true;
+				}
+
+				if (bVerifiedLink)
+				{
+					State.Stats[static_cast<int32>(Leg.Kind)].Crossed++;
+					State.LegIndex++;
+					State.Phase = EPhase::PrepareLeg;
+					State.PhaseTime = 0.f;
+					return true;
+				}
 			}
 
 			if (State.Progress.IsStuck(Now, CurrentPos, State.Config.StuckMoveCm, State.Config.StuckSeconds))
