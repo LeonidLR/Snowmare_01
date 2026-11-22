@@ -1,5 +1,5 @@
 // Tactical map runtime file (docs/design/TACTICAL_MAP.md P1, designer 2026-11-17): the layout's danger analysis ->
-// Content/Data/LevelGen/tactical/<Map>.tactical.json (codex.tactical_map/1, world space, layer per item, geometry_hash).
+// Content/Data/LevelGen/tactical/<Map>.tactical.json (codex.tactical_map/2, world space, layer per item, geometry_hash).
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
@@ -235,7 +235,7 @@ describe('tactical map runtime file (TACTICAL_MAP P1)', () => {
     assert.ok(f.ladder_only_roofs.length > 0, 'the x4 Depot has ladder-only roofs');
     assert.equal(f.walkable_roofs?.length, 22, 'x4 Depot has 22 walkable roofs');
     assert.equal(f.goal_sites?.length, 25, 'x4 Depot has 25 goal sites');
-    assert.equal(f.open_crossings?.length, 16, 'x4 Depot has 16 open crossings');
+    assert.equal(f.open_crossings?.length, 17, 'x4 Depot has 17 open crossings (safe cover-distance bound, 2026-11-22)');
     assert.ok(f.chokepoints.some((c) => c.building !== undefined), 'places have building attribution');
     assert.ok(f.hiding_spots.some((h) => h.building !== undefined), 'hiding spots have building attribution');
     assert.ok(f.open_crossings?.every((oc) => oc.length_m >= 10), 'all open crossings >= 10m');

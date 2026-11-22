@@ -39,6 +39,12 @@ export const GOAL_SITE_RADIUS_CM = 2500;
 export const GOAL_SITE_SECTOR_ARC_DEG = 90;
 export const ROUTE_SAMPLE_STEP_CM = 100;
 export const BUILDING_ASSOCIATION_MARGIN_CM = 200;
+/** A chokepoint side counts as a building wall only within this distance, m. */
+export const SIDE_WALL_MAX_DIST_M = 3.0;
+/** Ground walls taller than this block line of sight, cm. */
+export const LOS_WALL_MIN_HEIGHT_CM = 150;
+/** Cover height used when a cover has no size, cm. */
+export const DEFAULT_COVER_HEIGHT_CM = 100;
 
 export type Vec3 = [number, number, number];
 
@@ -206,7 +212,7 @@ export function buildingAndFloorAt(
     if (s && s.src && s.src.startsWith('wall:')) {
       const wid = s.src.slice(5);
       const w = (l.walls ?? []).find((x) => x.id === wid);
-      if (w && w.building && (s.dist_m === undefined || s.dist_m <= 3.0)) {
+      if (w && w.building && (s.dist_m === undefined || s.dist_m <= SIDE_WALL_MAX_DIST_M)) {
         const d = s.dist_m ?? 0;
         if (!sideBest || d < sideBest.dist_m) {
           sideBest = { building: w.building, floor: w.floor ?? 0, dist_m: d };
@@ -265,7 +271,9 @@ export function findOpenCrossings(l: GenLayout, groundZ: number): TacticalOpenCr
   }
 
   function distToCover(p: Vec2, c: GenCover, poly: readonly Vec2[]): number {
-    if (dist(p, c.pos) > 600) return dist(p, c.pos) - 200;
+    // Lower bound: every point of the cover box lies within half its diagonal of the centre.
+    const halfDiag = Math.hypot(c.size[0], c.size[1]) / 2;
+    if (dist(p, c.pos) > halfDiag) return dist(p, c.pos) - halfDiag;
     return distToPoly(p, poly);
   }
 
@@ -308,7 +316,7 @@ export function findOpenCrossings(l: GenLayout, groundZ: number): TacticalOpenCr
     }
   }
   for (const w of walls) {
-    if (w.height > 150) {
+    if (w.height > LOS_WALL_MIN_HEIGHT_CM) {
       blockerEdges.push({ a: w.a, b: w.b });
     }
   }
@@ -428,7 +436,7 @@ export function findGoalSites(l: GenLayout, groundZ: number): TacticalGoalSite[]
           facing_yaw,
           sector_arc_deg: GOAL_SITE_SECTOR_ARC_DEG,
           cover_kind: c.kind,
-          cover_height_cm: c.size ? c.size[2] : 100,
+          cover_height_cm: c.size ? c.size[2] : DEFAULT_COVER_HEIGHT_CM,
         });
       }
     }

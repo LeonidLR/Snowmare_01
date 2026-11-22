@@ -4,7 +4,7 @@
 
 /**
  * Pure rules of the TACTICAL MAP (docs/design/TACTICAL_MAP.md P1, designer 2026-11-17: "bots read the terrain"): the runtime file
- * Content/Data/LevelGen/tactical/<Map>.tactical.json ("codex.tactical_map/1", written by the Training Ground «Принять» / «Собрать в
+ * Content/Data/LevelGen/tactical/<Map>.tactical.json ("codex.tactical_map/2", written by the Training Ground «Принять» / «Собрать в
  * Unreal» / scripts/export-tactical-map.ts from the layout's danger analysis - Tools/TrainingGround/src/levelgen/tacticalMap.ts) and the
  * queries the AI asks it (dangerous places, ambush / overwatch / window / drop positions, chokepoint crossing, detour), plus the seeded
  * ladder-only roof picker for the placement. Thresholds / radii / weights: Content/Data/LevelGen/tactical_runtime.json

@@ -181,8 +181,8 @@ the three tries only when it ended short: refused, or not 1 m closer (`PmcTactic
 - All existing v1 fields, structures, and contracts are strictly preserved.
 
 **Structures and storey/building attribution:**
-- `building` and `floor` added where applicable:
-  - `windows[]`: building id and floor index of each window.
+- `building` and `floor` set where applicable (`windows[]` already had them in v1; v2 adds them to the entries below):
+  - `windows[]`: building id and floor index of each window (v1 field, unchanged).
   - `overwatch_roofs[]`: roof level (`floor`), plus `building` and `floor` on every spot in `spots[]`.
   - `hiding_spots[]`: building id and floor index when adjacent to a building wall or footprint (`BUILDING_ASSOCIATION_MARGIN_CM = 200` cm).
   - `chokepoints[]`: building id and floor index when passing through or bounded by a building.

@@ -1,5 +1,5 @@
 // CodexTactics.LevelGen.TacticalMap.* - TACTICAL_MAP P1 (docs/design/TACTICAL_MAP.md, designer 2026-11-17: "bots read the terrain"):
-// the runtime file codex.tactical_map/1 (Content/Data/LevelGen/tactical/<Map>.tactical.json, written by Tools/TrainingGround
+// the runtime file codex.tactical_map/2 (Content/Data/LevelGen/tactical/<Map>.tactical.json, written by Tools/TrainingGround
 // src/levelgen/tacticalMap.ts), the query settings codex.tactical_runtime/1 and every query of TacticalMapRules (zones near, danger,
 // ambush / overwatch / window / drop spots, chokepoint on a path, detour) plus the seeded ladder-only roof picker. Pure, no world.
 // UE-only (no Godot reference).
@@ -517,7 +517,7 @@ bool FTacticalMapCommittedFilesTest::RunTest(const FString&)
 			TestEqual(TEXT("x4 hiding spots"), File.HidingSpots.Num(), 150);
 			TestEqual(TEXT("x4 ladder-only roofs"), File.LadderOnlyRoofs.Num(), 7);
 			TestEqual(TEXT("x4 walkable roofs"), File.WalkableRoofs.Num(), 22);
-			TestEqual(TEXT("x4 open crossings"), File.OpenCrossings.Num(), 16);
+			TestEqual(TEXT("x4 open crossings"), File.OpenCrossings.Num(), 17); // 17 since the safe cover-distance bound (2026-11-22)
 			TestEqual(TEXT("x4 goal sites"), File.GoalSites.Num(), 25);
 			TestTrue(TEXT("x4 places have building attribution"), File.Chokepoints.ContainsByPredicate([](const FTacticalChokepoint& C) { return !C.Building.IsEmpty(); }));
 			TestTrue(TEXT("x4 hiding spots have building attribution"), File.HidingSpots.ContainsByPredicate([](const FTacticalHidingSpot& H) { return !H.Building.IsEmpty(); }));

@@ -129,3 +129,14 @@ MissionGoalsSmoke          PASS            41.0
 ---
 
 090 FINISH | PASS | 985e7c99 | done: review points 1-5 fixed (open_crossings polyline/cover/LOS, building/floor attribution, C++ logging and X4 asserts, English docs and thresholds, X6 target exclusion) | NOT done: none | needs Claude: merge from local branch gemini/090-tactical-export-v2 | gate: npm test (590 pass), LevelGen unit tests (98 pass), TacticalMapSmoke/TacticalPmcSmoke/MissionGoalsSmoke (all 3 PASS), gemini_gate PASS | report: docs/port/gemini/outbox/090-tactical-export-v2.report.md
+
+---
+
+## Lead fixes 2026-11-22
+- Branch head before the lead fixes: `bfccb3d6` (merge of main into `gemini/090-tactical-export-v2`). Lead fixes are working-tree changes on top of it; not committed yet.
+- `distToCover`: the unsafe `dist - 200` bound is replaced by `dist - hypot(sx, sy) / 2` (half the cover box diagonal, a true lower bound). This changes X4 output: `seeing_covers` / `nearest_cover_cm` / open crossing lengths move, the open crossing count stays 16. The committed X4 tactical file must be regenerated to match; that is not done yet (see the lead decision below).
+- Magic numbers named: `SIDE_WALL_MAX_DIST_M`, `LOS_WALL_MIN_HEIGHT_CM`, `DEFAULT_COVER_HEIGHT_CM` in tacticalMap.ts; `TacticalMapRulesLocal::DefaultGoalSiteSectorArcDeg` in TacticalMapRules.cpp.
+- Stale `codex.tactical_map/1` header comments fixed to /2 in TacticalMapRules.h, TacticalMapRulesTest.cpp, tacticalMap.test.ts. TACTICAL_MAP.md section 8 reworded (windows[] building/floor existed in v1).
+- Checks: `npx tsc --noEmit` exit 0; `node --test src/levelgen/tacticalMap.test.ts`: 13 pass, 1 fail (the committed X4 file equality test, see above).
+- C++ build: `Scripts/build.ps1` Result: Succeeded. `Scripts/test.ps1 -Filter CodexTactics.LevelGen.TacticalMap`: 11 tests, 0 failed. (The filter `CodexTactics.Tactics.TacticalMap` matches nothing; the real prefix is `CodexTactics.LevelGen.TacticalMap`.)
+- Open item: X4 export is no longer byte-equal to the committed file after the distToCover fix. The lead must decide whether to regenerate `L_Gen_Depot_X4.tactical.json` (and `L_Gen_Test_X2`) from the fixed code. Generated files were reverted to HEAD, not committed.

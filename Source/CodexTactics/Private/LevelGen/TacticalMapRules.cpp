@@ -15,6 +15,9 @@ namespace TacticalMapRulesLocal
 {
 	using FJsonArray = TArray<TSharedPtr<FJsonValue>>;
 
+		/** Default goal-site sector arc when the JSON omits sector_arc_deg (matches GOAL_SITE_SECTOR_ARC_DEG in tacticalMap.ts). */
+		constexpr float DefaultGoalSiteSectorArcDeg = 90.f;
+
 	bool IsNumber(const TSharedPtr<FJsonValue>& Value, double& Out)
 	{
 		if (!Value.IsValid() || Value->Type != EJson::Number)
@@ -572,7 +575,7 @@ bool TacticalMapRules::Parse(const FString& Json, FTacticalMapFile& Out, TArray<
 			}
 			GS.DistM = Num(J, TEXT("dist_m"), 0.f);
 			GS.FacingYaw = Num(J, TEXT("facing_yaw"), 0.f);
-			GS.SectorArcDeg = Num(J, TEXT("sector_arc_deg"), 90.f);
+			GS.SectorArcDeg = Num(J, TEXT("sector_arc_deg"), TacticalMapRulesLocal::DefaultGoalSiteSectorArcDeg);
 			GS.CoverKind = Str(J, TEXT("cover_kind"));
 			GS.CoverHeightCm = Num(J, TEXT("cover_height_cm"), 0.f);
 			Out.GoalSites.Add(MoveTemp(GS));
