@@ -27,11 +27,6 @@ AActor* WindowBreakage::FindWindowSillAt(UWorld& World, const FHitResult& Hit)
 	}
 	static TWeakObjectPtr<UWorld> CachedWorld;
 	static TArray<TPair<TWeakObjectPtr<AActor>, FBox>> Sills;
-	// A floor click beside the window is a plain move: only a face (glass, frame, the wall round it) means the window.
-	if (Hit.ImpactNormal.Z > 0.7f)
-	{
-		return nullptr;
-	}
 	if (CachedWorld.Get() != &World || (!Sills.IsEmpty() && !Sills[0].Key.IsValid()))
 	{
 		CachedWorld = &World;
@@ -46,10 +41,22 @@ AActor* WindowBreakage::FindWindowSillAt(UWorld& World, const FHitResult& Hit)
 	}
 	AActor* Best = nullptr;
 	double BestDistance = TNumericLimits<double>::Max();
+	const bool bFace = Hit.ImpactNormal.Z <= 0.7f;
+	const FVector Start = Hit.TraceStart;
+	const FVector Delta = Hit.ImpactPoint - Start;
 	for (const TPair<TWeakObjectPtr<AActor>, FBox>& Entry : Sills)
 	{
 		AActor* Sill = Entry.Key.Get();
-		if (Sill && IsOverSill(Entry.Value, Hit.ImpactPoint, 30.f, 260.f))
+		if (!Sill)
+		{
+			continue;
+		}
+		// The window face itself (glass, frame, the wall round it; a floor hit beside the window is a plain move), or a ray that went THROUGH
+		// the window opening (the cursor on the window, landing on the floor behind it: the opening has no glass collision).
+		const FBox& S = Entry.Value;
+		const FBox Opening(FVector(S.Min.X - 10.f, S.Min.Y - 10.f, S.Max.Z + 5.f), FVector(S.Max.X + 10.f, S.Max.Y + 10.f, S.Max.Z + 140.f));
+		const bool bThrough = !Delta.IsNearlyZero() && !Start.IsNearlyZero() && FMath::LineBoxIntersection(Opening, Start, Hit.ImpactPoint, Delta);
+		if ((bFace && IsOverSill(S, Hit.ImpactPoint, 30.f, 260.f)) || bThrough)
 		{
 			const double Distance = FVector::DistSquared2D(Entry.Value.GetCenter(), Hit.ImpactPoint);
 			if (Distance < BestDistance)

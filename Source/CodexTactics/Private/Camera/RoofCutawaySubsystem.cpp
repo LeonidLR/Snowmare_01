@@ -516,12 +516,17 @@ TArray<FBox> URoofCutawaySubsystem::GetStoreySlabs(const FString& BuildingId) co
 	return Building ? Building->Slabs : TArray<FBox>();
 }
 
-bool URoofCutawaySubsystem::FindStairUpTarget(const FHitResult& Hit, const AOperativeCharacter& Selected, FVector& OutFeet) const
+bool URoofCutawaySubsystem::FindStairUpTarget(const FHitResult& Hit, const AOperativeCharacter& Selected, FVector& OutFeet, FString* OutWhy) const
 {
+	const auto Why = [OutWhy](const FString& Text) { if (OutWhy) { *OutWhy = Text; } return false; };
 	const UPrimitiveComponent* Piece = Hit.GetComponent();
-	if (!Hit.bBlockingHit || !Piece || !IsStairPiece(*Piece) || CVarRoofCutawayStoreys.GetValueOnGameThread() == 0 || StoreyBuildings.IsEmpty())
+	if (!Hit.bBlockingHit || !Piece || !IsStairPiece(*Piece))
 	{
-		return false;
+		return Why(TEXT("not a stair piece"));
+	}
+	if (CVarRoofCutawayStoreys.GetValueOnGameThread() == 0 || StoreyBuildings.IsEmpty())
+	{
+		return Why(TEXT("no storey index"));
 	}
 	FVector Location;
 	const float FeetZ = GetFloorFeetZ(Selected, Location);
@@ -529,26 +534,40 @@ bool URoofCutawaySubsystem::FindStairUpTarget(const FHitResult& Hit, const AOper
 	const int32 BuildingIndex = FindOperativeStorey(Location, FeetZ, LastStoreyBuilding.Find(&Selected), Storey);
 	if (BuildingIndex == INDEX_NONE)
 	{
-		return false;
+		return Why(FString::Printf(TEXT("he is in no indexed building (feet %.0f)"), FeetZ));
 	}
+	// A stair of another building is no way up for him; a stair piece the index does not hold (kit / proxy) is judged by its place.
 	if (const TPair<int32, int32>* Of = StoreyOfPiece.Find(TObjectKey<UPrimitiveComponent>(Piece)); Of && Of->Key != BuildingIndex)
 	{
-		return false; // a stair of another building
+		return Why(TEXT("a stair of another building"));
 	}
 	const float NextBaseZ = GetStoreyCeilingZ(BuildingIndex, Storey);
 	if (NextBaseZ >= TNumericLimits<float>::Max() * 0.5f || NextBaseZ - FeetZ < 150.f)
 	{
-		return false;
+		return Why(FString::Printf(TEXT("no storey above his %d (next base %.0f, feet %.0f)"), Storey, NextBaseZ, FeetZ));
 	}
 	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
-	FNavLocation OnNav;
-	if (!Nav || !Nav->ProjectPointToNavigation(FVector(Hit.ImpactPoint.X, Hit.ImpactPoint.Y, NextBaseZ + 50.f), OnNav, FVector(250.f, 250.f, 90.f))
-		|| FMath::Abs(OnNav.Location.Z - NextBaseZ) > 70.f)
+	if (!Nav)
 	{
-		return false;
+		return Why(TEXT("no navigation"));
 	}
-	OutFeet = OnNav.Location;
-	return true;
+	// The landing the flight leads to: the navmesh at the next storey's floor round the hit, nearest first (rings out to 4 m).
+	for (const float Radius : { 0.f, 120.f, 240.f, 400.f })
+	{
+		for (int32 Step = 0; Step < (Radius > 0.f ? 8 : 1); ++Step)
+		{
+			const FVector Offset = Radius > 0.f ? FRotator(0.f, Step * 45.f, 0.f).RotateVector(FVector(Radius, 0.f, 0.f)) : FVector::ZeroVector;
+			FNavLocation OnNav;
+			// On that storey's FLOOR (the landing), not on the flight's upper steps.
+			if (Nav->ProjectPointToNavigation(FVector(Hit.ImpactPoint.X + Offset.X, Hit.ImpactPoint.Y + Offset.Y, NextBaseZ + 20.f), OnNav, FVector(60.f, 60.f, 40.f))
+				&& FMath::Abs(OnNav.Location.Z - NextBaseZ) <= 12.f)
+			{
+				OutFeet = OnNav.Location;
+				return true;
+			}
+		}
+	}
+	return Why(FString::Printf(TEXT("no navmesh on the next storey (base %.0f) within 4 m of the hit"), NextBaseZ));
 }
 
 float URoofCutawaySubsystem::GetStoreyCeilingZ(int32 BuildingIndex, int32 Storey) const

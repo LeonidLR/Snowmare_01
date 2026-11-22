@@ -257,7 +257,7 @@ public:
 	 * (tag stair=<id>) of the building Selected stands in, the navmesh spot of the NEXT storey up (or the walkable roof) over the hit -
 	 * the landing the flight leads to - is OutFeet (the controller shows a silhouette there; a click walks the squad up).
 	 */
-	bool FindStairUpTarget(const FHitResult& Hit, const AOperativeCharacter& Selected, FVector& OutFeet) const;
+	bool FindStairUpTarget(const FHitResult& Hit, const AOperativeCharacter& Selected, FVector& OutFeet, FString* OutWhy = nullptr) const;
 
 	/** The base height of Building's Storey (false when unknown). */
 	bool GetStoreyBaseZ(const FString& Building, int32 Storey, float& OutZ) const;

@@ -1291,6 +1291,21 @@ bool DoorTuning::Reload()
 		return false;
 	}
 	DoorTuningCurrent = FromJson(*Json);
+#if WITH_EDITOR
+	// A checkout-local switch for the designer's editor only (BGEN 2026-11-22, Lead OK: doors on in CodexTactics-agents, off in main; the
+	// [ConsoleVariables] line in Saved/Config/WindowsEditor/Engine.ini did not survive the editor's config save). Saved/ is never committed;
+	// -game runs (smokes) ignore it.
+	FString LocalText;
+	const FString LocalPath = FPaths::ProjectSavedDir() / TEXT("CodexLocal/doors.local.json");
+	TSharedPtr<FJsonObject> Local;
+	bool bLocalEnabled = false;
+	if (GIsEditor && FFileHelper::LoadFileToString(LocalText, *LocalPath) && FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(LocalText), Local)
+		&& Local.IsValid() && Local->TryGetBoolField(TEXT("enabled"), bLocalEnabled))
+	{
+		DoorTuningCurrent.bEnabled = bLocalEnabled;
+		UE_LOG(LogCodexTactics, Display, TEXT("Doors: %s sets enabled=%d for this checkout's editor"), *LocalPath, bLocalEnabled ? 1 : 0);
+	}
+#endif
 	return true;
 }
 

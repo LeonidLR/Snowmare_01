@@ -9,6 +9,7 @@
 
 #include "Core/CodexTacticsPlayerController.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
+#include "Interactables/WindowBreakage.h"
 #include "Camera/InteriorExitArrowActor.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -139,6 +140,11 @@ bool ACodexTacticsPlayerController::IsClickPreviewBypass(const FHitResult& Hit) 
 	// The ordinary click's own targets: a ladder, an EXIT arrow, a wire, an object, a body, a silhouette, an enemy.
 	if (HitActor->IsA<ALadderActor>() || HitActor->IsA<AInteriorExitArrowActor>() || HitActor->IsA<ATripwireActor>() || HitActor->IsA<AInteractableActor>()
 		|| (HitActor->IsA<APawn>() && !HitActor->IsA<AVehiclePawn>()) || HitActor->IsA<AEnemyGhostActor>() || HitActor->ActorHasTag(FName(TEXT("Enemy"))))
+	{
+		return true;
+	}
+	// Designer 2026-11-22: a click on a ground-floor window (its face; the silhouette shows past it) is the window order, not a cover ghost.
+	if (!GetActiveTurnBased() && WindowBreakage::FindWindowSillAt(*GetWorld(), Hit))
 	{
 		return true;
 	}

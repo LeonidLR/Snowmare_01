@@ -947,7 +947,35 @@ bool ACodexTacticsPlayerController::UpdateWindowHover(AOperativeCharacter* Opera
 	}
 	if (WindowGhost)
 	{
-		WindowGhost->ShowMantleFor(*Operative, Feet, Yaw, /*bCrouched*/ false);
+		// Designer 2026-11-22: the silhouette CLIMBING through the window - a frozen frame of the low climb clip (hands on the sill, a leg up),
+		// posed on the sill's near lip (the mantle hover ghost's B17-2 pose); the standing silhouette past the window when the clip is missing.
+		const FBox Local = Sill->CalculateComponentsBoundingBoxInLocalSpace(false);
+		const FVector Size = Local.GetSize() * Sill->GetActorScale3D().GetAbs();
+		const float Thickness = static_cast<float>(FMath::Min(Size.X, Size.Y));
+		const FVector Center = Sill->GetActorTransform().TransformPosition(Local.GetCenter());
+		const FVector Dir = FRotator(0.f, Yaw, 0.f).Vector();
+		const float TopZ = static_cast<float>(Sill->GetComponentsBoundingBox(true).Max.Z);
+		FMantleClickPlan Plan;
+		Plan.Dir = Dir;
+		Plan.bTop = false;
+		Plan.DepthCm = Thickness;
+		Plan.EdgeTop = FVector(Center.X, Center.Y, TopZ) - Dir * (Thickness * 0.5f);
+		Plan.Base = FVector(Plan.EdgeTop.X, Plan.EdgeTop.Y, Feet.Z) - Dir * 60.f;
+		Plan.Landing = Feet;
+		Plan.HeightCm = TopZ - Feet.Z;
+		Plan.Obstacle = Sill;
+		UMantleSubsystem* Mantle = GetWorld()->GetSubsystem<UMantleSubsystem>();
+		EMantleGait Gait = EMantleGait::Standing;
+		bool bStopFirst = false;
+		Plan.ClipIndex = Mantle ? MantleRules::ChooseClip(MantleRules::GetConfig(), FName(TEXT("low_mantle")), Operative->GetMantleBody(), /*bRunning*/ false, 0.f, 0,
+			[Mantle](int32 Index) { return Mantle->GetClip(Index) != nullptr; }, Gait, bStopFirst) : INDEX_NONE;
+		UAnimSequenceBase* PoseClip = nullptr;
+		float PoseSeconds = 0.f;
+		FVector PoseLocation = FVector::ZeroVector;
+		FName AnchorBone = NAME_None;
+		FVector AnchorTarget = FVector::ZeroVector;
+		const bool bPosed = Plan.ClipIndex != INDEX_NONE && Operative->PlanMantleGhostPose(Plan, PoseClip, PoseSeconds, PoseLocation, AnchorBone, AnchorTarget);
+		WindowGhost->ShowMantleFor(*Operative, Feet, Yaw, /*bCrouched*/ false, bPosed ? PoseClip : nullptr, PoseSeconds, PoseLocation, AnchorBone, AnchorTarget);
 	}
 	return WindowGhost != nullptr;
 }
