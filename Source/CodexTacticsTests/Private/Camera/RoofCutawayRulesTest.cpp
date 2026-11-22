@@ -1,6 +1,6 @@
 // CodexTactics.Camera.RoofCutaway.* — roofs disappear while operatives are inside (Demo 01 rev 5h, game designer 2026-10-15;
 // URoofCutawaySubsystem / RoofCutawayRules): which pieces are cut, the footprint of a graybox building, the interior camera
-// zone skip, the restore hysteresis.
+// zone skip, the restore hysteresis, the storey rule (designer bug 2026-11-22: every storey above the operative's is cut).
 
 #include "Camera/RoofCutawaySubsystem.h"
 #include "Misc/AutomationTest.h"
@@ -93,6 +93,106 @@ bool FRoofCutawayFollowSelectedTest::RunTest(const FString&)
 	TestFalse(TEXT("a team-mate under the roof while the selected man stands on it: no cut for him"), ShouldEvaluateOperative(false, true));
 	TestTrue(TEXT("Codex.RoofCutaway.FollowSelected 0 (the old rule): every operative counts"), ShouldEvaluateOperative(false, false));
 	TestTrue(TEXT("... the selected one too"), ShouldEvaluateOperative(true, false));
+	return true;
+}
+
+ROOF_CUTAWAY_TEST(FRoofCutawayStoreyTagsTest, "StoreyTags")
+bool FRoofCutawayStoreyTagsTest::RunTest(const FString&)
+{
+	using namespace RoofCutawayRules;
+	// The level generator's actor tags (build_levelgen_map.py) and kit_dress's component tags name the building and the storey.
+	FString Building;
+	int32 Storey = 0;
+	const TArray<FName> Wall = { TEXT("LevelGen"), TEXT("interior"), TEXT("building=S04_rubble_escape"), TEXT("floor=2"), TEXT("structure=partition") };
+	TestTrue(TEXT("a generated wall names its building"), ParseStoreyTags(Wall, Building, Storey));
+	TestEqual(TEXT("... the building id"), Building, FString(TEXT("S04_rubble_escape")));
+	TestEqual(TEXT("... its storey"), Storey, 2);
+	const TArray<FName> Slab = { TEXT("LevelGen"), TEXT("floor_slab"), TEXT("building=S04_rubble_escape"), TEXT("floor=1") };
+	TestTrue(TEXT("a floor slab"), ParseStoreyTags(Slab, Building, Storey));
+	TestEqual(TEXT("floor_slab is no floor=<n> tag"), Storey, 1);
+	TestTrue(TEXT("floor_slab is a slab tag"), IsSlabTag(TEXT("floor_slab")));
+	TestTrue(TEXT("roof_slab too"), IsSlabTag(TEXT("roof_slab")));
+	TestFalse(TEXT("a balcony slab is not (a man under a balcony stays outside)"), IsSlabTag(TEXT("balcony_slab")));
+	const TArray<FName> Ramp = { TEXT("LevelGen"), TEXT("stair=st1"), TEXT("switchback"), TEXT("building=S04_rubble_escape") };
+	TestTrue(TEXT("a piece with a building but no storey"), ParseStoreyTags(Ramp, Building, Storey));
+	TestEqual(TEXT("... has no storey (placed by its bottom)"), Storey, static_cast<int32>(INDEX_NONE));
+	const TArray<FName> Kit = { TEXT("LevelGen"), TEXT("KitDress"), TEXT("kit_building=S04_rubble_escape"), TEXT("kit_series=panel_1-464") };
+	TestFalse(TEXT("the kit actor's kit_building= is not building="), ParseStoreyTags(Kit, Building, Storey));
+	const TArray<FName> Bad = { TEXT("building=B_x"), TEXT("floor=top") };
+	TestTrue(TEXT("a non-numeric floor tag"), ParseStoreyTags(Bad, Building, Storey));
+	TestEqual(TEXT("... gives no storey"), Storey, static_cast<int32>(INDEX_NONE));
+	return true;
+}
+
+ROOF_CUTAWAY_TEST(FRoofCutawayStoreyRuleTest, "StoreyRule")
+bool FRoofCutawayStoreyRuleTest::RunTest(const FString&)
+{
+	using namespace RoofCutawayRules;
+	const FRoofCutawayConfig Config;
+	TestEqual(TEXT("50 cm storey tolerance"), Config.StoreyToleranceCm, 50.f);
+	TestEqual(TEXT("2 m keep-inside"), Config.StoreyKeepInsideCm, 200.f);
+	// A 3-storey khrushchevka on ground 0: walls of each storey stand on its base (300 cm storeys), a slab's bottom 20 cm under it,
+	// lintels at +220; the roof (storey 3) is the roof slab + parapets.
+	TMap<int32, TArray<float>> Bottoms;
+	Bottoms.Add(0, { 0.f, 0.f, 0.f, 0.f, 220.f, -5.f });
+	Bottoms.Add(1, { 280.f, 300.f, 300.f, 300.f, 520.f });
+	Bottoms.Add(2, { 580.f, 600.f, 600.f, 820.f });
+	Bottoms.Add(3, { 880.f, 900.f, 900.f });
+	const TArray<FStoreyBase> Bases = StoreyBasesFromBottoms(Bottoms);
+	TestEqual(TEXT("four storeys incl. the roof"), Bases.Num(), 4);
+	if (Bases.Num() != 4)
+	{
+		return false;
+	}
+	TestEqual(TEXT("ground floor base"), Bases[0].BaseZ, 0.f);
+	TestEqual(TEXT("storey 1 base (the slab bottom and the lintel do not move it)"), Bases[1].BaseZ, 300.f);
+	TestEqual(TEXT("storey 2 base"), Bases[2].BaseZ, 600.f);
+	TestEqual(TEXT("the roof"), Bases[3].BaseZ, 900.f);
+	TestEqual(TEXT("sorted by storey"), Bases[3].Storey, 3);
+
+	TestEqual(TEXT("feet on the ground floor"), StoreyAt(Bases, 0.f, 50.f), 0);
+	TestEqual(TEXT("on the half landing (+150): still the ground floor"), StoreyAt(Bases, 150.f, 50.f), 0);
+	TestEqual(TEXT("40 cm under the landing: already storey 1"), StoreyAt(Bases, 260.f, 50.f), 1);
+	TestEqual(TEXT("60 cm under it: not yet"), StoreyAt(Bases, 240.f, 50.f), 0);
+	TestEqual(TEXT("on storey 1"), StoreyAt(Bases, 300.f, 50.f), 1);
+	TestEqual(TEXT("on storey 2"), StoreyAt(Bases, 605.f, 50.f), 2);
+	TestEqual(TEXT("on the roof"), StoreyAt(Bases, 900.f, 50.f), 3);
+	TestEqual(TEXT("a basement / the street below the plinth"), StoreyAt(Bases, -100.f, 50.f), static_cast<int32>(INDEX_NONE));
+
+	// The designer's rule: ground floor -> 1, 2 and the roof hidden; storey 1 -> 2 and the roof hidden, 0 and 1 visible.
+	TestFalse(TEXT("ground floor: own storey stays"), ShouldCutStorey(0, 0));
+	TestTrue(TEXT("ground floor: storey 1 hidden"), ShouldCutStorey(1, 0));
+	TestTrue(TEXT("ground floor: storey 2 hidden"), ShouldCutStorey(2, 0));
+	TestTrue(TEXT("ground floor: the roof hidden"), ShouldCutStorey(3, 0));
+	TestFalse(TEXT("storey 1: the ground floor stays"), ShouldCutStorey(0, 1));
+	TestFalse(TEXT("storey 1: own storey stays"), ShouldCutStorey(1, 1));
+	TestTrue(TEXT("storey 1: storey 2 hidden"), ShouldCutStorey(2, 1));
+	TestTrue(TEXT("storey 1: the roof hidden"), ShouldCutStorey(3, 1));
+	TestFalse(TEXT("on the roof: nothing above"), ShouldCutStorey(3, 3));
+	TestFalse(TEXT("no storey: never"), ShouldCutStorey(INDEX_NONE, 0));
+	TestFalse(TEXT("outside any building: never"), ShouldCutStorey(2, INDEX_NONE));
+	return true;
+}
+
+ROOF_CUTAWAY_TEST(FRoofCutawayStoreyInsideTest, "StoreyInside")
+bool FRoofCutawayStoreyInsideTest::RunTest(const FString&)
+{
+	using namespace RoofCutawayRules;
+	// A 12 x 20 m slab strip.
+	const FBox Slab(FVector(1300.f, 2600.f, 280.f), FVector(2500.f, 4600.f, 300.f));
+	TestEqual(TEXT("over the slab: 0"), DistanceToBox2D(Slab, FVector2D(1900.0, 3600.0)), 0.f);
+	TestEqual(TEXT("1 m east of it"), DistanceToBox2D(Slab, FVector2D(2600.0, 3600.0)), 100.f, 0.01f);
+	TestEqual(TEXT("off the corner (3-4-5)"), DistanceToBox2D(Slab, FVector2D(2800.0, 5000.0)), 500.f, 0.01f);
+	TestTrue(TEXT("under a slab: inside"), IsInsideBuilding(0.f, false, 200.f));
+	TestFalse(TEXT("1.5 m off the slabs, coming from the street: outside"), IsInsideBuilding(150.f, false, 200.f));
+	TestTrue(TEXT("1.5 m off the slabs (a stair hole) while he was inside: still inside"), IsInsideBuilding(150.f, true, 200.f));
+	TestFalse(TEXT("2.5 m out of the door: outside"), IsInsideBuilding(250.f, true, 200.f));
+
+	TestTrue(TEXT("a stair ramp over the slabs is claimed"), ClaimsUntaggedPiece(Slab, FBox(FVector(1400.f, 3000.f, 0.f), FVector(1530.f, 3400.f, 150.f)), 50.f));
+	TestTrue(TEXT("a facade piece on the outer wall face (centre 30 cm outside)"), ClaimsUntaggedPiece(Slab, FBox(FVector(2510.f, 3000.f, 300.f), FVector(2550.f, 3300.f, 600.f)), 50.f));
+	TestFalse(TEXT("a street lamp 3 m away"), ClaimsUntaggedPiece(Slab, FBox(FVector(2800.f, 3000.f, 0.f), FVector(2820.f, 3020.f, 600.f)), 50.f));
+	TestFalse(TEXT("the ground plane under the whole level"), ClaimsUntaggedPiece(Slab, FBox(FVector(-10000.f, -10000.f, -10.f), FVector(10000.f, 10000.f, 0.f)), 50.f));
+	TestFalse(TEXT("no slabs"), ClaimsUntaggedPiece(FBox(ForceInit), FBox(FVector(0.f), FVector(10.f)), 50.f));
 	return true;
 }
 

@@ -6,6 +6,7 @@
 #include "CollisionQueryParams.h"
 #include "Combat/HealthComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
@@ -20,6 +21,12 @@ namespace
 		TEXT("1: roofs / ceilings over squad operatives are cut away from the main render pass (rev 5h, URoofCutawaySubsystem); 0: off"));
 	TAutoConsoleVariable<int32> CVarRoofCutawayFollowSelected(TEXT("Codex.RoofCutaway.FollowSelected"), 1,
 		TEXT("Bug report 2026-11-02 item 8: 1 = only the SELECTED operative's roof is cut (the squad leader: the selected man, a group's leader, the turn-based active unit) - a selected man on a roof keeps it drawn while a team-mate stands under it; 0 = every operative's roof (the old rule, A/B)"));
+	TAutoConsoleVariable<int32> CVarRoofCutawayStoreys(TEXT("Codex.RoofCutaway.Storeys"), 1,
+		TEXT("Designer bug 2026-11-22: 1 = in a building tagged building=<id> / floor=<n> (generated grey pieces, kit_dress per-storey components) every storey above the selected operative's is cut, the roof included, his own storey never; 0 = the head-clearance rule alone (A/B)"));
+
+	/** A building's slab tags (the level generator: build_levelgen_map.py floor / roof slabs). */
+	const FName FloorSlabTag(TEXT("floor_slab"));
+	const FName RoofSlabTag(TEXT("roof_slab"));
 
 	/** A head never counts lower than a standing operative's (a prone one must not cut a table he lies under), cm above the feet. */
 	constexpr float RoofMinHeadHeightCm = 180.f;
@@ -96,6 +103,101 @@ namespace RoofCutawayRules
 	{
 		return NowSeconds - LastCoveredSeconds >= RestoreDelaySeconds;
 	}
+
+	bool ParseStoreyTags(TConstArrayView<FName> Tags, FString& OutBuilding, int32& OutStorey)
+	{
+		static const FString BuildingPrefix(TEXT("building="));
+		static const FString FloorPrefix(TEXT("floor="));
+		OutBuilding.Reset();
+		OutStorey = INDEX_NONE;
+		for (const FName& Tag : Tags)
+		{
+			const FString Text = Tag.ToString();
+			if (Text.StartsWith(BuildingPrefix, ESearchCase::CaseSensitive))
+			{
+				OutBuilding = Text.Mid(BuildingPrefix.Len());
+			}
+			else if (Text.StartsWith(FloorPrefix, ESearchCase::CaseSensitive))
+			{
+				const FString Value = Text.Mid(FloorPrefix.Len());
+				if (!Value.IsEmpty() && Value.IsNumeric() && !Value.Contains(TEXT(".")))
+				{
+					OutStorey = FCString::Atoi(*Value);
+				}
+			}
+		}
+		return !OutBuilding.IsEmpty();
+	}
+
+	bool IsSlabTag(const FName& Tag)
+	{
+		return Tag == FloorSlabTag || Tag == RoofSlabTag;
+	}
+
+	TArray<FStoreyBase> StoreyBasesFromBottoms(const TMap<int32, TArray<float>>& BottomsByStorey)
+	{
+		TArray<FStoreyBase> Bases;
+		for (const TPair<int32, TArray<float>>& Pair : BottomsByStorey)
+		{
+			if (Pair.Value.IsEmpty())
+			{
+				continue;
+			}
+			TArray<float> Sorted = Pair.Value;
+			Sorted.Sort();
+			// The lower median: a storey's walls stand on its base, the odd slab bottom / lintel does not move it.
+			Bases.Add({ Pair.Key, Sorted[(Sorted.Num() - 1) / 2] });
+		}
+		Bases.Sort([](const FStoreyBase& A, const FStoreyBase& B) { return A.Storey < B.Storey; });
+		return Bases;
+	}
+
+	int32 StoreyAt(TConstArrayView<FStoreyBase> Bases, float Z, float ToleranceCm)
+	{
+		int32 Storey = INDEX_NONE;
+		for (const FStoreyBase& Base : Bases)
+		{
+			if (Z >= Base.BaseZ - ToleranceCm)
+			{
+				Storey = FMath::Max(Storey, Base.Storey);
+			}
+		}
+		return Storey;
+	}
+
+	bool ShouldCutStorey(int32 PieceStorey, int32 OperativeStorey)
+	{
+		return PieceStorey != INDEX_NONE && OperativeStorey != INDEX_NONE && PieceStorey > OperativeStorey;
+	}
+
+	float DistanceToBox2D(const FBox& Box, const FVector2D& P)
+	{
+		if (!Box.IsValid)
+		{
+			return TNumericLimits<float>::Max();
+		}
+		const double DX = FMath::Max3(Box.Min.X - P.X, 0.0, P.X - Box.Max.X);
+		const double DY = FMath::Max3(Box.Min.Y - P.Y, 0.0, P.Y - Box.Max.Y);
+		return static_cast<float>(FMath::Sqrt(DX * DX + DY * DY));
+	}
+
+	bool IsInsideBuilding(float DistanceToNearestSlabCm, bool bWasInside, float KeepCm)
+	{
+		return DistanceToNearestSlabCm <= 0.f || (bWasInside && DistanceToNearestSlabCm <= KeepCm);
+	}
+
+	bool ClaimsUntaggedPiece(const FBox& SlabBounds, const FBox& Piece, float MarginCm)
+	{
+		if (!SlabBounds.IsValid || !Piece.IsValid)
+		{
+			return false;
+		}
+		const FVector Centre = Piece.GetCenter();
+		const bool bCentreIn = DistanceToBox2D(SlabBounds, FVector2D(Centre.X, Centre.Y)) <= MarginCm;
+		const bool bNotWider = Piece.Max.X - Piece.Min.X <= SlabBounds.Max.X - SlabBounds.Min.X + 2.f * MarginCm
+			&& Piece.Max.Y - Piece.Min.Y <= SlabBounds.Max.Y - SlabBounds.Min.Y + 2.f * MarginCm;
+		return bCentreIn && bNotWider;
+	}
 }
 
 bool URoofCutawaySubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
@@ -111,6 +213,10 @@ TStatId URoofCutawaySubsystem::GetStatId() const
 void URoofCutawaySubsystem::Deinitialize()
 {
 	RestoreAll();
+	StoreyBuildings.Reset();
+	StoreyOfPiece.Reset();
+	LastStoreyBuilding.Reset();
+	PreviousStoreyBuilding.Reset();
 	Super::Deinitialize();
 }
 
@@ -156,6 +262,11 @@ void URoofCutawaySubsystem::UpdateNow()
 	}
 	const double Now = World->GetRealTimeSeconds();
 	RefreshOptInActors(Now);
+	if (CVarRoofCutawayStoreys.GetValueOnGameThread() != 0 && Now - StoreyIndexSeconds >= Config.StoreyIndexRefreshSeconds)
+	{
+		RebuildStoreyIndex();
+		StoreyIndexSeconds = Now;
+	}
 	TArray<ACameraZoneVolume*> ShownZones;
 	for (TActorIterator<ACameraZoneVolume> It(World); It; ++It)
 	{
@@ -164,6 +275,8 @@ void URoofCutawaySubsystem::UpdateNow()
 			ShownZones.Add(*It);
 		}
 	}
+	PreviousStoreyBuilding = MoveTemp(LastStoreyBuilding);
+	LastStoreyBuilding.Reset();
 	TSet<UPrimitiveComponent*> Covered;
 	if (const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
 	{
@@ -229,16 +342,273 @@ RoofCutawayRules::FRoofPieceTraits URoofCutawaySubsystem::GetTraits(const UPrimi
 	return Traits;
 }
 
-void URoofCutawaySubsystem::CollectRoofPieces(const AOperativeCharacter& Operative, const TArray<ACameraZoneVolume*>& ShownZones,
-	TSet<UPrimitiveComponent*>& OutPieces) const
+float URoofCutawaySubsystem::GetFloorFeetZ(const AOperativeCharacter& Operative, FVector& OutLocation)
 {
 	// On a ladder he counts on the floor he left until he is off it (LADDERS.md 7.3: no cutaway flicker mid-ladder).
-	const FVector Location = Operative.GetFloorReferenceLocation();
+	OutLocation = Operative.GetFloorReferenceLocation();
+	const float HalfHeight = Operative.GetCapsuleComponent() ? Operative.GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 90.f;
+	return static_cast<float>(OutLocation.Z) - HalfHeight;
+}
+
+void URoofCutawaySubsystem::CollectRoofPieces(const AOperativeCharacter& Operative, const TArray<ACameraZoneVolume*>& ShownZones,
+	TSet<UPrimitiveComponent*>& OutPieces)
+{
+	FVector Location;
+	const float FeetZ = GetFloorFeetZ(Operative, Location);
 	const bool bInShownZone = ShownZones.ContainsByPredicate([&Location](const ACameraZoneVolume* Zone) { return Zone->ContainsLocation(Location); });
 	if (!RoofCutawayRules::ShouldCutForOperative(bInShownZone))
 	{
 		return;
 	}
+	TSet<UPrimitiveComponent*> Pieces;
+	CollectHeadClearancePieces(Operative, Location, Pieces);
+
+	int32 Storey = INDEX_NONE;
+	const int32 BuildingIndex = CVarRoofCutawayStoreys.GetValueOnGameThread() != 0
+		? FindOperativeStorey(Location, FeetZ, PreviousStoreyBuilding.Find(&Operative), Storey) : INDEX_NONE;
+	if (BuildingIndex == INDEX_NONE)
+	{
+		OutPieces.Append(Pieces);
+		return;
+	}
+	const FStoreyBuilding& Building = StoreyBuildings[BuildingIndex];
+	LastStoreyBuilding.Add(&Operative, Building.Id);
+	// His own storey and those below are never cut (a lintel, a tall wall piece just over his head stays: designer 2026-11-22).
+	for (UPrimitiveComponent* Piece : Pieces)
+	{
+		const TPair<int32, int32>* Of = StoreyOfPiece.Find(Piece);
+		if (!Of || Of->Key != BuildingIndex || RoofCutawayRules::ShouldCutStorey(Of->Value, Storey))
+		{
+			OutPieces.Add(Piece);
+		}
+	}
+	// Every visible piece of a storey above his: upper storeys with their partitions, the ceiling over him (the slab above), the roof.
+	for (const TPair<TWeakObjectPtr<UPrimitiveComponent>, int32>& Entry : Building.Pieces)
+	{
+		UPrimitiveComponent* Piece = Entry.Key.Get();
+		if (Piece && RoofCutawayRules::ShouldCutStorey(Entry.Value, Storey) && RoofCutawayRules::IsCuttableKind(GetTraits(*Piece)))
+		{
+			OutPieces.Add(Piece);
+		}
+	}
+}
+
+int32 URoofCutawaySubsystem::FindOperativeStorey(const FVector& FloorLocation, float FeetZ, const FString* WasInside, int32& OutStorey) const
+{
+	OutStorey = INDEX_NONE;
+	const FVector2D P(FloorLocation.X, FloorLocation.Y);
+	int32 Best = INDEX_NONE;
+	float BestDistance = TNumericLimits<float>::Max();
+	for (int32 Index = 0; Index < StoreyBuildings.Num(); ++Index)
+	{
+		const FStoreyBuilding& Building = StoreyBuildings[Index];
+		if (Building.Bases.IsEmpty() || !Building.SlabBounds.IsValid || FeetZ < Building.Bases[0].BaseZ - Config.StoreyToleranceCm
+			|| FeetZ > Building.SlabBounds.Max.Z + Config.StoreyToleranceCm)
+		{
+			continue;
+		}
+		float Distance = TNumericLimits<float>::Max();
+		for (const FBox& Slab : Building.Slabs)
+		{
+			Distance = FMath::Min(Distance, RoofCutawayRules::DistanceToBox2D(Slab, P));
+		}
+		const bool bWasInside = WasInside && *WasInside == Building.Id;
+		if (RoofCutawayRules::IsInsideBuilding(Distance, bWasInside, Config.StoreyKeepInsideCm) && Distance < BestDistance)
+		{
+			Best = Index;
+			BestDistance = Distance;
+		}
+	}
+	if (Best != INDEX_NONE)
+	{
+		OutStorey = RoofCutawayRules::StoreyAt(StoreyBuildings[Best].Bases, FeetZ, Config.StoreyToleranceCm);
+		if (OutStorey == INDEX_NONE)
+		{
+			Best = INDEX_NONE;
+		}
+	}
+	return Best;
+}
+
+bool URoofCutawaySubsystem::GetOperativeStorey(const AOperativeCharacter& Operative, FString& OutBuilding, int32& OutStorey) const
+{
+	FVector Location;
+	const float FeetZ = GetFloorFeetZ(Operative, Location);
+	const int32 Index = FindOperativeStorey(Location, FeetZ, LastStoreyBuilding.Find(&Operative), OutStorey);
+	OutBuilding = Index != INDEX_NONE ? StoreyBuildings[Index].Id : FString();
+	return Index != INDEX_NONE;
+}
+
+TArray<TPair<FString, int32>> URoofCutawaySubsystem::GetStoreyBuildings() const
+{
+	TArray<TPair<FString, int32>> Out;
+	for (const FStoreyBuilding& Building : StoreyBuildings)
+	{
+		Out.Emplace(Building.Id, Building.Bases.IsEmpty() ? 0 : Building.Bases.Last().Storey + 1);
+	}
+	return Out;
+}
+
+TArray<TPair<UPrimitiveComponent*, int32>> URoofCutawaySubsystem::GetStoreyPieces(const FString& BuildingId) const
+{
+	TArray<TPair<UPrimitiveComponent*, int32>> Out;
+	if (const FStoreyBuilding* Building = StoreyBuildings.FindByPredicate([&BuildingId](const FStoreyBuilding& B) { return B.Id == BuildingId; }))
+	{
+		for (const TPair<TWeakObjectPtr<UPrimitiveComponent>, int32>& Entry : Building->Pieces)
+		{
+			if (UPrimitiveComponent* Piece = Entry.Key.Get())
+			{
+				Out.Emplace(Piece, Entry.Value);
+			}
+		}
+	}
+	return Out;
+}
+
+TArray<FBox> URoofCutawaySubsystem::GetStoreySlabs(const FString& BuildingId) const
+{
+	const FStoreyBuilding* Building = StoreyBuildings.FindByPredicate([&BuildingId](const FStoreyBuilding& B) { return B.Id == BuildingId; });
+	return Building ? Building->Slabs : TArray<FBox>();
+}
+
+void URoofCutawaySubsystem::RebuildStoreyIndex()
+{
+	StoreyBuildings.Reset();
+	StoreyOfPiece.Reset();
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	struct FLoose
+	{
+		UPrimitiveComponent* Piece = nullptr;
+		FBox Box;
+		/** Building index when the piece names its building but no storey; INDEX_NONE: claimed by the slabs' footprint. */
+		int32 Building = INDEX_NONE;
+	};
+	TArray<FLoose> Loose;
+	TArray<TMap<int32, TArray<float>>> Bottoms;
+	TMap<FString, int32> IndexOf;
+	FString BuildingId;
+	int32 Storey = INDEX_NONE;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		AActor* Actor = *It;
+		if (!Actor || Actor->IsA<APawn>() || Actor->ActorHasTag(RoofCutawayRules::OptOutTag()))
+		{
+			continue;
+		}
+		// A pawn's gear (weapons, attachments) walks with him: no building piece.
+		bool bOnPawn = false;
+		for (const AActor* Parent = Actor->GetAttachParentActor(); Parent && !bOnPawn; Parent = Parent->GetAttachParentActor())
+		{
+			bOnPawn = Parent->IsA<APawn>();
+		}
+		if (bOnPawn || (Actor->GetOwner() && Actor->GetOwner()->IsA<APawn>()))
+		{
+			continue;
+		}
+		TInlineComponentArray<UStaticMeshComponent*> Meshes(Actor);
+		for (UStaticMeshComponent* Mesh : Meshes)
+		{
+			if (!Mesh || !Mesh->IsRegistered() || !Mesh->GetStaticMesh())
+			{
+				continue;
+			}
+			const RoofCutawayRules::FRoofPieceTraits Traits = GetTraits(*Mesh);
+			if (Traits.bTerrain || Traits.bFoliage)
+			{
+				continue;
+			}
+			const UInstancedStaticMeshComponent* Instanced = Cast<UInstancedStaticMeshComponent>(Mesh);
+			if (Instanced && Instanced->GetInstanceCount() == 0)
+			{
+				continue;
+			}
+			const FBox Box = Mesh->Bounds.GetBox();
+			// A component's own tags (kit_dress per-storey components) win over its actor's (the generator's pieces).
+			const bool bTagged = RoofCutawayRules::ParseStoreyTags(Mesh->ComponentTags, BuildingId, Storey)
+				|| RoofCutawayRules::ParseStoreyTags(Actor->Tags, BuildingId, Storey);
+			if (!bTagged)
+			{
+				// Untagged movable pieces come and go (a selection ring, dropped gear): only fixed level pieces are claimed by the slabs.
+				if (Mesh->Mobility != EComponentMobility::Movable)
+				{
+					Loose.Add({ Mesh, Box, INDEX_NONE });
+				}
+				continue;
+			}
+			int32& Index = IndexOf.FindOrAdd(BuildingId, INDEX_NONE);
+			if (Index == INDEX_NONE)
+			{
+				Index = StoreyBuildings.AddDefaulted();
+				StoreyBuildings[Index].Id = BuildingId;
+				Bottoms.AddDefaulted();
+			}
+			FStoreyBuilding& Building = StoreyBuildings[Index];
+			const bool bSlab = Mesh->ComponentTags.ContainsByPredicate(&RoofCutawayRules::IsSlabTag)
+				|| Actor->Tags.ContainsByPredicate(&RoofCutawayRules::IsSlabTag);
+			if (bSlab)
+			{
+				Building.Slabs.Add(Box);
+				Building.SlabBounds += Box;
+			}
+			if (Storey == INDEX_NONE)
+			{
+				Loose.Add({ Mesh, Box, Index });
+				continue;
+			}
+			Bottoms[Index].FindOrAdd(Storey).Add(static_cast<float>(Box.Min.Z));
+			Building.Pieces.Emplace(Mesh, Storey);
+		}
+	}
+	for (int32 Index = 0; Index < StoreyBuildings.Num(); ++Index)
+	{
+		StoreyBuildings[Index].Bases = RoofCutawayRules::StoreyBasesFromBottoms(Bottoms[Index]);
+	}
+	// Pieces without a storey: by their bottom, in the building they name or whose slabs they lie over (the smallest such building).
+	for (const FLoose& Piece : Loose)
+	{
+		int32 Index = Piece.Building;
+		if (Index == INDEX_NONE)
+		{
+			double BestArea = TNumericLimits<double>::Max();
+			for (int32 Candidate = 0; Candidate < StoreyBuildings.Num(); ++Candidate)
+			{
+				const FBox& Slabs = StoreyBuildings[Candidate].SlabBounds;
+				const double Area = Slabs.IsValid ? (Slabs.Max.X - Slabs.Min.X) * (Slabs.Max.Y - Slabs.Min.Y) : 0.0;
+				if (RoofCutawayRules::ClaimsUntaggedPiece(Slabs, Piece.Box, Config.StoreyClaimMarginCm) && Area < BestArea)
+				{
+					Index = Candidate;
+					BestArea = Area;
+				}
+			}
+		}
+		if (Index == INDEX_NONE)
+		{
+			continue;
+		}
+		const int32 PieceStorey = RoofCutawayRules::StoreyAt(StoreyBuildings[Index].Bases, static_cast<float>(Piece.Box.Min.Z), Config.StoreyToleranceCm);
+		if (PieceStorey != INDEX_NONE)
+		{
+			StoreyBuildings[Index].Pieces.Emplace(Piece.Piece, PieceStorey);
+		}
+	}
+	// Buildings without slabs (legacy layouts: untagged slabs) never take part; the head-clearance rule alone covers them.
+	StoreyBuildings.RemoveAll([](const FStoreyBuilding& Building) { return Building.Slabs.IsEmpty() || Building.Bases.IsEmpty(); });
+	for (int32 Index = 0; Index < StoreyBuildings.Num(); ++Index)
+	{
+		for (const TPair<TWeakObjectPtr<UPrimitiveComponent>, int32>& Entry : StoreyBuildings[Index].Pieces)
+		{
+			StoreyOfPiece.Add(Entry.Key.Get(), TPair<int32, int32>(Index, Entry.Value));
+		}
+	}
+	UE_LOG(LogCodexTactics, Verbose, TEXT("[RoofCutaway] storey index: %d buildings, %d pieces"), StoreyBuildings.Num(), StoreyOfPiece.Num());
+}
+
+void URoofCutawaySubsystem::CollectHeadClearancePieces(const AOperativeCharacter& Operative, const FVector& Location, TSet<UPrimitiveComponent*>& OutPieces) const
+{
 	UWorld* World = Operative.GetWorld();
 	const float HalfHeight = Operative.GetCapsuleComponent() ? Operative.GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 90.f;
 	const float FeetZ = Location.Z - HalfHeight;
