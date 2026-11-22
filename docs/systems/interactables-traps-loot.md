@@ -9,6 +9,56 @@
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
+## Openable doors R1 (2026-11-22, behind a switch, OFF by default)
+
+Designer 2026-11-21: generated buildings need doors that can be opened. Roadmap (docs/port/ROADMAP_THREE_TRACKS_2026-11-21.md): doors change
+sight / cover / paths, so R1 sits behind `Codex.Doors.Openable` (-1 = `Content/Data/Interactables/doors.json` `"enabled"`, shipped 0; 0 off,
+1 on; read every tick - switching at runtime adopts / releases). Turning it on in main waits for the enemy-AI session's A/B.
+- **Off = exactly as before R1**: the builder's `door_leaf` actors (`door_state=closed|locked`, no pawn collision, block Visibility, no nav
+  effect - ADR-0003 "before R1") stay decorative; nothing is spawned.
+- **On**: `UDoorSubsystem` (tickable world subsystem) adopts every `door_leaf` tagged `closed` / `locked` (barricaded / sealed stay the
+  builder's blocking pieces): an `ADoorActor` per opening at the leaf's transform (width / height / thickness from the leaf's mesh bounds,
+  tags `building=` / `opening=` / `floor=`), the proxy hidden with its collision off (restored on release). One leaf up to
+  `single_leaf_max_cm` 130, a pair above (the showcase's 150 cm entrances); the grey leaf copies the proxy's mesh + materials; on a kit-dressed
+  map (proxy hidden, tag `KitDressProxy`) the kit leaf instances of the building's `Kit_<id>` ISMs (`kit_part=door_leaf_* / flat_door /
+  entrance_door`, within the doorway) are lifted onto the hinges (instance scaled to 0, a movable copy swings; put back on release).
+- **States** (`DoorRules`, pure): Closed / Locked block sight (Visibility), bullets (object queries: WorldStatic) and bodies; Open blocks
+  nothing (collision off the moment the swing starts). Open <-> Closed by order; AutoOpen opens Closed only; Kick opens Locked / Closed (the
+  lock is broken: closed again = Closed). Barricaded / Sealed refuse everything.
+- **Navmesh** (`NavBox`, a dynamic-obstacle box across the doorway, `nav_box_depth_cm` 60): Closed = `UNavArea_DoorClosed` (entering cost
+  `nav_entering_cost_cm` 350 = t_open, read at start-up), Locked = `NavArea_Null` (paths go round - story 3), Open = no modifier.
+- **Auto-open**: a pawn (operative, follower, enemy; capsule collision on) within `zone_depth_cm` 130 of the leaf plane at the door's level
+  whose navmesh path crosses the doorway within `path_look_ahead_cm` 300 (or who walks into the leaf) opens a Closed door after
+  `auto_open_delay_s` 0.3; the leaf swings away from him over `open_s`.
+- **Interaction** (designer door spec 2026-11-22; the existing click pattern, `DoorRules::ChooseClickAction`): a click on a leaf - or on
+  the floor within `click_snap_cm` of an open leaf - in exploration / real time (`ACodexTacticsPlayerController::HandleWorldHit`;
+  `IsClickPreviewBypass` / `LowerBuildingHit` keep it from the breach / cover ghosts) sends the leader to `approach_cm` on his side
+  (`UDoorSubsystem::RequestInteraction`), acting within `interact_reach_cm`. Two kinds of door: UNLOCKED (`closed`) and LOCKED.
+  - Single click: an unlocked door opens **by hand** (`hand_open_s` 0.5, montage hook `hand_open_montage`, then the swing); an open door
+    shuts (refused while somebody stands in the doorway, never a blown-off leaf); a locked door opens with the squad's **key**
+    (`unlock_s` 1.2, `unlock_montage`, then by hand; key = a building id, an opening id, a `door_key=` tag or `*`; `start_keys`, console
+    `Codex.Doors.GiveKey <id>`; TODO: keys as loot items) - without a key a line says how else.
+  - Double click (`UDoorSubsystem::NoteClick`, the controller's `DoubleClickSeconds`): the **KICK** - he runs up; each attempt `kick_s`
+    1.2 (montage hook `kick_montage`, its hit moment), the lure noise `kick_noise_m` 15 m (`UStealthLureSubsystem::EmitNoise`); it gives
+    with `kick_chance_closed` 1.0 / `kick_chance_locked` 0.4 (x `kick_heavy_factor` 0.6 on a heavy door: tag `door_heavy` or
+    >= `heavy_min_width_cm` 140 - the entrances), up to `kick_max_attempts` 4, then "The door holds."; each attempt hurts him with
+    `kick_injury_base` 0 + `kick_injury_wounded` 0.35 (health < `kick_wounded_below` 0.5) + `kick_injury_heavy` 0.15:
+    `kick_injury_damage` 10 through `UHealthComponent::ApplyDirectHealthLoss` (`DoorRules::ResolveKick`).
+  - Ctrl + click on a locked door: he **shoots the lock** - from within `lock_shot_range_cm` 800 with a clear line (else he walks to
+    `lock_shot_stand_cm` 250), a real quick-fire burst at `ADoorActor::GetLockPoint` (`OrderQuickFire`: his weapon's ammo, noise), and
+    `lock_shot_resolve_s` later the lock breaks with `lock_shot_chance[WeaponId]` (shotgun 0.9, sniper 0.6, m16 0.45, pistol 0.3,
+    default 0.35) or "The lock holds.".
+  - **Explosions** (`Explosions::OnDetonated`: grenade, RPG-7, mine, barrel): a door within the blast radius and `blast_reach_cm` 300
+    breaks - leaf gone, doorway open for good (story 3 locked doors are breachable this way).
+  Any other click drops the door order.
+- **Cold** (T-021): every open / shut calls `UColdShelterSubsystem::SetOpeningOpen(building, opening)` (fallback `SetOpeningOpenAt`).
+- Events `DoorOpened` / `DoorClosed` / `DoorKicked` / `DoorKickHeld` / `DoorUnlocked` / `DoorLockShot` / `DoorBlown` (`GameplayEvents::Raise`,
+  subject the door); BP hook `ReceiveStateChanged`.
+- Not in R1: the kick / hand / key clips (hooks + timings in data), keys as loot items (stub), enemies kicking / shooting doors, PMC
+  filters that price locked doors, cover slots at doors, a broken-leaf mesh / debris (the leaf is hidden), save / load of door states,
+  closing a leafless (`open`) doorway.
+- Tests `CodexTactics.Doors.*`; smoke `DoorsSmoke` (L_Gen_StoryShowcase, sets the switch on).
+
 ## Spotted trap -> the squad holds in Solo (old §5)
 
 - **Spotted trap -> the squad holds in Solo (rev 5h, game designer play-test 2026-10-15, every level):** a hidden level mine (`AProximityMineActor::HandleSpotted`) or PMC tripwire (`ATripwireActor::RevealBy`) spotted with a spotter calls `AInteractableActor::NotifyTrapSpotted` -> `USquadSubsystem::HoldForSpottedTrap(Spotter, TrapName)`: every member `StopOperative` (the Godot rule) and, by pure `Interactables/TrapSpotRules::DecideSquadResponse(bFormationActive, bAutonomy, LivingMembers)` (`HoldAndSolo` only exploring with the formation, AUTO off, 2+ alive; else `HoldOnly`), a box-selected group drops to the leader (`SetSelectedGroup`), `EnterSoloModeInternal(bForTrap)` (followers crouch except one in cover; no "[SOLO MODE: ON]" line) and the feed line "{Mine|Tripwire} spotted - squad holding. Move them one by one (B regroups)." (speaker SQUAD). `bTrapSolo` (`IsTrapSolo`): no 25 m leash in `Tick` until `ExitSoloMode`; saved as `is_trap_solo` (`RestoreTrapSolo` after the Solo state). Events: `TrapSpotted` (Subject = the spotter) for both kinds, besides `MineSpotted` / `TripwireSpotted`. AUTO keeps the old stop (its paths avoid known traps). Tests `CodexTactics.Interactables.TrapSpot.SquadResponse`; smoke `TrapSoloSmoke`.

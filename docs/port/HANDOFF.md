@@ -1,5 +1,24 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**Openable doors R1 (`claude/bgen-test`, 2026-11-22; designer 2026-11-21, Lead day plan row 5): behind `Codex.Doors.Openable`, OFF by default
+(`Content/Data/Interactables/doors.json` `"enabled": 0`; on in main only after the enemy-AI session's A/B).** Game C++ only, no builder / map
+change: at runtime `UDoorSubsystem` adopts the builder's `door_leaf` actors tagged `door_state=closed|locked` (ADR-0003: one leaf per opening,
+tags `building=` / `opening=`) as `ADoorActor`s - leaves on hinges (a pair above 130 cm), closed / locked block sight, bullets and bodies,
+the doorway's nav box prices a closed door (`UNavArea_DoorClosed`, 350) and nulls a locked one; anyone whose path crosses a closed door opens
+it after 0.3 s. Designer door spec 2026-11-22: click = open by hand (unlocked) / shut / unlock with the squad's key (locked; keys are a
+stub: `start_keys`, `Codex.Doors.GiveKey`); double click = kick (loud, chance per attempt, up to 4, may hurt him); Ctrl + click on a locked
+door = shoot the lock (a real burst, chance per weapon); any explosion within 3 m breaks a door. Montage hooks + every number in doors.json.
+The cold shelter follows; kit-dressed maps lift the kit leaf instances onto the hinges. Switch off (also at runtime) = every door released,
+the game exactly as before. Pure `Interactables/DoorRules` (tests `CodexTactics.Doors.*`), smoke `DoorsSmoke` (L_Gen_StoryShowcase). Full
+rule: `docs/systems/interactables-traps-loot.md` "Openable doors R1".
+Checked 2026-11-22 (local, fixed step 60, -SquadStart=formation, budget 1500): tests 13/13; `DoorsSmoke` PASS on the grey showcase and on
+the dressed `L_Gen_StoryShowcase_Kit` (42 of 56 hidden-proxy doors got their kit leaves - 84 instances; 14 without, see open items). Walk
+smoke OFF vs ON, two runs each: showcase walk legs 19/21, 19/21 vs 17/21, 17/21, flat entries 74, 71 vs 71, 71 of 84; BgenPlans walk 32/32 x4,
+entries 71, 71 vs 70, 70 of 78; path check 6/6 and 9/9 everywhere. The 2 lost walk legs are S03 / S09 "door_1 -> storey_0": the leg starts at
+the story's LOCKED front door, the route goes round through a ground window and the vault does not resume the walk (`UpdateVault` resumes
+only when the target lies within ~84 deg of the vault direction - pre-existing vault rule, exposed by real locked doors). Open: the 14 kit
+doors without a lifted leaf (entrance modules, kit_dress tags), the vault resume, keys as loot, kick / hand clips, enemies vs doors.
+
 **Storey cutaway (`claude/bgen-test`, 2026-11-22; designer bug, top priority: "in the dressed khrushchevka showcase I cannot see what
 happens inside").** Root cause: `URoofCutawaySubsystem` only cut static meshes whose bottom is above the selected man's head, found by an
 upward collision trace + a footprint overlap of the hit roof piece. On the dressed map the kit is NoCollision instanced components, one per
