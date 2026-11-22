@@ -2374,6 +2374,9 @@ private:
 	FString ActiveCoverAnimSet;
 	FString CoverAnimContextName;
 	bool bCoverNativeArraysCaptured = false;
+	/** The cover wall point the set was chosen at; a cover-to-cover move farther than CoverSetRechooseCm (not a shimmy) chooses again. */
+	FVector CoverSetSlotPoint = FVector::ZeroVector;
+	static constexpr float CoverSetRechooseCm = 150.f;
 	bool bCoverOverTopFireSet = false;
 	/** The facing the layer last drew (a change while idle in cover plays the set's side switch). */
 	ECoverFacing CoverSetLastFacing = ECoverFacing::Right;

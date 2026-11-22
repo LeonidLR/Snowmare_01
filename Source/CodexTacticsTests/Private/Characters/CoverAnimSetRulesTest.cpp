@@ -98,6 +98,8 @@ bool FCoverAnimSetBodiesTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the PMC body: its own table"), Pmc && Pmc->FindRef(TEXT("stand_idle_left")) == TEXT("/Game/A/PmcL"));
 	TestTrue(TEXT("other skeletons: default"), Ue4 && Ue4->FindRef(TEXT("stand_idle_left")) == TEXT("/Game/A/UE4L"));
 	TestNull(TEXT("unknown set"), CoverAnimSetRules::FindBodyClips(Config, TEXT("none"), TEXT("x")));
+	TestEqual(TEXT("package path -> object path"), CoverAnimSetRules::ToObjectPath(TEXT("/Game/A/AS_X")), FString(TEXT("/Game/A/AS_X.AS_X")));
+	TestEqual(TEXT("an object path stays"), CoverAnimSetRules::ToObjectPath(TEXT("/Game/A/AS_X.AS_X")), FString(TEXT("/Game/A/AS_X.AS_X")));
 	TestEqual(TEXT("right key"), CoverAnimSetRules::SideKey(TEXT("stand_idle"), ECoverFacing::Right), FString(TEXT("stand_idle_right")));
 	TestEqual(TEXT("left key"), CoverAnimSetRules::SideKey(TEXT("stand_idle"), ECoverFacing::Left), FString(TEXT("stand_idle_left")));
 	return true;

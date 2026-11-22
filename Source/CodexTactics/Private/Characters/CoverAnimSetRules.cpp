@@ -162,6 +162,18 @@ const TMap<FString, FString>* CoverAnimSetRules::FindBodyClips(const FCoverAnimS
 	return Data->Bodies.Find(TEXT("default"));
 }
 
+FString CoverAnimSetRules::ToObjectPath(const FString& Path)
+{
+	FString Package = Path;
+	int32 Slash = INDEX_NONE;
+	Package.FindLastChar(TEXT('/'), Slash);
+	if (Path.IsEmpty() || Path.Find(TEXT("."), ESearchCase::CaseSensitive, ESearchDir::FromEnd) > Slash)
+	{
+		return Path;
+	}
+	return Path + TEXT(".") + Path.Mid(Slash + 1);
+}
+
 FString CoverAnimSetRules::SideKey(const FString& Base, ECoverFacing Facing)
 {
 	return Base + (Facing == ECoverFacing::Right ? TEXT("_right") : TEXT("_left"));

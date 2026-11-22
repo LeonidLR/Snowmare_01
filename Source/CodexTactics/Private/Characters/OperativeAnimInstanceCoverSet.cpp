@@ -135,7 +135,7 @@ void UOperativeAnimInstance::ResolveCoverAnimSets(TArray<FSoftObjectPath>* OutPa
 			{
 				for (const TPair<FString, FString>& Clip : Body.Value)
 				{
-					OutPaths->AddUnique(FSoftObjectPath(Clip.Value));
+					OutPaths->AddUnique(FSoftObjectPath(CoverAnimSetRules::ToObjectPath(Clip.Value)));
 				}
 			}
 		}
@@ -165,11 +165,13 @@ void UOperativeAnimInstance::ResolveCoverAnimSets(TArray<FSoftObjectPath>* OutPa
 			Pair.Assets.SetNum(2);
 			for (const ECoverFacing Facing : { ECoverFacing::Left, ECoverFacing::Right })
 			{
-				const FString* Path = Clips->Find(CoverAnimSetRules::SideKey(KeyBase, Facing));
-				if (!Path)
+				const FString* Entry = Clips->Find(CoverAnimSetRules::SideKey(KeyBase, Facing));
+				if (!Entry)
 				{
 					continue;
 				}
+				const FString ObjectPath = CoverAnimSetRules::ToObjectPath(*Entry);
+				const FString* Path = &ObjectPath;
 				UObject* Asset = bBlendSpace ? static_cast<UObject*>(LoadObject<UBlendSpace>(nullptr, **Path, nullptr, LOAD_NoWarn | LOAD_Quiet))
 					: static_cast<UObject*>(ResolvePreparedAnimationAsset(*Path));
 				Pair.Assets[CoverFacingRules::ClipIndex(Facing)] = Asset;
@@ -199,13 +201,14 @@ void UOperativeAnimInstance::ResolveCoverAnimSets(TArray<FSoftObjectPath>* OutPa
 void UOperativeAnimInstance::ChooseCoverAnimSet(const AOperativeCharacter& Operative)
 {
 	FString Wanted;
+	CoverSetSlotPoint = Operative.GetCoverSlot().WallPoint;
 	if (IsCoverSetsOn(bUseCoverAnimSets) && bUseNativeCoverClips)
 	{
 		FString Building;
 		int32 Storey = INDEX_NONE;
 		const URoofCutawaySubsystem* Cutaway = Operative.GetWorld() ? Operative.GetWorld()->GetSubsystem<URoofCutawaySubsystem>() : nullptr;
 		const bool bInBuilding = Cutaway && Cutaway->GetOperativeStorey(Operative, Building, Storey);
-		const ECoverAnimContext Context = CoverAnimSetRules::DecideContext(bInBuilding, false);
+		const ECoverAnimContext Context = CoverAnimSetRules::DecideContext(bInBuilding, Operative.IsInStealthMode());
 		CoverAnimContextName = CoverAnimSetRules::ContextName(Context);
 		Wanted = CoverAnimSetRules::ChooseSet(CoverSetConfig(), Context, { Operative.DisplayName.ToString(), Operative.GetName() });
 		if (!LoadedCoverSets.Contains(Wanted))
@@ -217,11 +220,11 @@ void UOperativeAnimInstance::ChooseCoverAnimSet(const AOperativeCharacter& Opera
 	{
 		CoverAnimContextName = TEXT("off");
 	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[CoverSet] %s: cover at %s judged %s -> set '%s'"), *Operative.DisplayName.ToString(),
+		*Operative.GetCoverSlot().WallPoint.ToCompactString(), *CoverAnimContextName, Wanted.IsEmpty() ? CoverAnimSetRules::NativeSetName : *Wanted);
 	if (Wanted != ActiveCoverAnimSet || !bCoverNativeArraysCaptured)
 	{
 		ApplyCoverAnimSet(Wanted);
-		UE_LOG(LogCodexTactics, Display, TEXT("[CoverSet] %s: cover entry %s -> set '%s'"), *Operative.DisplayName.ToString(), *CoverAnimContextName,
-			Wanted.IsEmpty() ? CoverAnimSetRules::NativeSetName : *Wanted);
 	}
 }
 

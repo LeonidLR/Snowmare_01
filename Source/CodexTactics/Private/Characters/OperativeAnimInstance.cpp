@@ -2010,6 +2010,15 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	const bool bLeft = !bInCover && bWasInCover;
 	bWasInCover = bInCover;
 	bCoverEnteredThisFrame = bEntered;
+	// The cover set for this wall (indoor / outdoor, JSON), judged before anything else (also under the stealth wall pose, which returns below).
+	if (bEntered && bUseNativeCoverClips)
+	{
+		ChooseCoverAnimSet(Operative); // the cover set for this wall (indoor / outdoor, JSON) before any clip is picked
+	}
+	else if (bInCover && !bShimmying && FVector::Dist2D(Operative.GetCoverSlot().WallPoint, CoverSetSlotPoint) > CoverSetRechooseCm)
+	{
+		ChooseCoverAnimSet(Operative); // cover to cover without leaving it (another wall, maybe the other side of a door): judged again
+	}
 	if (bLeft || bIsDead)
 	{
 		ReleasePeekStanceYawLock(); // off the wall (another order) / dead: the peek stance's held facing lets go
@@ -2045,10 +2054,6 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	if (!bUseNativeCoverClips || bIsDead)
 	{
 		return;
-	}
-	if (bEntered)
-	{
-		ChooseCoverAnimSet(Operative); // the cover set for this wall (indoor / outdoor, JSON) before any clip is picked
 	}
 	if (bInCover)
 	{

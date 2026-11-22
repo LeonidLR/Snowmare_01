@@ -70,6 +70,9 @@ namespace CoverAnimSetRules
 	/** The clip table of Set for a skeleton (its own entry, else "default"); nullptr when the set or both entries are missing. */
 	CODEXTACTICS_API const TMap<FString, FString>* FindBodyClips(const FCoverAnimSetConfig& Config, const FString& Set, const FString& SkeletonName);
 
+	/** "/Game/A/B" -> "/Game/A/B.B" (a package path as the JSON writes it -> the asset's object path); an object path stays. */
+	CODEXTACTICS_API FString ToObjectPath(const FString& Path);
+
 	/** "<base>_right" / "<base>_left" for the side along the wall he faces. */
 	CODEXTACTICS_API FString SideKey(const FString& Base, ECoverFacing Facing);
 
