@@ -1,8 +1,8 @@
 {
-  "schema": "codex.tactical_map/1",
+  "schema": "codex.tactical_map/2",
   "map": "L_Lab_Crossroads",
   "layout": "gen_lab_crossroads",
-  "geometry_hash": "3f46d1e35900e772",
+  "geometry_hash": "8732af823d156bf2",
   "analysis_version": 1,
   "analysis_source": "computed",
   "conditions": {
@@ -28,21 +28,23 @@
     "min_score": 0.25,
     "ladder_only_factor": 0.65
   },
-  "chokepoints": [
-    {"id":"CP_01","kind":"canyon","kind_name":"каньон с высотами","tags":["narrow","canyon","hiding"],"score":0.428,"layer":"ground","pos":[1200,707,0],"line":[[1200,807,0],[1200,607,0]],"poly":[[1310,807],[1310,607],[1090,607],[1090,807]],"length_m":2,"width_m":2.2,"lane_m":2.2,"route":"variant","sources":["route:V1_enclosure"],"alternative":"n/a","detour_m":null,"drop_spots":[],"windows":[],"overwatch":[],"hiding_spots":["HS_01","HS_02","HS_05"],"reveal_m":1.8,"reveal_stealth_m":1.8}
-  ],
+  "chokepoints": [],
   "drop_spots": [],
   "windows": [],
   "overwatch_roofs": [],
   "hiding_spots": [
-    {"id":"HS_01","layer":"ground","pos":[1025,775,0],"facing_yaw":-10.4,"reveal_normal_m":1.8,"reveal_stealth_m":1.8,"stealth_only":false,"blind":false,"rush_m":2.2,"cover":"wall:W_grave_W_1","cover_height_cm":330,"threatens":{"line":"route:V1_enclosure","route":"V1_enclosure","pos":[1200,743,0]},"place":"CP_01"},
-    {"id":"HS_02","layer":"ground","pos":[1875,725,0],"facing_yaw":-120.5,"reveal_normal_m":5.3,"reveal_stealth_m":5.3,"stealth_only":false,"blind":false,"rush_m":5,"cover":"wall:W_grave_N","cover_height_cm":330,"threatens":{"line":"route:V1_enclosure","route":"V1_enclosure","pos":[1630,308,0]},"place":"CP_01"},
-    {"id":"HS_03","layer":"ground","pos":[-2125,-175,0],"facing_yaw":81.9,"reveal_normal_m":6,"reveal_stealth_m":6,"stealth_only":false,"blind":false,"rush_m":2.2,"cover":"cover:C_appr_j2","cover_height_cm":95,"threatens":{"line":"route:R_main","route":"R_main","pos":[-2100,0,0]}},
-    {"id":"HS_04","layer":"ground","pos":[-125,-175,0],"facing_yaw":81.9,"reveal_normal_m":6,"reveal_stealth_m":6,"stealth_only":false,"blind":false,"rush_m":2.2,"cover":"cover:C_appr_j1","cover_height_cm":95,"threatens":{"line":"route:R_main","route":"R_main","pos":[-100,0,0]}},
-    {"id":"HS_05","layer":"ground","pos":[725,1175,0],"facing_yaw":-3.9,"reveal_normal_m":6.4,"reveal_stealth_m":6.4,"stealth_only":false,"blind":false,"rush_m":5.2,"cover":"wall:W_grave_S","cover_height_cm":330,"threatens":{"line":"route:V1_enclosure","route":"V1_enclosure","pos":[1200,1143,0]},"place":"CP_01"}
+    {"id":"HS_01","layer":"ground","pos":[-725,475,0],"facing_yaw":-87,"reveal_normal_m":5.1,"reveal_stealth_m":5.1,"stealth_only":false,"blind":false,"rush_m":4.7,"cover":"wall:W_cross_near_N","cover_height_cm":300,"threatens":{"line":"route:R_main","route":"R_main","pos":[-700,0,0]}},
+    {"id":"HS_02","layer":"ground","pos":[1675,-425,0],"facing_yaw":86.2,"reveal_normal_m":6.6,"reveal_stealth_m":6.6,"stealth_only":false,"blind":false,"rush_m":2.5,"cover":"cover:cov_cross_3","cover_height_cm":95,"threatens":{"line":"route:R_main","route":"R_main","pos":[1693,-154,0]}}
   ],
   "ladder_only_roofs": [],
-  "kill_zones": [
-    {"id":"Z_killzone","source":"zone","intent":"kill_zone","set_piece":"street","center":[2600,0,0],"poly":[[3050,-450],[3050,450],[2150,450],[2150,-450]]}
+  "walkable_roofs": [],
+  "open_crossings": [
+    {"id":"OC_R_main_1","route":"R_main","start":[-3500,0,0],"end":[800,0,0],"length_m":43,"nearest_cover_cm":220,"seeing_covers":["cov_cross_1","cov_cross_2","cov_cross_3","cov_cross_4","cov_cross_5"]},
+    {"id":"OC_R_main_2","route":"R_main","start":[2400,0,0],"end":[3500,0,0],"length_m":11,"nearest_cover_cm":256,"seeing_covers":["cov_cross_1","cov_cross_2","cov_cross_3","cov_cross_4","cov_cross_5"]}
+  ],
+  "goal_sites": [
+    {"goal_id":"GOAL_crossroads","cover_id":"cov_cross_5","pos":[2000,0,0],"dist_m":15,"facing_yaw":0,"sector_arc_deg":90,"cover_kind":"jersey","cover_height_cm":95},
+    {"goal_id":"GOAL_crossroads","cover_id":"cov_cross_3","pos":[1500,-400,0],"dist_m":20.4,"facing_yaw":11.3,"sector_arc_deg":90,"cover_kind":"sandbag","cover_height_cm":95},
+    {"goal_id":"GOAL_crossroads","cover_id":"cov_cross_4","pos":[1500,400,0],"dist_m":20.4,"facing_yaw":-11.3,"sector_arc_deg":90,"cover_kind":"sandbag","cover_height_cm":95}
   ]
 }

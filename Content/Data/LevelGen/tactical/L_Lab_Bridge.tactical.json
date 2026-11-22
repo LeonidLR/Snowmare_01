@@ -1,8 +1,8 @@
 {
-  "schema": "codex.tactical_map/1",
+  "schema": "codex.tactical_map/2",
   "map": "L_Lab_Bridge",
   "layout": "gen_lab_bridge",
-  "geometry_hash": "ead731e246f02312",
+  "geometry_hash": "9fb63028cf86e909",
   "analysis_version": 1,
   "analysis_source": "computed",
   "conditions": {
@@ -29,41 +29,24 @@
     "ladder_only_factor": 0.65
   },
   "chokepoints": [
-    {"id":"CP_01","kind":"only_way","kind_name":"единственный путь","tags":["narrow","only_way","window_fire","hiding"],"score":0.654,"layer":"ground","pos":[-450,0,0],"line":[[-550,0,0],[-350,0,0],[-150,0,0],[50,0,0],[247,-17,0],[435,-85,0],[623,-154,0],[767,-262,0],[820,-455,0],[817,-655,0],[808,-854,0],[800,-1054,0],[791,-1254,0],[782,-1454,0],[773,-1654,0],[764,-1853,0],[756,-2053,0],[823,-2180,0]],"poly":[[-550,125],[-350,125],[-150,125],[55,125],[274,105],[478,32],[682,-43],[872,-194],[944,-440],[942,-658],[933,-860],[924,-1060],[916,-1259],[907,-1459],[898,-1659],[889,-1859],[879,-2031],[933,-2121],[713,-2239],[633,-2075],[639,-1848],[648,-1648],[657,-1448],[666,-1248],[675,-1049],[683,-849],[692,-651],[696,-471],[662,-331],[564,-264],[392,-203],[220,-139],[45,-125],[-150,-125],[-350,-125],[-550,-125]],"length_m":33.8,"width_m":2.5,"lane_m":2.17,"route":"mandatory","sources":["objectives","route:R_main","route:V2_windows","route:V3_mantle","street:Z_road"],"alternative":"none","detour_m":null,"drop_spots":[],"windows":["B_windows_win_east_f0_1","B_windows_win_east_f1_1","B_windows_win_east_f0_2","B_windows_win_east_f1_2","B_windows_win_south_f0_2","B_windows_win_south_f1_2"],"overwatch":[],"hiding_spots":["HS_01","HS_04","HS_05","HS_06","HS_11","HS_13","HS_14","HS_16"],"reveal_m":1.3,"reveal_stealth_m":1.3},
-    {"id":"CP_02","kind":"hiding","kind_name":"укрытие для засады / скрытый противник","tags":["window_fire","hiding"],"score":0.25,"layer":"ground","pos":[2286,-1482,0],"line":[[2160,-1562,0],[2286,-1482,0],[2301,-1283,0],[2317,-1083,0],[2332,-884,0],[2347,-684,0],[2363,-485,0],[2378,-286,0]],"poly":[[1946,-1224],[1929,-1302],[1903,-1252],[1918,-1053],[1933,-853],[1949,-654],[1964,-454],[1979,-255],[2777,-316],[2762,-516],[2746,-715],[2731,-914],[2716,-1114],[2700,-1313],[2643,-1662],[2375,-1900]],"length_m":13.9,"width_m":8.85,"lane_m":8.85,"route":"mandatory","sources":["objectives","route:R_main","route:V2_windows","route:V3_mantle","street:Z_road"],"alternative":"n/a","detour_m":null,"drop_spots":[],"windows":["B_windows_win_east_f0_1","B_windows_win_east_f1_1","B_windows_win_east_f0_2","B_windows_win_east_f1_2"],"overwatch":[],"hiding_spots":["HS_03","HS_07","HS_08"],"reveal_m":1.6,"reveal_stealth_m":1.6}
+    {"id":"CP_01","kind":"only_way","kind_name":"единственный путь","tags":["narrow","only_way","window_fire"],"score":0.408,"layer":"ground","pos":[-253,0,0],"line":[[-322,202,0],[-300,3,0],[-103,0,0],[97,0,0],[197,0,0]],"poly":[[-124,224],[-165,150],[-101,200],[97,200],[197,200],[197,-200],[97,-200],[-104,-200],[-436,-145],[-521,179]],"length_m":7,"width_m":4,"lane_m":1.06,"route":"mandatory","sources":["objectives","route:R_main","street:Z_ST_bridge"],"alternative":"detour","detour_m":33.2,"drop_spots":[],"windows":["B_overlook_win_east_f0_1","B_overlook_win_east_f0_2"],"overwatch":[],"hiding_spots":[],"reveal_m":null,"reveal_stealth_m":null}
   ],
   "drop_spots": [],
   "windows": [
-    {"id":"B_windows_win_east_f0_1","building":"B_windows","floor":0,"layer":"ground","kind":"window","pos":[1650,-700,0],"stand":[1650,-760,0],"yaw":90,"covered_m":226,"min_dist_m":6.6,"places":["CP_01","CP_02"]},
-    {"id":"B_windows_win_east_f1_1","building":"B_windows","floor":1,"layer":"floor:B_windows:1","kind":"window","pos":[1650,-700,300],"stand":[1650,-760,300],"yaw":90,"covered_m":226,"min_dist_m":6.6,"places":["CP_01","CP_02"]},
-    {"id":"B_windows_win_east_f0_2","building":"B_windows","floor":0,"layer":"ground","kind":"window","pos":[1350,-700,0],"stand":[1350,-760,0],"yaw":90,"covered_m":246,"min_dist_m":5.5,"places":["CP_01","CP_02"]},
-    {"id":"B_windows_win_east_f1_2","building":"B_windows","floor":1,"layer":"floor:B_windows:1","kind":"window","pos":[1350,-700,300],"stand":[1350,-760,300],"yaw":90,"covered_m":246,"min_dist_m":5.5,"places":["CP_01","CP_02"]},
-    {"id":"B_windows_win_south_f0_2","building":"B_windows","floor":0,"layer":"ground","kind":"window","pos":[900,-1183,0],"stand":[960,-1183,0],"yaw":180,"covered_m":230,"min_dist_m":1,"places":["CP_01"]},
-    {"id":"B_windows_win_south_f1_2","building":"B_windows","floor":1,"layer":"floor:B_windows:1","kind":"window","pos":[900,-1083,300],"stand":[960,-1083,300],"yaw":180,"covered_m":230,"min_dist_m":1.9,"places":["CP_01"]}
+    {"id":"B_overlook_win_east_f0_1","building":"B_overlook","floor":0,"layer":"ground","kind":"window","pos":[1367,-300,0],"stand":[1367,-360,0],"yaw":90,"covered_m":48,"min_dist_m":2.7,"places":["CP_01"]},
+    {"id":"B_overlook_win_east_f0_2","building":"B_overlook","floor":0,"layer":"ground","kind":"window","pos":[1083,-300,0],"stand":[1083,-360,0],"yaw":90,"covered_m":48,"min_dist_m":2.6,"places":["CP_01"]}
   ],
   "overwatch_roofs": [],
   "hiding_spots": [
-    {"id":"HS_01","layer":"ground","pos":[525,-225,0],"facing_yaw":109.4,"reveal_normal_m":1.3,"reveal_stealth_m":1.3,"stealth_only":false,"blind":false,"rush_m":1.5,"cover":"wall:CUTWALL_N_0","cover_height_cm":140,"threatens":{"line":"route:V2_windows","route":"V2_windows","pos":[482,-103,0]},"place":"CP_01"},
-    {"id":"HS_02","layer":"ground","pos":[525,2475,0],"facing_yaw":-9.2,"reveal_normal_m":1.6,"reveal_stealth_m":1.6,"stealth_only":false,"blind":false,"rush_m":1.7,"cover":"wall:CUTWALL_N_1","cover_height_cm":140,"threatens":{"line":"route:V1_trench","route":"V1_trench","pos":[682,2449,0]}},
-    {"id":"HS_03","layer":"ground","pos":[2175,-1725,0],"facing_yaw":95.2,"reveal_normal_m":1.6,"reveal_stealth_m":1.6,"stealth_only":false,"blind":false,"rush_m":1.5,"cover":"wall:B_windows_N_0","cover_height_cm":600,"threatens":{"line":"route:V2_windows","route":"V2_windows","pos":[2160,-1562,0]},"place":"CP_02"},
-    {"id":"HS_04","layer":"ground","pos":[-225,175,0],"facing_yaw":-69.8,"reveal_normal_m":2.2,"reveal_stealth_m":2.2,"stealth_only":false,"blind":false,"rush_m":1.7,"cover":"wall:CUTWALL_S_1","cover_height_cm":140,"threatens":{"line":"route:V3_mantle","route":"V3_mantle","pos":[-161,0,0]},"place":"CP_01"},
-    {"id":"HS_05","layer":"ground","pos":[525,275,0],"facing_yaw":-95.2,"reveal_normal_m":2.8,"reveal_stealth_m":2.8,"stealth_only":false,"blind":false,"rush_m":2.5,"cover":"wall:CUTWALL_N_1","cover_height_cm":140,"threatens":{"line":"route:R_main","route":"R_main","pos":[500,0,0]},"place":"CP_01"},
-    {"id":"HS_06","layer":"ground","pos":[-525,1175,0],"facing_yaw":176.6,"reveal_normal_m":3.1,"reveal_stealth_m":3.1,"stealth_only":false,"blind":false,"rush_m":1.5,"cover":"wall:CUTWALL_S_1","cover_height_cm":140,"threatens":{"line":"route:V3_mantle","route":"V3_mantle","pos":[-656,1183,0]},"place":"CP_01"},
-    {"id":"HS_07","layer":"ground","pos":[2025,-625,0],"facing_yaw":-10.4,"reveal_normal_m":3.3,"reveal_stealth_m":3.3,"stealth_only":false,"blind":false,"rush_m":3.2,"cover":"wall:B_windows_E_0","cover_height_cm":600,"threatens":{"line":"route:V2_windows","route":"V2_windows","pos":[2347,-684,0]},"place":"CP_02"},
-    {"id":"HS_08","layer":"ground","pos":[2175,-1225,0],"facing_yaw":-24.5,"reveal_normal_m":3.4,"reveal_stealth_m":3.4,"stealth_only":false,"blind":false,"rush_m":1.7,"cover":"wall:B_windows_N_1","cover_height_cm":600,"threatens":{"line":"route:V2_windows","route":"V2_windows","pos":[2301,-1283,0]},"place":"CP_02"},
-    {"id":"HS_09","layer":"ground","pos":[575,2975,0],"facing_yaw":-93.8,"reveal_normal_m":3.8,"reveal_stealth_m":3.8,"stealth_only":false,"blind":false,"rush_m":3.5,"cover":"wall:CUTWALL_N_1","cover_height_cm":140,"threatens":{"line":"route:V1_trench","route":"V1_trench","pos":[550,2600,0]}},
-    {"id":"HS_10","layer":"ground","pos":[-1525,-825,0],"facing_yaw":-118.6,"reveal_normal_m":6.1,"reveal_stealth_m":6.1,"stealth_only":false,"blind":false,"rush_m":6,"cover":"cover:C_appr_j1","cover_height_cm":95,"threatens":{"line":"route:V1_trench","route":"V1_trench","pos":[-1794,-1318,0]}},
-    {"id":"HS_11","layer":"ground","pos":[525,-725,0],"facing_yaw":4,"reveal_normal_m":6.2,"reveal_stealth_m":6.2,"stealth_only":false,"blind":false,"rush_m":3,"cover":"wall:CUTWALL_N_0","cover_height_cm":140,"threatens":{"line":"route:V2_windows","route":"V2_windows","pos":[815,-704,0]},"place":"CP_01"},
-    {"id":"HS_12","layer":"ground","pos":[575,1975,0],"facing_yaw":53.7,"reveal_normal_m":6.3,"reveal_stealth_m":6.3,"stealth_only":false,"blind":false,"rush_m":4,"cover":"wall:CUTWALL_N_1","cover_height_cm":140,"threatens":{"line":"route:V1_trench","route":"V1_trench","pos":[813,2299,0]}},
-    {"id":"HS_13","layer":"ground","pos":[525,775,0],"facing_yaw":-91.8,"reveal_normal_m":7.8,"reveal_stealth_m":7.8,"stealth_only":false,"blind":false,"rush_m":7.5,"cover":"wall:CUTWALL_N_1","cover_height_cm":140,"threatens":{"line":"route:R_main","route":"R_main","pos":[500,0,0]},"place":"CP_01"},
-    {"id":"HS_14","layer":"ground","pos":[1025,-575,0],"facing_yaw":160.7,"reveal_normal_m":9.1,"reveal_stealth_m":9.1,"stealth_only":false,"blind":false,"rush_m":2.2,"cover":"wall:B_windows_E_0","cover_height_cm":600,"threatens":{"line":"route:V2_windows","route":"V2_windows","pos":[824,-505,0]},"place":"CP_01"},
-    {"id":"HS_15","layer":"ground","pos":[1775,-2125,0],"facing_yaw":177.5,"reveal_normal_m":10.2,"reveal_stealth_m":10.2,"stealth_only":false,"blind":false,"rush_m":1.5,"cover":"wall:B_windows_W_0","cover_height_cm":600,"threatens":{"line":"route:V2_windows","route":"V2_windows","pos":[1611,-2118,0]}},
-    {"id":"HS_16","layer":"ground","pos":[575,-1275,0],"facing_yaw":-7.7,"reveal_normal_m":11.8,"reveal_stealth_m":11.8,"stealth_only":false,"blind":false,"rush_m":2.2,"cover":"wall:CUTWALL_N_0","cover_height_cm":140,"threatens":{"line":"route:V2_windows","route":"V2_windows","pos":[789,-1304,0]},"place":"CP_01"},
-    {"id":"HS_17","layer":"ground","pos":[575,1475,0],"facing_yaw":46.2,"reveal_normal_m":11.3,"reveal_stealth_m":11.3,"stealth_only":false,"blind":false,"rush_m":7.1,"cover":"wall:CUTWALL_N_1","cover_height_cm":140,"threatens":{"line":"route:V1_trench","route":"V1_trench","pos":[1077,1998,0]}}
+    {"id":"HS_01","layer":"ground","pos":[1875,-375,0],"facing_yaw":86.6,"reveal_normal_m":4.2,"reveal_stealth_m":4.2,"stealth_only":false,"blind":false,"rush_m":4,"cover":"wall:B_overlook_N_1","cover_height_cm":300,"threatens":{"line":"route:R_main","route":"R_main","pos":[1897,0,0]},"building":"B_overlook","floor":0}
   ],
   "ladder_only_roofs": [],
-  "kill_zones": [
-    {"id":"V1_trench","source":"route","intent":"kill_zone","note":"the trench floor is seen from both rims; the ladders are the only ways out (a way for a man who dropped, not a plan)","center":[0,0,-300],"line":[[-2700,0,0],[-1600,-1600,0],[-1000,-2600,0],[-550,-2600,0],[-190,-2600,-300],[0,0,-300],[190,2600,-300],[550,2600,0],[1600,1400,0],[2600,0,0]]},
-    {"id":"Z_deck","source":"zone","intent":"kill_zone","set_piece":"cut_crossing","center":[0,0,0],"poly":[[450,-200],[450,200],[-450,200],[-450,-200]]}
+  "walkable_roofs": [],
+  "open_crossings": [
+    {"id":"OC_R_main_1","route":"R_main","start":[-2500,0,0],"end":[-800,0,0],"length_m":17,"nearest_cover_cm":264,"seeing_covers":["cov_bridge_far_mantle","cov_bridge_near_1","cov_bridge_near_2"]},
+    {"id":"OC_R_main_2","route":"R_main","start":[700,0,0],"end":[2500,0,0],"length_m":18,"nearest_cover_cm":254,"seeing_covers":["cov_bridge_far_mantle","cov_bridge_near_1","cov_bridge_near_2"]}
+  ],
+  "goal_sites": [
+    {"goal_id":"GOAL_bridge","cover_id":"cov_bridge_far_mantle","pos":[450,250,0],"dist_m":20.7,"facing_yaw":-7,"sector_arc_deg":90,"cover_kind":"crate","cover_height_cm":85}
   ]
 }

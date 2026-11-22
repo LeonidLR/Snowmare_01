@@ -7,11 +7,11 @@
   "floor_tolerance_cm": 150,
   "goals": [
     {
-      "id": "GOAL_1",
+      "id": "GOAL_crossroads",
       "kind": "street",
       "layer": "ground",
       "pos": [
-        3850,
+        3500,
         0,
         0
       ],

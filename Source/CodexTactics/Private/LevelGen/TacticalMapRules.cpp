@@ -6,12 +6,17 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
-const TCHAR* const TacticalMapRules::Schema = TEXT("codex.tactical_map/1");
+const TCHAR* const TacticalMapRules::Schema = TEXT("codex.tactical_map/2");
+const TCHAR* const TacticalMapRules::SchemaV1 = TEXT("codex.tactical_map/1");
+const TCHAR* const TacticalMapRules::SchemaV2 = TEXT("codex.tactical_map/2");
 const TCHAR* const TacticalMapRules::ConfigSchema = TEXT("codex.tactical_runtime/1");
 
 namespace TacticalMapRulesLocal
 {
 	using FJsonArray = TArray<TSharedPtr<FJsonValue>>;
+
+		/** Default goal-site sector arc when the JSON omits sector_arc_deg (matches GOAL_SITE_SECTOR_ARC_DEG in tacticalMap.ts). */
+		constexpr float DefaultGoalSiteSectorArcDeg = 90.f;
 
 	bool IsNumber(const TSharedPtr<FJsonValue>& Value, double& Out)
 	{
@@ -267,11 +272,12 @@ bool TacticalMapRules::Parse(const FString& Json, FTacticalMapFile& Out, TArray<
 		OutErrors.Add(FString::Printf(TEXT("schema: expected %s, got '%s'"), Schema, *SchemaId));
 		return false;
 	}
-	if (SchemaId != Schema)
+	if (SchemaId != SchemaV1 && SchemaId != SchemaV2)
 	{
-		OutErrors.Add(FString::Printf(TEXT("schema %s is not supported (this build reads %s)"), *SchemaId, Schema));
+		OutErrors.Add(FString::Printf(TEXT("schema %s is not supported (this build reads %s or %s)"), *SchemaId, SchemaV1, SchemaV2));
 		return false;
 	}
+	Out.Schema = SchemaId;
 	Out.Map = Str(*Root, TEXT("map"));
 	Out.Layout = Str(*Root, TEXT("layout"));
 	Out.GeometryHash = Str(*Root, TEXT("geometry_hash"));
@@ -324,6 +330,8 @@ bool TacticalMapRules::Parse(const FString& Json, FTacticalMapFile& Out, TArray<
 		C.HidingSpots = StrArray(J, TEXT("hiding_spots"));
 		C.RevealM = Num(J, TEXT("reveal_m"), -1.f);
 		C.RevealStealthM = Num(J, TEXT("reveal_stealth_m"), -1.f);
+		C.Building = Str(J, TEXT("building"));
+		C.Floor = FMath::RoundToInt(Num(J, TEXT("floor"), 0.f));
 		Out.Chokepoints.Add(MoveTemp(C));
 		return true;
 	});
@@ -381,6 +389,7 @@ bool TacticalMapRules::Parse(const FString& Json, FTacticalMapFile& Out, TArray<
 		}
 		R.Layer = Str(J, TEXT("layer"));
 		R.Level = FMath::RoundToInt(Num(J, TEXT("level"), 0.f));
+		R.Floor = FMath::RoundToInt(Num(J, TEXT("floor"), static_cast<float>(R.Level)));
 		R.Z = Num(J, TEXT("z"), 0.f);
 		R.HeightCm = Num(J, TEXT("height_cm"), 0.f);
 		R.RangeM = Num(J, TEXT("range_m"), 0.f);
@@ -388,6 +397,24 @@ bool TacticalMapRules::Parse(const FString& Json, FTacticalMapFile& Out, TArray<
 		R.AccessKind = Str(J, TEXT("access_kind"));
 		R.bLadderOnly = Bool(J, TEXT("ladder_only"), false);
 		R.Places = StrArray(J, TEXT("places"));
+
+		const FJsonArray* APArr = nullptr;
+		if (J.TryGetArrayField(TEXT("access_points"), APArr) && APArr)
+		{
+			for (const TSharedPtr<FJsonValue>& Val : *APArr)
+			{
+				if (Val.IsValid() && Val->Type == EJson::Object)
+				{
+					const FJsonObject& APObj = *Val->AsObject();
+					FTacticalRoofAccess AP;
+					AP.Id = Str(APObj, TEXT("id"));
+					AP.Kind = Str(APObj, TEXT("kind"));
+					VecField(APObj, TEXT("top"), AP.Top);
+					R.AccessPoints.Add(MoveTemp(AP));
+				}
+			}
+		}
+
 		const FJsonArray* Spots = nullptr;
 		if (J.TryGetArrayField(TEXT("spots"), Spots) && Spots)
 		{
@@ -400,6 +427,12 @@ bool TacticalMapRules::Parse(const FString& Json, FTacticalMapFile& Out, TArray<
 					Spot.FacingYaw = Num(*S, TEXT("facing_yaw"), 0.f);
 					Spot.CoveredM = Num(*S, TEXT("covered_m"), 0.f);
 					Spot.LongestLosM = Num(*S, TEXT("longest_los_m"), 0.f);
+					Spot.Building = Str(*S, TEXT("building"));
+					if (Spot.Building.IsEmpty())
+					{
+						Spot.Building = R.Building;
+					}
+					Spot.Floor = FMath::RoundToInt(Num(*S, TEXT("floor"), static_cast<float>(R.Level)));
 					R.Spots.Add(Spot);
 				}
 			}
@@ -426,6 +459,8 @@ bool TacticalMapRules::Parse(const FString& Json, FTacticalMapFile& Out, TArray<
 		H.CoverHeightCm = Num(J, TEXT("cover_height_cm"), 0.f);
 		H.Place = Str(J, TEXT("place"));
 		H.ThreatLocation = H.Location;
+		H.Building = Str(J, TEXT("building"));
+		H.Floor = FMath::RoundToInt(Num(J, TEXT("floor"), 0.f));
 		const TSharedPtr<FJsonObject>* Threat = nullptr;
 		if (J.TryGetObjectField(TEXT("threatens"), Threat) && Threat && Threat->IsValid())
 		{
@@ -451,9 +486,102 @@ bool TacticalMapRules::Parse(const FString& Json, FTacticalMapFile& Out, TArray<
 		L.LadderTops = VecArray(J, TEXT("ladder_tops"));
 		L.bOverwatch = Bool(J, TEXT("overwatch"), false);
 		L.DropSpots = StrArray(J, TEXT("drop_spots"));
+
+		const FJsonArray* APArr = nullptr;
+		if (J.TryGetArrayField(TEXT("access_points"), APArr) && APArr)
+		{
+			for (const TSharedPtr<FJsonValue>& Val : *APArr)
+			{
+				if (Val.IsValid() && Val->Type == EJson::Object)
+				{
+					const FJsonObject& APObj = *Val->AsObject();
+					FTacticalRoofAccess AP;
+					AP.Id = Str(APObj, TEXT("id"));
+					AP.Kind = Str(APObj, TEXT("kind"));
+					VecField(APObj, TEXT("top"), AP.Top);
+					L.AccessPoints.Add(MoveTemp(AP));
+				}
+			}
+		}
+
 		Out.LadderOnlyRoofs.Add(MoveTemp(L));
 		return true;
 	});
+
+	if (Root->HasField(TEXT("walkable_roofs")))
+	{
+		ForEachItem(*Root, TEXT("walkable_roofs"), OutErrors, [&Out](const FJsonObject& J)
+		{
+			FTacticalWalkableRoof WR;
+			WR.Building = Str(J, TEXT("building"));
+			if (WR.Building.IsEmpty())
+			{
+				return false;
+			}
+			WR.Layer = Str(J, TEXT("layer"));
+			WR.Floor = FMath::RoundToInt(Num(J, TEXT("floor"), 0.f));
+			WR.Z = Num(J, TEXT("z"), 0.f);
+			WR.bLadderOnly = Bool(J, TEXT("ladder_only"), false);
+			const FJsonArray* APArr = nullptr;
+			if (J.TryGetArrayField(TEXT("access"), APArr) && APArr)
+			{
+				for (const TSharedPtr<FJsonValue>& Val : *APArr)
+				{
+					if (Val.IsValid() && Val->Type == EJson::Object)
+					{
+						const FJsonObject& APObj = *Val->AsObject();
+						FTacticalRoofAccess AP;
+						AP.Id = Str(APObj, TEXT("id"));
+						AP.Kind = Str(APObj, TEXT("kind"));
+						VecField(APObj, TEXT("top"), AP.Top);
+						WR.Access.Add(MoveTemp(AP));
+					}
+				}
+			}
+			Out.WalkableRoofs.Add(MoveTemp(WR));
+			return true;
+		});
+	}
+
+	if (Root->HasField(TEXT("open_crossings")))
+	{
+		ForEachItem(*Root, TEXT("open_crossings"), OutErrors, [&Out](const FJsonObject& J)
+		{
+			FTacticalOpenCrossing OC;
+			OC.Id = Str(J, TEXT("id"));
+			if (OC.Id.IsEmpty() || !VecField(J, TEXT("start"), OC.Start) || !VecField(J, TEXT("end"), OC.End))
+			{
+				return false;
+			}
+			OC.Route = Str(J, TEXT("route"));
+			OC.LengthM = Num(J, TEXT("length_m"), 0.f);
+			OC.NearestCoverCm = Num(J, TEXT("nearest_cover_cm"), 0.f);
+			OC.SeeingCovers = StrArray(J, TEXT("seeing_covers"));
+			Out.OpenCrossings.Add(MoveTemp(OC));
+			return true;
+		});
+	}
+
+	if (Root->HasField(TEXT("goal_sites")))
+	{
+		ForEachItem(*Root, TEXT("goal_sites"), OutErrors, [&Out](const FJsonObject& J)
+		{
+			FTacticalGoalSite GS;
+			GS.GoalId = Str(J, TEXT("goal_id"));
+			GS.CoverId = Str(J, TEXT("cover_id"));
+			if (GS.GoalId.IsEmpty() || GS.CoverId.IsEmpty() || !VecField(J, TEXT("pos"), GS.Location))
+			{
+				return false;
+			}
+			GS.DistM = Num(J, TEXT("dist_m"), 0.f);
+			GS.FacingYaw = Num(J, TEXT("facing_yaw"), 0.f);
+			GS.SectorArcDeg = Num(J, TEXT("sector_arc_deg"), TacticalMapRulesLocal::DefaultGoalSiteSectorArcDeg);
+			GS.CoverKind = Str(J, TEXT("cover_kind"));
+			GS.CoverHeightCm = Num(J, TEXT("cover_height_cm"), 0.f);
+			Out.GoalSites.Add(MoveTemp(GS));
+			return true;
+		});
+	}
 	UpdateDerived(Out);
 	return true;
 }
@@ -939,4 +1067,17 @@ FString TacticalMapRules::GetDefaultPathForMap(const FString& MapName)
 FString TacticalMapRules::GetConfigPath()
 {
 	return FPaths::ConvertRelativePathToFull(FPaths::ProjectContentDir() / TEXT("Data/LevelGen/tactical_runtime.json"));
+}
+
+TArray<FTacticalGoalSite> TacticalMapRules::GetGoalSitesForGoal(const FTacticalMapFile& File, const FString& GoalId)
+{
+	TArray<FTacticalGoalSite> Out;
+	for (const FTacticalGoalSite& Site : File.GoalSites)
+	{
+		if (Site.GoalId == GoalId)
+		{
+			Out.Add(Site);
+		}
+	}
+	return Out;
 }

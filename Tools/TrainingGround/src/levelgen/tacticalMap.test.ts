@@ -1,5 +1,5 @@
 // Tactical map runtime file (docs/design/TACTICAL_MAP.md P1, designer 2026-11-17): the layout's danger analysis ->
-// Content/Data/LevelGen/tactical/<Map>.tactical.json (codex.tactical_map/1, world space, layer per item, geometry_hash).
+// Content/Data/LevelGen/tactical/<Map>.tactical.json (codex.tactical_map/2, world space, layer per item, geometry_hash).
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
@@ -20,7 +20,7 @@ const tinyBase = (): GenLayout => ({
   walls: [{ id: 'W_canal', a: [-3000, -2000], b: [-3000, 2000], height: 200, thickness: 80, kind: 'cut_wall' }], zones: [],
   buildings: [
     { id: 'B_1', footprint: [[1000, 1000], [3000, 2000]], floors: 2, height: 600, enterable: true, roof_walkable: true,
-      stairs: [{ id: 'B_1_st', from: 0, to: 2 }], rooms: [] },
+      stairs: [{ id: 'B_1_st', from: 0, to: 2, top: [1500, 1500], pos: [1200, 1200] }], rooms: [] },
     { id: 'B_2', footprint: [[-2000, 1000], [-1000, 2000]], floors: 1, height: 300, enterable: false, roof_walkable: true, stairs: [] },
     { id: 'B_3', footprint: [[-2000, -2000], [-1000, -1000]], floors: 1, height: 300, enterable: false, roof_walkable: true, stairs: [] },
   ],
@@ -139,6 +139,91 @@ describe('tactical map runtime file (TACTICAL_MAP P1)', () => {
     assert.deepEqual(JSON.parse(text), JSON.parse(JSON.stringify(f)));
   });
 
+  it('schema v2 exports building and floor on roof spots and inside chokepoints/hiding spots', () => {
+    const l = tiny();
+    const lWithInside = {
+      ...l,
+      analysis: {
+        ...l.analysis!,
+        chokepoints: [
+          ...l.analysis!.chokepoints,
+          { ...l.analysis!.chokepoints[0], id: 'CP_inside', pos: [1500, 1500] as [number, number] },
+        ],
+        hidingSpots: [
+          ...l.analysis!.hidingSpots,
+          { ...l.analysis!.hidingSpots[0], id: 'HS_inside', pos: [1600, 1600] as [number, number] },
+        ],
+      },
+    };
+    const f = tacticalMapFor(lWithInside, 'M');
+    assert.equal(f.schema, 'codex.tactical_map/2');
+    const owSpot = f.overwatch_roofs[0].spots[0];
+    assert.equal(owSpot.building, 'B_1');
+    assert.equal(owSpot.floor, 2);
+
+    const cpOutside = f.chokepoints.find((c) => c.id === 'CP_01')!;
+    assert.equal(cpOutside.building, undefined);
+    assert.equal(cpOutside.floor, undefined);
+
+    const cpInside = f.chokepoints.find((c) => c.id === 'CP_inside')!;
+    assert.equal(cpInside.building, 'B_1');
+    assert.equal(cpInside.floor, 0);
+
+    const hsInside = f.hiding_spots.find((h) => h.id === 'HS_inside')!;
+    assert.equal(hsInside.building, 'B_1');
+    assert.equal(hsInside.floor, 0);
+  });
+
+  it('schema v2 exports roof access details on overwatch, ladder-only and walkable roofs', () => {
+    const f = tacticalMapFor(tiny(), 'M');
+    const ow = f.overwatch_roofs[0];
+    assert.equal(ow.floor, 2);
+    assert.equal(ow.access_points.length, 1);
+    assert.deepEqual(ow.access_points[0], { id: 'B_1_st', kind: 'stairs', top: [1500, 1500, 640] });
+
+    const lr = f.ladder_only_roofs[0];
+    assert.equal(lr.access_points.length, 1);
+    assert.deepEqual(lr.access_points[0], { id: 'LAD_B_2', kind: 'ladder', top: [-1950, 1500, 340] });
+
+    assert.ok(Array.isArray(f.walkable_roofs));
+    assert.deepEqual(f.walkable_roofs.map((r) => r.building), ['B_1', 'B_2', 'B_3']);
+    const wrB1 = f.walkable_roofs.find((r) => r.building === 'B_1')!;
+    assert.equal(wrB1.floor, 2);
+    assert.equal(wrB1.ladder_only, false);
+    assert.deepEqual(wrB1.access, [{ id: 'B_1_st', kind: 'stairs', top: [1500, 1500, 640] }]);
+    const wrB2 = f.walkable_roofs.find((r) => r.building === 'B_2')!;
+    assert.equal(wrB2.ladder_only, true);
+    assert.deepEqual(wrB2.access, [{ id: 'LAD_B_2', kind: 'ladder', top: [-1950, 1500, 340] }]);
+  });
+
+  it('schema v2 exports open crossings along routes and goal sites round goals', () => {
+    const l = tiny();
+    const lWithRouteAndCover = {
+      ...l,
+      covers: [
+        { id: 'COV_goal', pos: [-2050, 50] as [number, number], yaw: 0, size: [100, 50, 120] as [number, number, number], kind: 'half' as const },
+        { id: 'COV_seeing', pos: [500, 500] as [number, number], yaw: 0, size: [100, 50, 120] as [number, number, number], kind: 'full' as const },
+      ],
+      routes: [
+        { id: 'R_open', mandatory: true, points: [[0, 0] as [number, number], [0, 2500] as [number, number]] },
+      ],
+    };
+    const f = tacticalMapFor(lWithRouteAndCover, 'M');
+    assert.ok(f.open_crossings.length >= 1);
+    const oc = f.open_crossings[0];
+    assert.equal(oc.route, 'R_open');
+    assert.ok(oc.length_m >= 10);
+    assert.deepEqual(oc.seeing_covers, ['COV_goal', 'COV_seeing']);
+
+    assert.ok(f.goal_sites.length >= 1);
+    const gs = f.goal_sites[0];
+    assert.equal(gs.goal_id, 'GOAL_1');
+    assert.equal(gs.cover_id, 'COV_goal');
+    assert.equal(gs.sector_arc_deg, 90);
+    assert.equal(gs.cover_height_cm, 120);
+    assert.ok(gs.dist_m < 25);
+  });
+
   it('the committed x4 Depot file matches its accepted layout (the analysis computed as «Принять» does, deterministic)', () => {
     const x4 = readLayout('gen_ref_01_02_depot_1_x4');
     const f = tacticalMapFor(x4, 'L_Gen_Depot_X4', 'gen_ref_01_02_depot_1_x4');
@@ -151,6 +236,13 @@ describe('tactical map runtime file (TACTICAL_MAP P1)', () => {
     assert.equal(f.firing_gaps?.length, x4.firing_gaps?.length, "the file lists the layout's firing gaps (none on main's x4)");
     assert.ok(!f.firing_gaps || f.overwatch_roofs.every((r) => r.spots.length > 0) && f.overwatch_roofs.flatMap((r) => r.spots).filter((s) => s.gap).length >= 40, 'the rim spots link to their gaps');
     assert.ok(f.ladder_only_roofs.length > 0, 'the x4 Depot has ladder-only roofs');
+    assert.equal(f.walkable_roofs?.length, 22, 'x4 Depot has 22 walkable roofs');
+    assert.equal(f.goal_sites?.length, 25, 'x4 Depot has 25 goal sites');
+    assert.equal(f.open_crossings?.length, 17, 'x4 Depot has 17 open crossings (safe cover-distance bound, 2026-11-22)');
+    assert.ok(f.chokepoints.some((c) => c.building !== undefined), 'places have building attribution');
+    assert.ok(f.hiding_spots.some((h) => h.building !== undefined), 'hiding spots have building attribution');
+    assert.ok(f.open_crossings?.every((oc) => oc.length_m >= 10), 'all open crossings >= 10m');
+    assert.ok(f.open_crossings?.every((oc) => oc.nearest_cover_cm >= 200), 'all open crossings nearest cover >= 200cm');
     assert.ok(f.chokepoints.every((c, i) => i === 0 || c.score <= f.chokepoints[i - 1].score), 'sorted by score');
   });
 });

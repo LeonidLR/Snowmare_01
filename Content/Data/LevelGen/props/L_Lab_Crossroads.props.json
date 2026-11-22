@@ -1,0 +1,474 @@
+{
+	"schema": "codex.levelgen_props/1",
+	"map": "L_Lab_Crossroads",
+	"layout": "gen_lab_crossroads",
+	"layout_hash": "0000000000000000000000000000000000000000",
+	"revision": 1,
+	"frozen": false,
+	"source": "auto",
+	"layers": [
+		{
+			"id": "crates",
+			"kind": "crates",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "crates_default",
+			"rules": {
+				"count": {
+					"max": 80,
+					"mode": "density",
+					"per_100m2": 0.25
+				},
+				"route_corridor_m": 2,
+				"where": {
+					"near": [
+						{
+							"max_cm": 150,
+							"weight": 3,
+							"what": "wall"
+						},
+						{
+							"max_cm": 200,
+							"weight": 2,
+							"what": "cover"
+						}
+					],
+					"walk_layers": ["ground", "floor:*"]
+				}
+			},
+			"objects": [
+				{
+					"id": "crates_00000001_0",
+					"variant": "crate_s",
+					"pos": [1700, -1350],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_1",
+					"variant": "crate_l",
+					"pos": [200, -2950],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_2",
+					"variant": "crate_l",
+					"pos": [3600, -3400],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_3",
+					"variant": "crate_s",
+					"pos": [-150, 2850],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_4",
+					"variant": "crate_s",
+					"pos": [-3700, -3050],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_5",
+					"variant": "crate_s",
+					"pos": [-2050, -1100],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_6",
+					"variant": "crate_s",
+					"pos": [-1700, 3000],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_7",
+					"variant": "crate_l",
+					"pos": [1750, 2350],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_8",
+					"variant": "crate_s",
+					"pos": [-1100, 1000],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_9",
+					"variant": "crate_s",
+					"pos": [2000, 2900],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_10",
+					"variant": "crate_s",
+					"pos": [2100, -800],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_11",
+					"variant": "crate_s",
+					"pos": [950, -450],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_12",
+					"variant": "crate_s",
+					"pos": [200, -1400],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_13",
+					"variant": "crate_s",
+					"pos": [1700, -1650],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				}
+			],
+			"report": {
+				"eligible": 22801,
+				"gate": "pass",
+				"kept": 0,
+				"placed": 14,
+				"rejected": {
+					"blocked": 514,
+					"door": 0,
+					"keepout": 0,
+					"ladder": 0,
+					"other": 0,
+					"other_layer": 0,
+					"route": 823,
+					"spacing": 0,
+					"spawn": 3424
+				},
+				"requested": 14,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": []
+			}
+		},
+		{
+			"id": "barrels",
+			"kind": "barrels",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "barrels_default",
+			"rules": {
+				"count": {
+					"mode": "count",
+					"value": 4
+				},
+				"route_corridor_m": 2,
+				"where": {
+					"near": [
+						{
+							"max_cm": 120,
+							"weight": 2,
+							"what": "wall"
+						}
+					]
+				}
+			},
+			"objects": [
+				{
+					"id": "barrels_00000001_0",
+					"variant": "barrel_explosive",
+					"pos": [-2000, 2900],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_0"
+				},
+				{
+					"id": "barrels_00000001_1",
+					"variant": "barrel_explosive",
+					"pos": [600, 3700],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_1"
+				},
+				{
+					"id": "barrels_00000001_2",
+					"variant": "barrel_explosive",
+					"pos": [650, 3600],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_1"
+				},
+				{
+					"id": "barrels_00000001_3",
+					"variant": "barrel_explosive",
+					"pos": [500, 3650],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_1"
+				}
+			],
+			"report": {
+				"eligible": 22801,
+				"gate": "pass",
+				"kept": 0,
+				"placed": 4,
+				"rejected": {
+					"blocked": 871,
+					"door": 0,
+					"keepout": 0,
+					"ladder": 0,
+					"other": 0,
+					"other_layer": 617,
+					"route": 754,
+					"spacing": 0,
+					"spawn": 3391
+				},
+				"requested": 4,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": []
+			}
+		},
+		{
+			"id": "turrets",
+			"kind": "turrets",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "turrets_default",
+			"rules": {
+				"count": {
+					"mode": "count",
+					"value": 1
+				}
+			},
+			"objects": [],
+			"report": {
+				"eligible": 0,
+				"gate": "pass",
+				"kept": 0,
+				"placed": 0,
+				"rejected": {
+					"blocked": 0,
+					"coverage": 0,
+					"door": 0,
+					"keepout": 0,
+					"ladder": 0,
+					"other": 0,
+					"other_layer": 0,
+					"route": 0,
+					"spacing": 0,
+					"spawn": 0
+				},
+				"requested": 1,
+				"short_by": 1,
+				"status": "ok",
+				"warnings": ["no_candidates"]
+			}
+		},
+		{
+			"id": "mines",
+			"kind": "mines",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "mines_default",
+			"rules": {
+				"crates": {
+					"percent": 10
+				},
+				"doorways": {
+					"mode": "percent",
+					"value": 25
+				},
+				"field": {
+					"count": {
+						"mode": "count",
+						"value": 2
+					}
+				},
+				"route_clear_m": 6
+			},
+			"objects": [
+				{
+					"id": "mines_00000001_1",
+					"variant": "mine_crate",
+					"pos": [-3700, -3050],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_4",
+					"trigger": "crate_open"
+				}
+			],
+			"report": {
+				"crates": {
+					"dropped": 0,
+					"eligible": 14,
+					"forbidden": 0,
+					"kept": 0,
+					"placed": 2,
+					"requested": 2
+				},
+				"doorways": {
+					"dropped": 0,
+					"eligible": 0,
+					"forbidden": 0,
+					"kept": 0,
+					"placed": 0,
+					"requested": 0
+				},
+				"eligible": 0,
+				"field": {
+					"dropped": 0,
+					"eligible": 0,
+					"forbidden": 0,
+					"kept": 0,
+					"placed": 0,
+					"requested": 2
+				},
+				"gate": "pass",
+				"kept": 0,
+				"placed": 2,
+				"rejected": {
+					"blocked": 0,
+					"door": 0,
+					"keepout": 0,
+					"ladder": 0,
+					"other": 0,
+					"other_layer": 0,
+					"route": 0,
+					"spacing": 0,
+					"spawn": 0
+				},
+				"requested": 4,
+				"short_by": 2,
+				"status": "short",
+				"warnings": ["no_candidates"]
+			}
+		},
+		{
+			"id": "loot",
+			"kind": "loot",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "loot_default",
+			"rules": {
+				"budget_value": 300
+			},
+			"objects": [
+				{
+					"id": "loot_00000001_0",
+					"variant": "loot_crate",
+					"pos": [-1700, 3000],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_6",
+					"loot_table": "med_common"
+				},
+				{
+					"id": "loot_00000001_1",
+					"variant": "loot_crate",
+					"pos": [200, -1400],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_12",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_2",
+					"variant": "loot_crate",
+					"pos": [200, -2950],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_1",
+					"loot_table": "ammo_common"
+				}
+			],
+			"report": {
+				"budget": {
+					"left": 160,
+					"spent": 140,
+					"value": 300
+				},
+				"containers": {
+					"dropped": 0,
+					"eligible": 12,
+					"forbidden": 0,
+					"kept": 0,
+					"placed": 3,
+					"requested": 4
+				},
+				"eligible": 0,
+				"gate": "pass",
+				"kept": 0,
+				"loose": {
+					"dropped": 0,
+					"eligible": 0,
+					"forbidden": 0,
+					"kept": 0,
+					"placed": 0,
+					"requested": 0
+				},
+				"placed": 3,
+				"rejected": {
+					"blocked": 0,
+					"door": 0,
+					"keepout": 0,
+					"ladder": 0,
+					"other": 0,
+					"other_layer": 0,
+					"route": 0,
+					"spacing": 0,
+					"spawn": 0
+				},
+				"requested": 3,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": ["budget_left 160"]
+			}
+		},
+		{
+			"id": "power",
+			"kind": "power",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "power_default",
+			"rules": {},
+			"objects": []
+		}
+	],
+	"overrides": []
+}

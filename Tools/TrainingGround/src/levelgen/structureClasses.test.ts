@@ -53,10 +53,11 @@ test('CodexTactics.LevelGen.Structure.Rules: the table covers every rule role; o
     for (const role of ['perimeter', 'core', 'cross', 'inner']) {
       const [s, m] = (rule as Record<string, string[]>)[role];
       assert.ok(STRUCTURE_CLASSES.structures.includes(s) && STRUCTURE_CLASSES.materials.includes(m), `${arch}.${role}`);
-      assert.ok(`${s}/${m}` in STRUCTURE_CLASSES.classes, `${arch}.${role}: ${s}/${m} has a placeholder row`);
+      // Gemini 099 contract (merged 2026-11-22): classes keyed "structure.material" -> an hp class of hp_classes
+      const hp = (STRUCTURE_CLASSES.classes as Record<string, string>)[`${s}.${m}`];
+      assert.ok(hp && hp in (STRUCTURE_CLASSES as unknown as { hp_classes: Record<string, unknown> }).hp_classes, `${arch}.${role}: ${s}.${m} -> an hp class`);
     }
   }
-  for (const row of Object.values(STRUCTURE_CLASSES.classes)) assert.equal(row.hp_class, 'TBD');
   const { l, b } = one('office', 12.0, 10.2, 2);
   for (const w of l.walls.filter((x) => x.building === b.id && x.kind === 'building')) assert.deepEqual([w.structure, w.material], ['load_bearing', 'brick']);
 });

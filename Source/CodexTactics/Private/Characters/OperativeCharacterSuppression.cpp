@@ -4,6 +4,7 @@
 // Cluster map: docs/port/REFACTOR_OPERATIVE_2026-10.md.
 
 #include "Characters/OperativeCharacter.h"
+#include "Core/CodexGameplayRandom.h"
 
 #include "AI/PmcSquadSubsystem.h"
 #include "CodexTactics.h"
@@ -288,7 +289,7 @@ const TCHAR* AOperativeCharacter::RunSuppressFire(float DeltaTime, AActor*& OutT
 	if (!bSuppressAtTarget && Config.OrderSpotScatterCm > 0.f)
 	{
 		// Fire at a spot walks the rounds over it.
-		const FVector2D Scatter = FMath::RandPointInCircle(Config.OrderSpotScatterCm);
+		const FVector2D Scatter = CodexRandom::RandPointInCircle(ECodexRandomStream::Combat, this, Config.OrderSpotScatterCm);
 		AimAt += FVector(Scatter.X, Scatter.Y, 0.f);
 	}
 	OutTarget = bEnemyAlive && !Enemy->IsHidden() ? Enemy : nullptr; // hidden: fire at his last spot, not at him

@@ -1,35 +1,391 @@
 {
   "schema": "codex.structure_classes/1",
-  "comment": "Structural class + material of every wall segment, partition and opening of a schema /2 layout (lead addendum 2026-11-21, designer: future destruction; NOTHING reads it yet). Read by Tools/TrainingGround/src/levelgen/structureClasses.ts (written onto layout walls[], buildings[].partitions[] and every opening at finalize when building_plans is on) and passed through by Scripts/Editor/build_levelgen_map.py as actor tags structure=<class> / material=<material>. rules: per archetype (GenBuilding.archetype; 'default' for buildings without one), the class / material of a wall by its role: 'perimeter' (the outer walls), 'core' (the walls of a stair core room and its lane walls), 'cross' (a wall between two flats or between a flat and a common room - the panel block's transverse bearing walls), 'inner' (every other interior wall). free_walls: walls of no building, by their kind. An opening takes its host wall's class and material. classes: the placeholder durability table (class + material -> hp_class), values TBD - no number is decided.",
-  "structures": ["load_bearing", "partition", "annex", "facade"],
-  "materials": ["concrete_panel", "brick", "plaster", "wood", "sheet_metal"],
+  "_comment": "ADR-0004 P0 structure classes and hp classes mapping. All values are PLACEHOLDERS marked _placeholder: true. Generator part (rules / free_walls: structureClasses.ts, schema /2 wall segments) from claude/bgen-test e338f5ec; hp classes per 'structure.material' from Gemini 099.",
+  "structures": [
+    "load_bearing",
+    "partition",
+    "annex",
+    "facade"
+  ],
+  "materials": [
+    "concrete_panel",
+    "brick",
+    "plaster",
+    "wood",
+    "sheet_metal"
+  ],
   "rules": {
-    "block": { "perimeter": ["load_bearing", "concrete_panel"], "core": ["load_bearing", "concrete_panel"], "cross": ["load_bearing", "concrete_panel"], "inner": ["partition", "plaster"] },
-    "shop_flats": { "perimeter": ["load_bearing", "concrete_panel"], "core": ["load_bearing", "concrete_panel"], "cross": ["load_bearing", "concrete_panel"], "inner": ["partition", "plaster"] },
-    "hospital": { "perimeter": ["load_bearing", "brick"], "core": ["load_bearing", "brick"], "cross": ["load_bearing", "brick"], "inner": ["partition", "plaster"] },
-    "office": { "perimeter": ["load_bearing", "brick"], "core": ["load_bearing", "brick"], "cross": ["partition", "plaster"], "inner": ["partition", "plaster"] },
-    "hall": { "perimeter": ["facade", "sheet_metal"], "core": ["load_bearing", "concrete_panel"], "cross": ["partition", "sheet_metal"], "inner": ["partition", "sheet_metal"] },
-    "warehouse": { "perimeter": ["facade", "sheet_metal"], "core": ["load_bearing", "concrete_panel"], "cross": ["partition", "sheet_metal"], "inner": ["partition", "sheet_metal"] },
-    "gallery": { "perimeter": ["facade", "sheet_metal"], "core": ["load_bearing", "concrete_panel"], "cross": ["partition", "sheet_metal"], "inner": ["partition", "sheet_metal"] },
-    "shed": { "perimeter": ["annex", "wood"], "core": ["annex", "wood"], "cross": ["annex", "wood"], "inner": ["partition", "wood"] },
-    "ruin": { "perimeter": ["load_bearing", "brick"], "core": ["load_bearing", "brick"], "cross": ["load_bearing", "brick"], "inner": ["partition", "brick"] },
-    "shell": { "perimeter": ["load_bearing", "brick"], "core": ["load_bearing", "brick"], "cross": ["partition", "plaster"], "inner": ["partition", "plaster"] },
-    "default": { "perimeter": ["load_bearing", "brick"], "core": ["load_bearing", "brick"], "cross": ["partition", "plaster"], "inner": ["partition", "plaster"] }
+    "block": {
+      "perimeter": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "core": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "cross": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "inner": [
+        "partition",
+        "plaster"
+      ]
+    },
+    "shop_flats": {
+      "perimeter": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "core": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "cross": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "inner": [
+        "partition",
+        "plaster"
+      ]
+    },
+    "hospital": {
+      "perimeter": [
+        "load_bearing",
+        "brick"
+      ],
+      "core": [
+        "load_bearing",
+        "brick"
+      ],
+      "cross": [
+        "load_bearing",
+        "brick"
+      ],
+      "inner": [
+        "partition",
+        "plaster"
+      ]
+    },
+    "office": {
+      "perimeter": [
+        "load_bearing",
+        "brick"
+      ],
+      "core": [
+        "load_bearing",
+        "brick"
+      ],
+      "cross": [
+        "partition",
+        "plaster"
+      ],
+      "inner": [
+        "partition",
+        "plaster"
+      ]
+    },
+    "hall": {
+      "perimeter": [
+        "facade",
+        "sheet_metal"
+      ],
+      "core": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "cross": [
+        "partition",
+        "sheet_metal"
+      ],
+      "inner": [
+        "partition",
+        "sheet_metal"
+      ]
+    },
+    "warehouse": {
+      "perimeter": [
+        "facade",
+        "sheet_metal"
+      ],
+      "core": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "cross": [
+        "partition",
+        "sheet_metal"
+      ],
+      "inner": [
+        "partition",
+        "sheet_metal"
+      ]
+    },
+    "gallery": {
+      "perimeter": [
+        "facade",
+        "sheet_metal"
+      ],
+      "core": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "cross": [
+        "partition",
+        "sheet_metal"
+      ],
+      "inner": [
+        "partition",
+        "sheet_metal"
+      ]
+    },
+    "shed": {
+      "perimeter": [
+        "annex",
+        "wood"
+      ],
+      "core": [
+        "annex",
+        "wood"
+      ],
+      "cross": [
+        "annex",
+        "wood"
+      ],
+      "inner": [
+        "partition",
+        "wood"
+      ]
+    },
+    "ruin": {
+      "perimeter": [
+        "load_bearing",
+        "brick"
+      ],
+      "core": [
+        "load_bearing",
+        "brick"
+      ],
+      "cross": [
+        "load_bearing",
+        "brick"
+      ],
+      "inner": [
+        "partition",
+        "brick"
+      ]
+    },
+    "shell": {
+      "perimeter": [
+        "load_bearing",
+        "brick"
+      ],
+      "core": [
+        "load_bearing",
+        "brick"
+      ],
+      "cross": [
+        "partition",
+        "plaster"
+      ],
+      "inner": [
+        "partition",
+        "plaster"
+      ]
+    },
+    "default": {
+      "perimeter": [
+        "load_bearing",
+        "brick"
+      ],
+      "core": [
+        "load_bearing",
+        "brick"
+      ],
+      "cross": [
+        "partition",
+        "plaster"
+      ],
+      "inner": [
+        "partition",
+        "plaster"
+      ]
+    }
   },
   "free_walls": {
-    "fence": ["annex", "sheet_metal"],
-    "default": ["annex", "brick"]
+    "fence": [
+      "annex",
+      "sheet_metal"
+    ],
+    "default": [
+      "annex",
+      "brick"
+    ]
   },
   "classes": {
-    "load_bearing/concrete_panel": { "hp_class": "TBD" },
-    "load_bearing/brick": { "hp_class": "TBD" },
-    "partition/plaster": { "hp_class": "TBD" },
-    "partition/sheet_metal": { "hp_class": "TBD" },
-    "partition/wood": { "hp_class": "TBD" },
-    "partition/brick": { "hp_class": "TBD" },
-    "facade/sheet_metal": { "hp_class": "TBD" },
-    "annex/wood": { "hp_class": "TBD" },
-    "annex/sheet_metal": { "hp_class": "TBD" },
-    "annex/brick": { "hp_class": "TBD" }
+    "load_bearing.concrete_panel": "hp_heavy_concrete",
+    "load_bearing.brick": "hp_load_bearing_brick",
+    "load_bearing.sheet_metal": "hp_load_bearing_metal",
+    "load_bearing.plaster": "hp_load_bearing_plaster",
+    "load_bearing.wood": "hp_load_bearing_wood",
+    "facade.concrete_panel": "hp_facade_concrete",
+    "facade.brick": "hp_facade_brick",
+    "facade.sheet_metal": "hp_facade_metal",
+    "facade.plaster": "hp_facade_plaster",
+    "facade.wood": "hp_facade_wood",
+    "annex.concrete_panel": "hp_annex_concrete",
+    "annex.brick": "hp_annex_brick",
+    "annex.sheet_metal": "hp_annex_metal",
+    "annex.plaster": "hp_annex_plaster",
+    "annex.wood": "hp_annex_wood",
+    "partition.concrete_panel": "hp_partition_concrete",
+    "partition.brick": "hp_partition_brick",
+    "partition.sheet_metal": "hp_partition_metal",
+    "partition.plaster": "hp_partition_plaster",
+    "partition.wood": "hp_partition_wood"
+  },
+  "hp_classes": {
+    "hp_heavy_concrete": {
+      "_placeholder": true,
+      "hp_per_cell": 5000,
+      "min_breach_class": "heavy_explosive",
+      "noise_m": 50.0,
+      "rubble": "concrete_rubble"
+    },
+    "hp_load_bearing_brick": {
+      "_placeholder": true,
+      "hp_per_cell": 3500,
+      "min_breach_class": "medium_explosive",
+      "noise_m": 40.0,
+      "rubble": "brick_rubble"
+    },
+    "hp_load_bearing_metal": {
+      "_placeholder": true,
+      "hp_per_cell": 2800,
+      "min_breach_class": "medium_explosive",
+      "noise_m": 35.0,
+      "rubble": "scrap_metal"
+    },
+    "hp_load_bearing_plaster": {
+      "_placeholder": true,
+      "hp_per_cell": 1500,
+      "min_breach_class": "light_explosive",
+      "noise_m": 25.0,
+      "rubble": "plaster_dust"
+    },
+    "hp_load_bearing_wood": {
+      "_placeholder": true,
+      "hp_per_cell": 250,
+      "min_breach_class": "small_arms",
+      "noise_m": 12.0,
+      "rubble": "wood_splinters"
+    },
+    "hp_facade_concrete": {
+      "_placeholder": true,
+      "hp_per_cell": 3000,
+      "min_breach_class": "medium_explosive",
+      "noise_m": 35.0,
+      "rubble": "concrete_rubble"
+    },
+    "hp_facade_brick": {
+      "_placeholder": true,
+      "hp_per_cell": 2000,
+      "min_breach_class": "medium_explosive",
+      "noise_m": 30.0,
+      "rubble": "brick_rubble"
+    },
+    "hp_facade_metal": {
+      "_placeholder": true,
+      "hp_per_cell": 1400,
+      "min_breach_class": "light_explosive",
+      "noise_m": 25.0,
+      "rubble": "scrap_metal"
+    },
+    "hp_facade_plaster": {
+      "_placeholder": true,
+      "hp_per_cell": 600,
+      "min_breach_class": "light_explosive",
+      "noise_m": 18.0,
+      "rubble": "plaster_dust"
+    },
+    "hp_facade_wood": {
+      "_placeholder": true,
+      "hp_per_cell": 200,
+      "min_breach_class": "small_arms",
+      "noise_m": 10.0,
+      "rubble": "wood_splinters"
+    },
+    "hp_annex_concrete": {
+      "_placeholder": true,
+      "hp_per_cell": 1200,
+      "min_breach_class": "light_explosive",
+      "noise_m": 25.0,
+      "rubble": "concrete_rubble"
+    },
+    "hp_annex_brick": {
+      "_placeholder": true,
+      "hp_per_cell": 1000,
+      "min_breach_class": "light_explosive",
+      "noise_m": 22.0,
+      "rubble": "brick_rubble"
+    },
+    "hp_annex_metal": {
+      "_placeholder": true,
+      "hp_per_cell": 800,
+      "min_breach_class": "light_explosive",
+      "noise_m": 20.0,
+      "rubble": "scrap_metal"
+    },
+    "hp_annex_plaster": {
+      "_placeholder": true,
+      "hp_per_cell": 500,
+      "min_breach_class": "light_explosive",
+      "noise_m": 18.0,
+      "rubble": "plaster_dust"
+    },
+    "hp_annex_wood": {
+      "_placeholder": true,
+      "hp_per_cell": 180,
+      "min_breach_class": "small_arms",
+      "noise_m": 10.0,
+      "rubble": "wood_splinters"
+    },
+    "hp_partition_concrete": {
+      "_placeholder": true,
+      "hp_per_cell": 1000,
+      "min_breach_class": "light_explosive",
+      "noise_m": 20.0,
+      "rubble": "concrete_rubble"
+    },
+    "hp_partition_brick": {
+      "_placeholder": true,
+      "hp_per_cell": 800,
+      "min_breach_class": "light_explosive",
+      "noise_m": 18.0,
+      "rubble": "brick_rubble"
+    },
+    "hp_partition_metal": {
+      "_placeholder": true,
+      "hp_per_cell": 500,
+      "min_breach_class": "light_explosive",
+      "noise_m": 15.0,
+      "rubble": "scrap_metal"
+    },
+    "hp_partition_plaster": {
+      "_placeholder": true,
+      "hp_per_cell": 300,
+      "min_breach_class": "small_arms",
+      "noise_m": 12.0,
+      "rubble": "plaster_dust"
+    },
+    "hp_partition_wood": {
+      "_placeholder": true,
+      "hp_per_cell": 150,
+      "min_breach_class": "small_arms",
+      "noise_m": 8.0,
+      "rubble": "wood_splinters"
+    }
   }
 }

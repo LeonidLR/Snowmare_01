@@ -1,4 +1,5 @@
 #include "Characters/OperativeAnimInstance.h"
+#include "Core/CodexGameplayRandom.h"
 #include "Survival/FirstAidSubsystem.h"
 #include "Core/GameplayPreloadSubsystem.h"
 #include "Ladders/LadderPoseIK.h"
@@ -380,7 +381,7 @@ void UOperativeAnimInstance::UpdateRifle2Locomotion(float DeltaSeconds, bool bMo
 			if (LocoStateTime >= LocoClipLength - 0.25f)
 			{
 				EnterRifleLocoState(ERifleLocoState::Idle, nullptr);
-				LocoNextBreak = FMath::FRandRange(Rifle2IdleBreakMinSeconds, Rifle2IdleBreakMaxSeconds);
+				LocoNextBreak = CodexRandom::FRandRange(ECodexRandomStream::Cosmetic, this, Rifle2IdleBreakMinSeconds, Rifle2IdleBreakMaxSeconds);
 			}
 			break;
 		}
@@ -389,7 +390,7 @@ void UOperativeAnimInstance::UpdateRifle2Locomotion(float DeltaSeconds, bool bMo
 		LocoIdleSeconds += DeltaSeconds;
 		if (LocoIdleSeconds >= LocoNextBreak && Rifle2IdleBreaks.Num() > 0)
 		{
-			if (UAnimSequence* Break = Rifle2IdleBreaks[FMath::RandRange(0, Rifle2IdleBreaks.Num() - 1)])
+			if (UAnimSequence* Break = Rifle2IdleBreaks[CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, 0, Rifle2IdleBreaks.Num() - 1)])
 			{
 				EnterRifleLocoState(ERifleLocoState::IdleBreak, Break);
 			}
@@ -976,7 +977,7 @@ UAnimSequenceBase* UOperativeAnimInstance::PickDeathClip(const AOperativeCharact
 	}
 	return Operative.GetStance() == EOperativeStance::Crouching ? DeathCrouchAnimation.Get()
 		: Operative.GetStance() == EOperativeStance::Prone ? DeathProneAnimation.Get()
-		: StandClips.IsEmpty() ? nullptr : StandClips[FMath::RandRange(0, StandClips.Num() - 1)];
+		: StandClips.IsEmpty() ? nullptr : StandClips[CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, 0, StandClips.Num() - 1)];
 }
 
 void UOperativeAnimInstance::UpdateDeathPose(const AOperativeCharacter& Operative, float DeltaSeconds)

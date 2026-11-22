@@ -7,12 +7,12 @@
   "floor_tolerance_cm": 150,
   "goals": [
     {
-      "id": "GOAL_1",
+      "id": "GOAL_alley",
       "kind": "street",
       "layer": "ground",
       "pos": [
-        -200,
-        1900,
+        1500,
+        0,
         0
       ],
       "radius_cm": 300

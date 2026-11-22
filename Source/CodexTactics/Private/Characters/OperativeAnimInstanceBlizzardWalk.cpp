@@ -6,6 +6,7 @@
 // -> transit ...), blend in / out over 0.3 s, out over 0.15 s when the rifle is needed. The ABP graph is not changed.
 
 #include "Characters/OperativeAnimInstance.h"
+#include "Core/CodexGameplayRandom.h"
 
 #include "Animation/AnimMontage.h"
 #include "Camera/CameraZoneVolume.h"
@@ -229,10 +230,10 @@ void UOperativeAnimInstance::UpdateBlizzardWalkLayer(const AOperativeCharacter& 
 	else if (!bActive && bWanted)
 	{
 		BlizzardWalkLoopsDone = 0;
-		BlizzardWalkLoopsTarget = FMath::RandRange(FMath::Max(1, BlizzardWalkLoopsMin), FMath::Max(BlizzardWalkLoopsMin, BlizzardWalkLoopsMax));
+		BlizzardWalkLoopsTarget = CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, FMath::Max(1, BlizzardWalkLoopsMin), FMath::Max(BlizzardWalkLoopsMin, BlizzardWalkLoopsMax));
 		// Either loop to start with (two operatives side by side do not mirror each other).
 		const EWarmClipStep First = BlizzardWalkFirstStepForTesting != EWarmClipStep::None ? BlizzardWalkFirstStepForTesting
-			: FMath::RandBool() ? EWarmClipStep::LoopA : EWarmClipStep::LoopB;
+			: CodexRandom::RandBool(ECodexRandomStream::Cosmetic, this) ? EWarmClipStep::LoopA : EWarmClipStep::LoopB;
 		if (PlayBlizzardWalkClip(First, BlizzardWalkBlendSeconds) || PlayBlizzardWalkClip(EWarmClipStep::LoopA, BlizzardWalkBlendSeconds))
 		{
 			UE_LOG(LogCodexTactics, Verbose, TEXT("[BlizzardWalk] %s: on (%s)"), *Operative.DisplayName.ToString(),
@@ -261,7 +262,7 @@ void UOperativeAnimInstance::UpdateBlizzardWalkLayer(const AOperativeCharacter& 
 			BlizzardWalkLoopsDone = Next == BlizzardWalkStep ? Done : 0;
 			if (Next != BlizzardWalkStep && (Next == EWarmClipStep::LoopA || Next == EWarmClipStep::LoopB))
 			{
-				BlizzardWalkLoopsTarget = FMath::RandRange(FMath::Max(1, BlizzardWalkLoopsMin), FMath::Max(BlizzardWalkLoopsMin, BlizzardWalkLoopsMax));
+				BlizzardWalkLoopsTarget = CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, FMath::Max(1, BlizzardWalkLoopsMin), FMath::Max(BlizzardWalkLoopsMin, BlizzardWalkLoopsMax));
 			}
 			if (!PlayBlizzardWalkClip(Next, BlizzardWalkBlendSeconds))
 			{

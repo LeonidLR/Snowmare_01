@@ -1,299 +1,181 @@
 {
  "schema": "codex.levelgen_layout/1",
  "name": "gen_lab_crossroads",
- "profile": "lab_01_crossroads",
- "seed": 401,
+ "profile": "lab_crossroads",
+ "seed": 1,
  "params": {
   "size_m": [
-   60,
-   80
+   75,
+   75
   ],
   "density": 1,
   "variants": 1,
-  "verticality": 3
+  "verticality": 1
  },
- "comment": "Hand-placed lab map for the smart-enemies clip DS-00A (hammer & anvil): an open crossroads, cover on the far side, a walled enclosure with one gap on the near side.",
+ "comment": "L_Lab_Crossroads accepted layout for smart enemies T-02",
  "bounds": {
   "min": [
-   -4000,
-   -3000
+   -3750,
+   -3750
   ],
   "max": [
-   4000,
-   3000
+   3750,
+   3750
   ]
  },
  "ground_z": 0,
  "spawn": {
   "pos": [
-   -3700,
+   -3500,
    0
   ],
-  "yaw": 0
+  "yaw": 90
  },
  "end": [
-  3850,
+  3500,
   0
  ],
  "walls": [
   {
-   "id": "B_sw_block_N_0",
+   "id": "W_cross_near_S",
    "a": [
-    1800,
-    -2600
+    -2200,
+    400
    ],
    "b": [
-    1800,
-    -800
+    -2200,
+    1600
    ],
    "height": 300,
-   "thickness": 30,
-   "kind": "building",
-   "building": "B_sw_block"
-  },
-  {
-   "id": "B_sw_block_S_0",
-   "a": [
-    0,
-    -2600
-   ],
-   "b": [
-    0,
-    -800
-   ],
-   "height": 300,
-   "thickness": 30,
-   "kind": "building",
-   "building": "B_sw_block"
-  },
-  {
-   "id": "B_sw_block_W_0",
-   "a": [
-    1800,
-    -2600
-   ],
-   "b": [
-    0,
-    -2600
-   ],
-   "height": 300,
-   "thickness": 30,
-   "kind": "building",
-   "building": "B_sw_block"
-  },
-  {
-   "id": "B_sw_block_E_0",
-   "a": [
-    1800,
-    -800
-   ],
-   "b": [
-    0,
-    -800
-   ],
-   "height": 300,
-   "thickness": 30,
-   "kind": "building",
-   "building": "B_sw_block"
-  },
-  {
-   "id": "W_grave_W_0",
-   "a": [
-    1800,
-    700
-   ],
-   "b": [
-    1325,
-    700
-   ],
-   "height": 330,
-   "thickness": 30,
+   "thickness": 20,
    "kind": "wall"
   },
   {
-   "id": "W_grave_W_1",
+   "id": "W_cross_near_W",
    "a": [
-    1075,
-    700
+    -2200,
+    400
    ],
    "b": [
-    600,
-    700
+    -800,
+    400
    ],
-   "height": 330,
-   "thickness": 30,
+   "height": 300,
+   "thickness": 20,
    "kind": "wall"
   },
   {
-   "id": "W_grave_N",
+   "id": "W_cross_near_N",
    "a": [
-    1800,
-    700
+    -800,
+    400
    ],
    "b": [
-    1800,
-    1900
+    -800,
+    1600
    ],
-   "height": 330,
-   "thickness": 30,
+   "height": 300,
+   "thickness": 20,
    "kind": "wall"
   },
   {
-   "id": "W_grave_E",
+   "id": "W_cross_near_E1",
    "a": [
-    1800,
-    1900
+    -2200,
+    1600
    ],
    "b": [
-    600,
-    1900
+    -1600,
+    1600
    ],
-   "height": 330,
-   "thickness": 30,
+   "height": 300,
+   "thickness": 20,
    "kind": "wall"
   },
   {
-   "id": "W_grave_S",
+   "id": "W_cross_near_E2",
    "a": [
-    600,
-    700
+    -1400,
+    1600
    ],
    "b": [
-    600,
-    1900
+    -800,
+    1600
    ],
-   "height": 330,
-   "thickness": 30,
+   "height": 300,
+   "thickness": 20,
    "kind": "wall"
   }
  ],
- "buildings": [
-  {
-   "id": "B_sw_block",
-   "footprint": [
-    [
-     0,
-     -2600
-    ],
-    [
-     1800,
-     -800
-    ]
-   ],
-   "height": 300,
-   "floors": 1,
-   "enterable": false,
-   "roof_walkable": false,
-   "doors": [],
-   "openings": [],
-   "partitions": [],
-   "floors_detail": [],
-   "hatches": [],
-   "parapets": [],
-   "rooms": [],
-   "mantle_edges": [],
-   "stairs": [],
-   "roof_holes": [],
-   "floor_holes": [],
-   "set_piece": "facade"
-  }
- ],
+ "buildings": [],
  "ladders": [],
  "covers": [
   {
-   "id": "C_hammer_w1",
+   "id": "cov_cross_1",
    "kind": "crate",
    "pos": [
-    3400,
-    -800
+    1000,
+    -250
    ],
    "size": [
-    120,
+    160,
     120,
     85
    ],
    "yaw": 90
   },
   {
-   "id": "C_hammer_w2",
+   "id": "cov_cross_2",
    "kind": "crate",
    "pos": [
-    3550,
+    1000,
+    250
+   ],
+   "size": [
+    160,
+    120,
+    85
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "cov_cross_3",
+   "kind": "sandbag",
+   "pos": [
+    1500,
     -400
    ],
    "size": [
-    120,
-    120,
-    85
+    260,
+    75,
+    95
    ],
-   "yaw": 90
+   "yaw": 180
   },
   {
-   "id": "C_hammer_e1",
-   "kind": "crate",
+   "id": "cov_cross_4",
+   "kind": "sandbag",
    "pos": [
-    3550,
+    1500,
     400
    ],
    "size": [
-    120,
-    120,
-    85
-   ],
-   "yaw": 90
-  },
-  {
-   "id": "C_hammer_e2",
-   "kind": "crate",
-   "pos": [
-    3400,
-    800
-   ],
-   "size": [
-    120,
-    120,
-    85
-   ],
-   "yaw": 90
-  },
-  {
-   "id": "C_appr_j1",
-   "kind": "jersey",
-   "pos": [
-    -200,
-    -300
-   ],
-   "size": [
-    300,
-    60,
+    260,
+    75,
     95
    ],
-   "yaw": 90
+   "yaw": 180
   },
   {
-   "id": "C_appr_c1",
-   "kind": "crate",
-   "pos": [
-    -1200,
-    300
-   ],
-   "size": [
-    120,
-    120,
-    85
-   ],
-   "yaw": 90
-  },
-  {
-   "id": "C_appr_j2",
+   "id": "cov_cross_5",
    "kind": "jersey",
    "pos": [
-    -2200,
-    -300
+    2000,
+    0
    ],
    "size": [
-    300,
-    60,
+    280,
+    65,
     95
    ],
    "yaw": 90
@@ -301,28 +183,27 @@
  ],
  "zones": [
   {
-   "id": "Z_killzone",
-   "kind": "corridor",
+   "id": "Z_ST_crossroads",
+   "kind": "open",
    "set_piece": "street",
    "poly": [
     [
-     3050,
-     -450
+     -1000,
+     -1000
     ],
     [
-     3050,
-     450
+     1000,
+     -1000
     ],
     [
-     2150,
-     450
+     1000,
+     1000
     ],
     [
-     2150,
-     -450
+     -1000,
+     1000
     ]
-   ],
-   "intent": "kill_zone"
+   ]
   }
  ],
  "routes": [
@@ -331,158 +212,51 @@
    "pace": "walk",
    "points": [
     [
-     -3700,
+     -3500,
      0
     ],
     [
-     -2200,
+     -2000,
      0
     ],
     [
-     -200,
+     0,
      0
-    ],
-    [
-     1600,
-     0
-    ],
-    [
-     2600,
-     0
-    ],
-    [
-     3850,
-     0
-    ]
-   ],
-   "layers": [
-    "ground",
-    "ground",
-    "ground",
-    "ground",
-    "ground",
-    "ground"
-   ],
-   "links": [],
-   "set_pieces": [
-    "street",
-    "street",
-    "street"
-   ],
-   "mandatory": true
-  },
-  {
-   "id": "V1_enclosure",
-   "pace": "walk",
-   "points": [
-    [
-     -3700,
-     0
-    ],
-    [
-     -1000,
-     0
-    ],
-    [
-     600,
-     200
-    ],
-    [
-     1200,
-     550
-    ],
-    [
-     1200,
-     900
-    ],
-    [
-     1200,
-     1400
-    ],
-    [
-     1200,
-     900
-    ],
-    [
-     1200,
-     550
     ],
     [
      2000,
-     100
-    ],
-    [
-     2800,
      0
     ],
     [
-     3850,
+     3500,
      0
     ]
    ],
-   "layers": [
-    "ground",
-    "ground",
-    "ground",
-    "ground",
-    "ground",
-    "ground",
-    "ground",
-    "ground",
-    "ground",
-    "ground",
-    "ground"
-   ],
-   "links": [],
-   "set_pieces": [
-    "street"
-   ]
+   "mandatory": true
   }
  ],
  "spawn_points": [
   {
-   "id": "SP_start",
+   "id": "SP_crossroads_spawn",
    "pos": [
-    -3700,
+    -3500,
     0
    ],
    "kind": "edge"
   }
  ],
- "ambush_points": [
-  {
-   "id": "AMB_hammer_w",
-   "pos": [
-    3300,
-    -600
-   ]
-  },
-  {
-   "id": "AMB_hammer_e",
-   "pos": [
-    3300,
-    600
-   ]
-  },
-  {
-   "id": "AMB_anvil",
-   "pos": [
-    1200,
-    1500
-   ]
-  }
- ],
+ "ambush_points": [],
  "patrol_routes": [],
  "mantle_edges": [
   {
-   "id": "me_C_hammer_w1_a",
+   "id": "me_cov_cross_1",
    "start": [
-    3340,
-    -858
+    1000,
+    -327
    ],
    "end": [
-    3340,
-    -742
+    1000,
+    -173
    ],
    "floor": 0,
    "base_z": 0,
@@ -494,33 +268,14 @@
    "kind": "crate"
   },
   {
-   "id": "me_C_hammer_w1_b",
+   "id": "me_cov_cross_2",
    "start": [
-    3460,
-    -858
+    1000,
+    173
    ],
    "end": [
-    3460,
-    -742
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 85,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "crate"
-  },
-  {
-   "id": "me_C_hammer_w2_a",
-   "start": [
-    3490,
-    -458
-   ],
-   "end": [
-    3490,
-    -342
+    1000,
+    327
    ],
    "floor": 0,
    "base_z": 0,
@@ -532,210 +287,20 @@
    "kind": "crate"
   },
   {
-   "id": "me_C_hammer_w2_b",
+   "id": "me_cov_cross_5",
    "start": [
-    3610,
-    -458
+    2000,
+    -134
    ],
    "end": [
-    3610,
-    -342
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 85,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "crate"
-  },
-  {
-   "id": "me_C_hammer_e1_a",
-   "start": [
-    3490,
-    342
-   ],
-   "end": [
-    3490,
-    458
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 85,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "crate"
-  },
-  {
-   "id": "me_C_hammer_e1_b",
-   "start": [
-    3610,
-    342
-   ],
-   "end": [
-    3610,
-    458
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 85,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "crate"
-  },
-  {
-   "id": "me_C_hammer_e2_a",
-   "start": [
-    3340,
-    742
-   ],
-   "end": [
-    3340,
-    858
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 85,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "crate"
-  },
-  {
-   "id": "me_C_hammer_e2_b",
-   "start": [
-    3460,
-    742
-   ],
-   "end": [
-    3460,
-    858
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 85,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "crate"
-  },
-  {
-   "id": "me_C_appr_j1_a",
-   "start": [
-    -230,
-    -444
-   ],
-   "end": [
-    -230,
-    -156
+    2000,
+    134
    ],
    "floor": 0,
    "base_z": 0,
    "height_cm": 95,
    "normal": [
     -1,
-    0
-   ],
-   "kind": "obstacle"
-  },
-  {
-   "id": "me_C_appr_j1_b",
-   "start": [
-    -170,
-    -444
-   ],
-   "end": [
-    -170,
-    -156
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 95,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "obstacle"
-  },
-  {
-   "id": "me_C_appr_c1_a",
-   "start": [
-    -1260,
-    242
-   ],
-   "end": [
-    -1260,
-    358
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 85,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "crate"
-  },
-  {
-   "id": "me_C_appr_c1_b",
-   "start": [
-    -1140,
-    242
-   ],
-   "end": [
-    -1140,
-    358
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 85,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "crate"
-  },
-  {
-   "id": "me_C_appr_j2_a",
-   "start": [
-    -2230,
-    -444
-   ],
-   "end": [
-    -2230,
-    -156
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 95,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "obstacle"
-  },
-  {
-   "id": "me_C_appr_j2_b",
-   "start": [
-    -2170,
-    -444
-   ],
-   "end": [
-    -2170,
-    -156
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 95,
-   "normal": [
-    1,
     0
    ],
    "kind": "obstacle"
@@ -748,47 +313,33 @@
   "group_max": 4,
   "max_alive": 8,
   "patrol_share": 0.3,
-  "seed": 401,
+  "seed": 1,
   "ambush": {
-   "points": [
-    [
-     3300,
-     -600
-    ],
-    [
-     3300,
-     600
-    ],
-    [
-     1200,
-     1500
-    ]
-   ],
+   "points": [],
    "coordinated": {
     "share": 0.5,
     "max_alive": 8
    }
   }
  },
- "export_intents": true,
  "objectives": {
   "version": 1,
-  "seed": 401,
+  "seed": 1,
   "order": "free",
   "start": {
    "pos": [
-    -3700,
+    -3500,
     0
    ],
-   "yaw": 0,
+   "yaw": 90,
    "layer": "ground",
-   "source": "manual"
+   "source": "spawn"
   },
   "goals": [
    {
-    "id": "GOAL_1",
+    "id": "GOAL_crossroads",
     "pos": [
-     3850,
+     3500,
      0
     ],
     "layer": "ground",

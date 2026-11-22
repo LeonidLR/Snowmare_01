@@ -175,3 +175,36 @@ the route cached once per route (`FTeam::RouteCoverSpots`, `SetRouteOf`), not ev
 the three tries only when it ended short: refused, or not 1 m closer (`PmcTacticalRules::PostWalkEndedShort`, test
 `CodexTactics.AI.PmcTactical.PostWalkEndedShort`); an interrupting order resets it. (6) The arena's side-indexed tracks are guarded by
 `IsSideIndex` (0 / 1) everywhere.
+
+## 8. v2 — Buildings, storeys, roof access, open crossings, goal sites (Smart Enemies T-09, 2026-11-20)
+
+**Schema `codex.tactical_map/2` and backwards compatibility:**
+- The generator export is updated to schema `codex.tactical_map/2` in `Tools/TrainingGround/src/levelgen/tacticalMap.ts`.
+- The C++ loader (`TacticalMapRules::Parse`) supports both `codex.tactical_map/1` and `codex.tactical_map/2`. v1 files parse cleanly without errors (v2 fields default to empty arrays / default values), while newer unrecognized schemas (v3+) are refused.
+- All existing v1 fields, structures, and contracts are strictly preserved.
+
+**Structures and storey/building attribution:**
+- `building` and `floor` set where applicable (`windows[]` already had them in v1; v2 adds them to the entries below):
+  - `windows[]`: building id and floor index of each window (v1 field, unchanged).
+  - `overwatch_roofs[]`: roof level (`floor`), plus `building` and `floor` on every spot in `spots[]`.
+  - `hiding_spots[]`: building id and floor index when adjacent to a building wall or footprint (`BUILDING_ASSOCIATION_MARGIN_CM = 200` cm).
+  - `chokepoints[]`: building id and floor index when passing through or bounded by a building.
+- Structured roof access points (`access_points[]` with `id`, `kind`: stairs / ladder / hatch, `top` world XYZ):
+  - Added to `overwatch_roofs[]`, `ladder_only_roofs[]`, and `walkable_roofs[]`.
+  - Provides exact 3D world arrival positions on roofs rather than bare string tags, avoiding phantom access coordinates.
+- `walkable_roofs[]`:
+  - Master registry of all climbable roofs on the map (`building`, `layer`, `floor`, `z`, `ladder_only`, `access[]`).
+- `open_crossings[]`:
+  - Route segments $\ge 10\text{ m}$ (`MIN_CROSSING_LENGTH_CM = 1000` cm) with no cover within 2 m of the path line (`COVER_DISTANCE_THRESHOLD_CM = 200` cm, evaluating cover boxes, walls, and building footprints).
+  - List of cover objects within 40 m (`SEEING_COVER_MAX_DIST_CM = 4000` cm) with clear Line of Sight (`seeing_covers[]`, blocked by building footprints and tall walls $> 150\text{ cm}$).
+  - Used for squad dash bounding and PMC ambush planning.
+- `goal_sites[]`:
+  - Cover objects within 25 m (`GOAL_SITE_RADIUS_CM = 2500` cm) of each mission goal (`goal_id`, `cover_id`, `pos`, `dist_m`, `facing_yaw`, `sector_arc_deg: 90`, `cover_kind`, `cover_height_cm`).
+  - `facing_yaw` points outward from cover toward the goal.
+  - Geometry-only in TS (stop rule: physical UE line-trace validation is handled in T-05).
+
+**C++ Subsystem queries and Smart Enemies integration:**
+- `TacticalMapRules::GetGoalSitesForGoal(File, GoalId)` and `UTacticalMapSubsystem::GetGoalSitesForGoal(GoalId)`: retrieve goal defense covers.
+- Integration in Smart Enemies:
+  - T-05 (Line-trace position validation): Unreal-side raycast verification for `open_crossings` and `goal_sites`.
+  - T-12 (Goal defense): PMC squads deploy to `goal_sites` for 360-degree perimeter control around objectives.
