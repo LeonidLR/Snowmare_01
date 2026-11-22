@@ -96,6 +96,17 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 	{
 		return false;
 	}
+	// A whole (shut) window only on a window order or in Solo (designer 2026-11-22: "in formation they follow their leader and only that";
+	// FormationStairSmoke S04: the formation leader's walk ran along a window and the knee-height auto-vault took him out through it, loud).
+	// A broken window is an ordinary quiet vault.
+	if (const AActor* Window = Front.GetActor(); Window && Window->ActorHasTag(FName(TEXT("window_sill"))) && !Window->ActorHasTag(FName(TEXT("window_broken"))))
+	{
+		const USquadSubsystem* WindowSquad = World->GetSubsystem<USquadSubsystem>();
+		if (WindowSquad && !WindowSquad->IsWindowOrder() && !WindowSquad->IsSoloMode() && WindowSquad->GetMembers().Contains(this))
+		{
+			return false;
+		}
+	}
 	// 2. Its height.
 	const FVector TopProbe = Front.ImpactPoint + Direction * 20.f;
 	FHitResult Top;

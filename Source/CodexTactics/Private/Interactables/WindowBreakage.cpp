@@ -15,6 +15,8 @@ bool WindowBreakage::IsOverSill(const FBox& SillBox, const FVector& Point, float
 
 AActor* WindowBreakage::FindWindowSillAt(UWorld& World, const FHitResult& Hit)
 {
+	/** A ray through the opening counts as a window click only when it lands this near the sill (2D), cm. */
+	constexpr float ThroughLandingCm = 150.f;
 	static const FName SillTag(TEXT("window_sill"));
 	AActor* HitActor = Hit.GetActor();
 	if (!Hit.bBlockingHit)
@@ -55,7 +57,10 @@ AActor* WindowBreakage::FindWindowSillAt(UWorld& World, const FHitResult& Hit)
 		// the window opening (the cursor on the window, landing on the floor behind it: the opening has no glass collision).
 		const FBox& S = Entry.Value;
 		const FBox Opening(FVector(S.Min.X - 10.f, S.Min.Y - 10.f, S.Max.Z + 5.f), FVector(S.Max.X + 10.f, S.Max.Y + 10.f, S.Max.Z + 140.f));
-		const bool bThrough = !Delta.IsNearlyZero() && !Start.IsNearlyZero() && FMath::LineBoxIntersection(Opening, Start, Hit.ImpactPoint, Delta);
+		// Only a landing just behind the opening (CutawayClickSmoke 2026-11-22: a far floor click whose camera ray happened to pass a storey-0
+		// window 4 m away became a window order - the leader climbed out instead of walking to the point).
+		const bool bThrough = !Delta.IsNearlyZero() && !Start.IsNearlyZero() && FMath::LineBoxIntersection(Opening, Start, Hit.ImpactPoint, Delta)
+			&& FMath::Sqrt(S.ComputeSquaredDistanceToPoint(FVector(Hit.ImpactPoint.X, Hit.ImpactPoint.Y, S.GetCenter().Z))) <= ThroughLandingCm;
 		if ((bFace && IsOverSill(S, Hit.ImpactPoint, 30.f, 260.f)) || bThrough)
 		{
 			const double Distance = FVector::DistSquared2D(Entry.Value.GetCenter(), Hit.ImpactPoint);
