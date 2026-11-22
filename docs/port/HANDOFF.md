@@ -65,6 +65,11 @@ confined place has no slot velocity (the feed-forward sent the first move 120 cm
 Tried and dropped: `arrive_m` 4.5 (compress from the order) - B_y 36 -> 23/40. Walk smoke (budget 1500) final: showcase 100 -> 104/120, kit
 100 -> 104/120, BgenPlans 81 -> 85/100; hall legs STUCK/ratio/STOPPED 6/14/0 -> 10/6/0, 7/11/2 -> 11/5/0, 8/6/3 -> 6/5/3 - the slow legs are
 mostly gone, STUCK is not: in the showcase halls the first man (no way past the standing leader) still takes a shallow place by the door.
+Follow-up (same day): the standing leader no longer blocks a way in the queue (the step round takes the man past him) and the first man never
+takes the last tier's shallowest place (he had taken the entry point itself, depth 5) - showcase 104/120, kit 105/120, BgenPlans 87/100; hall
+legs STUCK/ratio/STOPPED 15/1/0, 14/1/0, 6/2/4 (max ratio 2.29 / 2.17 / 2.71): the hall failures are now almost all STUCK. Open (next): those
+STUCK legs - the man in the doorway is "through" (IsInside + InRoom) with his own navmesh line to every place cut by the jamb, so he is dealt
+from his doorway position; and the block swap is a no-op while the blocker is not through yet (only held places swap).
 
 **Обновление за 2026-11-18, main `50c0f915`.** Ожидающие подъёма бойцы смотрят наружу даже рядом с пропсами (`ccdec8d3`), появление пропсов X6 и X4 стало плавнее (`13be5a16`), сгенерированные карты используют холод и погоду (`6dbc9e38`). G007 исправил атаки на пандусе (`e24a6d6f`). Из задачи 044 в main вошёл выстрел из приседа за высоким углом (`e4558688`). Ошибки PeekMines и Suppression остаются открытыми. Antigravity 083/083c расширили покрытие архива QD и проверку настроек тренера (`b41973d8`, `d72b9629`). В AgentChat компактнее сообщения об ожидании (`7e4715d9`), инструменты API поддерживают второй ключ (`b9170e47`). Загрузка, пауза у бочки и урок аптечки обновлены в `4db03229`. Подробности в разделе «Сделано (2026-11-18)» файла TASK_BOARD.
 
