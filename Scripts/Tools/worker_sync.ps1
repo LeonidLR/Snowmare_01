@@ -28,6 +28,8 @@ param(
     [string]$ResultDir = "",                                # where results come back (default Saved\Logs\Worker\<timestamp>)
     [switch]$AllLogs,                                       # bring back every smoke log (zip), not only the failed ones
     [switch]$NoRetry,
+    [int]$Repeat = 1,
+    [switch]$RepeatSeeds,
     [switch]$WithPdb,                                       # also copy *.pdb (~420 MB; wired link, crash analysis on the worker)
     [switch]$NoPdb,                                         # obsolete: no PDB is the default now
     [switch]$Frozen,                                        # this sync is the evening trainer freeze: writes Saved\Worker\FROZEN
@@ -398,6 +400,8 @@ $names = ($Commands | ForEach-Object { $_ -split '[,;\s]+' } | Where-Object { $_
 $smokeArgs = "-Commands '$names' -Jobs $Jobs -ExtraArgs '$ExtraArgs' -ResultJson '$RemoteRoot/Saved/Logs/SmokeParallel-worker.json' $SmokeExtra"
 if ($NoRetry) { $smokeArgs += " -NoRetry" }
 if ($TimeoutSeconds -gt 0) { $smokeArgs += " -TimeoutSeconds $TimeoutSeconds" }
+if ($Repeat -gt 1) { $smokeArgs += " -Repeat $Repeat" }
+if ($RepeatSeeds) { $smokeArgs += " -RepeatSeeds" }
 Say "smokes on worker: $names (jobs $Jobs)"
 $run = Invoke-Worker -AllowFail @"
 Set-Location '$RemoteRoot'
