@@ -162,7 +162,7 @@ void USquadSubsystem::ApplyFormationConfined(const AOperativeCharacter& LeaderRe
 		FFormationConfinedSlot& Slot = Slots.AddDefaulted_GetRef();
 		Slot.Desired = Sectors.FrameSlots[Index].Position;
 		Slot.Occupant = FVector2D(Operative->GetActorLocation());
-		if (const FVector2D* Held = Confined.HeldPlaces.Find(Follower.Operative))
+		if (const FVector2D* Held = Tuning.bHoldPlaces ? Confined.HeldPlaces.Find(Follower.Operative) : nullptr)
 		{
 			Slot.Held = *Held;
 		}

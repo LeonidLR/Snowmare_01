@@ -104,6 +104,8 @@ struct CODEXTACTICS_API FFormationConfinedTuning
 	 * more than ThroatClearCm / 0.7 - puts the place out of the room (FFormationConfinedLineTests::InRoom), cm (throat_clear_cm; 0 = off).
 	 */
 	float ThroatClearCm = 30.f;
+	/** Lead review round 3: a follower keeps the place he was given last frame while it stays valid (FFormationConfinedSlot::Held) (hold_places, 0 / 1). */
+	bool bHoldPlaces = true;
 };
 
 /** A probed pocket: its centre and the free navmesh distance along each world-aligned ray (FormationConfinedRules::RayDir). */

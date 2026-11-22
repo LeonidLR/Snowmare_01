@@ -463,6 +463,7 @@ bool FFormationConfinedTuningTest::RunTest(const FString&)
 	TestEqual(TEXT("jamb_sample_cm"), FromFile.JambSampleCm, Defaults.JambSampleCm);
 	TestEqual(TEXT("gap_factor"), FromFile.GapFactor, Defaults.GapFactor);
 	TestEqual(TEXT("throat_clear_cm"), FromFile.ThroatClearCm, Defaults.ThroatClearCm);
+	TestEqual(TEXT("hold_places"), FromFile.bHoldPlaces, Defaults.bHoldPlaces);
 	return true;
 }
 
