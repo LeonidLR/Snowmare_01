@@ -230,11 +230,15 @@ def make_pmc_retargeter():
 
 def make_montage(dest, name, clip, force=False):
     path = f"{dest}/{name}"
-    if library.does_asset_exist(path) and (RESET or force) and not DRY:
-        library.delete_asset(path)
-    if library.does_asset_exist(path):
-        montage = library.load_asset(path)
+    # No delete here: in a commandlet delete_asset keeps the package and create_asset then refuses the name. A kept montage gets the
+    # script's slot / blends again (force: the blend times change with the script); one on another skeleton is reported (the PMC set
+    # removes such files before the run loads them).
+    montage = library.load_asset(path) if library.does_asset_exist(path) else None
+    if montage is not None:
         state = "kept"
+        if montage.get_editor_property("skeleton") != clip.get_editor_property("skeleton"):
+            say(f"  STALE {path}: montage skeleton {montage.get_editor_property('skeleton').get_name()} != clip "
+                f"{clip.get_editor_property('skeleton').get_name()} - remove its file and re-run")
     else:
         factory = unreal.AnimMontageFactory()
         factory.set_editor_property("source_animation", clip)
@@ -317,14 +321,31 @@ for key, (clip_name, montage_name, _) in CLIPS.items():
         if existing is not None:
             say(f"PMC {clip_name}: on {existing.get_editor_property('skeleton').get_name()} - redone by the retarget")
         pmc_todo.append(key)
+# A PMC montage on another skeleton (the first R2 set, or one left behind by a redone copy) is removed from disk BEFORE anything loads it:
+# in a commandlet delete_asset keeps the package (its file stays, create_asset then refuses the name). Read from the registry tags only.
+stale_montages = []
+for key, (_, montage_name, _) in CLIPS.items():
+    if "Pmc" not in BODIES:
+        break
+    data = unreal.AssetRegistryHelpers.get_asset_registry().get_asset_by_object_path(f"{OUT_PMC}/{montage_name}.{montage_name}")
+    if data.is_valid():
+        tag = str(data.get_tag_value("Skeleton") or "")
+        if PMC_SKELETON not in tag or key in pmc_todo:
+            stale_montages.append((montage_name, tag))
+if stale_montages and not DRY:
+    disk = OUT_PMC.replace("/Game/", unreal.Paths.project_content_dir())
+    for montage_name, tag in stale_montages:
+        file = os.path.join(disk, montage_name + ".uasset")
+        if os.path.exists(file):
+            os.remove(file)
+            say(f"PMC {montage_name}: on {tag.rsplit('.', 1)[-1].strip(chr(39))} - its file removed, made anew below")
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([OUT_PMC], True)
 pmc_retargeter = make_pmc_retargeter() if pmc_todo and source_mesh and pmc_mesh else None
 if pmc_todo and pmc_retargeter:
     if not DRY:
         for key in pmc_todo:
-            # the montage first (it references the old copy), then the copy itself
-            for path in (f"{OUT_PMC}/{CLIPS[key][1]}", f"{OUT_PMC}/{CLIPS[key][0]}"):
-                if library.does_asset_exist(path):
-                    library.delete_asset(path)
+            if library.does_asset_exist(f"{OUT_PMC}/{CLIPS[key][0]}"):
+                library.delete_asset(f"{OUT_PMC}/{CLIPS[key][0]}")  # the clip itself is then overwritten by the retarget
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
     by_pack_name = {str(d.asset_name): d for d in registry.get_assets_by_path(PACK, recursive=False)}
     datas = [by_pack_name[CLIPS[k][0]] for k in pmc_todo if CLIPS[k][0] in by_pack_name]
