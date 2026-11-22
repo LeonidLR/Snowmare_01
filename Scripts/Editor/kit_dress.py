@@ -615,11 +615,11 @@ def _opening_view(name, b, p, edges, cams, gz, z_at=160.0, dist=650.0, side=-260
     CAM_NORMALS[name] = e.n
 
 
-def _service_room_views(bid, b, door, edges, cams, gz, H):
+def _service_room_views(bid, b, door, edges, cams, gz):
     """The ground-floor service room behind a khrushchevka's gable door (designer 2026-11-22: dvornitskaya / shchitovaya / ZhEK, the end
-    flat's ground storey; rooms of zone 'service'): an eye-height view from just inside the gable door into the room it opens on, and a
-    cutaway from above the gable (roofs, floor slabs and the kit hidden) over the whole service bay. Nothing when the door opens on no
-    service room (a non-planned block)."""
+    flat's ground storey; rooms of zone 'service'): an eye-height view from just inside the gable door into the room it opens on. (A
+    cutaway of the bay shows nothing on the dressed map: the cutaway hides the kit and the grey proxies are hidden there.) Nothing when the
+    door opens on no service room (a non-planned block)."""
     e = K.edge_of_point(edges, door["pos"])
     if e is None:
         return
@@ -635,14 +635,6 @@ def _service_room_views(bid, b, door, edges, cams, gz, H):
     target = vadd(rc, vmul(inward, 100.0)) + (gz + 100.0,)
     pitch, yaw = look(eye, target)
     cams.append(("%s_service_room_interior" % bid, eye, pitch, yaw, 90.0, False))
-    # the bay: every service room of the storey within 8 m of the gable door (a block with both gables has two bays)
-    near = [r for r in rooms if math.hypot(r["anchor"][0] - p[0], r["anchor"][1] - p[1]) <= 800.0] if all("anchor" in r for r in rooms) else [main]
-    xs = [v for r in near for v in (r["bounds"]["min"][0], r["bounds"]["max"][0])]
-    ys = [v for r in near for v in (r["bounds"]["min"][1], r["bounds"]["max"][1])]
-    bc = ((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
-    loc = vadd(bc, vmul(e.n, 150.0 + abs((bc[0] - p[0]) * e.n[0] + (bc[1] - p[1]) * e.n[1])), vmul(e.d, -250.0)) + (gz + H + 600.0,)
-    pitch, yaw = look(loc, bc + (gz + 40.0,))
-    cams.append(("%s_service_bay_cutaway" % bid, loc, pitch, yaw, 60.0, "cutaway"))
 
 
 def story_cameras(layout):
@@ -692,7 +684,7 @@ def story_cameras(layout):
             if not K.edge_of_point(edges, o["pos"]).long:
                 # a khrushchevka's gable door (template gable_door, 2026-11-22): its own close-up whatever its state (S09: locked)
                 _opening_view("%s_gable_door" % bid, b, o["pos"], edges, cams, gz)
-                _service_room_views(bid, b, o, edges, cams, gz, H)
+                _service_room_views(bid, b, o, edges, cams, gz)
             elif o.get("state") in ("locked", "sealed", "barricaded"):
                 _opening_view("%s_door_%s" % (bid, o["state"]), b, o["pos"], edges, cams, gz)
         broken = [o for o in ops if o.get("kind") == "window" and o.get("state") == "broken"]

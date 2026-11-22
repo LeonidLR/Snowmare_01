@@ -339,10 +339,9 @@ class StoryCamerasTest(unittest.TestCase):
             if any(o.get("kind") == "door" and int(o.get("floor", 0)) == 0 and not (K.edge_of_point(edges, o["pos"]) or edges[0]).long
                    for o in b.get("openings", []) if K.edge_of_point(edges, o["pos"])):
                 self.assertIn("%s_gable_door" % b["id"], names)
-                # the gable door opens on a ground-floor service room (designer 2026-11-22): a view from the door + a cutaway of the bay
+                # the gable door opens on a ground-floor service room (designer 2026-11-22): a view from the door into it
                 if any(r.get("zone") == "service" and int(r.get("floor", 0)) == 0 for r in b.get("rooms", [])):
                     self.assertIn("%s_service_room_interior" % b["id"], names)
-                    self.assertIn("%s_service_bay_cutaway" % b["id"], names)
         for name, loc, pitch, yaw, fov, hide in cams:
             self.assertTrue(-90.0 <= pitch <= 30.0, (name, pitch))   # a roof ladder view looks up a little
             self.assertTrue(all(math.isfinite(v) for v in loc), name)
