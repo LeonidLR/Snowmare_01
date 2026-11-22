@@ -19,7 +19,13 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
+#include "Data/LevelJsonRules.h"
 #include "Data/WeaponDataAsset.h"
+#include "Dom/JsonObject.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
@@ -28,8 +34,11 @@
 #include "Interactables/LootCrateActor.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationData.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
 #include "NavMesh/NavMeshPath.h"
 #include "NavMesh/RecastNavMesh.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "CodexDoors"
@@ -134,8 +143,9 @@ namespace DoorSubsystemLocal
 
 	const TCHAR* ActionName(EDoorAction Action)
 	{
-		static const TCHAR* const Names[] = { TEXT("open"), TEXT("close"), TEXT("kick"), TEXT("auto-open"), TEXT("unlock"), TEXT("shoot the lock of"), TEXT("blow") };
-		return Names[FMath::Clamp(static_cast<int32>(Action), 0, 6)];
+		static const TCHAR* const Names[] = { TEXT("open"), TEXT("close"), TEXT("kick"), TEXT("auto-open"), TEXT("unlock"), TEXT("shoot the lock of"), TEXT("blow"),
+			TEXT("try the handle of") };
+		return Names[FMath::Clamp(static_cast<int32>(Action), 0, 7)];
 	}
 
 	const TCHAR* BreachName(EDoorAction Action)
@@ -203,6 +213,48 @@ void UDoorSubsystem::Tick(float DeltaTime)
 	TickFacingLocks();
 }
 
+void UDoorSubsystem::LoadLayoutDoors()
+{
+	LayoutDoors.Reset();
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	// The map's own LevelJson (as the cold shelter / the PMC defence layout): its levelgen_layout names the generator's layout.
+	const FString MapName = LevelJsonRules::NormalizeMapName(World->GetMapName());
+	const FString LevelJsonFile = FPaths::ProjectContentDir() / TEXT("Data/LevelJson") / (MapName + TEXT(".json"));
+	FString Text;
+	TSharedPtr<FJsonObject> LevelJson;
+	FString Relative;
+	if (!FFileHelper::LoadFileToString(Text, *LevelJsonFile) || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), LevelJson) || !LevelJson.IsValid()
+		|| !LevelJson->TryGetStringField(TEXT("levelgen_layout"), Relative) || Relative.IsEmpty())
+	{
+		return;
+	}
+	const FString LayoutPath = FPaths::IsRelative(Relative) ? FPaths::ProjectDir() / Relative : Relative;
+	TSharedPtr<FJsonObject> Layout;
+	if (!FFileHelper::LoadFileToString(Text, *LayoutPath) || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Layout) || !Layout.IsValid())
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("Doors: levelgen layout %s missing or unreadable - door strengths by tag / default only"), *LayoutPath);
+		return;
+	}
+	LayoutDoors = DoorRules::ParseLayoutDoors(*Layout);
+}
+
+void UDoorSubsystem::ApplyLayoutStrength(FDoorSetup& Setup, const FString& StrengthTag) const
+{
+	const DoorRules::FLayoutDoor* Layout = Setup.OpeningId.IsEmpty() ? nullptr : LayoutDoors.Find(Setup.OpeningId);
+	Setup.Role = Layout ? Layout->Role : FString();
+	Setup.Strength = DoorRules::ResolveStrength(!StrengthTag.IsEmpty() ? StrengthTag : (Layout ? Layout->Strength : FString()), Setup.Role,
+		Layout && Layout->bStoryLocked, Setup.OpeningId, DoorTuning::Get());
+}
+
+bool UDoorSubsystem::IsKnownLocked(const ADoorActor& Door) const
+{
+	return Door.GetDoorState() == EDoorLeafState::Locked && KnownLocked.Contains(&Door);
+}
+
 int32 UDoorSubsystem::AdoptLeaves()
 {
 	UWorld* World = GetWorld();
@@ -212,6 +264,10 @@ int32 UDoorSubsystem::AdoptLeaves()
 	}
 	bAdopted = true;
 	AutoOpenCount = 0;
+	KnownLocked.Reset();
+	LockedTries = 0;
+	LoadLayoutDoors();
+	int32 ByStrength[3] = { 0, 0, 0 };
 	const FDoorTuning& Tuning = DoorTuning::Get();
 	TArray<AStaticMeshActor*> Leaves;
 	for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
@@ -264,6 +320,10 @@ int32 UDoorSubsystem::AdoptLeaves()
 		Setup.bVisualHidden = Leaf->IsHidden() || Leaf->Tags.Contains(FName(TEXT("KitDressProxy")));
 		Setup.bHeavyTag = Leaf->Tags.Contains(FName(TEXT("door_heavy")));
 		DoorRules::FindTagValue(Leaf->Tags, TEXT("door_key"), Setup.KeyId);
+		FString StrengthTag;
+		DoorRules::FindTagValue(Leaf->Tags, TEXT("door_strength"), StrengthTag);
+		ApplyLayoutStrength(Setup, StrengthTag);
+		++ByStrength[static_cast<int32>(Setup.Strength)];
 		if (Setup.WidthCm < 30.f || Setup.HeightCm < 100.f)
 		{
 			UE_LOG(LogCodexTactics, Warning, TEXT("Doors: leaf %s is %.0f x %.0f cm - not a door, skipped"), *Leaf->GetName(), Setup.WidthCm, Setup.HeightCm);
@@ -317,6 +377,8 @@ int32 UDoorSubsystem::AdoptLeaves()
 	UE_LOG(LogCodexTactics, Display, TEXT("Doors: R1 on - %d door(s) from %d leaf actor(s) + %d open kit doorway(s) (auto-open %.2f s, kick %s, %d start key(s), %d found); kit-dressed: %d / %d hidden-proxy door(s) got %d kit leaf instance(s); breach %s, roll seed %d"),
 		Made, Leaves.Num(), OpenKitDoors, Tuning.AutoOpenDelaySeconds, Tuning.bKickEnabled ? TEXT("on") : TEXT("off"), Keys.Num(), FoundKeys.Num(), KitDoors, HiddenProxyDoors,
 		KitInstancesLifted, Tuning.bBreachEnabled ? TEXT("on") : TEXT("off"), DoorTuning::GetRollSeed());
+	UE_LOG(LogCodexTactics, Display, TEXT("Doors: strengths of the shut doors - wood %d, steel %d, reinforced %d (%d layout door openings read)"), ByStrength[0], ByStrength[1],
+		ByStrength[2], LayoutDoors.Num());
 	return Made;
 }
 
@@ -737,7 +799,7 @@ void UDoorSubsystem::TickKeyCarriers()
 
 // --- Player orders -------------------------------------------------------------------------------------------------------------------
 
-bool UDoorSubsystem::RequestInteraction(ADoorActor* Door, AOperativeCharacter* Operative, bool bDoubleClick, bool bAttack)
+bool UDoorSubsystem::RequestInteraction(ADoorActor* Door, AOperativeCharacter* Operative, bool bDoubleClick, bool bAttack, bool bForceTry)
 {
 	if (!bAdopted || !Door || !Operative)
 	{
@@ -747,11 +809,14 @@ bool UDoorSubsystem::RequestInteraction(ADoorActor* Door, AOperativeCharacter* O
 	FPendingOrder Order;
 	Order.Operative = Operative;
 	Order.Door = Door;
-	if (!DoorRules::ChooseClickAction(Door->GetDoorState(), bDoubleClick, bAttack, HasKeyFor(*Door), Door->IsBroken(), Order.Action))
+	// Designer 2026-11-22: a locked door the squad does not know is locked is tried first (walk up, the hand on the handle, "Locked"); a move
+	// into a room behind a locked door (bForceTry) always walks up and tries it.
+	const bool bKnown = IsKnownLocked(*Door) && !bForceTry;
+	if (!DoorRules::ChooseClickAction(Door->GetDoorState(), bDoubleClick, bAttack, HasKeyFor(*Door), Door->IsBroken(), Order.Action, bKnown))
 	{
 		if (Door->GetDoorState() == EDoorLeafState::Locked && !bAttack)
 		{
-			PostLine(LOCTEXT("Locked", "Locked. Double click: kick it. Ctrl + click: shoot the lock. Or blow it."));
+			PostLockedLine(*Door, nullptr);
 			return true; // the click is the door's (no walk into a locked door)
 		}
 		return false;
@@ -759,6 +824,12 @@ bool UDoorSubsystem::RequestInteraction(ADoorActor* Door, AOperativeCharacter* O
 	if (Order.Action == EDoorAction::Kick && !Tuning.bKickEnabled)
 	{
 		PostLine(LOCTEXT("NoKick", "Kicking doors is off."));
+		return true;
+	}
+	if (Order.Action == EDoorAction::Kick && DoorRules::GetKickChance(Door->GetDoorState(), Door->GetStrength(), Tuning) <= 0.f)
+	{
+		// The strength rule (designer 2026-11-22): a reinforced door gives to no kick - say so instead of four useless kicks.
+		PostLine(LOCTEXT("NoKickStrong", "Too strong to kick in. The key, a shotgun at the lock (Ctrl + click) or a blast."));
 		return true;
 	}
 	CancelInteraction(Operative);
@@ -777,6 +848,57 @@ bool UDoorSubsystem::RequestInteraction(ADoorActor* Door, AOperativeCharacter* O
 	return true;
 }
 
+bool UDoorSubsystem::RedirectMoveToLockedDoor(AOperativeCharacter& Operative, const FVector& Goal)
+{
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+	if (!bAdopted || !Nav)
+	{
+		return false;
+	}
+	const bool bAnyLocked = Doors.ContainsByPredicate([](const ADoorActor* Door) { return Door && Door->GetDoorState() == EDoorLeafState::Locked; });
+	if (!bAnyLocked)
+	{
+		return false;
+	}
+	const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(World, Operative.GetActorLocation(), Goal, &Operative);
+	const bool bReachable = Path && Path->IsValid() && !Path->IsPartial()
+		&& (Path->PathPoints.IsEmpty() || FVector::Dist2D(Path->PathPoints.Last(), Goal) <= DoorSubsystemLocal::PathShortCm);
+	if (bReachable)
+	{
+		return false;
+	}
+	const FVector End = Path && !Path->PathPoints.IsEmpty() ? Path->PathPoints.Last() : DoorSubsystemLocal::FeetOf(Operative);
+	const FDoorTuning& Tuning = DoorTuning::Get();
+	ADoorActor* Best = nullptr;
+	double BestCm = TNumericLimits<double>::Max();
+	for (ADoorActor* Door : Doors)
+	{
+		if (!Door || Door->GetDoorState() != EDoorLeafState::Locked || !Door->IsAtDoorLevel(Goal))
+		{
+			continue;
+		}
+		const float GoalSide = DoorRules::GoalBehindDoorSide(Door->ToLocal(Goal), Door->GetWidthCm() * 0.5f, Tuning.BreachGoalDoorCm);
+		if (GoalSide == 0.f || Door->ToLocal(End).Y * GoalSide > 0.f)
+		{
+			continue; // the goal is not behind it, or the path already got to the goal's side of it
+		}
+		const double Cm = FVector::Dist2D(End, Door->GetActorLocation()) + 0.5 * FVector::Dist2D(Door->GetActorLocation(), Goal);
+		if (Cm < BestCm)
+		{
+			Best = Door;
+			BestCm = Cm;
+		}
+	}
+	if (!Best)
+	{
+		return false;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("Doors: %s's move to (%.0f, %.0f, %.0f) stops at the locked %s (%s %s) - he goes to try it"), *Operative.GetName(), Goal.X, Goal.Y,
+		Goal.Z, *Best->GetName(), *Best->GetBuildingId(), *Best->GetOpeningId());
+	return RequestInteraction(Best, &Operative, false, false, /*bForceTry*/ true);
+}
+
 bool UDoorSubsystem::WalkUp(FPendingOrder& Order, AOperativeCharacter& Operative, ADoorActor& Door, bool bSprint)
 {
 	const FDoorTuning& Tuning = DoorTuning::Get();
@@ -792,6 +914,7 @@ bool UDoorSubsystem::WalkUp(FPendingOrder& Order, AOperativeCharacter& Operative
 		break;
 	case EDoorAction::Open:
 	case EDoorAction::Kick:
+	case EDoorAction::TryOpen:
 	{
 		// R2 root motion: he starts the clip at its start pose, square to the leaf (montage_approach_cm) - the clip walks him to the leaf.
 		const EDoorClip Clip = ClipOf(Order, Door);
@@ -843,11 +966,11 @@ bool UDoorSubsystem::IsInReach(const FPendingOrder& Order, const AOperativeChara
 		const float Cm = static_cast<float>(FVector::Dist2D(Feet, Door.GetActorLocation()));
 		return Cm >= Tuning.BlastStandCm * 0.8f && Cm <= Tuning.BlastStandCm * 1.6f && Door.IsAtDoorLevel(Feet);
 	}
-	if ((Order.Action == EDoorAction::Open || Order.Action == EDoorAction::Kick) && Operative.HasQuickFireOrder())
+	if ((Order.Action == EDoorAction::Open || Order.Action == EDoorAction::Kick || Order.Action == EDoorAction::TryOpen) && Operative.HasQuickFireOrder())
 	{
 		return false; // the lock burst is still firing: the push / kick clip starts once it is over (it would cut the clip's root motion)
 	}
-	if (Order.bClipApproach && (Order.Action == EDoorAction::Open || Order.Action == EDoorAction::Kick))
+	if (Order.bClipApproach && (Order.Action == EDoorAction::Open || Order.Action == EDoorAction::Kick || Order.Action == EDoorAction::TryOpen))
 	{
 		// At the clip's start pose; or (the walk could not get there) standing still by the door after a moment.
 		const bool bAtStart = FVector::Dist2D(Feet, Order.Approach) <= Tuning.MontageApproachSlackCm;
@@ -987,6 +1110,10 @@ bool UDoorSubsystem::UsesRootMotionClips(const ACharacter& Pawn, EDoorClip Clip)
 
 EDoorClip UDoorSubsystem::ClipOf(const FPendingOrder& Order, const ADoorActor& Door) const
 {
+	if (Order.Action == EDoorAction::TryOpen)
+	{
+		return EDoorClip::Open; // the hand on the handle (stopped once it does not give)
+	}
 	return Order.Action == EDoorAction::Kick ? EDoorClip::Kick : DoorRules::ChooseOpenClip(Order.bPush || Door.IsLockForced());
 }
 
@@ -1133,8 +1260,25 @@ bool UDoorSubsystem::Act(FPendingOrder& Order)
 		return true;
 	}
 	const FDoorTuning& Tuning = DoorTuning::Get();
+	if (Order.Action == EDoorAction::TryOpen && Door->GetDoorState() == EDoorLeafState::Closed)
+	{
+		Order.Action = EDoorAction::Open; // unlocked meanwhile (a key, a shot lock): he simply opens it
+	}
 	switch (Order.Action)
 	{
+	case EDoorAction::TryOpen:
+	{
+		if (Door->GetDoorState() != EDoorLeafState::Locked)
+		{
+			return true; // open already / blown
+		}
+		// Designer 2026-11-22: he tries the handle - the open clip's start, stopped once it does not give (FinishWork), then "Locked".
+		Operative->StopOperative();
+		FaceDoor(*Operative, *Door);
+		Order.ClipSeconds = PlayClip(*Operative, EDoorClip::Open, HandSideFor(*Operative, *Door), Door);
+		Order.WorkLeft = DoorRules::GetContactSeconds(EDoorClip::Open, Order.ClipSeconds > 0.f, Tuning) + Tuning.LockedTrySeconds;
+		break;
+	}
 	case EDoorAction::Open:
 	{
 		if (Door->GetDoorState() != EDoorLeafState::Closed)
@@ -1225,6 +1369,21 @@ bool UDoorSubsystem::FinishWork(FPendingOrder& Order)
 	const FDoorTuning& Tuning = DoorTuning::Get();
 	switch (Order.Action)
 	{
+	case EDoorAction::TryOpen:
+		// The handle does not give: the hand comes off (the clip stops before its root motion walks him into the leaf), the squad knows.
+		if (Order.ClipSeconds > 0.f)
+		{
+			Operative->StopAnimMontage();
+		}
+		if (Door->GetDoorState() == EDoorLeafState::Locked)
+		{
+			KnownLocked.Add(Door);
+			++LockedTries;
+			UE_LOG(LogCodexTactics, Display, TEXT("Doors: %s tried %s (%s %s, %s) - locked; the squad knows it now"), *Operative->GetName(), *Door->GetName(),
+				*Door->GetBuildingId(), *Door->GetOpeningId(), DoorRules::StrengthName(Door->GetStrength()));
+			PostLockedLine(*Door, Operative);
+		}
+		return true;
 	case EDoorAction::Open:
 		Door->OpenDoor(Operative);
 		if (Order.bBreach)
@@ -1253,7 +1412,7 @@ bool UDoorSubsystem::FinishWork(FPendingOrder& Order)
 	case EDoorAction::ShootLock:
 	{
 		const FString WeaponId = Operative->CurrentWeapon ? Operative->CurrentWeapon->WeaponId : FString();
-		const float Chance = DoorRules::GetLockShotChance(WeaponId, Tuning);
+		const float Chance = DoorRules::GetLockShotChance(WeaponId, Door->GetStrength(), Tuning);
 		const float Value = RollFor(LockShotRollForTesting, *Door, *Operative, Order.Shots, TEXT("lock"));
 		UE_LOG(LogCodexTactics, Display, TEXT("Doors: %s shot the lock of %s with %s: chance %.2f, roll %.2f"), *Operative->GetName(), *Door->GetName(),
 			WeaponId.IsEmpty() ? TEXT("nothing") : *WeaponId, Chance, Value);
@@ -1298,7 +1457,7 @@ bool UDoorSubsystem::FinishWork(FPendingOrder& Order)
 			return Order.WorkLeft <= 0.f && FinishWork(Order);
 		}
 		const UHealthComponent* Health = Operative->FindComponentByClass<UHealthComponent>();
-		const FDoorKickOutcome Kick = DoorRules::ResolveKick(Door->GetDoorState(), Door->IsHeavy(), Health ? Health->GetHealthFraction() : 1.f,
+		const FDoorKickOutcome Kick = DoorRules::ResolveKick(Door->GetDoorState(), Door->GetStrength(), Door->IsHeavy(), Health ? Health->GetHealthFraction() : 1.f,
 			RollFor(KickRollForTesting, *Door, *Operative, Order.Attempts, TEXT("kick")),
 			RollFor(InjuryRollForTesting, *Door, *Operative, Order.Attempts, TEXT("injury")), Tuning);
 		const EDoorSide Leg = DoorRules::ChooseKickLeg(Order.KickFirst, Order.Attempts);
@@ -1337,6 +1496,10 @@ bool UDoorSubsystem::FinishWork(FPendingOrder& Order)
 			}
 		}
 		Door->KickDoor(Operative, Kick.bOpens);
+		if (Door->GetDoorState() == EDoorLeafState::Locked && Operative->IsPlayerTeam())
+		{
+			KnownLocked.Add(Door); // a kick that held: the squad knows it is locked
+		}
 		if (Kick.bOpens || Door->IsOpen())
 		{
 			return true;
@@ -1585,9 +1748,10 @@ FDoorBreachAbility UDoorSubsystem::AbilityOf(const AOperativeCharacter& Operativ
 	FDoorBreachAbility Ability;
 	Ability.bHasKey = PawnHasKeyFor(&Operative, Door);
 	const FString WeaponId = Operative.CurrentWeapon ? Operative.CurrentWeapon->WeaponId : FString();
-	Ability.bCanShoot = DoorRules::GetLockShotChance(WeaponId, DoorTuning::Get()) > 0.f && Operative.CurrentClip > 0;
+	Ability.bCanShoot = DoorRules::GetLockShotChance(WeaponId, Door.GetStrength(), DoorTuning::Get()) > 0.f && Operative.CurrentClip > 0;
 	Ability.bHasGrenade = Operative.GrenadesCount > 0;
-	Ability.bCanKick = true;
+	// A door no kick can open (reinforced: the strength rule) is never kicked.
+	Ability.bCanKick = DoorRules::GetKickChance(EDoorLeafState::Locked, Door.GetStrength(), DoorTuning::Get()) > 0.f;
 	return Ability;
 }
 
@@ -1761,6 +1925,7 @@ void UDoorSubsystem::TickBreachDetection(float DeltaTime)
 		Ability.bHasKey = PawnHasKeyFor(Enemy, *Door);
 		Ability.bCanShoot = false; // monsters (and the marksman's own brain) never shoot locks: R2 scope
 		Ability.bHasGrenade = false;
+		Ability.bCanKick = DoorRules::GetKickChance(EDoorLeafState::Locked, Door->GetStrength(), Tuning) > 0.f; // reinforced: no bashing it in
 		FBash Bash;
 		Bash.Pawn = Enemy;
 		Bash.Door = Door;
@@ -1805,7 +1970,7 @@ void UDoorSubsystem::TickBashes(float DeltaTime)
 		}
 		else
 		{
-			const FDoorKickOutcome Kick = DoorRules::ResolveKick(Door->GetDoorState(), Door->IsHeavy(), 1.f,
+			const FDoorKickOutcome Kick = DoorRules::ResolveKick(Door->GetDoorState(), Door->GetStrength(), Door->IsHeavy(), 1.f,
 				RollFor(KickRollForTesting, *Door, *Pawn, Bash.Attempts, TEXT("kick")), 1.f, Tuning);
 			++Bash.Attempts;
 			++KickAttempts;
@@ -1868,6 +2033,24 @@ namespace DoorSubsystemLocal
 		TEXT("Openable doors: the squad gets a key - <building id> (every locked door of it), <opening id>, a door_key tag value, or * (all). ")
 		TEXT("Testing; in the game keys are loot (containers, searched bodies) and mission goal rewards."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&GiveKey));
+}
+
+void UDoorSubsystem::PostLockedLine(const ADoorActor& Door, const AOperativeCharacter* Operative) const
+{
+	// HUD text is English for now (user decision 2026-10-08, docs/port/glossary_ui_en.md); the designer's "Zaperto" = "Locked".
+	const FText How = Door.GetStrength() == EDoorStrength::Reinforced
+		? LOCTEXT("LockedReinforced", "Locked - a reinforced door: no kick will do. The key, a shotgun at the lock (Ctrl + click) or a blast.")
+		: LOCTEXT("Locked", "Locked. Double click: kick it. Ctrl + click: shoot the lock. Or blow it.");
+	if (!Operative)
+	{
+		PostLine(How);
+		return;
+	}
+	UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("LOCKED"), FLinearColor(1.f, 0.75f, 0.3f));
+	if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+	{
+		Messages->PostMessage(Operative->DisplayName, FText::Format(LOCTEXT("LockedTried", "🔒 {0}"), How));
+	}
 }
 
 void UDoorSubsystem::PostLine(const FText& Text) const

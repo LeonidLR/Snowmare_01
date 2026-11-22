@@ -46,6 +46,10 @@ struct CODEXTACTICS_API FDoorSetup
 	bool bHeavyTag = false;
 	/** Tag `door_key=<id>`: the key that opens it besides the building / opening id keys. */
 	FString KeyId;
+	/** Its strength (designer 2026-11-22: one strength for every way in; DoorRules::ResolveStrength from its tag / layout role at the adoption). */
+	EDoorStrength Strength = EDoorStrength::Wood;
+	/** The layout opening's role ("entry", "unit_entry", "room", ...; empty when unknown). */
+	FString Role;
 };
 
 /**
@@ -116,6 +120,9 @@ public:
 	/** The leaf was blown off. */
 	bool IsBroken() const { return bBroken; }
 	const FString& GetKeyId() const { return Setup_.KeyId; }
+	/** Its strength class (every kick and lock shot is judged against it). */
+	EDoorStrength GetStrength() const { return Setup_.Strength; }
+	const FString& GetRole() const { return Setup_.Role; }
 	/** Where the lock sits (the leaf's free edge, 100 cm up). */
 	FVector GetLockPoint() const;
 

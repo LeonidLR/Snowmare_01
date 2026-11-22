@@ -124,6 +124,38 @@ Switch off = nothing of R2 runs (no doors, no breach, no clips); keys in loot ar
   `test_entrance_and_escape_doors_get_separate_leaves`; smoke `DoorsSmoke` stages B / F / K / S (clips), P (a PMC fighter breaches S03 with
   both doors locked, twice with the same seed: the same trace), KD (key from his body), KC (key from a container).
 
+### Door strength and the handle try (2026-11-22, the designer's test of the kit showcase, items 1 / 2 / 4)
+
+- **One strength for every way in** (item 2: "a lock that held a pistol shot and then broke from two kicks is wrong"). Every door has a
+  class `EDoorStrength` wood / steel / reinforced (`ADoorActor::GetStrength`), picked at the adoption by `DoorRules::ResolveStrength`: its
+  tag `door_strength=<name>`, else the layout opening's own `strength`, else `strength_story_locked` (reinforced) for a door a building
+  story locks (the story's `door_state(<id>,locked)` brick), else `strength_by_role[<layout role>]` (entry steel, unit_entry `wood/steel` -
+  a deterministic mix by the opening id, `strength_mix_second_share` 0.5; room / enfilade / balcony wood), else `strength_default` wood. The
+  roles come from the map's `levelgen_layout` (`DoorRules::ParseLayoutDoors`, read once at the adoption; no map rebuild). ONE rule for all
+  attacks (`DoorRules::BreakChance`): power P vs the class's `resist` R -> (P - R) / (1 - R), clamped. A kick's power `kick_power` 0.55 is
+  capped at the weakest weapon's `lock_power` (pistol 0.6 / m16 0.7 / sniper 0.8 / shotgun 0.95 / default 0.6): a kick is never likelier
+  than the weakest gun on the same door; an unlocked shut door adds `kick_latch_bonus` 0.3; `kickable` 0 = no kick ever (reinforced).
+  Shipped: wood kick 0.55 (unlocked 0.85), pistol 0.6, shotgun 0.95; steel kick 0.10 (0.70), pistol 0.20, m16 0.40, shotgun 0.90;
+  reinforced no kick, pistol / m16 / sniper 0, shotgun 0.75 (+ key, blast). A double click on a door no kick can open says so
+  ("Too strong to kick in ...") instead of four useless kicks; enemies never kick / bash such a door (breach ability). Steel / reinforced
+  doors are heavy (the injury term). The R1 keys `kick_chance_closed / _locked`, `kick_heavy_factor`, `lock_shot_chance` are gone.
+  Tests `CodexTactics.Doors.Strength.OneRuleForEveryWayIn` (kick <= weakest shot per class, also with a typed-in kick 0.99; wood >= steel >=
+  reinforced per attack; shotgun >= pistol; reinforced kick 0; the designer's class wording; the flat-door mix is stable),
+  `Strength.LayoutRolesAndStoryLocks`; `Kick.ChanceAndInjury` / `LockShot.ChanceByWeapon` on the new rule. `DoorsSmoke` A2 (roles read,
+  the S01 entrance steel, the shipped rule makes the story-locked S03 entrance reinforced; the smoke itself runs story locks as steel so
+  F / S can kick / shoot them).
+- **The handle try** (item 1: "he says it is locked from afar"). A single click on a LOCKED door without the key that the squad does not
+  know is locked = `EDoorAction::TryOpen` (`DoorRules::ChooseClickAction(..., bKnownLocked)`): he walks up to the open clip's start pose,
+  the open clip starts, `locked_try_s` 0.45 after its contact it is stopped (no root-motion walk into the leaf), a floating LOCKED over him
+  and his line "🔒 Locked. ..." (the hint per strength); the door is then known-locked for the squad (`UDoorSubsystem::IsKnownLocked`; a
+  kick that held marks it too). A later single click on it says how from afar, as before. HUD text stays English (user decision
+  2026-10-08, `docs/port/glossary_ui_en.md`): the designer's «Заперто» is "Locked". `DoorsSmoke` T (S09 gable: the first click walks him up
+  267 cm, the try at the door, `open_*` clip, the door still locked and known; the second click no walk).
+- **A click into a room behind a locked door** (item 4): the plain move click (`HandleWorldHit`) asks
+  `UDoorSubsystem::RedirectMoveToLockedDoor` first - when his navmesh path to the goal stops short and a locked door at the goal's level
+  has the goal behind it (within `breach.goal_door_cm`), he is sent to try that door (the try above, forced even when known) instead of
+  walking to the nearest reachable spot outside.
+
 ## Spotted trap -> the squad holds in Solo (old §5)
 
 - **Spotted trap -> the squad holds in Solo (rev 5h, game designer play-test 2026-10-15, every level):** a hidden level mine (`AProximityMineActor::HandleSpotted`) or PMC tripwire (`ATripwireActor::RevealBy`) spotted with a spotter calls `AInteractableActor::NotifyTrapSpotted` -> `USquadSubsystem::HoldForSpottedTrap(Spotter, TrapName)`: every member `StopOperative` (the Godot rule) and, by pure `Interactables/TrapSpotRules::DecideSquadResponse(bFormationActive, bAutonomy, LivingMembers)` (`HoldAndSolo` only exploring with the formation, AUTO off, 2+ alive; else `HoldOnly`), a box-selected group drops to the leader (`SetSelectedGroup`), `EnterSoloModeInternal(bForTrap)` (followers crouch except one in cover; no "[SOLO MODE: ON]" line) and the feed line "{Mine|Tripwire} spotted - squad holding. Move them one by one (B regroups)." (speaker SQUAD). `bTrapSolo` (`IsTrapSolo`): no 25 m leash in `Tick` until `ExitSoloMode`; saved as `is_trap_solo` (`RestoreTrapSolo` after the Solo state). Events: `TrapSpotted` (Subject = the spotter) for both kinds, besides `MineSpotted` / `TripwireSpotted`. AUTO keeps the old stop (its paths avoid known traps). Tests `CodexTactics.Interactables.TrapSpot.SquadResponse`; smoke `TrapSoloSmoke`.

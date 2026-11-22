@@ -1,5 +1,17 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**Doors: one strength + the handle try (`claude/bgen-test`, 2026-11-22, designer test items 2 / 1 / 4; game C++ + doors.json, behind
+`Codex.Doors.Openable`).** Item 2: every door has a strength class (wood / steel / reinforced) from its tag / the layout role (entry steel,
+flat doors a stable wood/steel mix, room doors wood, story-locked doors reinforced) and ONE rule judges kicks and lock shots
+(`DoorRules::BreakChance`: (power - resist) / (1 - resist); a kick never above the weakest gun) - steel: kick 0.10, pistol 0.20, shotgun 0.90;
+reinforced: no kick, shotgun 0.75. Item 1: a single click on a locked door nobody tried = he walks up, the open clip starts, "Locked" (+ a
+floating LOCKED), the door is known-locked for the squad; later clicks say it from afar. Item 4 (rest): a move click into a room behind a
+locked door sends him to try that door (`RedirectMoveToLockedDoor`). HUD stays English ("Locked" = «Заперто», user decision 2026-10-08).
+Tests `CodexTactics.Doors.*` 27/27 (new `Strength.*`, `Click.Actions` TryOpen); `DoorsSmoke` A2 / T / K pass on the grey showcase (its RM-P
+stage - the PMC push clip 0 cm - is the PMC door-anim agent's open item, not this change). Rule: `docs/systems/interactables-traps-loot.md`
+"Door strength and the handle try". Designer question: story-locked doors are reinforced as asked - that makes S03 / S09's "kick it" fast
+entry impossible (shotgun / blast / key only); `strength_story_locked` "steel" restores the kick.
+
 **Cursor through the storey cutaway (`claude/bgen-test`, 2026-11-22, designer test of the dressed showcase items 5 + 4; isolated game C++,
 cherry-pickable).** Clicks with the storey cutaway on landed on the invisible upper storey (dressed S04: 70 / 96 far-floor rays stopped on a
 hidden grey proxy of a storey above - proxies carry the collision and are never "cut") and on his storey's wall tops under the cut storeys

@@ -212,10 +212,13 @@ bool FDoorsTuningTest::RunTest(const FString& Parameters)
 	const FDoorTuning File = DoorTuning::FromJson(*Json);
 	TestFalse(TEXT("the shipped file keeps the switch OFF (roadmap: on in main only after the enemy-AI A/B)"), File.bEnabled);
 	TestTrue(TEXT("a kick attempt takes a moment"), File.KickSeconds > 0.f && File.KickSeconds <= 5.f);
-	TestTrue(TEXT("a locked door gives to a kick only sometimes"), File.KickChanceLocked > 0.f && File.KickChanceLocked < 1.f);
-	TestEqual(TEXT("an unlocked door gives to the first kick"), File.KickChanceClosed, 1.f);
-	TestTrue(TEXT("the shotgun is the best lock breaker"), DoorRules::GetLockShotChance(TEXT("shotgun"), File) >= DoorRules::GetLockShotChance(TEXT("m16"), File)
-		&& DoorRules::GetLockShotChance(TEXT("shotgun"), File) >= DoorRules::GetLockShotChance(TEXT("pistol"), File));
+	const float WoodKick = DoorRules::GetKickChance(EDoorLeafState::Locked, EDoorStrength::Wood, File);
+	TestTrue(TEXT("a locked wood door gives to a kick only sometimes"), WoodKick > 0.f && WoodKick < 1.f);
+	TestTrue(TEXT("an unlocked wood door gives to a kick easily"), DoorRules::GetKickChance(EDoorLeafState::Closed, EDoorStrength::Wood, File) >= 0.8f);
+	TestTrue(TEXT("the shotgun is the best lock breaker"), DoorRules::GetLockPower(TEXT("shotgun"), File) >= DoorRules::GetLockPower(TEXT("m16"), File)
+		&& DoorRules::GetLockPower(TEXT("shotgun"), File) >= DoorRules::GetLockPower(TEXT("pistol"), File));
+	TestEqual(TEXT("an entrance is steel"), DoorRules::ResolveStrength(FString(), TEXT("entry"), false, TEXT("S01_f0_d19"), File), EDoorStrength::Steel);
+	TestEqual(TEXT("a story lock is reinforced"), DoorRules::ResolveStrength(FString(), TEXT("entry"), true, TEXT("S03_f0_d19"), File), EDoorStrength::Reinforced);
 	TestTrue(TEXT("the squad starts without keys"), File.StartKeys.IsEmpty());
 	TestEqual(TEXT("N_kick 15 m"), File.KickNoiseCm, 1500.f);
 	TestEqual(TEXT("single leaf up to 130 cm (kit sizes)"), File.SingleLeafMaxCm, 130.f);
@@ -244,28 +247,32 @@ DOORS_TEST(FDoorsKickTest, "Kick.ChanceAndInjury")
 bool FDoorsKickTest::RunTest(const FString& Parameters)
 {
 	FDoorTuning Tuning;
-	Tuning.KickChanceClosed = 1.f;
-	Tuning.KickChanceLocked = 0.4f;
-	Tuning.KickHeavyFactor = 0.5f;
+	Tuning.KickPower = 0.4f;
+	Tuning.KickLatchBonus = 0.6f;
+	Tuning.LockPowerDefault = 0.6f;
+	Tuning.Strengths[1].Resist = 0.2f;
 	Tuning.KickInjuryBase = 0.f;
 	Tuning.KickInjuryWounded = 0.3f;
 	Tuning.KickWoundedBelow = 0.5f;
 	Tuning.KickInjuryHeavy = 0.1f;
-	FDoorKickOutcome Kick = DoorRules::ResolveKick(EDoorLeafState::Closed, false, 1.f, 0.99f, 0.f, Tuning);
-	TestTrue(TEXT("an unlocked door: the first kick gives"), Kick.bOpens && FMath::IsNearlyEqual(Kick.OpenChance, 1.f));
+	const EDoorStrength Wood = EDoorStrength::Wood;
+	FDoorKickOutcome Kick = DoorRules::ResolveKick(EDoorLeafState::Closed, Wood, false, 1.f, 0.99f, 0.f, Tuning);
+	TestTrue(TEXT("an unlocked wood door: kick 0.4 + latch 0.6 - the first kick gives"), Kick.bOpens && FMath::IsNearlyEqual(Kick.OpenChance, 1.f));
 	TestFalse(TEXT("healthy, light door: no injury"), Kick.bInjures);
-	Kick = DoorRules::ResolveKick(EDoorLeafState::Locked, false, 1.f, 0.39f, 1.f, Tuning);
-	TestTrue(TEXT("locked: a roll under 0.4 gives"), Kick.bOpens && FMath::IsNearlyEqual(Kick.OpenChance, 0.4f));
-	Kick = DoorRules::ResolveKick(EDoorLeafState::Locked, false, 1.f, 0.41f, 1.f, Tuning);
-	TestFalse(TEXT("locked: a roll over 0.4 holds"), Kick.bOpens);
-	Kick = DoorRules::ResolveKick(EDoorLeafState::Locked, true, 1.f, 0.3f, 0.05f, Tuning);
-	TestTrue(TEXT("heavy: half the chance (0.2)"), !Kick.bOpens && FMath::IsNearlyEqual(Kick.OpenChance, 0.2f));
+	Kick = DoorRules::ResolveKick(EDoorLeafState::Locked, Wood, false, 1.f, 0.39f, 1.f, Tuning);
+	TestTrue(TEXT("locked wood: a roll under 0.4 gives"), Kick.bOpens && FMath::IsNearlyEqual(Kick.OpenChance, 0.4f));
+	Kick = DoorRules::ResolveKick(EDoorLeafState::Locked, Wood, false, 1.f, 0.41f, 1.f, Tuning);
+	TestFalse(TEXT("locked wood: a roll over 0.4 holds"), Kick.bOpens);
+	Kick = DoorRules::ResolveKick(EDoorLeafState::Locked, EDoorStrength::Steel, true, 1.f, 0.3f, 0.05f, Tuning);
+	TestTrue(TEXT("steel (resist 0.2): (0.4 - 0.2) / 0.8 = 0.25"), !Kick.bOpens && FMath::IsNearlyEqual(Kick.OpenChance, 0.25f));
 	TestTrue(TEXT("heavy: injury chance 0.1"), Kick.bInjures && FMath::IsNearlyEqual(Kick.InjuryChance, 0.1f));
-	Kick = DoorRules::ResolveKick(EDoorLeafState::Closed, true, 0.3f, 0.f, 0.39f, Tuning);
+	Kick = DoorRules::ResolveKick(EDoorLeafState::Closed, Wood, true, 0.3f, 0.f, 0.39f, Tuning);
 	TestTrue(TEXT("wounded on a heavy door: 0.4"), Kick.bInjures && FMath::IsNearlyEqual(Kick.InjuryChance, 0.4f));
-	Kick = DoorRules::ResolveKick(EDoorLeafState::Closed, false, 0.6f, 0.f, 0.f, Tuning);
+	Kick = DoorRules::ResolveKick(EDoorLeafState::Closed, Wood, false, 0.6f, 0.f, 0.f, Tuning);
 	TestTrue(TEXT("not wounded enough: no injury chance"), FMath::IsNearlyZero(Kick.InjuryChance) && !Kick.bInjures);
-	Kick = DoorRules::ResolveKick(EDoorLeafState::Open, false, 1.f, 0.f, 0.f, Tuning);
+	Kick = DoorRules::ResolveKick(EDoorLeafState::Locked, EDoorStrength::Reinforced, false, 1.f, 0.f, 1.f, Tuning);
+	TestTrue(TEXT("reinforced: no kick ever gives"), !Kick.bOpens && FMath::IsNearlyZero(Kick.OpenChance));
+	Kick = DoorRules::ResolveKick(EDoorLeafState::Open, Wood, false, 1.f, 0.f, 0.f, Tuning);
 	TestTrue(TEXT("an open door: nothing to kick"), !Kick.bOpens && !Kick.bInjures);
 	Tuning.HeavyMinWidthCm = 140.f;
 	TestTrue(TEXT("a 150 cm entrance is heavy"), DoorRules::IsHeavy(150.f, Tuning));
@@ -277,13 +284,108 @@ DOORS_TEST(FDoorsLockShotTest, "LockShot.ChanceByWeapon")
 bool FDoorsLockShotTest::RunTest(const FString& Parameters)
 {
 	FDoorTuning Tuning;
-	Tuning.LockShotChance.Add(TEXT("shotgun"), 0.9f);
-	Tuning.LockShotChance.Add(TEXT("pistol"), 0.3f);
-	Tuning.LockShotChanceDefault = 0.35f;
-	TestEqual(TEXT("shotgun"), DoorRules::GetLockShotChance(TEXT("shotgun"), Tuning), 0.9f);
-	TestEqual(TEXT("case-insensitive"), DoorRules::GetLockShotChance(TEXT("Pistol"), Tuning), 0.3f);
-	TestEqual(TEXT("unlisted: default"), DoorRules::GetLockShotChance(TEXT("m16"), Tuning), 0.35f);
-	TestEqual(TEXT("no weapon: no chance"), DoorRules::GetLockShotChance(FString(), Tuning), 0.f);
+	Tuning.LockPower.Add(TEXT("shotgun"), 0.9f);
+	Tuning.LockPower.Add(TEXT("pistol"), 0.3f);
+	Tuning.LockPowerDefault = 0.35f;
+	const EDoorStrength Wood = EDoorStrength::Wood; // resist 0: chance = power
+	TestEqual(TEXT("shotgun"), DoorRules::GetLockShotChance(TEXT("shotgun"), Wood, Tuning), 0.9f);
+	TestEqual(TEXT("case-insensitive"), DoorRules::GetLockShotChance(TEXT("Pistol"), Wood, Tuning), 0.3f);
+	TestEqual(TEXT("unlisted: default"), DoorRules::GetLockShotChance(TEXT("m16"), Wood, Tuning), 0.35f);
+	TestEqual(TEXT("no weapon: no chance"), DoorRules::GetLockShotChance(FString(), Wood, Tuning), 0.f);
+	TestEqual(TEXT("steel (resist 0.5): (0.9 - 0.5) / 0.5"), DoorRules::GetLockShotChance(TEXT("shotgun"), EDoorStrength::Steel, Tuning), 0.8f, 0.001f);
+	TestEqual(TEXT("a pistol is no match for steel here"), DoorRules::GetLockShotChance(TEXT("pistol"), EDoorStrength::Steel, Tuning), 0.f);
+	return true;
+}
+
+DOORS_TEST(FDoorsStrengthConsistencyTest, "Strength.OneRuleForEveryWayIn")
+bool FDoorsStrengthConsistencyTest::RunTest(const FString& Parameters)
+{
+	// Designer 2026-11-22: "a lock that held a pistol shot and then broke from two kicks is wrong" - one strength, one monotonic rule.
+	FString Text;
+	TSharedPtr<FJsonObject> Json;
+	TestTrue(TEXT("doors.json parses"), FFileHelper::LoadFileToString(Text, *DoorTuning::GetDefaultPath())
+		&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) && Json.IsValid());
+	if (!Json.IsValid())
+	{
+		return false;
+	}
+	const FDoorTuning File = DoorTuning::FromJson(*Json);
+	FDoorTuning Strong = File;
+	Strong.KickPower = 0.99f; // a kick typed stronger than the pistol: the rule caps it
+	const EDoorStrength All[] = { EDoorStrength::Wood, EDoorStrength::Steel, EDoorStrength::Reinforced };
+	const TCHAR* Weapons[] = { TEXT("pistol"), TEXT("m16"), TEXT("sniper_rifle"), TEXT("shotgun"), TEXT("plasma_carbine"), TEXT("unknown_gun") };
+	const FDoorTuning* Tunings[] = { &File, &Strong };
+	for (const FDoorTuning* T : Tunings)
+	{
+		for (const EDoorStrength Strength : All)
+		{
+			float Weakest = 1.f;
+			for (const TCHAR* Weapon : Weapons)
+			{
+				Weakest = FMath::Min(Weakest, DoorRules::GetLockShotChance(Weapon, Strength, *T));
+			}
+			const float Kick = DoorRules::GetKickChance(EDoorLeafState::Locked, Strength, *T);
+			TestTrue(FString::Printf(TEXT("%s: a kick (%.2f) is never likelier than the weakest lock shot (%.2f)"), DoorRules::StrengthName(Strength), Kick, Weakest),
+				Kick <= Weakest + KINDA_SMALL_NUMBER);
+			TestTrue(FString::Printf(TEXT("%s: the shotgun at least the pistol"), DoorRules::StrengthName(Strength)),
+				DoorRules::GetLockShotChance(TEXT("shotgun"), Strength, *T) >= DoorRules::GetLockShotChance(TEXT("pistol"), Strength, *T));
+			TestTrue(FString::Printf(TEXT("%s: an unlocked door kicks at least as easily as a locked one"), DoorRules::StrengthName(Strength)),
+				DoorRules::GetKickChance(EDoorLeafState::Closed, Strength, *T) >= Kick);
+		}
+		for (const TCHAR* Weapon : Weapons)
+		{
+			TestTrue(FString::Printf(TEXT("%s: wood >= steel >= reinforced"), Weapon),
+				DoorRules::GetLockShotChance(Weapon, EDoorStrength::Wood, *T) >= DoorRules::GetLockShotChance(Weapon, EDoorStrength::Steel, *T)
+				&& DoorRules::GetLockShotChance(Weapon, EDoorStrength::Steel, *T) >= DoorRules::GetLockShotChance(Weapon, EDoorStrength::Reinforced, *T));
+		}
+		TestTrue(TEXT("kicks: wood >= steel"), DoorRules::GetKickChance(EDoorLeafState::Locked, EDoorStrength::Wood, *T)
+			>= DoorRules::GetKickChance(EDoorLeafState::Locked, EDoorStrength::Steel, *T));
+		TestEqual(TEXT("reinforced: no kick, locked or not"), DoorRules::GetKickChance(EDoorLeafState::Locked, EDoorStrength::Reinforced, *T)
+			+ DoorRules::GetKickChance(EDoorLeafState::Closed, EDoorStrength::Reinforced, *T), 0.f);
+	}
+	// The designer's classes with the shipped numbers.
+	TestTrue(TEXT("wood: an easy kick"), DoorRules::GetKickChance(EDoorLeafState::Locked, EDoorStrength::Wood, File) >= 0.5f);
+	TestTrue(TEXT("wood: the lock gives to almost any weapon"), DoorRules::GetLockShotChance(TEXT("pistol"), EDoorStrength::Wood, File) >= 0.5f);
+	TestTrue(TEXT("steel: a hard kick"), DoorRules::GetKickChance(EDoorLeafState::Locked, EDoorStrength::Steel, File) <= 0.15f);
+	TestTrue(TEXT("steel: the shotgun opens the lock"), DoorRules::GetLockShotChance(TEXT("shotgun"), EDoorStrength::Steel, File) >= 0.85f);
+	TestTrue(TEXT("steel: a pistol rarely"), DoorRules::GetLockShotChance(TEXT("pistol"), EDoorStrength::Steel, File) <= 0.25f);
+	TestTrue(TEXT("reinforced: a shotgun at the lock still can"), DoorRules::GetLockShotChance(TEXT("shotgun"), EDoorStrength::Reinforced, File) > 0.5f);
+	TestEqual(TEXT("reinforced: a pistol never"), DoorRules::GetLockShotChance(TEXT("pistol"), EDoorStrength::Reinforced, File), 0.f);
+	// Picking the strength.
+	TestEqual(TEXT("a tag wins over the role"), DoorRules::ResolveStrength(TEXT("reinforced"), TEXT("room"), false, TEXT("x"), File), EDoorStrength::Reinforced);
+	TestEqual(TEXT("a room door is wood"), DoorRules::ResolveStrength(FString(), TEXT("room"), false, TEXT("x"), File), EDoorStrength::Wood);
+	TestEqual(TEXT("an unknown role: the default"), DoorRules::ResolveStrength(FString(), TEXT("???"), false, TEXT("x"), File), File.StrengthDefault);
+	int32 Steel = 0;
+	for (int32 Index = 0; Index < 200; ++Index)
+	{
+		const FString Id = FString::Printf(TEXT("S%02d_f%d_d%d"), Index % 11, Index % 3, Index);
+		const EDoorStrength Flat = DoorRules::ResolveStrength(FString(), TEXT("unit_entry"), false, Id, File);
+		TestEqual(TEXT("the same flat door always the same"), DoorRules::ResolveStrength(FString(), TEXT("unit_entry"), false, Id, File), Flat);
+		TestTrue(TEXT("a flat door is wood or steel"), Flat == EDoorStrength::Wood || Flat == EDoorStrength::Steel);
+		Steel += Flat == EDoorStrength::Steel ? 1 : 0;
+	}
+	TestTrue(FString::Printf(TEXT("flat doors are a mix (%d / 200 steel)"), Steel), Steel > 40 && Steel < 160);
+	return true;
+}
+
+DOORS_TEST(FDoorsLayoutDoorsTest, "Strength.LayoutRolesAndStoryLocks")
+bool FDoorsLayoutDoorsTest::RunTest(const FString& Parameters)
+{
+	const FString Layout = TEXT("{\"buildings\":[{\"id\":\"S03\",\"stories\":[{\"id\":\"locked_door\",\"bricks\":[\"door_state(S03_d19,locked)\",\"window_state(west:0,boarded)\"]}],")
+		TEXT("\"openings\":[{\"id\":\"S03_d19\",\"kind\":\"door\",\"role\":\"entry\"},{\"id\":\"S03_w0\",\"kind\":\"window\",\"role\":\"window\"}],")
+		TEXT("\"partitions\":[{\"openings\":[{\"id\":\"S03_d7\",\"kind\":\"door\",\"role\":\"unit_entry\",\"strength\":\"steel\"}]}]}]}");
+	TSharedPtr<FJsonObject> Json;
+	TestTrue(TEXT("parses"), FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Layout), Json) && Json.IsValid());
+	if (!Json.IsValid())
+	{
+		return false;
+	}
+	const TMap<FString, DoorRules::FLayoutDoor> Doors = DoorRules::ParseLayoutDoors(*Json);
+	TestEqual(TEXT("two doors (no window)"), Doors.Num(), 2);
+	const DoorRules::FLayoutDoor* Entry = Doors.Find(TEXT("S03_d19"));
+	TestTrue(TEXT("the story-locked entrance"), Entry && Entry->Role == TEXT("entry") && Entry->bStoryLocked && Entry->BuildingId == TEXT("S03"));
+	const DoorRules::FLayoutDoor* Flat = Doors.Find(TEXT("S03_d7"));
+	TestTrue(TEXT("a partition's flat door with its own strength"), Flat && Flat->Role == TEXT("unit_entry") && Flat->Strength == TEXT("steel") && !Flat->bStoryLocked);
 	return true;
 }
 
@@ -318,7 +420,13 @@ bool FDoorsClickTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("open, click: shut"), DoorRules::ChooseClickAction(EDoorLeafState::Open, false, false, false, false, Action) && Action == EDoorAction::Close);
 	TestFalse(TEXT("blown off: nothing to shut"), DoorRules::ChooseClickAction(EDoorLeafState::Open, false, false, false, true, Action));
 	TestTrue(TEXT("locked + key, click: unlock"), DoorRules::ChooseClickAction(EDoorLeafState::Locked, false, false, true, false, Action) && Action == EDoorAction::Unlock);
-	TestFalse(TEXT("locked, no key, click: refused (a line)"), DoorRules::ChooseClickAction(EDoorLeafState::Locked, false, false, false, false, Action));
+	TestTrue(TEXT("locked, no key, not known: walk up and try the handle"), DoorRules::ChooseClickAction(EDoorLeafState::Locked, false, false, false, false, Action)
+		&& Action == EDoorAction::TryOpen);
+	TestFalse(TEXT("locked, no key, known locked: refused (a line from afar)"), DoorRules::ChooseClickAction(EDoorLeafState::Locked, false, false, false, false, Action, true));
+	TestTrue(TEXT("known locked, double click: still the kick"), DoorRules::ChooseClickAction(EDoorLeafState::Locked, true, false, false, false, Action, true)
+		&& Action == EDoorAction::Kick);
+	EDoorLeafState Next;
+	TestFalse(TEXT("a try never changes the door"), DoorRules::ApplyAction(EDoorLeafState::Locked, EDoorAction::TryOpen, FDoorTuning(), Next));
 	TestTrue(TEXT("locked, double click: kick"), DoorRules::ChooseClickAction(EDoorLeafState::Locked, true, false, false, false, Action) && Action == EDoorAction::Kick);
 	TestTrue(TEXT("locked, Ctrl + click: shoot the lock"), DoorRules::ChooseClickAction(EDoorLeafState::Locked, false, true, false, false, Action) && Action == EDoorAction::ShootLock);
 	TestFalse(TEXT("sealed: no click action"), DoorRules::ChooseClickAction(EDoorLeafState::Sealed, true, false, true, false, Action));

@@ -297,7 +297,7 @@ bool ADoorActor::BlastDoor(AActor* InstigatorActor)
 
 bool ADoorActor::IsHeavy() const
 {
-	return Setup_.bHeavyTag || DoorRules::IsHeavy(Setup_.WidthCm, DoorTuning::Get());
+	return Setup_.bHeavyTag || Setup_.Strength != EDoorStrength::Wood || DoorRules::IsHeavy(Setup_.WidthCm, DoorTuning::Get());
 }
 
 FVector ADoorActor::GetLockPoint() const

@@ -42,7 +42,37 @@ enum class EDoorAction : uint8
 	/** A shot that breaks the lock (its chance by weapon): a locked / closed door bursts open. */
 	ShootLock,
 	/** An explosion: the leaf breaks, the doorway stays open for good (any state but barricaded / sealed). */
-	Blast
+	Blast,
+	/**
+	 * A hand on the handle of a locked door the squad does not know is locked (designer 2026-11-22: he walks up, tries it, then says
+	 * "Locked" - the door is known-locked from then on). Never changes the door.
+	 */
+	TryOpen
+};
+
+/**
+ * How strong a door is (designer 2026-11-22: "one door strength for all methods" - a lock that held a pistol shot must not then give to two
+ * kicks). Every way in (a kick, a shot at the lock) is judged against the same strength (DoorRules::BreakChance). doors.json "strengths",
+ * picked per door by its tag door_strength=<name>, else its layout role (doors.json "strength_by_role"), else "strength_default".
+ */
+UENUM(BlueprintType)
+enum class EDoorStrength : uint8
+{
+	/** Easy kick, the lock gives to almost any weapon. */
+	Wood,
+	/** Hard kick, the shotgun opens the lock, a pistol rarely. */
+	Steel,
+	/** Cannot be kicked: only the key, a shotgun at the lock or an explosive. */
+	Reinforced
+};
+
+/** One strength class (doors.json "strengths.<name>"). */
+struct CODEXTACTICS_API FDoorStrengthClass
+{
+	/** "resist" 0..<1: an attack of power P breaks it with (P - resist) / (1 - resist) (clamped 0..1). */
+	float Resist = 0.f;
+	/** "kickable": 0 = no kick ever opens it (locked or not). */
+	bool bKickable = true;
 };
 
 /** What one kick attempt does (DoorRules::ResolveKick). */
@@ -158,11 +188,23 @@ struct CODEXTACTICS_API FDoorTuning
 	float KickSeconds = 1.2f;
 	/** "kick_noise_m": N_kick (opening-states F1, 15 m): the lure noise radius of every kick attempt. */
 	float KickNoiseCm = 1500.f;
-	/** "kick_chance_closed" / "kick_chance_locked": the chance one kick opens an unlocked / a locked door. */
-	float KickChanceClosed = 1.f;
-	float KickChanceLocked = 0.4f;
-	/** "kick_heavy_factor": a heavy door's kick chance is multiplied by this; "heavy_min_width_cm": doors this wide are heavy (entrances). */
-	float KickHeavyFactor = 0.6f;
+	/**
+	 * Door strength (designer 2026-11-22, DoorRules::BreakChance): "kick_power" - one kick's power against a LOCKED door (never above the
+	 * weakest weapon's "lock_power": the consistency rule); "kick_latch_bonus" - added against an unlocked door (only the latch holds it).
+	 */
+	float KickPower = 0.55f;
+	float KickLatchBonus = 0.3f;
+	/** "strengths": wood / steel / reinforced (indexed by EDoorStrength). */
+	FDoorStrengthClass Strengths[3] = { { 0.f, true }, { 0.5f, true }, { 0.8f, false } };
+	/** "strength_by_role": layout door role ("entry", "unit_entry", "room", ...) -> strength name, or "a/b" = a deterministic mix by the opening id. */
+	TMap<FString, FString> StrengthByRole;
+	/** "strength_mix_second_share": in an "a/b" mix the share of doors that get b. */
+	float StrengthMixSecondShare = 0.5f;
+	/** "strength_story_locked": a door a building story locks (layout stories' door_state(<id>,locked) brick); empty = by its role. */
+	FString StrengthStoryLocked;
+	/** "strength_default": a door without a tag / a known role. */
+	EDoorStrength StrengthDefault = EDoorStrength::Wood;
+	/** "heavy_min_width_cm": doors this wide are heavy (entrances): a riskier kick (kick_injury_heavy); a steel / reinforced door is heavy too. */
 	float HeavyMinWidthCm = 140.f;
 	/** "kick_max_attempts": one double click kicks up to this many times until it gives. */
 	int32 KickMaxAttempts = 4;
@@ -177,9 +219,11 @@ struct CODEXTACTICS_API FDoorTuning
 	float HandOpenSeconds = 0.5f;
 	/** "unlock_s": the key in the lock (single click on a locked door with the squad's key), then it opens by hand. */
 	float UnlockSeconds = 1.2f;
-	/** "lock_shot_chance": per weapon id (weapons' WeaponId) the chance one shot burst breaks the lock; "default" for the rest. */
-	TMap<FString, float> LockShotChance;
-	float LockShotChanceDefault = 0.35f;
+	/** "lock_power": per weapon id (weapons' WeaponId) the power 0..1 of one burst at the lock (DoorRules::BreakChance vs the strength); "default" for the rest. */
+	TMap<FString, float> LockPower;
+	float LockPowerDefault = 0.6f;
+	/** "locked_try_s": the hand on the handle of a door not known to be locked, from the contact to "Locked" (TryOpen), s. */
+	float LockedTrySeconds = 0.45f;
 	/** "lock_shot_range_cm": he shoots the lock from up to this far (with a clear line); farther he walks to "lock_shot_stand_cm" first. */
 	float LockShotRangeCm = 800.f;
 	float LockShotStandCm = 250.f;
@@ -305,25 +349,73 @@ namespace DoorRules
 	/** An open door may be shut only with nobody standing in its doorway and its leaf not blown off. */
 	CODEXTACTICS_API bool CanClose(EDoorLeafState State, bool bDoorwayOccupied, bool bBroken = false);
 
-	/** A door this wide is heavy (doors.json heavy_min_width_cm): a lower kick chance, a higher injury chance. */
+	/** A door this wide is heavy (doors.json heavy_min_width_cm): a higher injury chance of a kick. */
 	CODEXTACTICS_API bool IsHeavy(float WidthCm, const FDoorTuning& Tuning);
 
+	/** "wood" / "steel" / "reinforced" (case-insensitive). */
+	CODEXTACTICS_API bool ParseStrength(const FString& Text, EDoorStrength& OutStrength);
+	CODEXTACTICS_API const TCHAR* StrengthName(EDoorStrength Strength);
+
 	/**
-	 * One kick attempt on a door in State (closed / locked; anything else: no chance): the open chance (kick_chance_closed / _locked,
-	 * x kick_heavy_factor when heavy) and the injury chance (kick_injury_base + kick_injury_wounded below kick_wounded_below health +
-	 * kick_injury_heavy when heavy, clamped 0..1), decided by the two rolls in 0..1 (a roll below the chance happens).
+	 * THE one strength rule (designer 2026-11-22): an attack of Power 0..1 (a kick, a weapon's burst at the lock) breaks a door of Strength with
+	 * (Power - resist) / (1 - resist), clamped 0..1 - monotonic in the power and in the resist, so one door ranks every way in the same.
 	 */
-	CODEXTACTICS_API FDoorKickOutcome ResolveKick(EDoorLeafState State, bool bHeavy, float HealthFraction, float RollOpen, float RollInjury,
+	CODEXTACTICS_API float BreakChance(float Power, EDoorStrength Strength, const FDoorTuning& Tuning);
+
+	/** The power of a weapon's burst at the lock (lock_power; "default" for an unlisted id, 0 for an empty id - no weapon). */
+	CODEXTACTICS_API float GetLockPower(const FString& WeaponId, const FDoorTuning& Tuning);
+
+	/** The weakest weapon power of lock_power (its default included): a kick is never stronger (the consistency rule). */
+	CODEXTACTICS_API float GetWeakestLockPower(const FDoorTuning& Tuning);
+
+	/** One kick's power against a LOCKED door: kick_power, capped at the weakest weapon power. */
+	CODEXTACTICS_API float GetKickPower(const FDoorTuning& Tuning);
+
+	/** The chance one kick opens a door of Strength in State: 0 unless closed / locked and kickable; locked = BreakChance(kick power), unlocked + the latch bonus. */
+	CODEXTACTICS_API float GetKickChance(EDoorLeafState State, EDoorStrength Strength, const FDoorTuning& Tuning);
+
+	/**
+	 * One kick attempt on a door of Strength in State (closed / locked; anything else: no chance): the open chance (GetKickChance) and the
+	 * injury chance (kick_injury_base + kick_injury_wounded below kick_wounded_below health + kick_injury_heavy when heavy, clamped 0..1),
+	 * decided by the two rolls in 0..1 (a roll below the chance happens).
+	 */
+	CODEXTACTICS_API FDoorKickOutcome ResolveKick(EDoorLeafState State, EDoorStrength Strength, bool bHeavy, float HealthFraction, float RollOpen,
+		float RollInjury, const FDoorTuning& Tuning);
+
+	/** The chance one burst of WeaponId breaks the lock of a door of Strength: BreakChance(GetLockPower). */
+	CODEXTACTICS_API float GetLockShotChance(const FString& WeaponId, EDoorStrength Strength, const FDoorTuning& Tuning);
+
+	/**
+	 * A door's strength: its tag door_strength=<name> (TagValue) wins; then a story lock (bStoryLocked, strength_story_locked); then its layout
+	 * Role in strength_by_role ("a/b" = b for strength_mix_second_share of the doors, by a hash of OpeningId - the same door always the same);
+	 * else strength_default.
+	 */
+	CODEXTACTICS_API EDoorStrength ResolveStrength(const FString& TagValue, const FString& Role, bool bStoryLocked, const FString& OpeningId,
 		const FDoorTuning& Tuning);
 
-	/** The chance one shot burst of WeaponId breaks a lock (lock_shot_chance; "default" for an unlisted id, 0 for an empty id). */
-	CODEXTACTICS_API float GetLockShotChance(const FString& WeaponId, const FDoorTuning& Tuning);
+	/** What the layout says about a door opening (DoorRules::ParseLayoutDoors). */
+	struct FLayoutDoor
+	{
+		FString BuildingId;
+		FString Role;
+		/** The opening's own "strength" field, if any (wins like a tag). */
+		FString Strength;
+		/** A building story's door_state(<id>, locked) brick names it. */
+		bool bStoryLocked = false;
+	};
+
+	/** The door openings of a levelgen layout (buildings[].openings + partitions[].openings, kind "door") by opening id. */
+	CODEXTACTICS_API TMap<FString, FLayoutDoor> ParseLayoutDoors(const FJsonObject& Layout);
 
 	/** Does one of Keys open this door: "*", the opening id, the building id (every locked door of it) or the door's own key tag. */
 	CODEXTACTICS_API bool KeyFits(const TSet<FString>& Keys, const FString& BuildingId, const FString& OpeningId, const FString& DoorKeyId);
 
-	/** What a click on a door in State orders: single click / double click / Ctrl + click (bAttack). */
-	CODEXTACTICS_API bool ChooseClickAction(EDoorLeafState State, bool bDoubleClick, bool bAttack, bool bHasKey, bool bBroken, EDoorAction& OutAction);
+	/**
+	 * What a click on a door in State orders: single click / double click / Ctrl + click (bAttack). A single click on a locked door without a key:
+	 * TryOpen (walk up, try the handle, "Locked") unless the squad already knows it is locked (bKnownLocked: refused - the caller says how else).
+	 */
+	CODEXTACTICS_API bool ChooseClickAction(EDoorLeafState State, bool bDoubleClick, bool bAttack, bool bHasKey, bool bBroken, EDoorAction& OutAction,
+		bool bKnownLocked = false);
 
 	/** The value of a "key=value" actor tag (false when absent). */
 	CODEXTACTICS_API bool FindTagValue(const TArray<FName>& Tags, const TCHAR* Key, FString& OutValue);

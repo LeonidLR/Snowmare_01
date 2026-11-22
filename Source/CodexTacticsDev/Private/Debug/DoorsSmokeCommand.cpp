@@ -58,7 +58,11 @@
 #include "Interactables/LootCrateActor.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
+#include "Dom/JsonObject.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "Survival/ColdShelterSubsystem.h"
 #include "UnrealClient.h"
 
@@ -88,6 +92,10 @@ namespace DoorsSmoke
 		bool bSecondKickArmed = false;
 		bool bKeyClicked = false;
 		float KeyClickAt = 0.f;
+		// T: the handle try of an unknown locked door
+		bool bTryClicked = false;
+		int32 TriesBefore = 0;
+		FVector TryFrom = FVector::ZeroVector;
 		int32 ClipBefore = 0;
 		FVector Target = FVector::ZeroVector;
 		float InsideSign = 1.f;
@@ -129,6 +137,7 @@ namespace DoorsSmoke
 
 	bool Finish(FState& State, bool bComplete)
 	{
+		DoorTuning::Reload(); // the smoke's strength override off
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s DoorsSmoke (%d failure(s)%s)"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"),
 			State.Failures, bComplete ? TEXT("") : TEXT(", incomplete"));
 		FPlatformMisc::RequestExit(false, TEXT("DoorsSmoke"));
@@ -379,6 +388,34 @@ namespace DoorsSmoke
 			Check(*State, Back && Back->GetDoorState() == EDoorLeafState::Closed, TEXT("A: S01 door d20 is a CLOSED door"));
 			Check(*State, Locked && Locked->GetDoorState() == EDoorLeafState::Locked, TEXT("A: S03 front door d19 is LOCKED (story 3)"));
 			Check(*State, Gable && Gable->GetDoorState() == EDoorLeafState::Closed, TEXT("A: S03 gable door d20 is CLOSED (the quiet way)"));
+			// Door strength (designer 2026-11-22): from the layout roles (the smoke makes story locks steel, see Run).
+			{
+				int32 ByStrength[3] = { 0, 0, 0 };
+				int32 WithRole = 0;
+				for (const ADoorActor* Door : Doors->GetDoors())
+				{
+					if (Door && Door->GetDoorState() != EDoorLeafState::Open)
+					{
+						++ByStrength[static_cast<int32>(Door->GetStrength())];
+						WithRole += Door->GetRole().IsEmpty() ? 0 : 1;
+					}
+				}
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: A2: shut doors by strength - wood %d, steel %d, reinforced %d; %d with a layout role"), ByStrength[0], ByStrength[1],
+					ByStrength[2], WithRole);
+				Check(*State, WithRole > 0, FString::Printf(TEXT("A2: the shut doors know their layout role (%d)"), WithRole));
+				Check(*State, Front && Front->GetRole() == TEXT("entry") && Front->GetStrength() == EDoorStrength::Steel, FString::Printf(TEXT("A2: the S01 entrance is steel (%s, %s)"),
+					Front ? *Front->GetRole() : TEXT("-"), Front ? DoorRules::StrengthName(Front->GetStrength()) : TEXT("-")));
+				FString FileText;
+				TSharedPtr<FJsonObject> FileJson;
+				const bool bFile = FFileHelper::LoadFileToString(FileText, *DoorTuning::GetDefaultPath())
+					&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(FileText), FileJson) && FileJson.IsValid();
+				const FDoorTuning Shipped = bFile ? DoorTuning::FromJson(*FileJson) : FDoorTuning();
+				Check(*State, bFile && Locked && DoorRules::ResolveStrength(FString(), Locked->GetRole(), true, Locked->GetOpeningId(), Shipped) == EDoorStrength::Reinforced,
+					TEXT("A2: with the shipped doors.json the story-locked S03 entrance is reinforced"));
+				Check(*State, bFile && DoorRules::GetKickChance(EDoorLeafState::Locked, EDoorStrength::Reinforced, Shipped) == 0.f
+					&& DoorRules::GetLockShotChance(TEXT("pistol"), EDoorStrength::Steel, Shipped) >= DoorRules::GetKickChance(EDoorLeafState::Locked, EDoorStrength::Steel, Shipped),
+					TEXT("A2: one strength rule - no kick on reinforced, a kick never likelier than the pistol"));
+			}
 			if (!Front || !Back || !Locked || !Gable)
 			{
 				return Finish(*State, false);
@@ -651,10 +688,38 @@ namespace DoorsSmoke
 			{
 				return true;
 			}
+			// T (designer 2026-11-22): without the key the FIRST click on a door nobody tried: he walks up, tries the handle, "Locked" - then
+			// the squad knows; the second click says how from afar (no walk).
+			if (!State->bTryClicked)
+			{
+				State->bTryClicked = true;
+				State->TriesBefore = Doors->GetLockedTries();
+				State->ClipsBefore = Doors->GetClipLog().Num();
+				State->TryFrom = Feet(*Leader);
+				Check(*State, !Doors->IsKnownLocked(*Gable), TEXT("T: nobody tried the S09 gable door yet"));
+				FHitResult NoKey(Gable, nullptr, Gable->GetDoorwayCenter() - Gable->GetNormal() * (State->InsideSign * 3.f), -Gable->GetNormal() * State->InsideSign);
+				NoKey.bBlockingHit = true;
+				PC->HandlePlayerClick(NoKey);
+				Check(*State, Doors->HasPendingInteraction(Leader), TEXT("T: the first click on the unknown locked door walks him up to it (no line from afar)"));
+				return true;
+			}
+			if (Doors->GetLockedTries() == State->TriesBefore && State->StageTime < 15.f)
+			{
+				return true;
+			}
+			const float AtDoorCm = static_cast<float>(FVector::Dist2D(Feet(*Leader), Gable->GetActorLocation()));
+			Check(*State, Doors->GetLockedTries() == State->TriesBefore + 1 && Doors->IsKnownLocked(*Gable),
+				FString::Printf(TEXT("T: he tried the handle and found it locked (%.1f s; the squad knows it now)"), State->StageTime));
+			Check(*State, AtDoorCm <= DoorTuning::Get().InteractReachCm + 60.f && FVector::Dist2D(State->TryFrom, Feet(*Leader)) > 50.f,
+				FString::Printf(TEXT("T: the try happened AT the door (%.0f cm from it, walked %.0f cm)"), AtDoorCm, FVector::Dist2D(State->TryFrom, Feet(*Leader))));
+			Check(*State, ClipsSince(*Doors, State->ClipsBefore).Contains(TEXT("open_")), FString::Printf(TEXT("T: the hand-open clip started for the try (%s)"),
+				*ClipsSince(*Doors, State->ClipsBefore)));
+			Check(*State, Gable->GetDoorState() == EDoorLeafState::Locked, TEXT("T: the try left the door locked"));
+			Teleport(*Leader, State->TryFrom, Gable->GetNormal() * State->InsideSign);
 			FHitResult NoKey(Gable, nullptr, Gable->GetDoorwayCenter() - Gable->GetNormal() * (State->InsideSign * 3.f), -Gable->GetNormal() * State->InsideSign);
 			NoKey.bBlockingHit = true;
 			PC->HandlePlayerClick(NoKey);
-			Check(*State, !Doors->HasPendingInteraction(Leader) && Gable->GetDoorState() == EDoorLeafState::Locked, TEXT("K: without the key the click only says how"));
+			Check(*State, !Doors->HasPendingInteraction(Leader) && Gable->GetDoorState() == EDoorLeafState::Locked, TEXT("K: known locked, no key: the click only says how"));
 			Doors->AddKey(Gable->GetBuildingId());
 			Next(*State, 11);
 			return true;
@@ -1186,6 +1251,13 @@ namespace DoorsSmoke
 			{
 				Variable->Set(0, ECVF_SetByConsole);
 			}
+		}
+		// Door strength (designer 2026-11-22): the shipped data makes story-locked doors reinforced (no kick, only a shotgun at the lock); the
+		// stages F (kick) / S (an m16 at the lock) need kickable, shootable story doors - here they are steel (stage A checks the shipped rule).
+		{
+			FDoorTuning Smoke = DoorTuning::Get();
+			Smoke.StrengthStoryLocked = TEXT("steel");
+			DoorTuning::SetForTesting(Smoke);
 		}
 		SetDoorsSwitch(1);
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float)

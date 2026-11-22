@@ -761,6 +761,14 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			}
 		}
 	}
+	// Openable doors (designer 2026-11-22, item 4): a click into a room behind a LOCKED door - he goes to that door, tries it and says it is
+	// locked (never a walk to the nearest reachable spot outside, never a cover hug there).
+	if (UDoorSubsystem* MoveDoors = GetWorld()->GetSubsystem<UDoorSubsystem>(); MoveDoors && MoveDoors->IsActive() && Dispatch == ECombatOrderDispatch::Execute
+		&& !IsAttackModifierDown() && MoveDoors->RedirectMoveToLockedDoor(*Leader, Hit.ImpactPoint))
+	{
+		HideCoverPreview();
+		return;
+	}
 	OrderGroupMove(Hit.ImpactPoint, bSprint, Dispatch == ECombatOrderDispatch::Queue);
 	ControllerCommands::Report(this, bSprint ? PlayerCommands::Sprint : PlayerCommands::Move, nullptr, Dispatch == ECombatOrderDispatch::Queue,
 		Squad->HasMultiSelection(), Leader, Hit.ImpactPoint);

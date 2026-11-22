@@ -69,7 +69,22 @@ public:
 	 * door within blast_reach_cm (HandleExplosion). He walks up first unless already in reach. False when the click is not a door order
 	 * (the caller goes on with it as an ordinary click).
 	 */
-	bool RequestInteraction(ADoorActor* Door, AOperativeCharacter* Operative, bool bDoubleClick = false, bool bAttack = false);
+	bool RequestInteraction(ADoorActor* Door, AOperativeCharacter* Operative, bool bDoubleClick = false, bool bAttack = false, bool bForceTry = false);
+
+	/**
+	 * The squad knows Door is locked (designer 2026-11-22): somebody tried its handle (TryOpen) or a kick held. A single click on a known-locked
+	 * door says how else from afar; on an unknown one he walks up and tries it first.
+	 */
+	bool IsKnownLocked(const ADoorActor& Door) const;
+	/** Handle tries that found a door locked since the adoption (smokes). */
+	int32 GetLockedTries() const { return LockedTries; }
+
+	/**
+	 * A move click whose goal lies behind a LOCKED door (designer 2026-11-22: "a click into a locked flat - he goes to its door, tries it and
+	 * reports"): when Operative's navmesh path to Goal stops short and a locked door at the goal's level has the goal behind it, he is sent to
+	 * try that door (RequestInteraction, bForceTry) instead. False = an ordinary move.
+	 */
+	bool RedirectMoveToLockedDoor(AOperativeCharacter& Operative, const FVector& Goal);
 
 	/** A click on Door now: true when it is the second click on the same door within the double-click window (the kick). */
 	bool NoteClick(const ADoorActor* Door, double NowSeconds, double WindowSeconds);
@@ -317,6 +332,17 @@ private:
 	/** Kit-dressed maps: lifts the kit leaf instances of Door's doorway onto its hinges; returns how many. */
 	int32 LiftKitLeaves(ADoorActor& Door) const;
 	void PostLine(const FText& Text) const;
+	/** "Locked" with how else (by the door's strength); from Operative (a floating LOCKED over him) after his try, else the squad's line. */
+	void PostLockedLine(const ADoorActor& Door, const AOperativeCharacter* Operative) const;
+	/** The layout's door openings (role, strength, story lock) for the strengths (DoorRules::ParseLayoutDoors), read at the adoption. */
+	void LoadLayoutDoors();
+	/** Setup's role and strength from its tag door_strength=<name> and the layout (DoorRules::ResolveStrength). */
+	void ApplyLayoutStrength(struct FDoorSetup& Setup, const FString& StrengthTag) const;
+
+	TMap<FString, DoorRules::FLayoutDoor> LayoutDoors;
+	/** Doors the squad found locked (a handle try, a kick that held). */
+	TSet<TWeakObjectPtr<const ADoorActor>> KnownLocked;
+	int32 LockedTries = 0;
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<ADoorActor>> Doors;

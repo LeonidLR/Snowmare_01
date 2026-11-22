@@ -231,7 +231,200 @@ bool DoorRules::IsHeavy(float WidthCm, const FDoorTuning& Tuning)
 	return WidthCm >= Tuning.HeavyMinWidthCm;
 }
 
-FDoorKickOutcome DoorRules::ResolveKick(EDoorLeafState State, bool bHeavy, float HealthFraction, float RollOpen, float RollInjury,
+bool DoorRules::ParseStrength(const FString& Text, EDoorStrength& OutStrength)
+{
+	const FString Name = Text.TrimStartAndEnd();
+	for (const EDoorStrength Strength : { EDoorStrength::Wood, EDoorStrength::Steel, EDoorStrength::Reinforced })
+	{
+		if (Name.Equals(StrengthName(Strength), ESearchCase::IgnoreCase))
+		{
+			OutStrength = Strength;
+			return true;
+		}
+	}
+	return false;
+}
+
+const TCHAR* DoorRules::StrengthName(EDoorStrength Strength)
+{
+	switch (Strength)
+	{
+	case EDoorStrength::Steel: return TEXT("steel");
+	case EDoorStrength::Reinforced: return TEXT("reinforced");
+	default: return TEXT("wood");
+	}
+}
+
+float DoorRules::BreakChance(float Power, EDoorStrength Strength, const FDoorTuning& Tuning)
+{
+	const float Resist = FMath::Clamp(Tuning.Strengths[FMath::Clamp(static_cast<int32>(Strength), 0, 2)].Resist, 0.f, 0.99f);
+	return FMath::Clamp((Power - Resist) / (1.f - Resist), 0.f, 1.f);
+}
+
+float DoorRules::GetLockPower(const FString& WeaponId, const FDoorTuning& Tuning)
+{
+	if (WeaponId.IsEmpty())
+	{
+		return 0.f;
+	}
+	for (const TPair<FString, float>& Entry : Tuning.LockPower)
+	{
+		if (Entry.Key.Equals(WeaponId, ESearchCase::IgnoreCase))
+		{
+			return FMath::Clamp(Entry.Value, 0.f, 1.f);
+		}
+	}
+	return FMath::Clamp(Tuning.LockPowerDefault, 0.f, 1.f);
+}
+
+float DoorRules::GetWeakestLockPower(const FDoorTuning& Tuning)
+{
+	float Weakest = FMath::Clamp(Tuning.LockPowerDefault, 0.f, 1.f);
+	for (const TPair<FString, float>& Entry : Tuning.LockPower)
+	{
+		Weakest = FMath::Min(Weakest, FMath::Clamp(Entry.Value, 0.f, 1.f));
+	}
+	return Weakest;
+}
+
+float DoorRules::GetKickPower(const FDoorTuning& Tuning)
+{
+	return FMath::Clamp(FMath::Min(Tuning.KickPower, GetWeakestLockPower(Tuning)), 0.f, 1.f);
+}
+
+float DoorRules::GetKickChance(EDoorLeafState State, EDoorStrength Strength, const FDoorTuning& Tuning)
+{
+	if ((State != EDoorLeafState::Closed && State != EDoorLeafState::Locked) || !Tuning.Strengths[FMath::Clamp(static_cast<int32>(Strength), 0, 2)].bKickable)
+	{
+		return 0.f;
+	}
+	const float Power = GetKickPower(Tuning) + (State == EDoorLeafState::Closed ? FMath::Max(0.f, Tuning.KickLatchBonus) : 0.f);
+	return BreakChance(FMath::Min(Power, 1.f), Strength, Tuning);
+}
+
+float DoorRules::GetLockShotChance(const FString& WeaponId, EDoorStrength Strength, const FDoorTuning& Tuning)
+{
+	const float Power = GetLockPower(WeaponId, Tuning);
+	return Power > 0.f ? BreakChance(Power, Strength, Tuning) : 0.f;
+}
+
+EDoorStrength DoorRules::ResolveStrength(const FString& TagValue, const FString& Role, bool bStoryLocked, const FString& OpeningId, const FDoorTuning& Tuning)
+{
+	EDoorStrength Out = Tuning.StrengthDefault;
+	if (ParseStrength(TagValue, Out))
+	{
+		return Out;
+	}
+	if (bStoryLocked && ParseStrength(Tuning.StrengthStoryLocked, Out))
+	{
+		return Out;
+	}
+	if (const FString* Rule = Role.IsEmpty() ? nullptr : Tuning.StrengthByRole.Find(Role))
+	{
+		FString First;
+		FString Second;
+		if (Rule->Split(TEXT("/"), &First, &Second))
+		{
+			// The same door always gets the same: a hash of its opening id picks the second for strength_mix_second_share of the doors.
+			const float Pick = static_cast<float>(FCrc::StrCrc32(*OpeningId) % 10000u) / 10000.f;
+			if (ParseStrength(Pick < Tuning.StrengthMixSecondShare ? Second : First, Out))
+			{
+				return Out;
+			}
+		}
+		else if (ParseStrength(*Rule, Out))
+		{
+			return Out;
+		}
+	}
+	return Tuning.StrengthDefault;
+}
+
+TMap<FString, DoorRules::FLayoutDoor> DoorRules::ParseLayoutDoors(const FJsonObject& Layout)
+{
+	TMap<FString, FLayoutDoor> Out;
+	const TArray<TSharedPtr<FJsonValue>>* Buildings = nullptr;
+	if (!Layout.TryGetArrayField(TEXT("buildings"), Buildings) || !Buildings)
+	{
+		return Out;
+	}
+	for (const TSharedPtr<FJsonValue>& BuildingValue : *Buildings)
+	{
+		const TSharedPtr<FJsonObject> Building = BuildingValue.IsValid() ? BuildingValue->AsObject() : nullptr;
+		if (!Building.IsValid())
+		{
+			continue;
+		}
+		const FString BuildingId = Building->GetStringField(TEXT("id"));
+		TSet<FString> StoryLocked;
+		const TArray<TSharedPtr<FJsonValue>>* Stories = nullptr;
+		if (Building->TryGetArrayField(TEXT("stories"), Stories) && Stories)
+		{
+			for (const TSharedPtr<FJsonValue>& StoryValue : *Stories)
+			{
+				const TSharedPtr<FJsonObject> Story = StoryValue.IsValid() ? StoryValue->AsObject() : nullptr;
+				const TArray<TSharedPtr<FJsonValue>>* Bricks = nullptr;
+				if (!Story.IsValid() || !Story->TryGetArrayField(TEXT("bricks"), Bricks) || !Bricks)
+				{
+					continue;
+				}
+				for (const TSharedPtr<FJsonValue>& Brick : *Bricks)
+				{
+					// "door_state(<opening id>,locked)"
+					FString Text = Brick.IsValid() ? Brick->AsString() : FString();
+					FString Args;
+					if (Text.StartsWith(TEXT("door_state(")) && Text.EndsWith(TEXT(")")))
+					{
+						Args = Text.Mid(11, Text.Len() - 12);
+						FString Id;
+						FString State;
+						if (Args.Split(TEXT(","), &Id, &State) && State.TrimStartAndEnd().Equals(TEXT("locked"), ESearchCase::IgnoreCase))
+						{
+							StoryLocked.Add(Id.TrimStartAndEnd());
+						}
+					}
+				}
+			}
+		}
+		const auto AddOpenings = [&Out, &BuildingId, &StoryLocked](const FJsonObject& Holder)
+		{
+			const TArray<TSharedPtr<FJsonValue>>* Openings = nullptr;
+			if (!Holder.TryGetArrayField(TEXT("openings"), Openings) || !Openings)
+			{
+				return;
+			}
+			for (const TSharedPtr<FJsonValue>& OpeningValue : *Openings)
+			{
+				const TSharedPtr<FJsonObject> Opening = OpeningValue.IsValid() ? OpeningValue->AsObject() : nullptr;
+				FString Id;
+				if (!Opening.IsValid() || Opening->GetStringField(TEXT("kind")) != TEXT("door") || !Opening->TryGetStringField(TEXT("id"), Id) || Id.IsEmpty())
+				{
+					continue;
+				}
+				FLayoutDoor& Door = Out.FindOrAdd(Id);
+				Door.BuildingId = BuildingId;
+				Opening->TryGetStringField(TEXT("role"), Door.Role);
+				Opening->TryGetStringField(TEXT("strength"), Door.Strength);
+				Door.bStoryLocked = StoryLocked.Contains(Id);
+			}
+		};
+		AddOpenings(*Building);
+		const TArray<TSharedPtr<FJsonValue>>* Partitions = nullptr;
+		if (Building->TryGetArrayField(TEXT("partitions"), Partitions) && Partitions)
+		{
+			for (const TSharedPtr<FJsonValue>& PartitionValue : *Partitions)
+			{
+				if (const TSharedPtr<FJsonObject> Partition = PartitionValue.IsValid() ? PartitionValue->AsObject() : nullptr; Partition.IsValid())
+				{
+					AddOpenings(*Partition);
+				}
+			}
+		}
+	}
+	return Out;
+}
+
+FDoorKickOutcome DoorRules::ResolveKick(EDoorLeafState State, EDoorStrength Strength, bool bHeavy, float HealthFraction, float RollOpen, float RollInjury,
 	const FDoorTuning& Tuning)
 {
 	FDoorKickOutcome Outcome;
@@ -239,29 +432,12 @@ FDoorKickOutcome DoorRules::ResolveKick(EDoorLeafState State, bool bHeavy, float
 	{
 		return Outcome;
 	}
-	const float Base = State == EDoorLeafState::Locked ? Tuning.KickChanceLocked : Tuning.KickChanceClosed;
-	Outcome.OpenChance = FMath::Clamp(Base * (bHeavy ? Tuning.KickHeavyFactor : 1.f), 0.f, 1.f);
+	Outcome.OpenChance = GetKickChance(State, Strength, Tuning);
 	Outcome.InjuryChance = FMath::Clamp(Tuning.KickInjuryBase + (HealthFraction < Tuning.KickWoundedBelow ? Tuning.KickInjuryWounded : 0.f)
 		+ (bHeavy ? Tuning.KickInjuryHeavy : 0.f), 0.f, 1.f);
 	Outcome.bOpens = RollOpen < Outcome.OpenChance;
 	Outcome.bInjures = RollInjury < Outcome.InjuryChance;
 	return Outcome;
-}
-
-float DoorRules::GetLockShotChance(const FString& WeaponId, const FDoorTuning& Tuning)
-{
-	if (WeaponId.IsEmpty())
-	{
-		return 0.f;
-	}
-	for (const TPair<FString, float>& Entry : Tuning.LockShotChance)
-	{
-		if (Entry.Key.Equals(WeaponId, ESearchCase::IgnoreCase))
-		{
-			return FMath::Clamp(Entry.Value, 0.f, 1.f);
-		}
-	}
-	return FMath::Clamp(Tuning.LockShotChanceDefault, 0.f, 1.f);
 }
 
 bool DoorRules::KeyFits(const TSet<FString>& Keys, const FString& BuildingId, const FString& OpeningId, const FString& DoorKeyId)
@@ -270,7 +446,8 @@ bool DoorRules::KeyFits(const TSet<FString>& Keys, const FString& BuildingId, co
 		|| (!DoorKeyId.IsEmpty() && Keys.Contains(DoorKeyId));
 }
 
-bool DoorRules::ChooseClickAction(EDoorLeafState State, bool bDoubleClick, bool bAttack, bool bHasKey, bool bBroken, EDoorAction& OutAction)
+bool DoorRules::ChooseClickAction(EDoorLeafState State, bool bDoubleClick, bool bAttack, bool bHasKey, bool bBroken, EDoorAction& OutAction,
+	bool bKnownLocked)
 {
 	switch (State)
 	{
@@ -295,8 +472,14 @@ bool DoorRules::ChooseClickAction(EDoorLeafState State, bool bDoubleClick, bool 
 			OutAction = EDoorAction::Kick;
 			return true;
 		}
-		OutAction = EDoorAction::Unlock;
-		return bHasKey; // no key: the caller says how else
+		if (bHasKey)
+		{
+			OutAction = EDoorAction::Unlock;
+			return true;
+		}
+		// No key (designer 2026-11-22): he walks up and tries the handle first; once the squad knows it is locked the caller says how else.
+		OutAction = EDoorAction::TryOpen;
+		return !bKnownLocked;
 	default:
 		return false;
 	}
@@ -608,9 +791,43 @@ FDoorTuning DoorTuning::FromJson(const FJsonObject& Json, const FDoorTuning& Bas
 	ReadDoorFlag(Json, TEXT("kick_enabled"), Tuning.bKickEnabled);
 	ReadDoorNumber(Json, TEXT("kick_s"), Tuning.KickSeconds, 0.f, 20.f);
 	ReadDoorNumber(Json, TEXT("kick_noise_m"), Tuning.KickNoiseCm, 0.f, 10000.f, 100.f);
-	ReadDoorNumber(Json, TEXT("kick_chance_closed"), Tuning.KickChanceClosed, 0.f, 1.f);
-	ReadDoorNumber(Json, TEXT("kick_chance_locked"), Tuning.KickChanceLocked, 0.f, 1.f);
-	ReadDoorNumber(Json, TEXT("kick_heavy_factor"), Tuning.KickHeavyFactor, 0.f, 1.f);
+	ReadDoorNumber(Json, TEXT("kick_power"), Tuning.KickPower, 0.f, 1.f);
+	ReadDoorNumber(Json, TEXT("kick_latch_bonus"), Tuning.KickLatchBonus, 0.f, 1.f);
+	const TSharedPtr<FJsonObject>* Strengths = nullptr;
+	if (Json.TryGetObjectField(TEXT("strengths"), Strengths) && Strengths && Strengths->IsValid())
+	{
+		for (const EDoorStrength Strength : { EDoorStrength::Wood, EDoorStrength::Steel, EDoorStrength::Reinforced })
+		{
+			const TSharedPtr<FJsonObject>* Class = nullptr;
+			if ((*Strengths)->TryGetObjectField(DoorRules::StrengthName(Strength), Class) && Class && Class->IsValid())
+			{
+				FDoorStrengthClass& Out = Tuning.Strengths[static_cast<int32>(Strength)];
+				ReadDoorNumber(**Class, TEXT("resist"), Out.Resist, 0.f, 0.99f);
+				ReadDoorFlag(**Class, TEXT("kickable"), Out.bKickable);
+			}
+		}
+	}
+	const TSharedPtr<FJsonObject>* ByRole = nullptr;
+	if (Json.TryGetObjectField(TEXT("strength_by_role"), ByRole) && ByRole && ByRole->IsValid())
+	{
+		Tuning.StrengthByRole.Reset();
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*ByRole)->Values)
+		{
+			FString Name;
+			if (!Entry.Key.StartsWith(TEXT("_")) && Entry.Value.IsValid() && Entry.Value->TryGetString(Name))
+			{
+				Tuning.StrengthByRole.Add(Entry.Key, Name);
+			}
+		}
+	}
+	ReadDoorNumber(Json, TEXT("strength_mix_second_share"), Tuning.StrengthMixSecondShare, 0.f, 1.f);
+	Json.TryGetStringField(TEXT("strength_story_locked"), Tuning.StrengthStoryLocked);
+	FString DefaultStrength;
+	if (Json.TryGetStringField(TEXT("strength_default"), DefaultStrength))
+	{
+		DoorRules::ParseStrength(DefaultStrength, Tuning.StrengthDefault);
+	}
+	ReadDoorNumber(Json, TEXT("locked_try_s"), Tuning.LockedTrySeconds, 0.f, 5.f);
 	ReadDoorNumber(Json, TEXT("heavy_min_width_cm"), Tuning.HeavyMinWidthCm, 0.f, 1000.f);
 	float Attempts = static_cast<float>(Tuning.KickMaxAttempts);
 	ReadDoorNumber(Json, TEXT("kick_max_attempts"), Attempts, 1.f, 20.f);
@@ -623,9 +840,9 @@ FDoorTuning DoorTuning::FromJson(const FJsonObject& Json, const FDoorTuning& Bas
 	ReadDoorNumber(Json, TEXT("hand_open_s"), Tuning.HandOpenSeconds, 0.f, 10.f);
 	ReadDoorNumber(Json, TEXT("unlock_s"), Tuning.UnlockSeconds, 0.f, 20.f);
 	const TSharedPtr<FJsonObject>* Shots = nullptr;
-	if (Json.TryGetObjectField(TEXT("lock_shot_chance"), Shots) && Shots && Shots->IsValid())
+	if (Json.TryGetObjectField(TEXT("lock_power"), Shots) && Shots && Shots->IsValid())
 	{
-		Tuning.LockShotChance.Reset();
+		Tuning.LockPower.Reset();
 		for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*Shots)->Values)
 		{
 			double Chance = 0.0;
@@ -635,11 +852,11 @@ FDoorTuning DoorTuning::FromJson(const FJsonObject& Json, const FDoorTuning& Bas
 			}
 			if (Entry.Key == TEXT("default"))
 			{
-				Tuning.LockShotChanceDefault = FMath::Clamp(static_cast<float>(Chance), 0.f, 1.f);
+				Tuning.LockPowerDefault = FMath::Clamp(static_cast<float>(Chance), 0.f, 1.f);
 			}
 			else
 			{
-				Tuning.LockShotChance.Add(Entry.Key, FMath::Clamp(static_cast<float>(Chance), 0.f, 1.f));
+				Tuning.LockPower.Add(Entry.Key, FMath::Clamp(static_cast<float>(Chance), 0.f, 1.f));
 			}
 		}
 	}
