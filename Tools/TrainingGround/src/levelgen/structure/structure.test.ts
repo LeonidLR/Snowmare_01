@@ -76,6 +76,11 @@ test('structure/types: type guards identify valid and invalid values', () => {
   assert.equal(isSlabPanel(validSlab), true);
   assert.equal(isSlabPanel({ id: 'slab_1', floor: -1 }), false);
   assert.equal(isSlabPanel({ ...validSlab, on_fail: 'explosion' }), false);
+  assert.equal(isSlabPanel({ ...validSlab, rect: [[NaN, 0], [1000, 1000]] }), false);
+  assert.equal(isSlabPanel({ ...validSlab, rect: [[0, Infinity], [1000, 1000]] }), false);
+  assert.equal(isSlabPanel({ ...validSlab, rect: [[-Infinity, 0], [1000, 1000]] }), false);
+  assert.equal(isSlabPanel({ ...validSlab, needs: NaN }), false);
+  assert.equal(isSlabPanel({ ...validSlab, needs: Infinity }), false);
 });
 
 // ---------------------------------------------------------------------------
@@ -467,4 +472,74 @@ test('structure_classes.json: all 20 structure.material pairs mapped and HP orde
     const woodHp = hpOf(s, 'wood');
     assert.ok(partPlaster > woodHp, `partition.plaster (${partPlaster}) > ${s}.wood (${woodHp})`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// 8. 099b Nits: Stairs explicit needs & V3 Dangling references
+// ---------------------------------------------------------------------------
+
+test('structure/validate: stairs explicit needs validation', () => {
+  const stair: StructuredStair = {
+    id: 'stair_0',
+    supported_by: ['wall_1'],
+    needs: 2,
+    on_fail: 'blocked_rubble',
+  };
+  const building: StructuredBuilding = {
+    id: 'B_stair_test',
+    walls: [
+      {
+        id: 'wall_1',
+        struct: { structure: 'load_bearing', material: 'concrete_panel', hp_class: 'hp_heavy_concrete' },
+      },
+    ],
+    stairs: [stair],
+  };
+  const failures = validateBuildingStructure(building);
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].rule, 'V3_supports_count');
+  assert.equal(failures[0].element_id, 'stair_0');
+});
+
+test('structure/validate: V3 Dangling Reference rule (supports non-existent element)', () => {
+  const building: StructuredBuilding = {
+    id: 'B_dangling_supports',
+    walls: [
+      {
+        id: 'wall_1',
+        struct: {
+          structure: 'load_bearing',
+          material: 'concrete_panel',
+          hp_class: 'hp_heavy_concrete',
+          supports: ['non_existent_slab'],
+        },
+      },
+    ],
+  };
+  const failures = validateBuildingStructure(building);
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].rule, 'V3_dangling_reference');
+  assert.equal(failures[0].element_id, 'wall_1');
+  assert.match(failures[0].message, /non_existent_slab/);
+});
+
+test('structure/validate: V3 Dangling Reference rule (supported_by non-existent element)', () => {
+  const building: StructuredBuilding = {
+    id: 'B_dangling_supported_by',
+    slab_panels: [
+      {
+        id: 'slab_1',
+        floor: 1,
+        rect: [[0, 0], [500, 500]],
+        supported_by: ['ghost_wall'],
+        needs: 1,
+        on_fail: 'floor_hole',
+      },
+    ],
+  };
+  const failures = validateBuildingStructure(building);
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].rule, 'V3_dangling_reference');
+  assert.equal(failures[0].element_id, 'slab_1');
+  assert.match(failures[0].message, /ghost_wall/);
 });

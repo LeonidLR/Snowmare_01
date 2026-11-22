@@ -8,7 +8,13 @@ import type {
 } from './types.ts';
 
 export interface ValidationFailure {
-  rule: 'V3_acyclic' | 'V3_supports_count' | 'V3_partition_supports_nothing' | 'V3_annex_supports_annex_only' | 'V3_hp_class_resolves';
+  rule:
+    | 'V3_acyclic'
+    | 'V3_supports_count'
+    | 'V3_partition_supports_nothing'
+    | 'V3_annex_supports_annex_only'
+    | 'V3_hp_class_resolves'
+    | 'V3_dangling_reference';
   element_id: string;
   message: string;
 }
@@ -102,7 +108,7 @@ function collectElements(building: StructuredBuilding): Map<string, ElementEntry
     for (let i = 0; i < building.stairs.length; i++) {
       const s = building.stairs[i];
       const id = s.id ?? `${building.id}_stair_${i}`;
-      const needs = typeof (s as any).needs === 'number' ? (s as any).needs : (s.supported_by?.length ? 1 : 0);
+      const needs = typeof s.needs === 'number' ? s.needs : (s.supported_by?.length ? 1 : 0);
       map.set(id, {
         id,
         kind: 'stair',
@@ -162,12 +168,26 @@ export function validateBuildingStructure(
     if (entry.struct?.supports) {
       for (const target of entry.struct.supports) {
         getAdj(id).add(target);
+        if (!elements.has(target)) {
+          failures.push({
+            rule: 'V3_dangling_reference',
+            element_id: id,
+            message: `Element '${id}' supports non-existent element '${target}'`,
+          });
+        }
       }
     }
     // 2. From entry.supported_by: carrier carries id
     if (entry.supported_by) {
       for (const carrier of entry.supported_by) {
         getAdj(carrier).add(id);
+        if (!elements.has(carrier)) {
+          failures.push({
+            rule: 'V3_dangling_reference',
+            element_id: id,
+            message: `Element '${id}' is supported by non-existent element '${carrier}'`,
+          });
+        }
       }
     }
   }
