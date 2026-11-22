@@ -2,6 +2,15 @@
 
 #include "Engine/World.h"
 #include "CoreGlobals.h"
+#include "HAL/IConsoleManager.h"
+#include "CodexTactics.h"
+
+namespace CodexRandomTrace
+{
+	/** Determinism hunt (2026-11-22): 1 logs every seeded gameplay draw - frame, stream, caller, value - so two runs of one seed can be diffed. */
+	static TAutoConsoleVariable<int32> CVarTrace(TEXT("Codex.Random.Trace"), 0,
+		TEXT("1: log every seeded gameplay random draw ([Rng] frame stream caller value) for determinism diffs."), ECVF_Default);
+}
 
 void FCodexRandomStreams::Seed(uint32 InSeed)
 {
@@ -121,45 +130,84 @@ namespace CodexRandom
 			const UCodexGameplayRandom* Service = UCodexGameplayRandom::Get(WorldContext);
 			return Service && Service->IsSeeded() ? Service->GetStreams() : Unseeded;
 		}
+
+		void NoteText(const FCodexRandomStreams& S, ECodexRandomStream Category, const UObject* WorldContext, const FString& Value)
+		{
+			if (!S.IsSeeded() || CodexRandomTrace::CVarTrace.GetValueOnGameThread() <= 0)
+			{
+				return;
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[Rng] f=%llu s=%d ctx=%s v=%s"), static_cast<unsigned long long>(GFrameCounter),
+				static_cast<int32>(Category), WorldContext ? *WorldContext->GetName() : TEXT("-"), *Value);
+		}
+		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, float V) { NoteText(S, C, W, FString::Printf(TEXT("%.6f"), V)); }
+		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, int32 V) { NoteText(S, C, W, FString::FromInt(V)); }
+		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, bool V) { NoteText(S, C, W, V ? TEXT("1") : TEXT("0")); }
+		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, const FVector& V) { NoteText(S, C, W, FString::Printf(TEXT("%.5f,%.5f,%.5f"), V.X, V.Y, V.Z)); }
+		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, const FVector2D& V) { NoteText(S, C, W, FString::Printf(TEXT("%.4f,%.4f"), V.X, V.Y)); }
 	}
 
 	float FRand(ECodexRandomStream Category, const UObject* WorldContext)
 	{
-		return StreamsFor(WorldContext).FRand(Category);
+		const FCodexRandomStreams& S = StreamsFor(WorldContext);
+		const auto Value = S.FRand(Category);
+		Note(S, Category, WorldContext, Value);
+		return Value;
 	}
 
 	float FRandRange(ECodexRandomStream Category, const UObject* WorldContext, float Min, float Max)
 	{
-		return StreamsFor(WorldContext).FRandRange(Category, Min, Max);
+		const FCodexRandomStreams& S = StreamsFor(WorldContext);
+		const auto Value = S.FRandRange(Category, Min, Max);
+		Note(S, Category, WorldContext, Value);
+		return Value;
 	}
 
 	int32 RandRange(ECodexRandomStream Category, const UObject* WorldContext, int32 Min, int32 Max)
 	{
-		return StreamsFor(WorldContext).RandRange(Category, Min, Max);
+		const FCodexRandomStreams& S = StreamsFor(WorldContext);
+		const auto Value = S.RandRange(Category, Min, Max);
+		Note(S, Category, WorldContext, Value);
+		return Value;
 	}
 
 	int32 RandHelper(ECodexRandomStream Category, const UObject* WorldContext, int32 Count)
 	{
-		return StreamsFor(WorldContext).RandHelper(Category, Count);
+		const FCodexRandomStreams& S = StreamsFor(WorldContext);
+		const auto Value = S.RandHelper(Category, Count);
+		Note(S, Category, WorldContext, Value);
+		return Value;
 	}
 
 	bool RandBool(ECodexRandomStream Category, const UObject* WorldContext)
 	{
-		return StreamsFor(WorldContext).RandBool(Category);
+		const FCodexRandomStreams& S = StreamsFor(WorldContext);
+		const auto Value = S.RandBool(Category);
+		Note(S, Category, WorldContext, Value);
+		return Value;
 	}
 
 	FVector VRand(ECodexRandomStream Category, const UObject* WorldContext)
 	{
-		return StreamsFor(WorldContext).VRand(Category);
+		const FCodexRandomStreams& S = StreamsFor(WorldContext);
+		const auto Value = S.VRand(Category);
+		Note(S, Category, WorldContext, Value);
+		return Value;
 	}
 
 	FVector VRandCone(ECodexRandomStream Category, const UObject* WorldContext, const FVector& Dir, float ConeHalfAngleRad)
 	{
-		return StreamsFor(WorldContext).VRandCone(Category, Dir, ConeHalfAngleRad);
+		const FCodexRandomStreams& S = StreamsFor(WorldContext);
+		const auto Value = S.VRandCone(Category, Dir, ConeHalfAngleRad);
+		Note(S, Category, WorldContext, Value);
+		return Value;
 	}
 
 	FVector2D RandPointInCircle(ECodexRandomStream Category, const UObject* WorldContext, float Radius)
 	{
-		return StreamsFor(WorldContext).RandPointInCircle(Category, Radius);
+		const FCodexRandomStreams& S = StreamsFor(WorldContext);
+		const auto Value = S.RandPointInCircle(Category, Radius);
+		Note(S, Category, WorldContext, Value);
+		return Value;
 	}
 }
