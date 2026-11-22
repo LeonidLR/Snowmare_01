@@ -2,14 +2,17 @@
 
 **Stairwell / window night fixes (`claude/bgen-test`, 2026-11-23 night; designer "stuck on the stairwell too").** (1) Follower goals are snapped
 to the leader's FEET floor (`SnapGoalToFloor`, the capsule-centre height put them on the next flight), ring search only over a stairwell (XY has
-navmesh on another level alone). (2) RampFile single file now holds on STEPPED stairs: a floor piece tagged `stair=*` counts as a ramp when its
-height gradient over +-40 cm is a slope (the dressed kit stairs are steps, the normal test never fired). (3) `FindWindowSillAt`: a ray through
+navmesh on another level alone). (2) Stepped kit stairs (tag `stair=*`, height gradient over +-40 cm is a slope) count for `IsRampUnder`
+(no follower slot on them while the leader stands on a floor) but form NO single file (every flight of a stairwell is one component: one
+uphill axis for a switchback made the two flights wait for each other). (3) `FindWindowSillAt`: a ray through
 a window opening is a window click only when it lands within 150 cm of the sill (a far floor click became a window order). (4) `TryVault`: no
 knee-height auto-vault through a SHUT window in formation without a window order (the leader broke a window on a plain walk); broken windows
 stay ordinary vaults. Smokes: `FormationStairSmoke` (kit map, `-DPCVars=Codex.Doors.InnerLockedShare=0`, flags window-only storeys as gaps),
-`CutawayClickSmoke` (locked-door redirects / window clicks counted apart). Open gap: a click onto a storey cut off by a randomly LOCKED door on
-the way (not at the goal's level) is not redirected to try that door (`RedirectMoveToLockedDoor` checks the goal's level only) - the leader walks
-under the goal.
+`CutawayClickSmoke` (locked-door redirects / window clicks counted apart). (5) `RedirectMoveToLockedDoor` also finds a locked door ON THE WAY (the nearest of 8
+within 30 m he can walk up to and from whose far side the goal is reachable; paths judged with the squad's no-window filter) - a click onto a
+storey cut off by it sends the leader to try it (was: he walked under the goal). `FormationStairSmoke` checks it in a last locked-way case.
+Worker 2026-11-23 01:12 on ac3d7297: 15 smokes PASS (formation set, stairs x3, ramp, mantle, cutaway click, doors, breach, window/stair hover,
+buildings).
 
 **Story-showcase labels (`claude/bgen-test`, 2026-11-22, designer test item 6; dev overlay, CodexTacticsDev).** `UStoryLabelSubsystem` draws
 on the game canvas (debug draw "Game": PIE, -game, screenshots) the story of every house ("3 · Запертая дверь", layout `buildings[].stories`)
