@@ -21,5 +21,6 @@
   "jamb_clear_cm": 10,
   "jamb_sample_cm": 20,
   "gap_factor": 1.5,
-  "throat_clear_cm": 30
+  "throat_clear_cm": 30,
+  "hold_places": 1
 }

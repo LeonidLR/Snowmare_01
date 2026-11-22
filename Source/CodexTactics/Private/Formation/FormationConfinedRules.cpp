@@ -417,6 +417,14 @@ FFormationConfinedTuning FormationConfinedTuning::FromJson(const FJsonObject& Js
 	{
 		Tuning.bEnabled = Number != 0.0;
 	}
+	if (Json.TryGetBoolField(TEXT("hold_places"), bFlag))
+	{
+		Tuning.bHoldPlaces = bFlag;
+	}
+	else if (Json.TryGetNumberField(TEXT("hold_places"), Number))
+	{
+		Tuning.bHoldPlaces = Number != 0.0;
+	}
 	if (Json.TryGetNumberField(TEXT("probe_rays"), Number))
 	{
 		Tuning.ProbeRays = FMath::Clamp(FMath::RoundToInt32(Number), 8, 64);
