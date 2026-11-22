@@ -153,7 +153,7 @@
       "extra": "-LevelJson=L_Gen_Depot_X4.json",
       "timeout": 1200,
       "knownFail": true,
-      "_why": "smart enemies T-12 baseline: stairs 13/19 (68.4%), ladders 12/23 (52.2%), mantles 2/120 (1.7%), drops 0/80 (0.0%) - PMC fighter lacks mantle permission (bMantlePathAllowed gates on player squad solo mode) and drop nav filters; fixes are Phase 2 tasks (T-07)"
+      "_why": "smart enemies T-12 baseline (strict link passage verified): stairs 13/19 (68.4%), ladders 12/23 (52.2%), mantles 52/120 (43.3%), drops 73/80 (91.2%); remaining failures due to PMC navigation constraints and architectural mantle path gating; fixes are Phase 2 tasks (T-07)"
     },
     "LevelGenLaddersSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "extra": "-LevelJson=L_Gen_Depot_1.json", "timeout": 1200, "_why": "game designer bug report 2026-11-02 on the generated map (docs/design/levelgen/LEVEL_GENERATOR.md 8): every ladder of the layout faces away from its wall and is climbed up and down by move orders through its nav link; the squad walks into the cut and out by the ramp crossing, across the bridge, out of and into the cut by the V3 cut ladder - each ladder / entry reported by id. Any generated map: map=<L_Gen_...> with that map loaded" },
     "LevelGenBuildingsSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelGenBuildingsSmokeMaxFail=10", "timeout": 180, "_why": "048: report complete operative nav paths from every exterior door to every room, landing and walkable roof on the old X6 layout" },
