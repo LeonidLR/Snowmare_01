@@ -268,6 +268,19 @@ namespace FormationStairSmoke
 				bAll &= FMath::Abs(FeetZ(*Member) - C.ToZ) < 40.f && FVector::Dist2D(Member->GetActorLocation(), Leader->GetActorLocation()) < TogetherCm;
 			}
 			const float Seconds = R.StepFrame / 60.f;
+			if (R.StepFrame == 20)
+			{
+				// Where the click sent the leader: the order's goal and his path's end (a goal on the storey below = the click went down a storey).
+				const AAIController* LeaderAI = Cast<AAIController>(Leader->GetController());
+				const UPathFollowingComponent* Follow = LeaderAI ? LeaderAI->GetPathFollowingComponent() : nullptr;
+				const FNavPathSharedPtr Path = Follow ? Follow->GetPath() : nullptr;
+				FNavLocation GoalOnNav;
+				UNavigationSystemV1* GoalNav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+				const bool bGoalNav = GoalNav && GoalNav->ProjectPointToNavigation(C.Goal, GoalOnNav, FVector(40.f, 40.f, 60.f));
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s leader goal %s, path end %s (%d points, partial %d); the goal on the navmesh %s"), *C.Building,
+					*Leader->GetLastMoveDestination().ToCompactString(), Path.IsValid() && Path->GetPathPoints().Num() ? *Path->GetEndLocation().ToCompactString() : TEXT("-"),
+					Path.IsValid() ? Path->GetPathPoints().Num() : 0, Path.IsValid() && Path->IsPartial() ? 1 : 0, bGoalNav ? *GoalOnNav.Location.ToCompactString() : TEXT("none"));
+			}
 			if (!bAll && Seconds < LegSeconds)
 			{
 				return true;
