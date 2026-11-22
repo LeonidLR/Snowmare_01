@@ -72,6 +72,31 @@ Open (R2): the pack clips' forward travel without root motion (bake root motion 
 call); the PMC commander does not price locked doors itself (it only learns at the partial path); monsters never shoot / blow locks; the
 props generator does not place keys in containers yet (KeyIds per placed crate in the editor works); keys / door states in saves.
 
+**Doors R2c - PMC door clips with root motion (`claude/bgen-test`, 2026-11-22, designer "door animations for the PMC").** Code 01dfb8f9:
+`UDoorSubsystem::UsesRootMotionClips(Pawn, Clip)` -> pure `DoorRules::ClipMovesPawn` - the operatives' default set always moves them; the
+PMC body's own set (`doors.json` `montages.SK_PmcOperator_Skeleton`, paths unchanged) moves him only when the clip asset is ON his skeleton
+with root motion; then his breach uses the clip start pose (`montage_approach_cm`) exactly like the operatives (facing lock as before);
+old bone-name copies keep playing in place without a start pose (no regression on a machine without the new assets). `FClipMove` +
+pawn name / skeleton / after-end move along his facing; `DoorsSmoke` RM-P (logs `Smoke info: RM PMC <clip> ...` per clip; checks open /
+push >= half the root travel and <= root + 40 cm, a kick >= 20 cm, no snap back < -10 cm along his facing - he walks on after a breach;
+info-only where the PMC set is not retargeted); test `CodexTactics.Doors.Clips.RootMotionMovesPawn`. Script fe5ca015:
+`setup_door_animation.py` IK-retargets the 6 pack clips onto `SKM_PmcOperator` (transient RTG from `RTG_UE4Manny_UE5Manny`'s op stack,
+`IK_Mannequin` both sides, Blend to Source off; deleted after the run), re-keys, bakes pelvis -> root as for the operatives (root_inner
+counted), remakes `AM_Door_*` (0.1 s blends); copies still on the pack skeleton are replaced. Assets UNTRACKED: `/Game/Animations/Door/Pmc/`
+(6 `anim_OpenDoor_*` + 6 `AM_Door_*`, all on SK_PmcOperator_Skeleton; regenerate with `CODEX_DOOR_BODIES=Pmc` and every editor closed).
+086eefcf: in a commandlet `delete_asset` keeps the package (file stays, `create_asset` refuses the name) - stale PMC montages (registry Skeleton
+tag not the PMC skeleton) have their files removed before anything loads them, then are created anew. PMC copies' root travel: open 74 /
+kick 105 / push 196 cm (the operatives' UE4 copies 81 / 115 / 214). THE REAL CAUSE of the PMC's 0 cm (the retarget alone did not fix it,
+measured): the SNIPER anim layer - `UpdateSniperLayer` replays its idle loop / bolt one-shots in the FullBody slot of DefaultGroup and cut the
+door montage at 0.03 s (the PMC smoke fighter carries the sniper rifle; the operatives use the M16). Fix: the layer yields to a root-motion
+montage it did not start (`SniperRules::YieldsToMontage`, test `CodexTactics.Combat.Sniper.AnimRules`); an operative with the sniper rifle
+gains the same fix. Checked 2026-11-22 (local): tests Doors.* + Combat.Sniper.* 32/32; DoorsSmoke PASS on the grey showcase (75 ok) and
+on `L_Gen_StoryShowcase_Kit` (78 ok): RM-P "push_r 151 cm forward (root 214), 8 cm after the end, along his facing" x2 (both seed-7 runs;
+he starts on the S01 f1 stair landing 160 cm from the leaf - the 240 cm start pose does not fit there, the stuck-near fallback - and the
+clip carries him to 9 cm before the leaf); operatives unchanged (open 75-76 / kick 74 / push 199 cm). The smoke logs "RM-P diag" lines
+(montage instances, root motion mode / instance, movement mode, controller, tick option) for 1.2 s after each PMC door clip.
+Open: the PMC breach only exercised the push here (seed 7 = "shoot:gives push"); open / kick on the PMC are not covered by a smoke run yet.
+
 **Doors R2b (`claude/bgen-test`, 2026-11-22, designer bugs on the kit showcase + root motion option a).** OPEN doors are doors on kit-dressed
 maps (the kit's open leaves -> 262 open `ADoorActor`s on the showcase kit; click = shut / open; grey maps have leafless open doorways); the
 cursor ray through an open leaf or the floor at a shut doorway is the door and beats the cover hug; hand cursor over doors; he steps out of

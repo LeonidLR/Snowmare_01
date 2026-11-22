@@ -73,8 +73,10 @@ Switch off = nothing of R2 runs (no doors, no breach, no clips); keys in loot ar
   `SK_PmcOperator_Skeleton` the PMC body; monsters only their own listed skeleton (none: no clip). Assets (`Scripts/Editor/
   setup_door_animation.py`, run with every editor closed): `/Game/Animations/Door/UE4/` = IK-retargeted copies (UE5 pack skeleton ->
   `RTG_UE5Manny_UE4Manny`, Blend to Source off in memory, root motion off) + `AM_Door_{Open,Kick,Push}_{L,R}` (slot FullBody);
-  `/Game/Animations/Door/Pmc/AM_Door_*` = montages of the pack clips themselves (the PMC skeleton has the pack's UE5 hierarchy, played by
-  bone name). `/Game/Animations` is untracked: these assets derive from the untracked pack and are not committed; a missing asset logs a
+  `/Game/Animations/Door/Pmc/` = the six clips IK-retargeted onto `SKM_PmcOperator` (2026-11-22, designer "door animations for the
+  PMC": a transient UE5 -> UE5 retargeter, the M4 pack's `RTG_UE4Manny_UE5Manny` op stack with `IK_Mannequin` on both sides, as the PMC
+  launcher set; root motion baked as for the operatives) + `AM_Door_*` montages (the first R2 set played the pack clips by bone name and
+  lost their root motion; a re-run of the script replaces such copies). `/Game/Animations` is untracked: these assets derive from the untracked pack and are not committed; a missing asset logs a
   warning and the timings hold.
 - **Push after a shot lock** (`lock_shot_push` 1): the burst breaks the lock (`ADoorActor::BreakLock`: Locked -> Closed, event
   `DoorLockShot`), he walks up and pushes it open; 0 = R1 (it bursts open). After the key: unlock_s, then the push.
@@ -118,8 +120,12 @@ Switch off = nothing of R2 runs (no doors, no breach, no clips); keys in loot ar
   had it on the root already; montage blends 0.1 / 0.1 s - a blend scales root motion). He starts each clip at its start pose
   (`montage_approach_cm` open 95 / kick 95 / push 240, square to the leaf, `montage_approach_slack_cm` 25; after the key he steps back to the
   push pose; the push waits for the lock burst to end); `montage_root_cm` 81 / 115 / 214; every clip's capsule move is measured and logged
-  (`Doors: <pawn> <clip> moved X cm forward ... from the leaf plane A -> B cm`, `GetClipMoves`). The PMC body's set plays in place for now
-  (its root motion does not come through the bone-name playback - open).
+  (`Doors: <pawn> <clip> moved X cm forward ... from the leaf plane A -> B cm`, `GetClipMoves`). The PMC body moves the same way when its set is
+  retargeted onto its skeleton (`UDoorSubsystem::UsesRootMotionClips` -> `DoorRules::ClipMovesPawn`: the default set always; an own set
+  only when the clip asset is on the pawn's skeleton with root motion - else it plays in place without a start pose, as before);
+  `DoorsSmoke` RM-P checks the PMC fighter's breach clips (open / push about the root travel, a kick stops at the leaf, no snap back
+  along his facing - he walks on after the breach). The sniper anim layer stands aside while a root-motion montage it did not start
+  plays (`SniperRules::YieldsToMontage`): its loop / bolt one-shots share the FullBody slot's group and had cut the PMC sniper's push at once.
 - Tests `CodexTactics.Doors.Clips.*` / `Breach.*` / `Rolls.Deterministic` / `Keys.LootItem` / `Keys.MissionGoalGrant`; `test_kit_dress.py`
   `test_entrance_and_escape_doors_get_separate_leaves`; smoke `DoorsSmoke` stages B / F / K / S (clips), P (a PMC fighter breaches S03 with
   both doors locked, twice with the same seed: the same trace), KD (key from his body), KC (key from a container).
