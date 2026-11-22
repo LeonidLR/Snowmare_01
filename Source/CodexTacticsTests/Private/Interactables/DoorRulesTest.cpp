@@ -461,6 +461,40 @@ bool FDoorsBreachChoiceTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+DOORS_TEST(FDoorsClipMovesPawnTest, "Clips.RootMotionMovesPawn")
+bool FDoorsClipMovesPawnTest::RunTest(const FString& Parameters)
+{
+	// The operatives' default set (UE4 copies, root motion baked): it moves them whatever the clip asset says.
+	TestTrue(TEXT("an operative on the default set"), DoorRules::ClipMovesPawn(true, false, false, false));
+	// The PMC body's own set: only clips retargeted ONTO its skeleton with root motion move him (start pose + travel).
+	TestTrue(TEXT("PMC: retargeted onto his skeleton, root motion"), DoorRules::ClipMovesPawn(true, true, true, true));
+	TestFalse(TEXT("PMC: the pack clips by bone name (another skeleton) play in place"), DoorRules::ClipMovesPawn(true, true, false, true));
+	TestFalse(TEXT("PMC: on his skeleton but no root motion"), DoorRules::ClipMovesPawn(true, true, true, false));
+	// Monsters bash in place (no operative body, no start pose).
+	TestFalse(TEXT("not an operative"), DoorRules::ClipMovesPawn(false, false, true, true));
+	TestFalse(TEXT("not an operative, own set"), DoorRules::ClipMovesPawn(false, true, true, true));
+	// The shipped file keeps the PMC set at the retargeted copies' paths.
+	FString Text;
+	TestTrue(TEXT("doors.json exists"), FFileHelper::LoadFileToString(Text, *DoorTuning::GetDefaultPath()));
+	TSharedPtr<FJsonObject> Json;
+	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid())
+	{
+		AddError(TEXT("doors.json does not parse"));
+		return false;
+	}
+	const FDoorTuning File = DoorTuning::FromJson(*Json);
+	const TMap<FString, FString>* Pmc = File.MontageSets.Find(TEXT("SK_PmcOperator_Skeleton"));
+	TestTrue(TEXT("doors.json: the PMC body has its own set of six"), Pmc && Pmc->Num() == 6);
+	if (Pmc)
+	{
+		for (const TPair<FString, FString>& Entry : *Pmc)
+		{
+			TestTrue(FString::Printf(TEXT("PMC %s under /Game/Animations/Door/Pmc/"), *Entry.Key), Entry.Value.StartsWith(TEXT("/Game/Animations/Door/Pmc/AM_Door_")));
+		}
+	}
+	return true;
+}
+
 DOORS_TEST(FDoorsBreachPathTest, "Breach.PathStoppedByDoor")
 bool FDoorsBreachPathTest::RunTest(const FString& Parameters)
 {

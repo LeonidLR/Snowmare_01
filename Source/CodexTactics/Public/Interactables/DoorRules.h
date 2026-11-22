@@ -360,6 +360,13 @@ namespace DoorRules
 	/** The clip has a measured start pose (montage_approach_cm lists its kind): he walks to it before the clip starts. */
 	CODEXTACTICS_API bool HasClipApproach(EDoorClip Clip, const FDoorTuning& Tuning);
 
+	/**
+	 * The clip moves the pawn (root motion -> the start pose, the measured travel): operatives only. The default set (the operatives' UE4
+	 * copies, root motion baked) always does; a skeleton's own set (the PMC body) only when its clip is ON that skeleton (retargeted onto it)
+	 * and has root motion - a clip of another skeleton played by bone name loses its root motion (the PMC pack-clip playback: 0 cm).
+	 */
+	CODEXTACTICS_API bool ClipMovesPawn(bool bOperative, bool bOwnSet, bool bClipOnPawnSkeleton, bool bClipHasRootMotion);
+
 	/** Seconds from the start of the work to the leaf moving / the kick landing: the clip's contact time when a clip plays, else hand_open_s / kick_s / push_s. */
 	CODEXTACTICS_API float GetContactSeconds(EDoorClip Clip, bool bClipPlays, const FDoorTuning& Tuning);
 

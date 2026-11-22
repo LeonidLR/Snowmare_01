@@ -387,6 +387,11 @@ bool DoorRules::HasClipApproach(EDoorClip Clip, const FDoorTuning& Tuning)
 	return Tuning.MontageApproachCm.Contains(ClipKindName(Clip));
 }
 
+bool DoorRules::ClipMovesPawn(bool bOperative, bool bOwnSet, bool bClipOnPawnSkeleton, bool bClipHasRootMotion)
+{
+	return bOperative && (!bOwnSet || (bClipOnPawnSkeleton && bClipHasRootMotion));
+}
+
 float DoorRules::GetContactSeconds(EDoorClip Clip, bool bClipPlays, const FDoorTuning& Tuning)
 {
 	if (bClipPlays)

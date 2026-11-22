@@ -4,6 +4,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequenceBase.h"
+#include "Animation/Skeleton.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Combat/Explosion.h"
@@ -794,7 +795,7 @@ bool UDoorSubsystem::WalkUp(FPendingOrder& Order, AOperativeCharacter& Operative
 	{
 		// R2 root motion: he starts the clip at its start pose, square to the leaf (montage_approach_cm) - the clip walks him to the leaf.
 		const EDoorClip Clip = ClipOf(Order, Door);
-		Order.bClipApproach = DoorRules::HasClipApproach(Clip, DoorTuning::Get()) && UsesRootMotionClips(Operative);
+		Order.bClipApproach = DoorRules::HasClipApproach(Clip, DoorTuning::Get()) && UsesRootMotionClips(Operative, Clip);
 		Order.Approach = Door.GetActorLocation() + Door.GetNormal() * (Side * (Order.bClipApproach ? DoorRules::GetClipApproachCm(Clip, DoorTuning::Get())
 			: DoorTuning::Get().ApproachCm));
 		break;
@@ -940,7 +941,8 @@ float UDoorSubsystem::PlayClip(ACharacter& Pawn, EDoorClip Clip, EDoorSide Side,
 		Watch.Forward = Pawn.GetActorForwardVector().GetSafeNormal2D();
 		Watch.EndAt = GetWorld()->GetTimeSeconds() + Length;
 		const float* Expected = DoorTuning::Get().MontageRootCm.Find(DoorRules::ClipKindName(Clip));
-		Watch.ExpectedCm = Expected && UsesRootMotionClips(Pawn) ? *Expected : 0.f;
+		Watch.ExpectedCm = Expected && UsesRootMotionClips(Pawn, Clip) ? *Expected : 0.f;
+		Watch.Skeleton = Skeleton;
 		Watch.Last = Watch.Start;
 		Watch.Door = Door;
 		Watch.StartFacingErrorDeg = Door ? DoorRules::FacingErrorDeg(FVector2D(Pawn.GetActorForwardVector()), Door->ToLocal(Pawn.GetActorLocation()),
@@ -962,11 +964,25 @@ float UDoorSubsystem::RollFor(float& Forced, const ADoorActor& Door, const AActo
 	return DoorRules::DeterministicRoll(DoorTuning::GetRollSeed(), DoorRules::RollSalt(DoorId, Pawn.GetName(), Attempt, What));
 }
 
-bool UDoorSubsystem::UsesRootMotionClips(const ACharacter& Pawn) const
+bool UDoorSubsystem::UsesRootMotionClips(const ACharacter& Pawn, EDoorClip Clip) const
 {
-	// The operatives' default set (UE4 copies, root motion baked) moves the capsule; a skeleton with its own set (the PMC body: the pack's
-	// clips by bone name) plays them in place for now - its root motion does not come through the bone-name playback.
-	return Pawn.IsA<AOperativeCharacter>() && !DoorTuning::Get().MontageSets.Contains(DoorSubsystemLocal::SkeletonNameOf(Pawn));
+	// The operatives' default set (UE4 copies, root motion baked) moves the capsule. A skeleton with its own set (the PMC body) moves only
+	// with clips retargeted ONTO it (setup_door_animation.py): the pack clips played by bone name lose their root motion (0 cm measured).
+	const bool bOperative = Pawn.IsA<AOperativeCharacter>();
+	const FString Skeleton = DoorSubsystemLocal::SkeletonNameOf(Pawn);
+	const FDoorTuning& Tuning = DoorTuning::Get();
+	const bool bOwnSet = Tuning.MontageSets.Contains(Skeleton);
+	bool bOnSkeleton = false;
+	bool bRootMotion = false;
+	if (bOperative && bOwnSet)
+	{
+		const FString Path = DoorRules::FindClipPath(Tuning, Skeleton, /*bUseDefault*/ false, Clip, EDoorSide::Right);
+		const UAnimSequenceBase* Asset = Path.IsEmpty() ? nullptr : Cast<UAnimSequenceBase>(FSoftObjectPath(Path).TryLoad());
+		const USkeleton* AssetSkeleton = Asset ? Asset->GetSkeleton() : nullptr;
+		bOnSkeleton = AssetSkeleton && AssetSkeleton->GetName() == Skeleton;
+		bRootMotion = Asset && Asset->HasRootMotion();
+	}
+	return DoorRules::ClipMovesPawn(bOperative, bOwnSet, bOnSkeleton, bRootMotion);
 }
 
 EDoorClip UDoorSubsystem::ClipOf(const FPendingOrder& Order, const ADoorActor& Door) const
@@ -1063,7 +1079,10 @@ void UDoorSubsystem::TickClipWatches()
 		Result.ForwardCm = static_cast<float>(FVector::DotProduct(Move, Watch.Forward));
 		Result.SideCm = static_cast<float>(FVector::DotProduct(Move, FVector::CrossProduct(FVector::UpVector, Watch.Forward)));
 		Result.AfterEndCm = Watch.bFollowed ? -1.f : static_cast<float>(FVector::Dist2D(Feet, Watch.Pre));
+		Result.AfterEndForwardCm = Watch.bFollowed ? 0.f : static_cast<float>(FVector::DotProduct((Feet - Watch.Pre) * FVector(1.f, 1.f, 0.f), Watch.Forward));
 		Result.ExpectedCm = Watch.ExpectedCm;
+		Result.PawnName = Pawn->GetName();
+		Result.Skeleton = Watch.Skeleton;
 		Result.StartFacingErrorDeg = Watch.StartFacingErrorDeg;
 		const ADoorActor* WatchDoor = Watch.Door.Get();
 		UE_LOG(LogCodexTactics, Display, TEXT("Doors: %s %s moved %.0f cm forward, %.0f cm aside (clip root %.0f cm); start %s, end %s, %.0f cm after the end; from the leaf plane %.0f -> %.0f cm"),

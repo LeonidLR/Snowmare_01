@@ -130,9 +130,20 @@ public:
 		float SideCm = 0.f;
 		/** The move from just before the end to 0.3 s after it (a pop back would show here), cm. */
 		float AfterEndCm = 0.f;
-		/** montage_root_cm of the clip's kind (0 = unknown). */
+		/** The same move along his clip facing (a snap back is negative; walking on after a breach is positive), cm; 0 when followed. */
+		float AfterEndForwardCm = 0.f;
+		/** montage_root_cm of the clip's kind (0 = unknown, or his clip plays in place). */
 		float ExpectedCm = 0.f;
+		/** Who played it (GetName) and his skeleton (the PMC body's own set vs the operatives' default set). */
+		FString PawnName;
+		FString Skeleton;
 	};
+	/**
+	 * Pawn's Clip moves him (root motion: he walks to the clip's start pose first, the clip walks him to the leaf). Operatives only: the
+	 * default set always; a skeleton's own set (the PMC body) when its clip asset is on that skeleton with root motion (DoorRules::ClipMovesPawn:
+	 * the retargeted PMC copies of setup_door_animation.py; the old bone-name pack copies play in place).
+	 */
+	bool UsesRootMotionClips(const ACharacter& Pawn, EDoorClip Clip) const;
 	/** The measured moves since the adoption (the last 64). */
 	const TArray<FClipMove>& GetClipMoves() const { return ClipMoves; }
 	/** Every kick attempt's facing off the leaf at its impact, degrees (smokes). */
@@ -258,8 +269,6 @@ private:
 	float PlayClip(ACharacter& Pawn, EDoorClip Clip, EDoorSide Side, const ADoorActor* Door = nullptr);
 	/** Open kit doorways (kit_part=door_leaf_open instances) become open doors; returns how many. */
 	int32 AdoptKitOpenLeaves();
-	/** The pawn's clips move him (root motion): his skeleton plays the operatives' default set (the PMC body's set plays in place for now). */
-	bool UsesRootMotionClips(const ACharacter& Pawn) const;
 	/** Holds the facing of everyone working a door (orders at work, clips playing); releases the rest. */
 	void TickFacingLocks();
 	/** The side of the handle for Pawn at Door. */
@@ -285,6 +294,7 @@ private:
 		FVector Pre = FVector::ZeroVector;
 		float ExpectedCm = 0.f;
 		float StartFacingErrorDeg = 0.f;
+		FString Skeleton;
 		TWeakObjectPtr<const ADoorActor> Door;
 		/** His feet last tick (a jump = a teleport: the move is not measured). */
 		FVector Last = FVector::ZeroVector;

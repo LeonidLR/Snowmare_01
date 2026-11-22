@@ -18,6 +18,9 @@
 //   KC a loot container in a room holding a key: taken = the squad has the key;
 //   RM (root motion, designer 2026-11-22 option a): every clip's capsule move is measured - open / push move him about the clip's root
 //      travel (montage_root_cm), no clip pops back after its end;
+//   RM-P (designer 2026-11-22 "door animations for the PMC"): the PMC fighter's breach clips (retargeted onto SK_PmcOperator_Skeleton)
+//      move him too - open / push about the root travel, a kick stops at the leaf, no snap back; logged per clip ("RM PMC ...");
+//      skipped (info) on a machine whose PMC set is not retargeted;
 //   Arg "shots" (a rendered run: -RenderOffscreen): frames of the kick (F) and the two pushes (K, S) from the game camera ->
 //      Saved/StoryShowcase/doors/.
 //   O  (kit-dressed maps) an initially OPEN door (made from the kit's open leaves): the click through its open leaf shuts it, the click on
@@ -30,6 +33,7 @@
 #if !UE_BUILD_SHIPPING
 
 #include "AI/PmcSquadSubsystem.h"
+#include "Animation/Skeleton.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/FirePostureRules.h"
 #include "Characters/OperativeCharacter.h"
@@ -39,9 +43,11 @@
 #include "Data/WeaponDataAsset.h"
 #include "CodexTactics.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Debug/SmokeUtils.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -92,6 +98,9 @@ namespace DoorsSmoke
 		int32 ClipsBefore = 0;
 		int32 MontagesBefore = 0;
 		TWeakObjectPtr<AOperativeCharacter> Fighter;
+		/** The fighter's name (his clip moves are told apart by it) and whether his set moves him (retargeted onto SK_PmcOperator_Skeleton). */
+		FString FighterName;
+		bool bFighterRootClips = false;
 		FVector FighterStart = FVector::ZeroVector;
 		FVector FighterGoal = FVector::ZeroVector;
 		int32 BreachOpensBefore = 0;
@@ -828,6 +837,13 @@ namespace DoorsSmoke
 				*Door->GetActorLocation().ToCompactString());
 			State->BreachDoor = Door;
 			State->Fighter = Fighter;
+			State->FighterName = Fighter->GetName();
+			State->bFighterRootClips = Doors->UsesRootMotionClips(*Fighter, EDoorClip::Push) && Doors->UsesRootMotionClips(*Fighter, EDoorClip::Kick)
+				&& Doors->UsesRootMotionClips(*Fighter, EDoorClip::Open);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: P: %s (skeleton %s) - his door clips %s"), *State->FighterName,
+				Fighter->GetMesh() && Fighter->GetMesh()->GetSkeletalMeshAsset() && Fighter->GetMesh()->GetSkeletalMeshAsset()->GetSkeleton()
+					? *Fighter->GetMesh()->GetSkeletalMeshAsset()->GetSkeleton()->GetName() : TEXT("?"),
+				State->bFighterRootClips ? TEXT("move him (root motion, start pose)") : TEXT("play in place (not retargeted onto his skeleton: run setup_door_animation.py)"));
 			State->FighterStart = Start;
 			State->FighterGoal = Goal;
 			State->Run = 0;
@@ -1051,7 +1067,10 @@ namespace DoorsSmoke
 					++Measured;
 					const bool bWalkIn = Move.Key.StartsWith(TEXT("open_")) || Move.Key.StartsWith(TEXT("push_"));
 					const bool bNear = Move.ExpectedCm <= 0.f || FMath::Abs(Move.ForwardCm - Move.ExpectedCm) <= 40.f;
-					Pops += Move.AfterEndCm > 10.f ? 1 : 0; // -1 = the next attempt followed at once (not a pop)
+					// -1 = the next attempt followed at once (not a pop). The breaching fighter walks on right after his clip: only a move back
+					// against his clip facing is a pop for him (checked with his clips below).
+					const bool bFighter = !State->FighterName.IsEmpty() && Move.PawnName == State->FighterName;
+					Pops += (bFighter ? Move.AfterEndForwardCm < -10.f : Move.AfterEndCm > 10.f) ? 1 : 0;
 					Off += bWalkIn && !bNear ? 1 : 0;
 					UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: RM %s: %.0f cm forward, %.0f aside (root %.0f), %.0f cm after the end"), *Move.Key, Move.ForwardCm,
 						Move.SideCm, Move.ExpectedCm, Move.AfterEndCm);
@@ -1065,6 +1084,38 @@ namespace DoorsSmoke
 					UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: RM: open / push off the clip's root travel by > 40 cm: %d of %d"), Off, Measured);
 				}
 				Check(*State, Pops == 0, FString::Printf(TEXT("RM: no clip popped back after its end (%d of %d moved > 10 cm after it)"), Pops, Measured));
+			}
+			// RM-P: the PMC fighter's breach clips (retargeted onto SK_PmcOperator_Skeleton, root motion baked) move him like the operatives:
+			// open / push about the clip's root travel (open ~75, push ~200 cm), a kick stops at the leaf, no snap back after the end.
+			{
+				int32 Moves = 0;
+				int32 Bad = 0;
+				FString Lines;
+				for (const UDoorSubsystem::FClipMove& Move : Doors->GetClipMoves())
+				{
+					if (State->FighterName.IsEmpty() || Move.PawnName != State->FighterName)
+					{
+						continue;
+					}
+					++Moves;
+					const bool bKick = Move.Key.StartsWith(TEXT("kick_"));
+					const bool bTravel = bKick ? Move.ForwardCm >= 20.f
+						: Move.ExpectedCm > 0.f && Move.ForwardCm >= 0.5f * Move.ExpectedCm && Move.ForwardCm <= Move.ExpectedCm + 40.f;
+					const bool bNoSnap = Move.AfterEndForwardCm >= -10.f;
+					Bad += State->bFighterRootClips && !(bTravel && bNoSnap && Move.ExpectedCm > 0.f) ? 1 : 0;
+					Lines += FString::Printf(TEXT("%s%s %.0f cm (root %.0f)"), Lines.IsEmpty() ? TEXT("") : TEXT(", "), *Move.Key, Move.ForwardCm, Move.ExpectedCm);
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: RM PMC %s (%s): %.0f cm forward, %.0f aside (root %.0f), after the end %.0f cm (%.0f along his facing)"),
+						*Move.Key, *Move.Skeleton, Move.ForwardCm, Move.SideCm, Move.ExpectedCm, Move.AfterEndCm, Move.AfterEndForwardCm);
+				}
+				if (State->bFighterRootClips)
+				{
+					Check(*State, Moves >= 1 && Bad == 0, FString::Printf(TEXT("RM-P: the PMC fighter's clips moved him about their root travel, no snap back (%d clips, %d off: %s)"),
+						Moves, Bad, *Lines));
+				}
+				else
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: RM-P: the PMC set plays in place on this machine (%d clips: %s) - not checked"), Moves, *Lines);
+				}
 			}
 			// Every kick attempt faced the leaf (the designer's "first kick at the door, the second into the air").
 			{
