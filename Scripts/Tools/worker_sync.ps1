@@ -44,6 +44,10 @@ param(
     [string]$TrainerFrom = "16:30",
     [string]$TrainerUntil = "08:00",
     [int]$WaitEngineMinutes = 60,                           # how long to wait for a running wave / batch on the worker
+    # Designer 2026-11-22 "smokes go to the worker": at night the loop keeps 4 engines busy in C:/Work/CodexTactics, so a smoke in a
+    # second checkout (-RemoteRoot .../CodexTactics-slot1) would wait forever. -ShareMachine waits only for engines of ITS root
+    # (use -Jobs 1; the night batch just runs a little slower). The editor check stays machine-wide.
+    [switch]$ShareMachine,
     [double]$LockStaleHours = 3,                            # a sync older than this is dead whatever its host (= loop's -SyncStaleHours)
     # Remote compile (Tools\build_remote.ps1 / build.ps1 -Remote worker): the caller's uncommitted work rides along.
     [string]$Patch = "",                                    # `git diff HEAD --binary` file, applied on the worker after the reset
@@ -151,7 +155,9 @@ if (Test-Path `$l) {
     if (`$j -and (`$j.manual -or (Get-Process -Id `$j.pid -ErrorAction SilentlyContinue))) { 'busy lock: ' + `$j.agent + ' (' + `$j.purpose + ')'; exit 0 }
     Remove-Item `$l -ErrorAction SilentlyContinue   # stale
 }
-`$e = @(Get-CimInstance Win32_Process -Filter "Name like 'UnrealEditor%'" | Where-Object { `$_.CommandLine -match 'CodexTactics' -or `$_.Name -eq 'UnrealEditor.exe' } | ForEach-Object { `$_.Name })
+`$share = `$$($ShareMachine.IsPresent)
+`$root = '$RemoteRoot'.Replace('/', '\')
+`$e = @(Get-CimInstance Win32_Process -Filter "Name like 'UnrealEditor%'" | Where-Object { `$_.Name -eq 'UnrealEditor.exe' -or (`$_.CommandLine -match 'CodexTactics' -and (-not `$share -or `$_.CommandLine.Replace('/', '\').ToLower().Contains((`$root + '\').ToLower()))) } | ForEach-Object { `$_.Name })
 if (`$e -contains 'UnrealEditor.exe') { 'EDITOR'; exit 0 }
 if (`$e.Count) { 'busy engines: ' + (`$e -join ', '); exit 0 }
 try {
