@@ -1,5 +1,26 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**Storey cutaway (`claude/bgen-test`, 2026-11-22; designer bug, top priority: "in the dressed khrushchevka showcase I cannot see what
+happens inside").** Root cause: `URoofCutawaySubsystem` only cut static meshes whose bottom is above the selected man's head, found by an
+upward collision trace + a footprint overlap of the hit roof piece. On the dressed map the kit is NoCollision instanced components, one per
+mesh spanning ALL storeys (bounds from the ground) and the grey pieces under it are hidden proxies - nothing of the kit was ever cut (only
+the visible grey slabs: 3 pieces); on the grey map the footprint was one slab strip, so upper storeys were cut only partly (S04, man on
+storey 0: storey 1 72/135 pieces, the roof 1/8) while 21 ground-floor pieces (lintels) were cut. Fix, game C++: a **storey rule** (pure
+`RoofCutawayRules::ParseStoreyTags / StoreyBasesFromBottoms / StoreyAt / ShouldCutStorey / IsInsideBuilding / ClaimsUntaggedPiece`, tests
+`CodexTactics.Camera.RoofCutaway.Storey*`; CVar `Codex.RoofCutaway.Storeys` 1, 0 = the old rule alone; under `Codex.RoofCutaway`): a storey
+index of the level's static meshes tagged `building=<id>` / `floor=<n>` (actor tags of the generator's pieces, component tags of the kit's
+components; untagged fixed pieces over a building's slabs - ramps, props, ladders - by their bottom; rebuilt every 5 s); the selected man
+over / under one of a building's `floor_slab` / `roof_slab` pieces (kept 2 m past them while he was inside: stair holes, the doorway) is on
+the storey his feet stand on (50 cm tolerance; the floor he left while on a ladder), every visible piece of a higher storey is cut (roof,
+upper walls, partitions, the ceiling over him = the slab above), none of his storey or below (the head-clearance rule spares them too).
+Dresser (`kit_dress.py` / `kit_dress_lib.py`): every instance has a storey (`storey_of_z`, roof group = the roof storey, the ceiling under
+slab f+1 = f+1, stair glass column modules by their centre, drains one pipe per storey), one ISM component per mesh / material / mirror /
+group / **storey**, component tags `building=<id>` + `floor=<n>`; the showcase has 271 components (was 161). Smoke
+`RoofCutawayStoreySmoke` (`building=`, `storeys=0+1+2`, `shots=1 dir=`): grey and dressed showcase S04 storeys 0 / 1 / 2 and dressed S07 PASS
+(before = `Storeys 0` logged per storey); pictures `Saved/StoryShowcase/cutaway/` (old dresser: `old_dresser/`). Dressed map rebuilt
+(untracked), LevelGenBuildingsSmoke 6/6. Open: the cut storeys still cast their shadows (old design: the interior is not sunlit) - the
+inside reads dark; a shadow-off variant is the designer's call.
+
 **Building generator branch `claude/building-generator` (2026-11-21, not in main).** Residential blocks are planned from a template catalog (`building_plans.json` `recipes.block.templates`, default `block_khrushchevka`, series 1-464) with the kit pattern of the
 Soviet panel-block pack (three flats per landing round a half-landing switchback core on the court side, flats with hall / bath / kitchen /
 living rooms; `Tools/TrainingGround/src/levelgen/buildings/kitPlan.ts`, `building_plans.json` `recipes.block_kit`), flat-door roles follow
