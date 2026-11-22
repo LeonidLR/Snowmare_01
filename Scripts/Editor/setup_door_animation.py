@@ -46,7 +46,7 @@ PMC_MESH = "/Game/Characters/Enemies/PMC/Operator/SKM_PmcOperator"
 OUT_UE4 = "/Game/Animations/Door/UE4"
 OUT_PMC = "/Game/Animations/Door/Pmc"
 FULL_BODY_SLOT = "FullBody"
-BLEND_IN, BLEND_OUT = 0.2, 0.25
+BLEND_IN, BLEND_OUT = 0.1, 0.1  # short: a montage blend scales its root motion (0.2 / 0.25 lost ~30 % of the travel)
 # clip key -> (pack clip, montage name, the bone that touches the leaf)
 CLIPS = {
     "open_l": ("anim_OpenDoor_L", "AM_Door_Open_L", "hand_l"),
@@ -278,7 +278,7 @@ for key, (clip_name, montage_name, bone) in CLIPS.items():
         say(f"  {label} {clip_name}: root motion {'kept (baked before)' if skipped else 'baked'} - root travel {end_cm:.0f} cm "
             f"(x {r1.x - r0.x:.0f}, y {r1.y - r0.y:.0f}), {contact_cm:.0f} cm at the contact {tc:.2f} s, {frames} frames, root motion "
             f"{clip.get_editor_property('enable_root_motion')}")
-        make_montage(dest, montage_name, clip, force=(label == "Pmc"))
+        make_montage(dest, montage_name, clip, force=True)  # the blend times change with the script: always remade
 report["montage_contact_s"] = {k: round(sum(v) / len(v), 2) for k, v in contacts.items() if v}
 report["montage_root_cm"] = {k: round(sum(v) / len(v)) for k, v in roots.items() if v}
 report["montage_root_at_contact_cm"] = {k: round(sum(v) / len(v)) for k, v in at_contact.items() if v}
