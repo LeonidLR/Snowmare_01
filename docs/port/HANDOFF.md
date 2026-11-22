@@ -25,6 +25,13 @@ rebuilt, dressed kit map rebuilt: LevelGenBuildingsSmoke 6/6, 6/6, 9/9, IslandsP
 `<bid>_service_room_interior` (eye from the gable door) + `<bid>_service_bay_cutaway`. Tooling for worker A/B: smoke_parallel / smoke_remote /
 worker_sync from main (-Repeat, -RepeatSeeds, -SmokeArgs) + `smoke_parallel -ForceMap` (-Map wins over the smoke's map option, its -LevelJson
 follows) + an explicit -TimeoutSeconds extends a shorter smoke "timeout" option; walk smoke `tag=<s>` -> buildings_walk_<map>_<s>.json.
+Entry-queue A/B on codex-worker (2026-11-22, f20a2bef, `worker_sync -Repeat 3 -RepeatSeeds`, fixed step 60 fps, -SquadStart=formation,
+budget=1500; flat entry legs are 84 / 78 now - the gable door leads into the service room, no flat): showcase ON 72/72/72 of 84 vs OFF
+(`Codex.Formation.ConfinedQueue 0`) 65/66/65; BgenPlans ON 72/72/72 of 78 vs OFF 62/60/63 - the ranges do not overlap, the queue stays ON.
+Hall legs STUCK/ratio/STOPPED: showcase ON 10/2/0, 12/0/0, 10/2/0 vs OFF 8/10/1, 6/11/1, 7/12/0 (the queue turns the slow legs into fewer,
+but slightly more STUCK); BgenPlans ON 4/0/2 x3 vs OFF 11/3/2, 11/5/2, 9/4/2; max ratio ON 1.85-2.74 / 1.85-1.97, OFF 2.57-2.74 / 2.41-3.72.
+Open: the 10-12 STUCK hall legs on the showcase (follower held at the door) remain the main walk failure. Reports
+`Saved/LevelGen/walk_ab_worker/` (local, untracked).
 
 **Formation compresses in confined spaces (`claude/bgen-test`, 2026-11-22; designer decision 2026-11-21 "the whole squad must enter").** In a
 confined navmesh pocket round the leader's arrival (16 navmesh rays round his destination, median free distance <= 2 m - a flat hall, a 2.5 m
