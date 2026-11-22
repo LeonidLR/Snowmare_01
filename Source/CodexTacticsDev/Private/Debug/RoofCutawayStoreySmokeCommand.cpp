@@ -43,6 +43,7 @@
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Kismet/GameplayStatics.h"
+#include "Core/CodexTacticsPlayerController.h"
 #include "Misc/CoreDelegates.h"
 #include "Misc/Paths.h"
 #include "NavigationSystem.h"
@@ -57,7 +58,7 @@ namespace RoofCutawayStoreySmoke
 	constexpr int32 ShotSettleFrames = 180;
 	constexpr int32 MaxFrames = 60 * 400;
 
-	enum class EStep : uint8 { Warmup, Place, Before, After, ShotGame, ShotTop, Next, Done };
+	enum class EStep : uint8 { Warmup, Place, Before, After, Switch, ShotGame, ShotTop, Next, Done };
 
 	struct FRunner
 	{
@@ -72,6 +73,9 @@ namespace RoofCutawayStoreySmoke
 		TArray<int32> Storeys = { 0, 1 };
 		int32 StoreyIndex = 0;
 		bool bShots = false;
+		/** switch=1 (designer bug 2026-11-22: "the upper storeys hid only for the engineer"): after the check, the player selects another member
+		 * standing on the same storey (the number key, SelectMember) - the cut must stay. */
+		bool bSwitch = false;
 		FString Dir;
 		FString Label;
 		FString PendingShot;
@@ -486,6 +490,34 @@ namespace RoofCutawayStoreySmoke
 			Check(bIn && Building == R.BuildingId && InStorey == Storey, FString::Printf(TEXT("the leader %s (feet %.0f) is in %s on storey %d (expected %s / %d)"),
 				*Leader->DisplayName.ToString(), FeetZ(*Leader), bIn ? *Building : TEXT("-"), InStorey, *R.BuildingId, Storey));
 			Dump(World, Storey, true, TEXT("AFTER (storey rule on)"));
+			if (R.bSwitch && Squad->GetMembers().Num() > 1)
+			{
+				if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(UGameplayStatics::GetPlayerController(World, 0)))
+				{
+					PC->SelectMember(1); // the number key 2
+				}
+				Go(EStep::Switch);
+				return;
+			}
+			Go(R.bShots ? EStep::ShotGame : EStep::Next);
+			return;
+		}
+		case EStep::Switch:
+		{
+			if (R.StepFrame < SettleFrames)
+			{
+				return;
+			}
+			const AOperativeCharacter* Picked = Squad->GetMembers()[1];
+			const AOperativeCharacter* Now = Squad->GetLeader();
+			FString Building;
+			int32 InStorey = INDEX_NONE;
+			const bool bIn = Now && Roofs->GetOperativeStorey(*Now, Building, InStorey);
+			Check(Now == Picked, FString::Printf(TEXT("switch: the number key selected %s (leader now %s)"), *Picked->DisplayName.ToString(),
+				Now ? *Now->DisplayName.ToString() : TEXT("-")));
+			Check(bIn && Building == R.BuildingId && InStorey == Storey, FString::Printf(TEXT("switch: %s is in %s on storey %d (expected %s / %d)"),
+				Now ? *Now->DisplayName.ToString() : TEXT("-"), bIn ? *Building : TEXT("-"), InStorey, *R.BuildingId, Storey));
+			Dump(World, Storey, true, *FString::Printf(TEXT("AFTER SWITCH to %s"), Now ? *Now->DisplayName.ToString() : TEXT("-")));
 			Go(R.bShots ? EStep::ShotGame : EStep::Next);
 			return;
 		}
@@ -548,6 +580,10 @@ namespace RoofCutawayStoreySmoke
 			else if (Arg.StartsWith(TEXT("shots=")))
 			{
 				Runner->bShots = Arg.Mid(6) != TEXT("0");
+			}
+			else if (Arg.StartsWith(TEXT("switch=")))
+			{
+				Runner->bSwitch = Arg.Mid(7) != TEXT("0");
 			}
 			else if (Arg.StartsWith(TEXT("dir=")))
 			{
