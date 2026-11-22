@@ -46,6 +46,10 @@
 
 namespace DoorSubsystemLocal
 {
+	/** Dev: 1 = log why a closed door near a walker does not auto-open (designer 2026-11-22: the squad stuck behind shut kit doors). */
+	TAutoConsoleVariable<int32> CVarDoorsDebugAutoOpen(TEXT("Codex.Doors.DebugAutoOpen"), 0,
+		TEXT("1 = log every closed door with a pawn within 2.5 m that does not auto-open (local x / y, level dz, heading, path)"));
+
 	/** Kit leaf instances: within this of the doorway along the wall (past the jambs), across it and above its floor. */
 	constexpr float KitAlongSlackCm = 15.f;
 	constexpr float KitAcrossCm = 25.f;
@@ -618,7 +622,19 @@ int32 UDoorSubsystem::AdoptLeaves()
 		Doors.Add(Door);
 		++Made;
 	}
+	KitDoorOffsets.Reset();
+	KitDoorOffsetSamples = 0;
 	OpenKitDoors = AdoptKitOpenLeaves();
+	{
+		int32 Far = 0;
+		int32 NoPlace = 0;
+		for (const float Offset : KitDoorOffsets)
+		{
+			Far += Offset > 40.f ? 1 : 0;
+			NoPlace += Offset < 0.f ? 1 : 0;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[DoorsDbg] kit open-leaf doors: %d, %d more than 40 cm off the nearest layout doorway, %d with none near"), KitDoorOffsets.Num(), Far, NoPlace);
+	}
 	ChooseSwings();
 	const int32 ShutInner = CloseInteriorDoors();
 	Made += OpenKitDoors;
@@ -719,6 +735,29 @@ int32 UDoorSubsystem::AdoptKitOpenLeaves()
 				Door->Tags.Add(FName(TEXT("door_actor")));
 				Door->Tags.Add(FName(TEXT("door_from_kit_open_leaf")));
 				LiftKitLeaves(*Door);
+				{
+					// Diagnostic (designer 2026-11-22, the squad stuck behind shut kit doors): how far this kit doorway lies from the layout's nearest doorway.
+					float Best = TNumericLimits<float>::Max();
+					const DoorRules::FLayoutPlace* Near = nullptr;
+					for (const DoorRules::FLayoutPlace& Place : LayoutPlaces)
+					{
+						if (!Place.bStair && FMath::Abs(Place.Center.Z - Center.Z) < 150.f && FVector::Dist2D(Place.Center, Center) < Best)
+						{
+							Best = FVector::Dist2D(Place.Center, Center);
+							Near = &Place;
+						}
+					}
+					KitDoorOffsets.Add(Near ? Best : -1.f);
+					if (Near && Best > 40.f && KitDoorOffsetSamples < 8)
+					{
+						++KitDoorOffsetSamples;
+						const FVector2D N = Near->Normal.GetSafeNormal();
+						const FVector2D D = FVector2D(Center - Near->Center);
+						UE_LOG(LogCodexTactics, Display, TEXT("[DoorsDbg] kit door %s (%s f%d) at %s: %.0f cm from layout doorway %s (along its normal %.0f, along the wall %.0f); kit tangent (%.2f, %.2f), doorway normal (%.2f, %.2f), width %.0f vs %.0f"),
+							*Door->GetName(), *BuildingId, Floor, *Center.ToCompactString(), Best, *Near->Id, FVector2D::DotProduct(D, N), FVector2D::DotProduct(D, FVector2D(-N.Y, N.X)),
+							Doorway.Tangent.X, Doorway.Tangent.Y, N.X, N.Y, Doorway.WidthCm, Near->WidthCm);
+					}
+				}
 				Doors.Add(Door);
 				++Made;
 			}
@@ -862,6 +901,20 @@ void UDoorSubsystem::TickAutoOpen(float DeltaTime)
 				break;
 			}
 		}
+		if (!Opener && CVarDoorsDebugAutoOpen.GetValueOnGameThread() != 0)
+		{
+			for (const FPawnSample& Sample : Pawns)
+			{
+				if (FVector::Dist2D(Sample.Feet, Door->GetActorLocation()) < 250.f)
+				{
+					const FVector2D L = Door->ToLocal(Sample.Feet);
+					UE_LOG(LogCodexTactics, Display, TEXT("[DoorsDbg] %s (%s %s, kit %d) closed, %s near: local (%.0f, %.0f) half %.0f depth %.0f, dz %.0f (h %.0f) level %d, zone %d, path %d pts, vel %.0f"),
+						*Door->GetName(), *Door->GetBuildingId(), *Door->GetOpeningId(), Door->Tags.Contains(FName(TEXT("door_from_kit_open_leaf"))) ? 1 : 0,
+						*GetNameSafe(Sample.Pawn), L.X, L.Y, HalfWidth, Tuning.ZoneDepthCm, Sample.Feet.Z - Door->GetActorLocation().Z, Door->GetHeightCm(),
+						Door->IsAtDoorLevel(Sample.Feet) ? 1 : 0, DoorRules::IsInZone(L, HalfWidth, Tuning) ? 1 : 0, Sample.Path.Num(), Sample.Velocity.Size2D());
+				}
+			}
+		}
 		bool bOpen = false;
 		Held[DoorIndex] = DoorRules::AdvanceAutoOpen(Door->GetDoorState(), Held[DoorIndex], Opener != nullptr, DeltaTime, Tuning, bOpen);
 		if (bOpen && Door->OpenDoor(Opener))
@@ -921,9 +974,11 @@ ADoorActor* UDoorSubsystem::FindClickedDoor(const FHitResult& Hit) const
 		{
 			continue;
 		}
-		if (Door->IsOpen() && (Door->IsNearOpenLeaf(Hit.ImpactPoint) || (bRay && Door->IsRayOnOpenLeaf(Hit.TraceStart, Hit.ImpactPoint))))
+		// An open leaf (its collision is off): only a ray through the leaf itself. Designer 2026-11-22: the floor beside an open leaf is a
+		// plain move - "the formation got stuck going to the next room" came with a "close the door" order on every room click by a leaf.
+		if (Door->IsOpen() && bRay && Door->IsRayOnOpenLeaf(Hit.TraceStart, Hit.ImpactPoint))
 		{
-			return Door; // an open leaf (its collision is off): the ray through it or the floor by it
+			return Door;
 		}
 		if (!Door->IsOpen() && Door->IsAtDoorLevel(Hit.ImpactPoint)
 			&& DoorRules::IsInShutDoorwaySnap(Door->ToLocal(Hit.ImpactPoint), Door->GetWidthCm() * 0.5f, DoorSubsystemLocal::ShutDoorSnapCm))

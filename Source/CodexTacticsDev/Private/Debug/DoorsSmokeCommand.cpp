@@ -607,15 +607,22 @@ namespace DoorsSmoke
 			{
 				Check(*State, Cold->IsOpeningOpen(Front->GetBuildingId(), Front->GetOpeningId()), TEXT("B: the cold shelter sees the opening open"));
 			}
-			// C: a click on the floor 20 cm beside the open leaf's middle.
-			const FVector LeafPoint = Front->GetLeafFootprintMid(0) + Front->GetTangent() * 20.f + FVector(0.f, 0.f, 2.f);
-			const bool bFound = Front->IsNearOpenLeaf(LeafPoint);
-			Check(*State, bFound, TEXT("C: a floor point by the open leaf"));
+			// C: a click whose ray goes through the open leaf's middle (designer 2026-11-22: the floor BESIDE an open leaf is a plain move).
+			const FVector LeafPoint = Front->GetLeafFootprintMid(0) + FVector(0.f, 0.f, 2.f);
+			FHitResult LeafClick = FloorHit(LeafPoint);
+			LeafClick.TraceStart = LeafPoint + FVector(0.f, 0.f, 1500.f);
+			const bool bFound = Front->IsRayOnOpenLeaf(LeafClick.TraceStart, LeafClick.ImpactPoint);
+			Check(*State, bFound, TEXT("C: a click ray through the open leaf"));
+			const FVector Beside = Front->GetLeafFootprintMid(0) + Front->GetTangent() * 20.f + FVector(0.f, 0.f, 2.f);
+			FHitResult BesideClick = FloorHit(Beside);
+			BesideClick.TraceStart = Beside + FVector(0.f, 0.f, 1500.f);
+			UDoorSubsystem* DoorsC = World->GetSubsystem<UDoorSubsystem>();
+			Check(*State, DoorsC && DoorsC->FindClickedDoor(BesideClick) != Front, TEXT("C: the floor beside the open leaf is no door click"));
 			if (!bFound)
 			{
 				return Finish(*State, false);
 			}
-			PC->HandlePlayerClick(FloorHit(LeafPoint));
+			PC->HandlePlayerClick(LeafClick);
 			Next(*State, 4);
 			return true;
 		}
@@ -1184,11 +1191,18 @@ namespace DoorsSmoke
 				{
 					bSomebodyNear |= FVector::Dist(Pawn->GetActorLocation(), Door->GetActorLocation()) < 400.f;
 				}
-				if (Door && !bSomebodyNear && Door->Tags.Contains(FName(TEXT("door_from_kit_open_leaf"))) && Door->IsOpen() && Door->GetFloor() == 0)
+				// start_interior_closed (designer 2026-11-22) shuts the kit's open inner doors at the start: take a kit door walkable on BOTH sides
+				// (an inner one) and open it again for the stage (the click must shut it, then open it).
+				if (Door && !bSomebodyNear && Door->Tags.Contains(FName(TEXT("door_from_kit_open_leaf"))) && Door->GetFloor() == 0 && !Door->IsBroken()
+					&& (Door->IsOpen() || Door->GetDoorState() == EDoorLeafState::Closed))
 				{
 					FVector Probe;
-					if (OnNav(World, Door->GetActorLocation() + Door->GetNormal() * 250.f, Probe) || OnNav(World, Door->GetActorLocation() - Door->GetNormal() * 250.f, Probe))
+					if (OnNav(World, Door->GetActorLocation() + Door->GetNormal() * 250.f, Probe) && OnNav(World, Door->GetActorLocation() - Door->GetNormal() * 250.f, Probe))
 					{
+						if (!Door->IsOpen())
+						{
+							Door->ForceState(EDoorLeafState::Open, nullptr);
+						}
 						Open = Door;
 						break;
 					}

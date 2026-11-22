@@ -369,6 +369,9 @@ private:
 	TArray<float> Held;
 	/** TickCloseBehind: per door, how long nobody has been still to come through. */
 	TArray<float> CloseQuiet;
+	/** Diagnostic: each kit open-leaf door's distance to the nearest layout doorway (-1 none). */
+	TArray<float> KitDoorOffsets;
+	int32 KitDoorOffsetSamples = 0;
 	float CloseBehindAccum = 0.f;
 	int32 CloseBehindCount = 0;
 	TArray<FProxy> Proxies;

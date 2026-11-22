@@ -173,6 +173,7 @@ public:
 	const FString& GetOpeningId() const { return Setup_.OpeningId; }
 	int32 GetFloor() const { return Setup_.Floor; }
 	float GetWidthCm() const { return Setup_.WidthCm; }
+	float GetHeightCm() const { return Setup_.HeightCm; }
 	bool WasKicked() const { return bKicked; }
 	bool WasLockShot() const { return bLockShot; }
 
