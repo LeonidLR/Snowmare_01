@@ -17,7 +17,9 @@ smoke OFF vs ON, two runs each: showcase walk legs 19/21, 19/21 vs 17/21, 17/21,
 entries 71, 71 vs 70, 70 of 78; path check 6/6 and 9/9 everywhere. The 2 lost walk legs are S03 / S09 "door_1 -> storey_0": the leg starts at
 the story's LOCKED front door, the route goes round through a ground window and the vault does not resume the walk (`UpdateVault` resumes
 only when the target lies within ~84 deg of the vault direction - pre-existing vault rule, exposed by real locked doors). Open: the 14 kit
-doors without a lifted leaf (entrance modules, kit_dress tags), the vault resume, keys as loot, kick / hand clips, enemies vs doors.
+doors without a lifted leaf (12 entrances: `SM_SH_Ent_Door_Steel` is one frame + leaf module, pivot 165 cm off the doorway centre - needs a
+leaf-only instance from kit_dress; 2 balcony escape doors: no kit leaf) stay static on the dressed map; the vault resume; keys as loot;
+kick / hand / key clips; enemies vs doors; door states in saves. Door actors carry the leaf's building= / floor= tags (storey cutaway).
 
 **Storey cutaway (`claude/bgen-test`, 2026-11-22; designer bug, top priority: "in the dressed khrushchevka showcase I cannot see what
 happens inside").** Root cause: `URoofCutawaySubsystem` only cut static meshes whose bottom is above the selected man's head, found by an
