@@ -1668,6 +1668,13 @@ private:
 		TMap<TWeakObjectPtr<AOperativeCharacter>, float> SwapCooldown;
 		/** Entry order: the queue last logged. */
 		FString LastLoggedQueue;
+		/**
+		 * The leader makes room (FFormationConfinedTuning::LeaderRoomCm): a follower by the door found the standing leader first on his way with
+		 * no side to step round him (set by UpdateSectorFollower, read by the next ApplyFormationConfined).
+		 */
+		bool bLeaderRoomRequest = false;
+		/** ... and the leader's move-order serial he last made room for (once per player order). */
+		TOptional<uint32> LeaderRoomSerial;
 	};
 	FFormationConfinedState Confined;
 	/** Crowd separation + obstacle avoidance of Operative on / off (UCrowdFollowingComponent; the rule's own switch, Confined.NoSeparation). */

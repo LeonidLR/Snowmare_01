@@ -590,6 +590,115 @@ bool FFormationConfinedQueueDealTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_CONFINED_TEST(FFormationConfinedDoorMouthTest, "Queue.DoorMouthManDealtFromTheDoor")
+bool FFormationConfinedDoorMouthTest::RunTest(const FString&)
+{
+	// The walk smoke's STUCK hall legs (S01 / S07 2026-11-22): the first man stands in the door mouth (5 cm from the inside entry point); his
+	// own straight navmesh line to every place off the door axis is cut by the jamb. Counted as through the door he was dealt from there - the
+	// shallowest place on the door axis - and stood in the door for good, the second man behind him on the landing. With the door mouth rule
+	// he is dealt from the inside entry point: the deepest place, out of the door mouth; the second man (the last) gets a spaced place too.
+	using namespace FormationConfinedTestLocal;
+	FFormationConfinedTuning Tuning;
+	const FFormationConfinedPocket Pocket = RoomPocket(FVector2D(40.0, 0.0), 80.f, 90.f, 45.f, Tuning);
+	FFormationConfinedQueue Queue;
+	Queue.EntryInside = FVector2D(-70.0, 0.0);
+	const FVector2D DoorSide(-130.0, 0.0);
+	FFormationConfinedSlot Mouth = Slot(FVector2D(-330.0, 0.0), FVector2D(-75.0, 5.0));
+	Mouth.ToEntryCm = 5.f;
+	FFormationConfinedSlot Behind = Slot(FVector2D(-480.0, 0.0), FVector2D(-200.0, 0.0));
+	Behind.ToEntryCm = 130.f;
+	FFormationConfinedLineTests Lines;
+	// The jamb: from the door (x < -60) no straight line reaches a place off the door axis (|y| > 30).
+	Lines.Straight = [](const FVector2D& From, const FVector2D& To) { return !(From.X < -60.0 && FMath::Abs(To.Y) > 30.0); };
+	const TArray<FFormationConfinedSlot> Slots{ Mouth, Behind };
+
+	FFormationConfinedTuning Before = Tuning;
+	Before.DoorMouthCm = 0.f;
+	const FFormationConfinedResult Old = FormationConfinedRules::CompressSlots(Pocket, Slots, TOptional<FVector2D>(), DoorSide, Before, &Lines, &Queue);
+	TestTrue(*FString::Printf(TEXT("door_mouth_cm 0 (the rule before): the man in the door is dealt a door-mouth place (%.0f, %.0f)"), Old.Places[0].X, Old.Places[0].Y),
+		Old.Replaced[0] && FVector2D::Distance(Old.Places[0], Queue.EntryInside) < Tuning.DoorMouthCm);
+
+	const FFormationConfinedResult Result = FormationConfinedRules::CompressSlots(Pocket, Slots, TOptional<FVector2D>(), DoorSide, Tuning, &Lines, &Queue);
+	TestTrue(TEXT("queued, both placed"), Result.bQueued && Result.ReplacedCount == 2);
+	TestFalse(TEXT("the man in the door mouth is not through (not locked)"), Result.Locked[0]);
+	TestEqual(TEXT("he is first"), Result.Rank[0], 0);
+	const double Depth0 = FVector2D::Distance(Result.Places[0], Queue.EntryInside);
+	const double Depth1 = FVector2D::Distance(Result.Places[1], Queue.EntryInside);
+	TestTrue(*FString::Printf(TEXT("his place (%.0f, %.0f) depth %.0f lies out of the door mouth"), Result.Places[0].X, Result.Places[0].Y, Depth0),
+		Depth0 >= Tuning.DoorMouthCm);
+	TestTrue(*FString::Printf(TEXT("he goes deepest (%.0f >= %.0f)"), Depth0, Depth1), Depth0 >= Depth1 - 0.01);
+	TestTrue(TEXT("spaced"), MinPairDistance(Result.Places, Pocket.Center) >= Tuning.MinSpacingCm - 0.1f);
+	for (const FVector2D& Place : Result.Places)
+	{
+		TestTrue(*FString::Printf(TEXT("(%.0f, %.0f) inside"), Place.X, Place.Y), FormationConfinedRules::IsInside(Pocket, Place, Tuning));
+	}
+
+	// Through the door (out of the mouth, on his place's way) he keeps his place, locked, as before.
+	FFormationConfinedSlot In = Slot(FVector2D(-330.0, 0.0), FMath::Lerp(Queue.EntryInside, Result.Places[0], 0.6));
+	In.Held = Result.Places[0];
+	In.ToEntryCm = 0.f;
+	const FFormationConfinedResult Kept = FormationConfinedRules::CompressSlots(Pocket, TArray<FFormationConfinedSlot>{ In, Behind }, TOptional<FVector2D>(),
+		DoorSide, Tuning, &Lines, &Queue);
+	TestTrue(TEXT("out of the mouth: locked on his place"), Kept.Locked[0] && Kept.Places[0].Equals(Result.Places[0], 1e-3));
+
+	// A door-mouth place goes only to the last man: alone (the last) he may take the entry point itself when nothing else is free.
+	FFormationConfinedTuning Tight = Tuning;
+	Tight.MinRadiusCm = 0.f;
+	FFormationConfinedPocket Small = RoomPocket(FVector2D(40.0, 0.0), 80.f, 90.f, 45.f, Tight);
+	const FFormationConfinedResult Three = FormationConfinedRules::CompressSlots(Small, TArray<FFormationConfinedSlot>{ Mouth, Behind,
+		Slot(FVector2D(-630.0, 0.0), FVector2D(-300.0, 0.0)) }, TOptional<FVector2D>(), DoorSide, Tight, &Lines, &Queue);
+	for (int32 Each = 0; Each < 3; ++Each)
+	{
+		if (Three.Replaced[Each] && Three.Rank[Each] != INDEX_NONE && Three.Rank[Each] < 2)
+		{
+			TestTrue(*FString::Printf(TEXT("rank %d (%.0f, %.0f): not in the door mouth"), Three.Rank[Each] + 1, Three.Places[Each].X, Three.Places[Each].Y),
+				FVector2D::Distance(Three.Places[Each], Queue.EntryInside) >= Tight.DoorMouthCm);
+		}
+	}
+	return true;
+}
+
+FORMATION_CONFINED_TEST(FFormationConfinedLeaderRoomTest, "Queue.LeaderMakesRoom")
+bool FFormationConfinedLeaderRoomTest::RunTest(const FString&)
+{
+	// The walk smoke's S01 / S07 hall (2026-11-22): the inside entry point (2375, -5310), the leader standing at his click (2375, -5240) 70 cm
+	// in; the first man in at the door mouth (2376, -5329) walking to his corridor place (2321, -5096) has the leader first on his way.
+	using namespace FormationConfinedTestLocal;
+	FFormationConfinedTuning Tuning;
+	const FVector2D In(2375.0, -5310.0);
+	const FVector2D Leader(2375.0, -5240.0);
+	const FVector2D Mouth(2376.0, -5329.0);
+	const FVector2D Place(2321.0, -5096.0);
+	const TArray<FVector2D> Bodies{ Leader, FVector2D(2440.0, -5400.0) };
+	TestEqual(TEXT("the leader is the first body on his way"), FormationConfinedRules::FirstBodyOnWay(Mouth, Place, Bodies, Tuning), 0);
+	TestEqual(TEXT("nobody on a way clear of bodies"), FormationConfinedRules::FirstBodyOnWay(Mouth, FVector2D(2500.0, -5329.0), Bodies, Tuning), INDEX_NONE);
+	// StepRoundBody walks round that same body (no walkable test: a side point).
+	const TOptional<FVector2D> Round = FormationConfinedRules::StepRoundBody(Mouth, Place, Bodies, Tuning);
+	TestTrue(TEXT("the step round is beside the leader"), Round.IsSet() && FMath::IsNearlyEqual(FVector2D::Distance(Round.GetValue(), Leader),
+		FMath::Max(Tuning.BodyClearCm, Tuning.MinSpacingCm) + FormationConfinedRules::StepRoundMarginCm, 0.1));
+	// No walkable side (the jamb, the hall wall): nothing - the runtime asks the leader to make room.
+	TestFalse(TEXT("no walkable side: no step"), FormationConfinedRules::StepRoundBody(Mouth, Place, Bodies, Tuning, [](const FVector2D&) { return false; }).IsSet());
+
+	// The leader steps straight away from the inside entry point to leader_room_cm from it (60 cm here: 70 -> 130).
+	const TOptional<FVector2D> Step = FormationConfinedRules::LeaderRoomStep(Leader, In, 400.f, Tuning);
+	TestTrue(TEXT("he steps"), Step.IsSet());
+	if (Step.IsSet())
+	{
+		TestTrue(*FString::Printf(TEXT("to (%.0f, %.0f), %.0f cm from the door"), Step->X, Step->Y, FVector2D::Distance(Step.GetValue(), In)),
+			FMath::IsNearlyEqual(FVector2D::Distance(Step.GetValue(), In), Tuning.LeaderRoomCm, 0.5) && FMath::IsNearlyEqual(Step->X, Leader.X, 0.5));
+	}
+	// At most leader_room_max_cm, at most the free navmesh distance less the wall margin.
+	const TOptional<FVector2D> Far = FormationConfinedRules::LeaderRoomStep(FVector2D(2375.0, -5300.0), In, 400.f, Tuning);
+	TestTrue(TEXT("capped at leader_room_max_cm"), Far.IsSet() && FMath::IsNearlyEqual(FVector2D::Distance(Far.GetValue(), FVector2D(2375.0, -5300.0)), Tuning.LeaderRoomMaxCm, 0.5));
+	const TOptional<FVector2D> Wall = FormationConfinedRules::LeaderRoomStep(Leader, In, 40.f, Tuning);
+	TestTrue(TEXT("capped by the free distance"), Wall.IsSet() && FMath::IsNearlyEqual(FVector2D::Distance(Wall.GetValue(), Leader), 40.0 - Tuning.WallMarginCm, 0.5));
+	TestFalse(TEXT("no room ahead: no step"), FormationConfinedRules::LeaderRoomStep(Leader, In, 15.f, Tuning).IsSet());
+	TestFalse(TEXT("already far enough from the door: no step"), FormationConfinedRules::LeaderRoomStep(FVector2D(2375.0, -5175.0), In, 400.f, Tuning).IsSet());
+	Tuning.LeaderRoomCm = 0.f;
+	TestFalse(TEXT("leader_room_cm 0: off"), FormationConfinedRules::LeaderRoomStep(Leader, In, 400.f, Tuning).IsSet());
+	return true;
+}
+
 FORMATION_CONFINED_TEST(FFormationConfinedQueueSwitchTest, "Queue.SwitchOffIsTheCostRule")
 bool FFormationConfinedQueueSwitchTest::RunTest(const FString&)
 {
@@ -688,6 +797,9 @@ bool FFormationConfinedTuningTest::RunTest(const FString&)
 	TestEqual(TEXT("block_radius_cm"), FromFile.BlockRadiusCm, Defaults.BlockRadiusCm);
 	TestEqual(TEXT("block_cooldown_s"), FromFile.BlockCooldownSeconds, Defaults.BlockCooldownSeconds);
 	TestEqual(TEXT("body_clear_cm"), FromFile.BodyClearCm, Defaults.BodyClearCm);
+	TestEqual(TEXT("door_mouth_cm"), FromFile.DoorMouthCm, Defaults.DoorMouthCm);
+	TestEqual(TEXT("leader_room_cm"), FromFile.LeaderRoomCm, Defaults.LeaderRoomCm);
+	TestEqual(TEXT("leader_room_max_cm"), FromFile.LeaderRoomMaxCm, Defaults.LeaderRoomMaxCm);
 	const TSharedRef<FJsonObject> QueueOff = MakeShared<FJsonObject>();
 	QueueOff->SetNumberField(TEXT("entry_queue"), 0.0);
 	QueueOff->SetNumberField(TEXT("block_radius_cm"), 10.0);
