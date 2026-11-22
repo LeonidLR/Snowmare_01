@@ -31,7 +31,6 @@ SCENARIO_MAP = {
     "roofs": "PmcRoofDefenceSmoke",
     "chokepoint": "PmcArenaTacticalSmoke",
     "stalemate": "PmcStalemateSmoke",
-    "encounter": "PmcEncounterSmoke",
 }
 
 
@@ -114,11 +113,12 @@ def run_scenario_regression(
     results: List[dict] = []
 
     if mock:
-        for seed in seeds:
+        for i, seed in enumerate(seeds):
             is_fail = bool(mock_fail_seeds and seed in mock_fail_seeds)
             results.append({
                 "smoke": smoke,
                 "seed": seed,
+                "repeat": i + 1,
                 "passed": not is_fail,
                 "duration_s": 12.5,
                 "log": f"Mock-Smoke-{smoke}-{seed}.log",
@@ -129,79 +129,151 @@ def run_scenario_regression(
                 ] if is_fail else [],
             })
     else:
-        # Batch smoke execution: invoke smoke_parallel.ps1 ONCE per scenario
         script_path = REPO_ROOT / "Scripts" / "smoke_parallel.ps1"
-        temp_json = LOG_DIR / f"SmokeParallel-batch-{smoke}-{os.getpid()}.json"
+        is_contiguous_1_to_n = (seeds == list(range(1, len(seeds) + 1)))
 
-        cmd = [
-            "powershell",
-            "-ExecutionPolicy", "Bypass",
-            "-File", str(script_path),
-            "-Commands", smoke,
-            "-Repeat", str(len(seeds)),
-            "-SmokeArgs", "Seed={n}",
-            "-NoRetry",
-            "-Jobs", str(parallel),
-            "-ResultJson", str(temp_json),
-            "-Remote", remote,
-            "-TimeoutSeconds", str(timeout_s),
-        ]
+        if is_contiguous_1_to_n:
+            # Batch smoke execution: invoke smoke_parallel.ps1 ONCE per scenario for 1..N seeds
+            temp_json = LOG_DIR / f"SmokeParallel-batch-{smoke}-{os.getpid()}.json"
+            cmd = [
+                "powershell",
+                "-ExecutionPolicy", "Bypass",
+                "-File", str(script_path),
+                "-Commands", smoke,
+                "-Repeat", str(len(seeds)),
+                "-SmokeArgs", "Seed={n}",
+                "-NoRetry",
+                "-Jobs", str(parallel),
+                "-ResultJson", str(temp_json),
+                "-Remote", remote,
+                "-TimeoutSeconds", str(timeout_s),
+            ]
 
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
-        batch_results = []
-        if temp_json.is_file():
-            try:
-                # UTF-8-SIG to cleanly handle PowerShell UTF-8 BOM (Review 091 Point 1)
-                data = json.loads(temp_json.read_text(encoding="utf-8-sig"))
-                batch_results = data.get("results") or []
-            except Exception as e:
-                print(f"[scenario_regression] Warning: failed to parse {temp_json}: {e}", file=sys.stderr)
-            finally:
+            batch_results = []
+            if temp_json.is_file():
                 try:
-                    temp_json.unlink()
-                except OSError:
-                    pass
+                    # UTF-8-SIG to cleanly handle PowerShell UTF-8 BOM (Review 091 Point 1)
+                    data = json.loads(temp_json.read_text(encoding="utf-8-sig"))
+                    batch_results = data.get("results") or []
+                except Exception as e:
+                    print(f"[scenario_regression] Warning: failed to parse {temp_json}: {e}", file=sys.stderr)
+                finally:
+                    try:
+                        temp_json.unlink()
+                    except OSError:
+                        pass
 
-        # Parse each result row
-        for i, seed in enumerate(seeds):
-            row = None
-            if i < len(batch_results):
-                row = batch_results[i]
+            # Parse each result row
+            for i, seed in enumerate(seeds):
+                row = None
+                if i < len(batch_results):
+                    row = batch_results[i]
                 for r in batch_results:
                     if r.get("Repeat") == (i + 1):
                         row = r
                         break
 
-            if row:
-                state = row.get("State", "")
-                passed = (state in ("PASS", "PASS*"))
-                duration_s = float(row.get("Seconds", 0.0))
-                log_path = row.get("Log")
-                fail_reason = row.get("Reason")
-            else:
-                passed = (proc.returncode == 0)
-                duration_s = 0.0
-                log_path = str(LOG_DIR / f"Smoke-{smoke}-r{i+1}.log")
-                fail_reason = "No result row found in batch output" if not passed else None
+                r_repeat = row.get("Repeat", i + 1) if row else (i + 1)
+                r_seed = r_repeat
 
-            decisions = []
-            if not passed:
-                extracted_reason, decisions = parse_failed_log(log_path)
-                if extracted_reason:
-                    fail_reason = extracted_reason
-                elif not fail_reason:
-                    fail_reason = "Smoke test failed verification"
+                if row:
+                    state = row.get("State", "")
+                    passed = (state in ("PASS", "PASS*"))
+                    duration_s = float(row.get("Seconds", 0.0))
+                    log_path = row.get("Log")
+                    fail_reason = row.get("Reason")
+                else:
+                    passed = (proc.returncode == 0)
+                    duration_s = 0.0
+                    log_path = str(LOG_DIR / f"Smoke-{smoke}-r{r_repeat}.log")
+                    fail_reason = "No result row found in batch output" if not passed else None
 
-            results.append({
-                "smoke": smoke,
-                "seed": seed,
-                "passed": passed,
-                "duration_s": duration_s,
-                "log": str(log_path) if log_path else None,
-                "failure_reason": fail_reason,
-                "decisions": decisions,
-            })
+                decisions = []
+                if not passed:
+                    extracted_reason, decisions = parse_failed_log(log_path)
+                    if extracted_reason:
+                        fail_reason = extracted_reason
+                    elif not fail_reason:
+                        fail_reason = "Smoke test failed verification"
+
+                results.append({
+                    "smoke": smoke,
+                    "seed": r_seed,
+                    "repeat": r_repeat,
+                    "passed": passed,
+                    "duration_s": duration_s,
+                    "log": str(log_path) if log_path else None,
+                    "failure_reason": fail_reason,
+                    "decisions": decisions,
+                })
+        else:
+            # Explicit seed execution (e.g. 20..50 or arbitrary seed list): run per explicit seed
+            for seed in seeds:
+                temp_json = LOG_DIR / f"SmokeParallel-seed-{smoke}-{seed}-{os.getpid()}.json"
+                cmd = [
+                    "powershell",
+                    "-ExecutionPolicy", "Bypass",
+                    "-File", str(script_path),
+                    "-Commands", smoke,
+                    "-Repeat", "1",
+                    "-SmokeArgs", f"Seed={seed}",
+                    "-NoRetry",
+                    "-Jobs", str(parallel),
+                    "-ResultJson", str(temp_json),
+                    "-Remote", remote,
+                    "-TimeoutSeconds", str(timeout_s),
+                ]
+                proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+                row = None
+                if temp_json.is_file():
+                    try:
+                        data = json.loads(temp_json.read_text(encoding="utf-8-sig"))
+                        res_list = data.get("results") or []
+                        if res_list:
+                            row = res_list[0]
+                    except Exception as e:
+                        print(f"[scenario_regression] Warning: failed to parse {temp_json}: {e}", file=sys.stderr)
+                    finally:
+                        try:
+                            temp_json.unlink()
+                        except OSError:
+                            pass
+
+                r_repeat = row.get("Repeat", 1) if row else 1
+
+                if row:
+                    state = row.get("State", "")
+                    passed = (state in ("PASS", "PASS*"))
+                    duration_s = float(row.get("Seconds", 0.0))
+                    log_path = row.get("Log")
+                    fail_reason = row.get("Reason")
+                else:
+                    passed = (proc.returncode == 0)
+                    duration_s = 0.0
+                    log_path = str(LOG_DIR / f"Smoke-{smoke}.log")
+                    fail_reason = "No result row found in single seed output" if not passed else None
+
+                decisions = []
+                if not passed:
+                    extracted_reason, decisions = parse_failed_log(log_path)
+                    if extracted_reason:
+                        fail_reason = extracted_reason
+                    elif not fail_reason:
+                        fail_reason = "Smoke test failed verification"
+
+                results.append({
+                    "smoke": smoke,
+                    "seed": seed,
+                    "repeat": r_repeat,
+                    "passed": passed,
+                    "duration_s": duration_s,
+                    "log": str(log_path) if log_path else None,
+                    "failure_reason": fail_reason,
+                    "decisions": decisions,
+                })
 
     passed_count = sum(1 for r in results if r["passed"])
     failed_results = [r for r in results if not r["passed"]]

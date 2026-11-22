@@ -75,7 +75,11 @@ class TestTrainingGate(unittest.TestCase):
         self.assertFalse(gate_res["checks"]["G2_metric_liveness"]["passed"])
 
     def test_gate_passes_healthy_probe(self):
-        """Healthy probe matching codex.pmc_arena_behaviour/1 schema must pass all liveness checks."""
+        """Healthy probe matching codex.pmc_arena_behaviour/1 schema must pass all liveness checks.
+
+        Review 091 Point a: Real layout has core stats on sides.A, behaviour in round.behaviour,
+        and objective_win derived canonically via ArenaAdapter from winner + end_reason + role.
+        """
         used_metrics = extract_used_metrics(self.config)
         healthy_rounds = []
         for i in range(6):
@@ -86,28 +90,23 @@ class TestTrainingGate(unittest.TestCase):
                 "flanks_completed": {"value": 1.0 + (i % 2), "unit": "count"},
                 "moves": {"value": 4.0 + v, "unit": "count"},
                 "ambush_success": {"value": 0.15 + (v * 0.05), "unit": "ratio"},
-                "flanks_succeeded": {"value": 1.0 + (i % 2), "unit": "count"},
-                "suppression_s": {"value": 5.0 + v * 2.0, "unit": "s"},
-                "ambushes": {"value": 1.0 + (i % 2), "unit": "count"},
-                "retreats_survived": {"value": float(i % 2), "unit": "count"},
-                "heals": {"value": float(i % 3), "unit": "count"},
-                "damage_from_concealment": {"value": 20.0 + v * 5.0, "unit": "hp"},
-                "first_strike": {"value": float(i % 2), "unit": "flag"},
-                "objective_win": {"value": float((i + 1) % 2), "unit": "flag"},
-                "strikes_unobserved": {"value": float(i % 2), "unit": "count"},
-                "friendly_fire": {"value": 0.0, "unit": "count"},
-                "stuck_events": {"value": 0.0, "unit": "count"},
             }
             round_obj = {
                 "index": i + 1,
                 "scenario": "tactical",
                 "duration_s": 80.0 + v * 5.0,
+                "winner": "A" if (i % 2 == 0) else "B",
+                "end_reason": "objective" if (i % 2 == 0) else "elimination",
                 "defence": {
                     "overwatch_kills": 1 if i % 2 == 0 else 2,
                     "guard_share": 0.6 + (v * 0.03),
                     "spread_m": 20.0 + v,
                     "shared_cover_pairs": i,
                     "objective_share": 0.5 + (v * 0.05),
+                },
+                "behaviour": {
+                    "schema": "codex.pmc_arena_behaviour/1",
+                    "metrics": behaviour_metrics,
                 },
                 "sides": {
                     "A": {
@@ -116,10 +115,16 @@ class TestTrainingGate(unittest.TestCase):
                         "damage_dealt": 100.0 + v * 20.0,
                         "hp_lost": 40.0 + v * 10.0,
                         "survivors": 2 + (i % 2),
-                        "behaviour": {
-                            "schema": "codex.pmc_arena_behaviour/1",
-                            "metrics": behaviour_metrics,
-                        },
+                        "flanks_succeeded": 1.0 + (i % 2),
+                        "suppression_s": 5.0 + v * 2.0,
+                        "ambushes": 1.0 + (i % 2),
+                        "retreats_survived": float(i % 2),
+                        "heals": float(i % 3),
+                        "damage_from_concealment": 20.0 + v * 5.0,
+                        "first_strike": float(i % 2),
+                        "strikes_unobserved": float(i % 2),
+                        "friendly_fire": 0.0,
+                        "stuck_events": 0.0,
                     },
                     "B": {"role": "defender", "kills": 1, "damage_dealt": 50.0, "hp_lost": 150.0, "survivors": 1},
                 },
@@ -251,19 +256,44 @@ class TestTrainingGate(unittest.TestCase):
         pass_ok, issues_ok = check_smoke_health(sweep_pass)
         self.assertTrue(pass_ok, f"All-green sweep should pass, issues: {issues_ok}")
 
+        # Repeated runs of the same smoke with mixed states (Review 091 Point c: keep worst state)
+        sweep_repeated = {
+            "results": [
+                {"Name": "PmcCrossroadsSmoke", "State": "PASS"},
+                {"Name": "PmcRoofDefenceSmoke", "State": "FAIL", "Repeat": 1},
+                {"Name": "PmcRoofDefenceSmoke", "State": "PASS", "Repeat": 2},
+                {"Name": "PmcStalemateSmoke", "State": "PASS"},
+            ]
+        }
+        pass_rep, issues_rep = check_smoke_health(sweep_repeated)
+        self.assertFalse(pass_rep, "Smoke health must fail when a repeated run of PmcRoofDefenceSmoke failed")
+        self.assertTrue(any("PmcRoofDefenceSmoke" in i for i in issues_rep))
+
     def test_night_trainer_check_gate_cli(self):
-        """CLI invocation of night_trainer.py --check-gate exits 1 when gate is blocked."""
-        trainer_script = TRAINER_DIR / "night_trainer.py"
-        cmd = [
-            sys.executable,
-            str(trainer_script),
-            "--check-gate",
-            "--config", str(self.config_path),
-            "--gate-probe", str(self.dead_metrics_fixture),
-        ]
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        self.assertEqual(proc.returncode, 1, "night_trainer.py --check-gate must exit 1 when dead metrics exist")
-        self.assertIn("TRAINING GATE: BLOCKED", proc.stdout)
+        """CLI invocation of night_trainer.py --check-gate exits 1 when gate is blocked.
+
+        Review 091 Point d: Pass a temporary --repo-root so the CLI test never modifies
+        or unlinks a live Saved/Trainer/gate_pass.json in the repository.
+        """
+        import tempfile
+        import shutil
+
+        temp_dir = tempfile.mkdtemp(prefix="test_gate_cli_")
+        try:
+            trainer_script = TRAINER_DIR / "night_trainer.py"
+            cmd = [
+                sys.executable,
+                str(trainer_script),
+                "--check-gate",
+                "--repo-root", temp_dir,
+                "--config", str(self.config_path),
+                "--gate-probe", str(self.dead_metrics_fixture),
+            ]
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.assertEqual(proc.returncode, 1, "night_trainer.py --check-gate must exit 1 when dead metrics exist")
+            self.assertIn("TRAINING GATE: BLOCKED", proc.stdout)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     def test_stale_gate_pass_deleted_on_blocked(self):
         """When gate is blocked, any stale gate_pass.json must be deleted to prevent false starts."""

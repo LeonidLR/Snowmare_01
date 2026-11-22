@@ -16,6 +16,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .adapter import ArenaAdapter
+
 
 def extract_used_metrics(config: dict) -> Set[str]:
     """Extract all metric identifiers used by fitness bonuses/penalties and QD axes."""
@@ -74,31 +76,59 @@ def _extract_node_value(node: Any) -> Optional[float]:
     return None
 
 
+def build_probe_rows(config: dict, probe_data: Optional[dict]) -> List[dict]:
+    """Parse probe rounds into canonical rows using ArenaAdapter (Review 091 Point a)."""
+    if not probe_data:
+        return []
+    if isinstance(probe_data, list):
+        return probe_data
+    rounds = probe_data.get("rounds")
+    if not isinstance(rounds, list):
+        return []
+
+    try:
+        adapter = ArenaAdapter(
+            config.get("arena", {}),
+            repo_root=".",
+            close_range_cfg=config.get("fitness", {}).get("close_range"),
+        )
+        rows = adapter.parse_doc(probe_data)
+        # Preserve defence and raw references so defence metrics (guard_share, spread_m) are accessible
+        for idx, row in enumerate(rows):
+            if idx < len(rounds) and isinstance(rounds[idx], dict):
+                raw_r = rounds[idx]
+                if "defence" in raw_r and "defence" not in row:
+                    row["defence"] = raw_r["defence"]
+                row["_raw_round"] = raw_r
+        return rows
+    except Exception:
+        return rounds
+
+
 def get_metric_value_from_round(rnd: dict, metric: str, side: str = "A") -> Any:
-    """Retrieve the value of a metric from round or defence block or sides block.
+    """Retrieve the value of a metric from a canonical row or raw round dictionary.
 
     Checks:
-    1. defence block: numeric or {'value': X}
-    2. sides.<side>.behaviour.metrics.<k>.value or sides.<side>.behaviour.<k>
-    3. round.behaviour.metrics.<k>.value or round.behaviour.<k>
-    4. sides.<side> direct stats: damage_dealt, hp_lost, kills, survivors
+    1. Direct key on canonical row (e.g. objective_win, damage_dealt, kills, survivors)
+    2. rnd.behaviour dictionary (parsed by adapter or raw)
+    3. defence block (either on row or in raw round)
+    4. sides.<side> direct stats or candidate behaviour
     5. top-level round[metric]
     """
-    # 1. Check defence block first
-    defence = rnd.get("defence") or {}
-    if metric in defence:
-        val = _extract_node_value(defence[metric])
+    if not isinstance(rnd, dict):
+        return None
+
+    # 1. Direct key on canonical row (objective_win derived by adapter, damage_dealt, kills, etc.)
+    if metric in rnd and not metric.startswith("_"):
+        val = _extract_node_value(rnd[metric])
         if val is not None:
             return val
-        if defence[metric] is None:
+        if rnd[metric] is None:
             return None
 
-    # 2. Check candidate side (A) behaviour
-    sides = rnd.get("sides") or {}
-    side_info = sides.get(side) or {}
-    beh = side_info.get("behaviour")
+    # 2. Check behaviour dictionary (parsed behaviour from adapter or raw)
+    beh = rnd.get("behaviour")
     if isinstance(beh, dict):
-        # Rich behaviour document format: {"schema": "...", "metrics": {metric: {"value": X}}}
         metrics_dict = beh.get("metrics")
         if isinstance(metrics_dict, dict) and metric in metrics_dict:
             val = _extract_node_value(metrics_dict[metric])
@@ -109,36 +139,49 @@ def get_metric_value_from_round(rnd: dict, metric: str, side: str = "A") -> Any:
             if val is not None:
                 return val
 
-    # 3. Check top-level round behaviour
-    rnd_beh = rnd.get("behaviour")
-    if isinstance(rnd_beh, dict):
-        metrics_dict = rnd_beh.get("metrics")
-        if isinstance(metrics_dict, dict) and metric in metrics_dict:
-            val = _extract_node_value(metrics_dict[metric])
-            if val is not None:
-                return val
-        if metric in rnd_beh:
-            val = _extract_node_value(rnd_beh[metric])
-            if val is not None:
-                return val
-
-    # 4. Direct stats on candidate side
-    if metric in side_info:
-        val = _extract_node_value(side_info[metric])
+    # 3. Check defence block first (from row or raw round)
+    defence = rnd.get("defence") or {}
+    if not defence and "_raw_round" in rnd:
+        defence = rnd["_raw_round"].get("defence") or {}
+    if metric in defence:
+        val = _extract_node_value(defence[metric])
         if val is not None:
             return val
-        if side_info[metric] is None:
+        if defence[metric] is None:
             return None
 
-    # Core round/side scalar stats (without fake proxies)
-    if metric == "damage_dealt":
-        return _extract_node_value(side_info.get("damage_dealt"))
-    elif metric in ("damage_taken", "hp_lost"):
-        return _extract_node_value(side_info.get("hp_lost"))
-    elif metric == "kills":
-        return _extract_node_value(side_info.get("kills"))
-    elif metric == "survivors":
-        return _extract_node_value(side_info.get("survivors"))
+    # 4. Check candidate side (A) on raw round or sides block
+    sides = rnd.get("sides") or {}
+    if not sides and "_raw_round" in rnd:
+        sides = rnd["_raw_round"].get("sides") or {}
+    side_info = sides.get(side) or {}
+    if isinstance(side_info, dict):
+        side_beh = side_info.get("behaviour")
+        if isinstance(side_beh, dict):
+            metrics_dict = side_beh.get("metrics")
+            if isinstance(metrics_dict, dict) and metric in metrics_dict:
+                val = _extract_node_value(metrics_dict[metric])
+                if val is not None:
+                    return val
+            if metric in side_beh:
+                val = _extract_node_value(side_beh[metric])
+                if val is not None:
+                    return val
+        if metric in side_info:
+            val = _extract_node_value(side_info[metric])
+            if val is not None:
+                return val
+            if side_info[metric] is None:
+                return None
+        # Specific mappings
+        if metric == "damage_dealt":
+            return _extract_node_value(side_info.get("damage_dealt"))
+        elif metric in ("damage_taken", "hp_lost"):
+            return _extract_node_value(side_info.get("hp_lost"))
+        elif metric == "kills":
+            return _extract_node_value(side_info.get("kills"))
+        elif metric == "survivors":
+            return _extract_node_value(side_info.get("survivors"))
 
     # 5. Check top-level round
     if metric in rnd:
@@ -237,6 +280,19 @@ def check_baseline_sufficiency(baseline_data: Optional[dict], min_rounds_per_sce
     return passed, issues
 
 
+def _is_worse_state(new_state: str, cur_state: str) -> bool:
+    """Return True if new_state is more severe/worse than cur_state (Review 091 Point c)."""
+    order = {
+        "FAIL": 0, "CRASH": 0, "TIMEOUT": 0, "ERROR": 0,
+        "KNOWN_FAIL": 1, "KNOWN-FAIL": 1,
+        "PASS*": 2,
+        "PASS": 3,
+    }
+    new_rank = order.get(str(new_state).upper(), 0)
+    cur_rank = order.get(str(cur_state).upper(), 3)
+    return new_rank < cur_rank
+
+
 def check_smoke_health(sweep_data: Optional[dict], required_smokes: Optional[List[str]] = None) -> Tuple[bool, List[str]]:
     """G1 Smoke Health: ensure all required foundation/scenario smokes are green in last sweep."""
     if not sweep_data:
@@ -244,14 +300,16 @@ def check_smoke_health(sweep_data: Optional[dict], required_smokes: Optional[Lis
         return False, ["No smoke sweep result data provided or found (sweep-result.json)"]
 
     results = sweep_data.get("results") or sweep_data.get("smokes") or {}
-    # Convert list of results to dict if needed
+    # Convert list of results to dict, keeping the worst state per smoke name (Review 091 Point c)
     res_dict: Dict[str, str] = {}
     if isinstance(results, list):
         for item in results:
             name = item.get("Name") or item.get("name")
             state = item.get("State") or item.get("state") or ("PASS" if item.get("Pass") else "FAIL")
             if name:
-                res_dict[name.replace("CodexTactics.", "")] = state
+                clean_name = name.replace("CodexTactics.", "")
+                if clean_name not in res_dict or _is_worse_state(state, res_dict[clean_name]):
+                    res_dict[clean_name] = state
     elif isinstance(results, dict):
         res_dict = {k.replace("CodexTactics.", ""): v for k, v in results.items()}
 
@@ -280,7 +338,7 @@ def evaluate_training_gate(
     """Run all training gate checks and return structured diagnostic results."""
     used_metrics = extract_used_metrics(config)
     penalty_metrics = extract_penalty_metrics(config)
-    probe_rounds = (probe_data.get("rounds") if probe_data else None) or []
+    probe_rounds = build_probe_rows(config, probe_data)
 
     g2_pass, g2_reasons = check_metric_liveness(probe_rounds, used_metrics, penalty_metrics=penalty_metrics)
     g3_pass, g3_reasons = check_baseline_sufficiency(baseline_data)

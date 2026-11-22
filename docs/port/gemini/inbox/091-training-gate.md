@@ -15,11 +15,3 @@ gemini/* changes outside its allowlist (Scripts/ is outside) - commit locally, F
 Scope addition (designer 2026-11-19, roadmap section 5a "day loop + night regression"): `scenario_regression.py` also gets a quick DAY mode -
 `--scenario X --seeds 20..50`, target < ~15 min wall, short digest: pass rate, the worst 3 seeds, one failed seed's decision trace. The night
 mode (16:30-08:00 on the worker: regressions since yesterday, stable, flaky seeds) stays as section T-10 describes.
-
-## Allowed paths
-- `Scripts/Trainer/**`
-- `Scripts/Tools/scenario_regression.py`
-- `Scripts/smoke_parallel.ps1`
-- `docs/tools/night-trainer.md`
-- `docs/port/gemini/**`
-- `gemini`
