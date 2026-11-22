@@ -60,7 +60,11 @@ Same as `setup_door_animation.py`:
   the play rate follows the ground speed as today); the crouch walk's -90 deg root yaw is folded into the pelvis. One-shots (`_Start`,
   `_Exit`, `_Aim_Start` / `_End`, `_To_*`, walk start / stop / turn) keep their root track as **mesh travel only** (root motion off, the capsule
   stays on the slot - the M4 fire idle already steps sideways this way); `_Start` is started at the frame that matches the arrival like the
-  M4 enter clips. Offsets -> mesh-space additive on `_Aim_Idle` -> one `AO_CoverIndoor_{Stand,Crouch,CrouchOver}_{L,R}` AimOffset each.
+  M4 enter clips. Offsets -> mesh-space additive on `_Aim_Idle` -> one `AO_CoverIndoor_{StandL,StandR,CrouchL,CrouchR,CrouchL_Over,CrouchR_Over}`
+  AimOffset each (centre = `<Aim idle>_AOZero`). Python cannot rebuild a blend space's triangulation (`ResampleData` is not exposed), so until a
+  C++ `FillAimOffsetSamples` helper exists the AOs are a cross from `FillAimOffset2D` (corners left out; every measured sample is in the JSON).
+  Walk start / stop / turn are baked in place too (lead 2026-11-22: the capsule moves while they play). The mirrored `CrouchR_Aim2_*` set
+  holds the rifle LEFT-handed (a mirror swaps the hands): the weapon must follow the left grip / hand IK while it plays.
 - Grenade clips: the release frame is measured (hand_r peak speed) -> JSON `release_s`, so the grenade leaves the hand on time.
 - `CODEX_COVERINDOOR_DRYRUN=1` measures only; `CODEX_RESET_COVERINDOOR=1` redoes the copies.
 
