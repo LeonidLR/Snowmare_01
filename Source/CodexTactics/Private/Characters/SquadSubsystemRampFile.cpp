@@ -126,22 +126,9 @@ bool USquadSubsystem::IsOperativeOnRamp(const AOperativeCharacter& Operative, FV
 	const FHitResult& Floor = Move->CurrentFloor.HitResult;
 	if (!RampFileRules::IsRampSurface(Floor.ImpactNormal, IsTerrain(Floor.GetComponent()), Config().MinSlopeDeg))
 	{
-		const TOptional<FVector> Stepped = IsStairPiece(Floor.GetComponent()) && GetWorld()
-			? SteppedStairNormal(*GetWorld(), FVector(Operative.GetActorLocation().X, Operative.GetActorLocation().Y, RampFeetZ(Operative)))
-			: TOptional<FVector>();
-		if (!Stepped.IsSet())
-		{
-			return false;
-		}
-		if (OutUphill)
-		{
-			*OutUphill = RampFileRules::UphillOf(Stepped.GetValue());
-		}
-		if (OutRamp)
-		{
-			*OutRamp = Floor.GetComponent();
-		}
-		return true;
+		// Stepped kit stairs are NOT a file ramp: every flight of a stairwell is one component (one file, one uphill axis for a switchback -
+		// men on the two flights waited for each other, FormationStairSmoke S10 2026-11-23). They count only for IsRampUnder (no slot on them).
+		return false;
 	}
 	if (OutUphill)
 	{
