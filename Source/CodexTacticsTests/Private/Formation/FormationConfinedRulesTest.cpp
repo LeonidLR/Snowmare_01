@@ -412,6 +412,221 @@ bool FFormationConfinedHeldTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_CONFINED_TEST(FFormationConfinedEntryOnPathTest, "Queue.EntryInsideTheDoorway")
+bool FFormationConfinedEntryOnPathTest::RunTest(const FString&)
+{
+	// The 2.5 m hall (eroded +-90), its door in the -X wall: the leader's navmesh way in from the landing at (-300, 0). The pocket alone reaches
+	// out through the door (its door rays are a corridor's axis), the throat test (InRoom: here x > -85) keeps the entry point inside the
+	// doorway; the door side lies entry_back_cm back along the way.
+	using namespace FormationConfinedTestLocal;
+	const FFormationConfinedTuning Tuning;
+	const FFormationConfinedPocket Pocket = RoomPocket(FVector2D::ZeroVector, 90.f, 90.f, 45.f, Tuning);
+	const TArray<FVector2D> Way{ FVector2D(-300.0, 0.0), FVector2D(-120.0, 0.0), FVector2D(0.0, 0.0) };
+	const auto InRoom = [](const FVector2D& Point) { return Point.X > -85.0; };
+	const TOptional<FFormationConfinedEntry> Entry = FormationConfinedRules::EntryOnPath(Pocket, Way, Tuning, InRoom);
+	if (!TestTrue(TEXT("an entry on the way in"), Entry.IsSet()))
+	{
+		return false;
+	}
+	TestTrue(*FString::Printf(TEXT("inside (%.0f, %.0f) just inside the doorway"), Entry->Inside.X, Entry->Inside.Y),
+		Entry->Inside.Equals(FVector2D(-80.0, 0.0), 0.5));
+	TestTrue(*FString::Printf(TEXT("door side (%.0f, %.0f) 60 cm back along the way"), Entry->Outside.X, Entry->Outside.Y),
+		Entry->Outside.Equals(FVector2D(-140.0, 0.0), 0.5));
+	// Without the throat test the pocket's own reach decides (out on the landing within the pocket radius).
+	const TOptional<FFormationConfinedEntry> Loose = FormationConfinedRules::EntryOnPath(Pocket, Way, Tuning);
+	TestTrue(TEXT("no throat test: an entry still"), Loose.IsSet() && Loose->Inside.X <= -150.0);
+	// A way that starts inside (no door crossed) or never gets in: none.
+	TestFalse(TEXT("starts inside: none"), FormationConfinedRules::EntryOnPath(Pocket, TArray<FVector2D>{ FVector2D(-40.0, 0.0), FVector2D(0.0, 0.0) }, Tuning, InRoom).IsSet());
+	TestFalse(TEXT("never inside: none"), FormationConfinedRules::EntryOnPath(Pocket, TArray<FVector2D>{ FVector2D(-400.0, 0.0), FVector2D(-300.0, 0.0) }, Tuning, InRoom).IsSet());
+	// A way that crosses the pocket's edge, leaves it (round a pillar) and comes in again: the last run counts.
+	const TArray<FVector2D> Wiggle{ FVector2D(-300.0, 0.0), FVector2D(-60.0, 0.0), FVector2D(-200.0, 0.0), FVector2D(0.0, 0.0) };
+	const TOptional<FFormationConfinedEntry> Again = FormationConfinedRules::EntryOnPath(Pocket, Wiggle, Tuning, InRoom);
+	TestTrue(TEXT("the last run inside"), Again.IsSet() && Again->Inside.Equals(FVector2D(-80.0, 0.0), 0.5));
+	return true;
+}
+
+FORMATION_CONFINED_TEST(FFormationConfinedQueueOrderTest, "Queue.OrderBlockAndStepRound")
+bool FFormationConfinedQueueOrderTest::RunTest(const FString&)
+{
+	// The nearer the door the earlier; the last order holds until the later man is hysteresis nearer.
+	const auto Is = [this](const TCHAR* What, const TArray<int32>& Got, const TArray<int32>& Want)
+	{
+		FString Text;
+		for (const int32 Each : Got)
+		{
+			Text += FString::Printf(TEXT(" %d"), Each);
+		}
+		TestTrue(*FString::Printf(TEXT("%s (got%s)"), What, *Text), Got == Want);
+	};
+	const TArray<float> Keys{ 300.f, 100.f, 200.f };
+	const TArray<int32> NoRank{ INDEX_NONE, INDEX_NONE, INDEX_NONE };
+	Is(TEXT("new men by their way to the door"), FormationConfinedRules::QueueOrder(Keys, NoRank, 40.f), TArray<int32>{ 1, 2, 0 });
+	const TArray<int32> Ranked{ 0, 1, 2 };
+	Is(TEXT("20 cm nearer: the order holds"), FormationConfinedRules::QueueOrder(TArray<float>{ 100.f, 80.f, 300.f }, Ranked, 40.f), TArray<int32>{ 0, 1, 2 });
+	Is(TEXT("50 cm nearer: they flip"), FormationConfinedRules::QueueOrder(TArray<float>{ 100.f, 50.f, 300.f }, Ranked, 40.f), TArray<int32>{ 1, 0, 2 });
+	Is(TEXT("the last man far ahead moves up"), FormationConfinedRules::QueueOrder(TArray<float>{ 200.f, 300.f, 10.f }, Ranked, 40.f), TArray<int32>{ 2, 0, 1 });
+	Is(TEXT("a new man queues behind the ranked ones with a like key"), FormationConfinedRules::QueueOrder(TArray<float>{ 100.f, 90.f }, TArray<int32>{ 0, INDEX_NONE }, 40.f),
+		TArray<int32>{ 0, 1 });
+	// Block detection: a team-mate within the radius, ahead on his way.
+	const FFormationConfinedTuning Tuning;
+	TestTrue(TEXT("a mate 80 cm ahead on his way blocks"), FormationConfinedRules::IsBlockedBy(FVector2D(0.0, 0.0), FVector2D(200.0, 0.0), FVector2D(80.0, 10.0), Tuning));
+	TestFalse(TEXT("behind him: no"), FormationConfinedRules::IsBlockedBy(FVector2D(0.0, 0.0), FVector2D(200.0, 0.0), FVector2D(-80.0, 0.0), Tuning));
+	TestFalse(TEXT("beside his way: no"), FormationConfinedRules::IsBlockedBy(FVector2D(0.0, 0.0), FVector2D(200.0, 0.0), FVector2D(40.0, 80.0), Tuning));
+	TestFalse(TEXT("too far: no"), FormationConfinedRules::IsBlockedBy(FVector2D(0.0, 0.0), FVector2D(400.0, 0.0), FVector2D(150.0, 0.0), Tuning));
+
+	// Step round a standing body (the walk smoke: the first man in clipped the leader standing 60 cm inside the hall door).
+	const FVector2D Here(0.0, 0.0);
+	const FVector2D Place(200.0, 0.0);
+	const TArray<FVector2D> Leader{ FVector2D(100.0, -30.0) };
+	const TOptional<FVector2D> Step = FormationConfinedRules::StepRoundBody(Here, Place, Leader, Tuning);
+	TestTrue(*FString::Printf(TEXT("a body 30 cm off his way: step round on the way's side (%s)"), Step.IsSet() ? *Step->ToString() : TEXT("-")),
+		Step.IsSet() && Step->Equals(FVector2D(100.0, -30.0 + Tuning.MinSpacingCm + FormationConfinedRules::StepRoundMarginCm), 0.01));
+	const auto NotNorth = [](const FVector2D& Point) { return Point.Y < 0.0; };
+	const TOptional<FVector2D> Other = FormationConfinedRules::StepRoundBody(Here, Place, Leader, Tuning, NotNorth);
+	TestTrue(TEXT("that side off the navmesh: the other side"), Other.IsSet() && Other->Y < -30.0 - Tuning.MinSpacingCm);
+	TestFalse(TEXT("a body 70 cm off his way (a graze): clear"), FormationConfinedRules::StepRoundBody(Here, Place, TArray<FVector2D>{ FVector2D(100.0, 70.0) }, Tuning).IsSet());
+	TestFalse(TEXT("a body behind him: clear"), FormationConfinedRules::StepRoundBody(Here, Place, TArray<FVector2D>{ FVector2D(-50.0, 10.0) }, Tuning).IsSet());
+	TestFalse(TEXT("both sides off the navmesh: none"),
+		FormationConfinedRules::StepRoundBody(Here, Place, Leader, Tuning, [](const FVector2D&) { return false; }).IsSet());
+	const TArray<FVector2D> Two{ FVector2D(150.0, 10.0), FVector2D(60.0, -10.0) };
+	const TOptional<FVector2D> Nearest = FormationConfinedRules::StepRoundBody(Here, Place, Two, Tuning);
+	TestTrue(TEXT("two bodies: round the first one ahead"), Nearest.IsSet() && FMath::IsNearlyEqual(Nearest->X, 60.0, 0.01));
+	FFormationConfinedTuning NoStep = Tuning;
+	NoStep.BodyClearCm = 0.f;
+	TestFalse(TEXT("body_clear_cm 0: off"), FormationConfinedRules::StepRoundBody(Here, Place, Leader, NoStep).IsSet());
+	return true;
+}
+
+FORMATION_CONFINED_TEST(FFormationConfinedQueueDealTest, "Queue.FirstThroughTheDoorGoesDeepest")
+bool FFormationConfinedQueueDealTest::RunTest(const FString&)
+{
+	// A 2.3 x 2.5 m hall (eroded +-80 x +-90), its door in the -X wall; the leader stands deep in it at (40, 0) (the pocket centre), his two
+	// men come in from the landing. The man nearer the door (shorter way in) takes the deepest place his way in reaches past the leader, the
+	// next one off the first man's way in; their ways swap -> their places swap; a man through the door keeps his; a block swaps places.
+	using namespace FormationConfinedTestLocal;
+	const FFormationConfinedTuning Tuning;
+	const FFormationConfinedPocket Pocket = RoomPocket(FVector2D(40.0, 0.0), 80.f, 90.f, 45.f, Tuning);
+	TestTrue(TEXT("confined"), FormationConfinedRules::IsConfined(Pocket, Tuning));
+	FFormationConfinedQueue Queue;
+	Queue.EntryInside = FVector2D(-70.0, 0.0);
+	const FVector2D DoorSide(-130.0, 0.0);
+	FFormationConfinedSlot Near = Slot(FVector2D(-330.0, 0.0), FVector2D(-200.0, 30.0));
+	Near.ToEntryCm = 135.f;
+	FFormationConfinedSlot Far = Slot(FVector2D(-480.0, 0.0), FVector2D(-240.0, -30.0));
+	Far.ToEntryCm = 175.f;
+	const FFormationConfinedResult Result = FormationConfinedRules::CompressSlots(Pocket, TArray<FFormationConfinedSlot>{ Near, Far }, TOptional<FVector2D>(),
+		DoorSide, Tuning, nullptr, &Queue);
+	TestTrue(TEXT("queued"), Result.bQueued);
+	TestEqual(TEXT("both placed"), Result.ReplacedCount, 2);
+	TestEqual(TEXT("the man nearer the door is first"), Result.Rank[0], 0);
+	TestEqual(TEXT("the other second"), Result.Rank[1], 1);
+	const double Depth0 = FVector2D::Distance(Result.Places[0], Queue.EntryInside);
+	const double Depth1 = FVector2D::Distance(Result.Places[1], Queue.EntryInside);
+	TestTrue(*FString::Printf(TEXT("first (%.0f, %.0f) depth %.0f >= second (%.0f, %.0f) depth %.0f"), Result.Places[0].X, Result.Places[0].Y, Depth0,
+		Result.Places[1].X, Result.Places[1].Y, Depth1), Depth0 >= Depth1 - 0.01);
+	TestTrue(TEXT("the second place off the first man's way in"),
+		FormationConfinedRules::DistanceToSegment(Result.Places[1], Queue.EntryInside, Result.Places[0]) >= Tuning.PassClearCm - 0.01f);
+	TestTrue(TEXT("spaced"), MinPairDistance(Result.Places, Pocket.Center) >= Tuning.MinSpacingCm - 0.1f);
+	for (const FVector2D& Place : Result.Places)
+	{
+		TestTrue(*FString::Printf(TEXT("(%.0f, %.0f) inside"), Place.X, Place.Y), FormationConfinedRules::IsInside(Pocket, Place, Tuning));
+		TestFalse(TEXT("off the entry line"), FormationConfinedRules::IsOnEntry(Pocket, DoorSide, Place, Tuning));
+	}
+
+	// Their ways in swap: so do their places (nobody through the door yet).
+	FFormationConfinedSlot NearSwapped = Near;
+	NearSwapped.ToEntryCm = 175.f;
+	FFormationConfinedSlot FarSwapped = Far;
+	FarSwapped.ToEntryCm = 135.f;
+	const FFormationConfinedResult Swapped = FormationConfinedRules::CompressSlots(Pocket, TArray<FFormationConfinedSlot>{ NearSwapped, FarSwapped },
+		TOptional<FVector2D>(), DoorSide, Tuning, nullptr, &Queue);
+	TestTrue(TEXT("places swap with the order"), Swapped.Places[0].Equals(Result.Places[1], 1e-3) && Swapped.Places[1].Equals(Result.Places[0], 1e-3));
+	// ... but within the hysteresis of their last ranks the order holds.
+	NearSwapped.PrevRank = 0;
+	FarSwapped.PrevRank = 1;
+	NearSwapped.ToEntryCm = 160.f;
+	FarSwapped.ToEntryCm = 135.f;
+	const FFormationConfinedResult Held = FormationConfinedRules::CompressSlots(Pocket, TArray<FFormationConfinedSlot>{ NearSwapped, FarSwapped },
+		TOptional<FVector2D>(), DoorSide, Tuning, nullptr, &Queue);
+	TestTrue(TEXT("25 cm: the order holds"), Held.Places[0].Equals(Result.Places[0], 1e-3) && Held.Rank[0] == 0);
+
+	// The second man is through the door already (inside, past the entry point) on his held place: he keeps it, locked, whatever the order.
+	FFormationConfinedSlot Inside = Slot(FVector2D(-480.0, 0.0), FMath::Lerp(Result.Places[1], Pocket.Center, 0.25));
+	Inside.Held = Result.Places[1];
+	Inside.ToEntryCm = 0.f;
+	FFormationConfinedSlot Outside = Near;
+	Outside.ToEntryCm = 60.f;
+	const FFormationConfinedResult Locked = FormationConfinedRules::CompressSlots(Pocket, TArray<FFormationConfinedSlot>{ Outside, Inside },
+		TOptional<FVector2D>(), DoorSide, Tuning, nullptr, &Queue);
+	TestTrue(TEXT("the man inside is locked"), Locked.Locked[1]);
+	TestTrue(TEXT("on his held place"), Locked.Places[1].Equals(Result.Places[1], 1e-3));
+	TestFalse(TEXT("the man outside is not"), Locked.Locked[0]);
+	TestTrue(TEXT("the man outside still gets a place"), Locked.Replaced[0] && !Locked.Places[0].Equals(Locked.Places[1], 1.0));
+
+	// A block: a man through the door stands on his shallow place (-27, 67) right on the way in of the man behind him (his deep place
+	// (40, 80)); with BlockedBy their held places swap - the blocker walks on to the deep place (locked there), the blocked man is dealt a
+	// place again (spaced, off the blocker's way on).
+	const FVector2D Shallow = Pocket.Center + FormationConfinedRules::RayDir(6, Tuning.ProbeRays) * 95.0;
+	const FVector2D Deep(40.0, 80.0);
+	FFormationConfinedSlot Blocked = Slot(FVector2D(-330.0, 0.0), FVector2D(-90.0, 10.0));
+	Blocked.Held = Deep;
+	FFormationConfinedSlot Blocker = Slot(FVector2D(-480.0, 0.0), Shallow);
+	Blocker.Held = Shallow;
+	Blocked.BlockedBy = 1;
+	TestTrue(TEXT("the blocker stands on his way"), FormationConfinedRules::IsBlockedBy(FVector2D(-90.0, 10.0), Deep, Shallow, Tuning));
+	const FFormationConfinedResult Unblocked = FormationConfinedRules::CompressSlots(Pocket, TArray<FFormationConfinedSlot>{ Blocked, Blocker },
+		TOptional<FVector2D>(), DoorSide, Tuning, nullptr, &Queue);
+	TestTrue(TEXT("swapped"), Unblocked.Swapped[0] && Unblocked.Swapped[1]);
+	TestTrue(*FString::Printf(TEXT("the blocker (%.0f, %.0f) takes the deep place, locked"), Unblocked.Places[1].X, Unblocked.Places[1].Y),
+		Unblocked.Places[1].Equals(Deep, 1e-3) && Unblocked.Locked[1]);
+	TestTrue(*FString::Printf(TEXT("the blocked man (%.0f, %.0f) is placed again, spaced"), Unblocked.Places[0].X, Unblocked.Places[0].Y),
+		Unblocked.Replaced[0] && MinPairDistance(Unblocked.Places, Pocket.Center) >= Tuning.MinSpacingCm - 0.1f);
+	TestTrue(TEXT("off the blocker's way on"), FormationConfinedRules::DistanceToSegment(Unblocked.Places[0], Shallow, Deep) >= Tuning.PassClearCm - 0.01f);
+	// Without the block both keep theirs (the blocker is through the door on a valid place; the man behind is dealt the deepest free one).
+	Blocked.BlockedBy = INDEX_NONE;
+	const FFormationConfinedResult Stays = FormationConfinedRules::CompressSlots(Pocket, TArray<FFormationConfinedSlot>{ Blocked, Blocker },
+		TOptional<FVector2D>(), DoorSide, Tuning, nullptr, &Queue);
+	TestTrue(TEXT("no block: the blocker keeps his place"), Stays.Places[1].Equals(Shallow, 1e-3) && Stays.Locked[1] && !Stays.Swapped[0]);
+	return true;
+}
+
+FORMATION_CONFINED_TEST(FFormationConfinedQueueSwitchTest, "Queue.SwitchOffIsTheCostRule")
+bool FFormationConfinedQueueSwitchTest::RunTest(const FString&)
+{
+	// entry_queue 0 (or no queue input: no entry on the way in) gives exactly the round-3 cost rule's places; open ground is unchanged either way.
+	using namespace FormationConfinedTestLocal;
+	FFormationConfinedTuning Tuning;
+	const FFormationConfinedPocket Pocket = RoomPocket(FVector2D::ZeroVector, 90.f, 90.f, 45.f, Tuning);
+	const TArray<FFormationConfinedSlot> Slots{ Slot(FVector2D(-330.0, 0.0), FVector2D(-160.0, 10.0)), Slot(FVector2D(-480.0, 0.0), FVector2D(-300.0, -10.0)) };
+	FFormationConfinedQueue Queue;
+	Queue.EntryInside = FVector2D(-80.0, 0.0);
+	const FVector2D Entry(-140.0, 0.0);
+	const FFormationConfinedResult Cost = FormationConfinedRules::CompressSlots(Pocket, Slots, TOptional<FVector2D>(), Entry, Tuning);
+	TestFalse(TEXT("no queue input: not queued"), Cost.bQueued);
+	Tuning.bEntryQueue = false;
+	const FFormationConfinedResult Off = FormationConfinedRules::CompressSlots(Pocket, Slots, TOptional<FVector2D>(), Entry, Tuning, nullptr, &Queue);
+	TestFalse(TEXT("entry_queue 0: not queued"), Off.bQueued);
+	TestTrue(TEXT("the same places as the cost rule"), Off.Places.Num() == 2 && Off.Places[0].Equals(Cost.Places[0], 1e-6) && Off.Places[1].Equals(Cost.Places[1], 1e-6));
+	Tuning.bEntryQueue = true;
+	FFormationConfinedPocket Open;
+	Open.Free.Init(Tuning.ProbeCm, Tuning.ProbeRays);
+	const FFormationConfinedResult Outdoors = FormationConfinedRules::CompressSlots(Open, Slots, FVector2D(-100.0, 0.0), Entry, Tuning, nullptr, &Queue);
+	TestFalse(TEXT("open ground: not confined"), Outdoors.bConfined);
+	TestFalse(TEXT("open ground: not queued"), Outdoors.bQueued);
+	TestTrue(TEXT("open ground: slots as given"), Outdoors.Places[0].Equals(Slots[0].Desired, 1e-6) && Outdoors.Places[1].Equals(Slots[1].Desired, 1e-6));
+	// The queue in the 2.5 m hall: both placed, inside, spaced, off the entry line (the same guarantees as the cost rule).
+	const FFormationConfinedResult Queued = FormationConfinedRules::CompressSlots(Pocket, Slots, TOptional<FVector2D>(), Entry, Tuning, nullptr, &Queue);
+	TestTrue(TEXT("queued"), Queued.bQueued);
+	TestEqual(TEXT("both placed"), Queued.ReplacedCount, 2);
+	for (const FVector2D& Place : Queued.Places)
+	{
+		TestTrue(*FString::Printf(TEXT("(%.0f, %.0f) inside"), Place.X, Place.Y), FormationConfinedRules::IsInside(Pocket, Place, Tuning));
+		TestFalse(*FString::Printf(TEXT("(%.0f, %.0f) off the entry line"), Place.X, Place.Y), FormationConfinedRules::IsOnEntry(Pocket, Entry, Place, Tuning));
+	}
+	TestTrue(TEXT("spaced"), MinPairDistance(Queued.Places, FVector2D::ZeroVector) >= Tuning.MinSpacingCm - 0.1f);
+	return true;
+}
+
 FORMATION_CONFINED_TEST(FFormationConfinedTuningTest, "TuningFromJsonAndFile")
 bool FFormationConfinedTuningTest::RunTest(const FString&)
 {
@@ -464,6 +679,21 @@ bool FFormationConfinedTuningTest::RunTest(const FString&)
 	TestEqual(TEXT("gap_factor"), FromFile.GapFactor, Defaults.GapFactor);
 	TestEqual(TEXT("throat_clear_cm"), FromFile.ThroatClearCm, Defaults.ThroatClearCm);
 	TestEqual(TEXT("hold_places"), FromFile.bHoldPlaces, Defaults.bHoldPlaces);
+	TestEqual(TEXT("entry_queue"), FromFile.bEntryQueue, Defaults.bEntryQueue);
+	TestEqual(TEXT("entry_back_cm"), FromFile.EntryBackCm, Defaults.EntryBackCm);
+	TestEqual(TEXT("entry_step_cm"), FromFile.EntryStepCm, Defaults.EntryStepCm);
+	TestEqual(TEXT("queue_hysteresis_cm"), FromFile.QueueHysteresisCm, Defaults.QueueHysteresisCm);
+	TestEqual(TEXT("block_speed_cm_s"), FromFile.BlockSpeedCmS, Defaults.BlockSpeedCmS);
+	TestEqual(TEXT("block_s"), FromFile.BlockSeconds, Defaults.BlockSeconds);
+	TestEqual(TEXT("block_radius_cm"), FromFile.BlockRadiusCm, Defaults.BlockRadiusCm);
+	TestEqual(TEXT("block_cooldown_s"), FromFile.BlockCooldownSeconds, Defaults.BlockCooldownSeconds);
+	TestEqual(TEXT("body_clear_cm"), FromFile.BodyClearCm, Defaults.BodyClearCm);
+	const TSharedRef<FJsonObject> QueueOff = MakeShared<FJsonObject>();
+	QueueOff->SetNumberField(TEXT("entry_queue"), 0.0);
+	QueueOff->SetNumberField(TEXT("block_radius_cm"), 10.0);
+	const FFormationConfinedTuning Off = FormationConfinedTuning::FromJson(*QueueOff);
+	TestFalse(TEXT("entry_queue 0"), Off.bEntryQueue);
+	TestEqual(TEXT("block_radius_cm clamped to 40"), Off.BlockRadiusCm, 40.f);
 	return true;
 }
 

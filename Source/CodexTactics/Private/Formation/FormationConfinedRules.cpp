@@ -15,6 +15,10 @@ namespace FormationConfinedLocal
 		TEXT("1 = in a confined navmesh pocket (a flat hall, a 2.5 m corridor) the formation's slots compress into it round the leader's arrival, ")
 		TEXT("0 = the formation's own slots everywhere (the column parked its men outside the hall door - A/B)"));
 
+	TAutoConsoleVariable<int32> CVarFormationConfinedQueue(TEXT("Codex.Formation.ConfinedQueue"), -1,
+		TEXT("Entry order 2026-11-22: -1 = Content/Data/AI/squad_confined.json \"entry_queue\" (default), 1 = the depth queue (the man first through ")
+		TEXT("the door takes the deepest place, the next the next), 0 = the round-3 cost rule (A/B)"));
+
 	FFormationConfinedTuning ConfinedTuningCurrent;
 	bool bConfinedTuningLoaded = false;
 
@@ -35,6 +39,12 @@ bool FormationConfinedRules::IsEnabled(const FFormationConfinedTuning& Tuning)
 {
 	const int32 Console = FormationConfinedLocal::CVarFormationConfined.GetValueOnAnyThread();
 	return Console < 0 ? Tuning.bEnabled : Console != 0;
+}
+
+bool FormationConfinedRules::IsQueueEnabled(const FFormationConfinedTuning& Tuning)
+{
+	const int32 Console = FormationConfinedLocal::CVarFormationConfinedQueue.GetValueOnAnyThread();
+	return Console < 0 ? Tuning.bEntryQueue : Console != 0;
 }
 
 FVector2D FormationConfinedRules::RayDir(int32 Index, int32 Count)
@@ -218,9 +228,373 @@ TArray<FVector2D> FormationConfinedRules::Candidates(const FFormationConfinedPoc
 	return Out;
 }
 
+namespace FormationConfinedLocal
+{
+	/** A man's straight way in: from the inside entry point (or from where he stands, through the door already) to his place. */
+	struct FConfinedWay
+	{
+		FVector2D From = FVector2D::ZeroVector;
+		FVector2D To = FVector2D::ZeroVector;
+	};
+
+	/**
+	 * The depth queue (FFormationConfinedTuning::bEntryQueue; Result already confined, its places the slots). A man through the door keeps
+	 * his (still valid) held place; the others in queue order take the deepest free place from the inside entry point that keeps the spacing,
+	 * lies off every earlier man's way in and has his own way in clear of the places given out (tiers relax these in turn).
+	 */
+	FFormationConfinedResult QueueSlots(const FFormationConfinedPocket& Pocket, TArrayView<const FFormationConfinedSlot> Slots, const TOptional<FVector2D>& LeaderAt,
+		const TOptional<FVector2D>& EntryFrom, const FFormationConfinedTuning& Tuning, const FFormationConfinedLineTests* Lines,
+		const FFormationConfinedQueue& Queue, FFormationConfinedResult Result)
+	{
+		using namespace FormationConfinedRules;
+		Result.bQueued = true;
+		const FVector2D In = Queue.EntryInside;
+		const bool bWay = LeaderAt.IsSet() && FVector2D::Distance(LeaderAt.GetValue(), Pocket.Center) > Tuning.WayMinCm;
+		const auto OnWay = [&](const FVector2D& Point) { return bWay && DistanceToSegment(Point, LeaderAt.GetValue(), Pocket.Center) < Tuning.WayHalfWidthCm; };
+		const bool bEntryLines = Lines && Lines->FromEntry && EntryFrom.IsSet();
+		const auto SeenFromEntry = [&](const FVector2D& Point) { return !bEntryLines || Lines->FromEntry(Point); };
+		const auto InRoom = [&](const FVector2D& Point) { return !Lines || !Lines->InRoom || Lines->InRoom(Point); };
+		const auto Valid = [&](const FVector2D& Point)
+		{
+			return IsInside(Pocket, Point, Tuning) && !OnWay(Point) && !IsOnEntry(Pocket, EntryFrom, Point, Tuning) && !IsPastLeader(Pocket, EntryFrom, Point, Tuning)
+				&& SeenFromEntry(Point) && InRoom(Point);
+		};
+		const auto Through = [&](int32 Index)
+		{
+			const TOptional<FVector2D>& At = Slots[Index].Occupant;
+			return At.IsSet() && IsInside(Pocket, At.GetValue(), Tuning) && InRoom(At.GetValue());
+		};
+		TArray<FVector2D> Given{ Pocket.Center };
+		TArray<FConfinedWay> Ways;
+		const auto Spaced = [&](const FVector2D& Point, float Spacing)
+		{
+			for (const FVector2D& Each : Given)
+			{
+				if (FVector2D::Distance(Each, Point) < Spacing - TieCm)
+				{
+					return false;
+				}
+			}
+			return true;
+		};
+
+		// The held places with the block swaps applied (a man standing on his team-mate's way takes the place beyond him, the blocked man his).
+		TArray<TOptional<FVector2D>> Held;
+		for (const FFormationConfinedSlot& Slot : Slots)
+		{
+			Held.Add(Slot.Held);
+		}
+		for (int32 Index = 0; Index < Slots.Num(); ++Index)
+		{
+			const int32 Other = Slots[Index].BlockedBy;
+			if (Other != Index && Slots.IsValidIndex(Other) && Held[Index].IsSet() && Held[Other].IsSet() && !Result.Swapped[Index] && !Result.Swapped[Other])
+			{
+				Swap(Held[Index], Held[Other]);
+				Result.Swapped[Index] = true;
+				Result.Swapped[Other] = true;
+			}
+		}
+
+		// 1. Through the door: he keeps his place while it is valid and spaced.
+		int32 NextRank = 0;
+		TArray<int32> Open;
+		for (int32 Index = 0; Index < Slots.Num(); ++Index)
+		{
+			if (Through(Index) && Held[Index].IsSet() && Valid(Held[Index].GetValue()) && Spaced(Held[Index].GetValue(), Tuning.MinSpacingCm))
+			{
+				Result.Places[Index] = Held[Index].GetValue();
+				Result.Replaced[Index] = true;
+				Result.Locked[Index] = true;
+				Result.Rank[Index] = NextRank++;
+				++Result.ReplacedCount;
+				Given.Add(Held[Index].GetValue());
+				Ways.Add({ Slots[Index].Occupant.GetValue(), Held[Index].GetValue() });
+			}
+			else
+			{
+				Open.Add(Index);
+			}
+		}
+		if (Open.IsEmpty())
+		{
+			return Result;
+		}
+
+		// 2. The queue: who comes through the door next (a man inside already: the deeper the earlier).
+		TArray<float> Keys;
+		TArray<int32> PrevRanks;
+		for (const int32 Index : Open)
+		{
+			const FVector2D Ref = Slots[Index].Occupant.Get(Slots[Index].Desired);
+			Keys.Add(Through(Index) ? -static_cast<float>(FVector2D::Distance(Ref, In))
+				: Slots[Index].ToEntryCm.Get(static_cast<float>(FVector2D::Distance(Ref, In))));
+			PrevRanks.Add(Slots[Index].PrevRank);
+		}
+		const TArray<int32> Order = QueueOrder(Keys, PrevRanks, Tuning.QueueHysteresisCm);
+
+		// 3. The places, deepest from the inside entry point first, in three pools: seen from the door and in the room; in the room; any (a
+		// hall seen through a narrow door has few places in the door's view off the entry line - the walk smoke left a man outside on his
+		// formation slot when the one pool held no second spaced place).
+		TArray<FVector2D> All = Candidates(Pocket, Tuning);
+		All.RemoveAll([&](const FVector2D& Point) { return OnWay(Point) || IsPastLeader(Pocket, EntryFrom, Point, Tuning); });
+		All.StableSort([&In](const FVector2D& A, const FVector2D& B) { return FVector2D::DistSquared(A, In) > FVector2D::DistSquared(B, In); });
+		TArray<FVector2D> Pools[3];
+		Pools[2] = All;
+		Pools[1] = All.FilterByPredicate([&](const FVector2D& Point) { return InRoom(Point); });
+		Pools[0] = Pools[1].FilterByPredicate([&](const FVector2D& Point) { return SeenFromEntry(Point); });
+		TArray<bool> OnEntryLines[3];
+		for (int32 Each = 0; Each < 3; ++Each)
+		{
+			for (const FVector2D& Point : Pools[Each])
+			{
+				OnEntryLines[Each].Add(IsOnEntry(Pocket, EntryFrom, Point, Tuning));
+			}
+		}
+
+		for (const int32 OpenIndex : Order)
+		{
+			const int32 Index = Open[OpenIndex];
+			const bool bThrough = Through(Index);
+			const FVector2D Ref = bThrough ? Slots[Index].Occupant.GetValue() : In;
+			const auto WayClear = [&](const FVector2D& Point)
+			{
+				if (bThrough && Lines && Lines->Straight && !Lines->Straight(Ref, Point))
+				{
+					return false;
+				}
+				for (const FVector2D& Each : Given)
+				{
+					if (FVector2D::Distance(Each, Ref) >= Tuning.PassClearCm && DistanceToSegment(Each, Ref, Point) < Tuning.PassClearCm)
+					{
+						return false;
+					}
+				}
+				return true;
+			};
+			const auto OffEarlierWays = [&](const FVector2D& Point)
+			{
+				for (const FConfinedWay& Way : Ways)
+				{
+					if (DistanceToSegment(Point, Way.From, Way.To) < Tuning.PassClearCm)
+					{
+						return false;
+					}
+				}
+				return true;
+			};
+			// Per pool (the strictest first), tiers: off the earlier ways + off the entry line + his way clear; off the entry line + his way
+			// clear; his way clear; spaced only. The last tier (his way passes a place given out) takes the SHALLOWEST place: he stops short
+			// instead of pushing past a team-mate to the deepest one (the walk smoke's second man on the first man's way in).
+			TOptional<FVector2D> Chosen;
+			for (int32 PoolIndex = 0; PoolIndex < 3 && !Chosen.IsSet(); ++PoolIndex)
+			{
+				const TArray<FVector2D>& Pool = Pools[PoolIndex];
+				for (int32 Tier = 0; Tier < 4 && !Chosen.IsSet(); ++Tier)
+				{
+					for (int32 Each = 0; Each < Pool.Num(); ++Each)
+					{
+						const int32 Candidate = Tier == 3 ? Pool.Num() - 1 - Each : Each;
+						const FVector2D& Point = Pool[Candidate];
+						if (!Spaced(Point, Tuning.MinSpacingCm) || (Tier <= 1 && OnEntryLines[PoolIndex][Candidate]) || (Tier == 0 && !OffEarlierWays(Point))
+							|| (Tier <= 2 && !WayClear(Point)))
+						{
+							continue;
+						}
+						Chosen = Point; // the pool is deepest first (the last tier: walked from its shallow end)
+						break;
+					}
+				}
+			}
+			if (!Chosen.IsSet())
+			{
+				// Too tight for the spacing: the place farthest from everyone given out, if it keeps half the spacing; else his slot stays.
+				float BestRoom = -1.f;
+				for (const FVector2D& Point : All)
+				{
+					float Room = TNumericLimits<float>::Max();
+					for (const FVector2D& Each : Given)
+					{
+						Room = FMath::Min(Room, static_cast<float>(FVector2D::Distance(Each, Point)));
+					}
+					if (Room > BestRoom + TieCm)
+					{
+						Chosen = Point;
+						BestRoom = Room;
+					}
+				}
+				if (BestRoom < 0.5f * Tuning.MinSpacingCm)
+				{
+					Given.Add(Result.Places[Index]);
+					continue;
+				}
+			}
+			Result.Places[Index] = Chosen.GetValue();
+			Result.Replaced[Index] = true;
+			Result.Rank[Index] = NextRank++;
+			++Result.ReplacedCount;
+			Given.Add(Chosen.GetValue());
+			Ways.Add({ Ref, Chosen.GetValue() });
+		}
+		return Result;
+	}
+}
+
+TOptional<FFormationConfinedEntry> FormationConfinedRules::EntryOnPath(const FFormationConfinedPocket& Pocket, TArrayView<const FVector2D> Path,
+	const FFormationConfinedTuning& Tuning, const TFunction<bool(const FVector2D&)>& InRoom)
+{
+	if (Path.Num() < 2 || Pocket.Free.Num() < 4)
+	{
+		return TOptional<FFormationConfinedEntry>();
+	}
+	// Samples along the way with their distance from its start.
+	TArray<FVector2D> Samples;
+	TArray<double> Along;
+	const double Step = FMath::Max(Tuning.EntryStepCm, 1.f);
+	double Walked = 0.0;
+	Samples.Add(Path[0]);
+	Along.Add(0.0);
+	for (int32 Index = 1; Index < Path.Num(); ++Index)
+	{
+		const FVector2D From = Path[Index - 1];
+		const double Length = FVector2D::Distance(From, Path[Index]);
+		for (double At = Step; At < Length; At += Step)
+		{
+			Samples.Add(From + (Path[Index] - From) * (At / Length));
+			Along.Add(Walked + At);
+		}
+		Walked += Length;
+		Samples.Add(Path[Index]);
+		Along.Add(Walked);
+	}
+	const auto In = [&](const FVector2D& Point) { return IsInside(Pocket, Point, Tuning) && (!InRoom || InRoom(Point)); };
+	// The last run of samples inside: walk back from the way's end.
+	int32 First = INDEX_NONE;
+	for (int32 Index = Samples.Num() - 1; Index >= 0 && In(Samples[Index]); --Index)
+	{
+		First = Index;
+	}
+	if (First == INDEX_NONE || First == 0)
+	{
+		return TOptional<FFormationConfinedEntry>(); // never inside, or already inside at the start: no door crossed on this way
+	}
+	FFormationConfinedEntry Entry;
+	Entry.Inside = Samples[First];
+	// Back along the way to the door side.
+	const double Back = FMath::Max(0.0, Along[First] - static_cast<double>(Tuning.EntryBackCm));
+	Entry.Outside = Samples[0];
+	for (int32 Index = First; Index > 0; --Index)
+	{
+		if (Along[Index - 1] <= Back)
+		{
+			const double Span = Along[Index] - Along[Index - 1];
+			const double T = Span > UE_DOUBLE_SMALL_NUMBER ? (Back - Along[Index - 1]) / Span : 0.0;
+			Entry.Outside = Samples[Index - 1] + (Samples[Index] - Samples[Index - 1]) * T;
+			break;
+		}
+	}
+	return Entry;
+}
+
+bool FormationConfinedRules::IsBlockedBy(const FVector2D& Here, const FVector2D& Place, const FVector2D& Other, const FFormationConfinedTuning& Tuning)
+{
+	const FVector2D ToPlace = Place - Here;
+	const double Length = ToPlace.Size();
+	if (Length < 1.0 || FVector2D::Distance(Here, Other) > Tuning.BlockRadiusCm)
+	{
+		return false;
+	}
+	return FVector2D::DotProduct(Other - Here, ToPlace / Length) > 0.0 && DistanceToSegment(Other, Here, Place) < Tuning.PassClearCm;
+}
+
+TArray<int32> FormationConfinedRules::QueueOrder(TArrayView<const float> Keys, TArrayView<const int32> PrevRank, float HysteresisCm)
+{
+	TArray<int32> Order;
+	for (int32 Index = 0; Index < Keys.Num(); ++Index)
+	{
+		Order.Add(Index);
+	}
+	const auto RankOf = [&PrevRank](int32 Index) { return PrevRank.IsValidIndex(Index) && PrevRank[Index] != INDEX_NONE ? PrevRank[Index] : TNumericLimits<int32>::Max(); };
+	// The last order first (new men behind it, by key; ties: the lower index).
+	Order.StableSort([&](int32 A, int32 B)
+	{
+		const int32 RankA = RankOf(A);
+		const int32 RankB = RankOf(B);
+		if (RankA != RankB)
+		{
+			return RankA < RankB;
+		}
+		return RankA == TNumericLimits<int32>::Max() && Keys[A] < Keys[B] - FormationConfinedLocal::TieCm;
+	});
+	// Neighbours flip only past the hysteresis (bubble passes: deterministic, at most N - 1 passes).
+	for (int32 Pass = 0; Pass < Order.Num(); ++Pass)
+	{
+		bool bSwapped = false;
+		for (int32 Each = 0; Each + 1 < Order.Num(); ++Each)
+		{
+			if (Keys[Order[Each + 1]] < Keys[Order[Each]] - HysteresisCm)
+			{
+				Order.Swap(Each, Each + 1);
+				bSwapped = true;
+			}
+		}
+		if (!bSwapped)
+		{
+			break;
+		}
+	}
+	return Order;
+}
+
+TOptional<FVector2D> FormationConfinedRules::StepRoundBody(const FVector2D& Here, const FVector2D& Place, TArrayView<const FVector2D> Bodies,
+	const FFormationConfinedTuning& Tuning, const TFunction<bool(const FVector2D&)>& IsWalkable)
+{
+	const FVector2D Way = Place - Here;
+	const double Length = Way.Size();
+	if (Tuning.BodyClearCm <= 0.f || Length < 1.0)
+	{
+		return TOptional<FVector2D>();
+	}
+	const FVector2D Dir = Way / Length;
+	// The first body ahead on the way, closer to it than the clearance.
+	int32 First = INDEX_NONE;
+	double FirstAlong = TNumericLimits<double>::Max();
+	for (int32 Index = 0; Index < Bodies.Num(); ++Index)
+	{
+		const double Along = FVector2D::DotProduct(Bodies[Index] - Here, Dir);
+		if (Along <= 0.0 || Along >= Length || DistanceToSegment(Bodies[Index], Here, Place) >= Tuning.BodyClearCm)
+		{
+			continue;
+		}
+		if (Along < FirstAlong - FormationConfinedLocal::TieCm)
+		{
+			First = Index;
+			FirstAlong = Along;
+		}
+	}
+	if (First == INDEX_NONE)
+	{
+		return TOptional<FVector2D>();
+	}
+	// Out from the body toward the way (its own side first; on the line: the left of his walk first).
+	const FVector2D Body = Bodies[First];
+	const FVector2D Closest = Here + Dir * FirstAlong;
+	FVector2D Side = Closest - Body;
+	Side = Side.Size() > 1.0 ? Side.GetSafeNormal() : FVector2D(-Dir.Y, Dir.X);
+	const double Out = FMath::Max(Tuning.BodyClearCm, Tuning.MinSpacingCm) + StepRoundMarginCm;
+	for (const FVector2D& Each : { Side, -Side })
+	{
+		const FVector2D Point = Body + Each * Out;
+		if (!IsWalkable || IsWalkable(Point))
+		{
+			return Point;
+		}
+	}
+	return TOptional<FVector2D>();
+}
+
 FFormationConfinedResult FormationConfinedRules::CompressSlots(const FFormationConfinedPocket& Pocket, TArrayView<const FFormationConfinedSlot> Slots,
 	const TOptional<FVector2D>& LeaderAt, const TOptional<FVector2D>& EntryFrom, const FFormationConfinedTuning& Tuning,
-	const FFormationConfinedLineTests* Lines)
+	const FFormationConfinedLineTests* Lines, const FFormationConfinedQueue* Queue)
 {
 	using namespace FormationConfinedLocal;
 	FFormationConfinedResult Result;
@@ -230,11 +604,18 @@ FFormationConfinedResult FormationConfinedRules::CompressSlots(const FFormationC
 		Result.Places.Add(Slot.Desired);
 	}
 	Result.Replaced.Init(false, Slots.Num());
+	Result.Rank.Init(INDEX_NONE, Slots.Num());
+	Result.Locked.Init(false, Slots.Num());
+	Result.Swapped.Init(false, Slots.Num());
 	if (!IsConfined(Pocket, Tuning))
 	{
 		return Result;
 	}
 	Result.bConfined = true;
+	if (Queue && IsQueueEnabled(Tuning))
+	{
+		return QueueSlots(Pocket, Slots, LeaderAt, EntryFrom, Tuning, Lines, *Queue, MoveTemp(Result));
+	}
 
 	const bool bWay = LeaderAt.IsSet() && FVector2D::Distance(LeaderAt.GetValue(), Pocket.Center) > Tuning.WayMinCm;
 	const auto OnWay = [&](const FVector2D& Point)
@@ -449,6 +830,22 @@ FFormationConfinedTuning FormationConfinedTuning::FromJson(const FJsonObject& Js
 	ReadConfinedNumber(Json, TEXT("jamb_sample_cm"), Tuning.JambSampleCm, 5.f, 100.f);
 	ReadConfinedNumber(Json, TEXT("gap_factor"), Tuning.GapFactor, 0.f, 10.f);
 	ReadConfinedNumber(Json, TEXT("throat_clear_cm"), Tuning.ThroatClearCm, 0.f, 200.f);
+	if (Json.TryGetBoolField(TEXT("entry_queue"), bFlag))
+	{
+		Tuning.bEntryQueue = bFlag;
+	}
+	else if (Json.TryGetNumberField(TEXT("entry_queue"), Number))
+	{
+		Tuning.bEntryQueue = Number != 0.0;
+	}
+	ReadConfinedNumber(Json, TEXT("entry_back_cm"), Tuning.EntryBackCm, 0.f, 300.f);
+	ReadConfinedNumber(Json, TEXT("entry_step_cm"), Tuning.EntryStepCm, 2.f, 50.f);
+	ReadConfinedNumber(Json, TEXT("queue_hysteresis_cm"), Tuning.QueueHysteresisCm, 0.f, 300.f);
+	ReadConfinedNumber(Json, TEXT("block_speed_cm_s"), Tuning.BlockSpeedCmS, 0.f, 200.f);
+	ReadConfinedNumber(Json, TEXT("block_s"), Tuning.BlockSeconds, 0.05f, 10.f);
+	ReadConfinedNumber(Json, TEXT("block_radius_cm"), Tuning.BlockRadiusCm, 40.f, 300.f);
+	ReadConfinedNumber(Json, TEXT("block_cooldown_s"), Tuning.BlockCooldownSeconds, 0.f, 30.f);
+	ReadConfinedNumber(Json, TEXT("body_clear_cm"), Tuning.BodyClearCm, 0.f, 200.f);
 	return Tuning;
 }
 

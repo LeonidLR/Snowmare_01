@@ -36,6 +36,12 @@ class FJsonObject;
  *   needs his own straight navmesh line to it, unless he still stands farther out than the entry point (he walks in through the door); no
  *   place beyond a throat on the line from the centre (InRoom). A man keeps the place he was given last frame (Held) while it is still valid.
  *
+ * - ENTRY ORDER (2026-11-22, bEntryQueue; FFormationConfinedQueue): with the squad's navmesh way in known (EntryOnPath: the inside entry point
+ *   just past the door throat, the door side EntryBackCm back along the way) the places are dealt as a depth queue - QueueSlots: a man through
+ *   the door keeps his held place; the others, nearest the door first (QueueOrder, hysteresis), take the deepest free place from the inside
+ *   entry point that keeps the spacing, lies off every earlier man's way in and has his own way clear (pools: seen from the door + in the room,
+ *   in the room, any; the last tier the shallowest); a detected block (BlockedBy) swaps two held places. The runtime walks a man round a
+ *   standing body head on his way (StepRoundBody). No queue input / entry_queue 0: the cost rule above.
  * Content/Data/AI/squad_confined.json (snake_case keys, metres where the key says _m; a missing key keeps the default), read on the first
  * FormationConfinedTuning::Get(); console Codex.Formation.Confined (-1 = the file's "enabled", 0 = off - the old slots, 1 = on).
  * Tests: CodexTactics.Formation.Confined.*; in-game: LevelGenBuildingsWalkSmoke flat-entry squad legs (hall legs).
@@ -106,6 +112,53 @@ struct CODEXTACTICS_API FFormationConfinedTuning
 	float ThroatClearCm = 30.f;
 	/** Lead review round 3: a follower keeps the place he was given last frame while it stays valid (FFormationConfinedSlot::Held) (hold_places, 0 / 1). */
 	bool bHoldPlaces = true;
+	/**
+	 * Entry order 2026-11-22 (Lead: the STUCK legs were a follower held at the door by his team-mate's body on his place by the door): the
+	 * DEPTH QUEUE (entry_queue, 0 / 1). With an entry point inside the doorway known (FFormationConfinedQueue, from the navmesh way in) the
+	 * places are ranked by their distance from it, the man first through the door takes the deepest, the next the next, a later (shallower)
+	 * place never lies on an earlier man's way in; a man through the door keeps his place, places are re-dealt only on a detected block.
+	 * 0 = the round-3 cost rule (A/B).
+	 */
+	bool bEntryQueue = true;
+	/** The line tests' entry point (the door side) lies this far back along the way in from the inside entry point, cm (entry_back_cm). */
+	float EntryBackCm = 60.f;
+	/** The way in is sampled this often to find where it enters the pocket, cm (entry_step_cm). */
+	float EntryStepCm = 10.f;
+	/** Two men's queue order flips only when the later one is this much nearer the door than the earlier, cm (queue_hysteresis_cm). */
+	float QueueHysteresisCm = 40.f;
+	/** A follower slower than this while away from his place counts as standing, cm/s (block_speed_cm_s). */
+	float BlockSpeedCmS = 20.f;
+	/** ... for this long with a team-mate on his way = blocked, s (block_s). */
+	float BlockSeconds = 0.6f;
+	/** The team-mate on his way stands within this of him (two bodies touching: 80 cm), cm (block_radius_cm). */
+	float BlockRadiusCm = 95.f;
+	/** After a block swap the same man is not swapped again for this long, s (block_cooldown_s). */
+	float BlockCooldownSeconds = 2.f;
+	/**
+	 * Entry order: a follower's straight way to his confined place passing a standing body (the leader, a team-mate) closer than this - head
+	 * on, not a graze the capsules slide past - goes by a step-round point beside it first, MinSpacingCm + StepRoundMarginCm out from it (the
+	 * navmesh ignores bodies, the followers' crowd avoidance is off while compressed: the first man in pushed into the leader standing 60 cm
+	 * inside the door; at 80 a 76 cm graze in the doorway sent him round the leader's far side), cm (body_clear_cm; 0 = off).
+	 */
+	float BodyClearCm = 55.f;
+};
+
+/**
+ * Entry order (FFormationConfinedTuning::bEntryQueue): where the squad's navmesh way in enters the pocket. Inside = the first point of the way's
+ * last run of points inside the pocket and in the room (just inside the doorway); Outside = EntryBackCm back along the way (the door side: the
+ * line tests' and the entry line's point).
+ */
+struct FFormationConfinedEntry
+{
+	FVector2D Inside = FVector2D::ZeroVector;
+	FVector2D Outside = FVector2D::ZeroVector;
+};
+
+/** The depth queue's input to CompressSlots (unset / nullptr = the round-3 cost rule). */
+struct FFormationConfinedQueue
+{
+	/** The inside entry point (FFormationConfinedEntry::Inside): places rank by their distance from it, men walk in from it. */
+	FVector2D EntryInside = FVector2D::ZeroVector;
 };
 
 /** A probed pocket: its centre and the free navmesh distance along each world-aligned ray (FormationConfinedRules::RayDir). */
@@ -142,6 +195,12 @@ struct FFormationConfinedSlot
 	 * swapped places frame by frame as they moved, across the hall and back).
 	 */
 	TOptional<FVector2D> Held;
+	/** Depth queue: his navmesh way to the inside entry point, cm (unset: the straight distance). */
+	TOptional<float> ToEntryCm;
+	/** Depth queue: his rank last frame (INDEX_NONE: none) - the order flips only past QueueHysteresisCm. */
+	int32 PrevRank = INDEX_NONE;
+	/** Depth queue: the slot index of the team-mate standing on his way while he stands (the runtime's block detection): their places swap. */
+	int32 BlockedBy = INDEX_NONE;
 };
 
 /** CompressSlots' result: each slot's place and whether the rule moved it. */
@@ -151,12 +210,23 @@ struct FFormationConfinedResult
 	TArray<FVector2D> Places;
 	TArray<bool> Replaced;
 	int32 ReplacedCount = 0;
+	/** The depth queue dealt the places. */
+	bool bQueued = false;
+	/** Depth queue: each slot's rank (0 = the first through the door, the deepest place; INDEX_NONE = not queued: his slot stayed). */
+	TArray<int32> Rank;
+	/** Depth queue: the man is through the door and keeps his place. */
+	TArray<bool> Locked;
+	/** Depth queue: a block swap was applied (BlockedBy) for this slot. */
+	TArray<bool> Swapped;
 };
 
 namespace FormationConfinedRules
 {
 	/** The rule in force: console Codex.Formation.Confined (0 / 1) over the tuning's bEnabled (-1, the default). */
 	CODEXTACTICS_API bool IsEnabled(const FFormationConfinedTuning& Tuning);
+
+	/** The depth queue in force: console Codex.Formation.ConfinedQueue (0 / 1) over the tuning's bEntryQueue (-1, the default). */
+	CODEXTACTICS_API bool IsQueueEnabled(const FFormationConfinedTuning& Tuning);
 
 	/** Unit direction of ray Index of Count: world-aligned, ray 0 = +X, then counter-clockwise (+Y) in 360 / Count steps. */
 	CODEXTACTICS_API FVector2D RayDir(int32 Index, int32 Count);
@@ -207,7 +277,39 @@ namespace FormationConfinedRules
 	 */
 	CODEXTACTICS_API FFormationConfinedResult CompressSlots(const FFormationConfinedPocket& Pocket, TArrayView<const FFormationConfinedSlot> Slots,
 		const TOptional<FVector2D>& LeaderAt, const TOptional<FVector2D>& EntryFrom, const FFormationConfinedTuning& Tuning,
-		const FFormationConfinedLineTests* Lines = nullptr);
+		const FFormationConfinedLineTests* Lines = nullptr, const FFormationConfinedQueue* Queue = nullptr);
+
+	/**
+	 * Entry order: where the way in (Path: polyline from outside toward the pocket centre, e.g. the leader's navmesh path) enters the pocket -
+	 * sampled every EntryStepCm, the first point of its LAST run of points inside the pocket (IsInside) and in the room (InRoom, unset = no
+	 * test); Outside = EntryBackCm back along the way (at most its start). Unset: the way starts inside (no door crossed) or never gets in.
+	 */
+	CODEXTACTICS_API TOptional<FFormationConfinedEntry> EntryOnPath(const FFormationConfinedPocket& Pocket, TArrayView<const FVector2D> Path,
+		const FFormationConfinedTuning& Tuning, const TFunction<bool(const FVector2D&)>& InRoom = nullptr);
+
+	/**
+	 * Block detection (the depth queue's re-deal): a man at Here walking to Place stands blocked by a team-mate at Other when Other lies within
+	 * BlockRadiusCm of him, ahead toward Place (forward of him) and within PassClearCm of his straight line to Place.
+	 */
+	CODEXTACTICS_API bool IsBlockedBy(const FVector2D& Here, const FVector2D& Place, const FVector2D& Other, const FFormationConfinedTuning& Tuning);
+
+	/**
+	 * The depth queue's order of the men not yet locked: Keys[i] = how far man i still is from the door (lower = earlier); PrevRank[i] his last
+	 * rank (INDEX_NONE: new). Start from the last order (new men by key behind), then two neighbours flip only when the later one's key is lower
+	 * by more than HysteresisCm. Returns the indices into Keys in queue order.
+	 */
+	CODEXTACTICS_API TArray<int32> QueueOrder(TArrayView<const float> Keys, TArrayView<const int32> PrevRank, float HysteresisCm);
+
+	/**
+	 * Entry order: the step-round point for a man at Here walking straight to Place past standing Bodies - the first body ahead on the way
+	 * (projected strictly between Here and Place) closer than BodyClearCm to it: the point MinSpacingCm + StepRoundMarginCm out from that body
+	 * on the way's side (the other side when IsWalkable refuses it; IsWalkable unset = any). Unset: the way is clear, no walkable side, or off.
+	 */
+	CODEXTACTICS_API TOptional<FVector2D> StepRoundBody(const FVector2D& Here, const FVector2D& Place, TArrayView<const FVector2D> Bodies,
+		const FFormationConfinedTuning& Tuning, const TFunction<bool(const FVector2D&)>& IsWalkable = nullptr);
+
+	/** StepRoundBody's margin beyond the body clearance, cm. */
+	inline constexpr float StepRoundMarginCm = 5.f;
 }
 
 namespace FormationConfinedTuning
