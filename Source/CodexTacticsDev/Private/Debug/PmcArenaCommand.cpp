@@ -3225,6 +3225,11 @@ namespace PmcArena
 		// The round's own seed (base + round - 1, the trainer's convention): Rounds=1 Seed=<it> replays this round - its spawns, looks,
 		// weapons AND its attacker (by the seed's parity, not the round index).
 		const int32 Seed = State.Options.Seed + State.Round - 1;
+		// Doors R2: the door rolls (kick / injury / lock shot) follow the round seed - the same round replays the same breaches.
+		if (IConsoleVariable* DoorSeed = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Doors.Seed")))
+		{
+			DoorSeed->Set(FMath::Max(0, Seed), ECVF_SetByConsole);
+		}
 		State.AreaRejects = 0;
 		for (FSide& Side : State.Sides)
 		{

@@ -10,6 +10,12 @@
 //   E  story 3: the leader ordered into S03 behind its LOCKED front door walks round through the gable door (it auto-opens), never through
 //      the locked one, which stays locked;
 //   F  the kick hook: his click on the locked door from inside: he stands t_kick, the door bursts open (kicked);
+//   R2 (designer 2026-11-22): the clips - B the hand open (open_l / open_r), F the kicks alternate the legs, K / S the push after the key /
+//      the shot lock (the shot breaks the lock, he walks up and pushes); a montage plays when its asset exists (the names are logged);
+//   P  an ENEMY breach: a PMC fighter (team 1, no commander) ordered into S03 with both doors locked breaks in (shot / kick / ...) and
+//      walks on; run twice with the same Codex.Doors.Seed - the same breach trace (deterministic);
+//   KD the fighter carried a key: his body is searchable remains holding it; taken = the squad has the key;
+//   KC a loot container in a room holding a key: taken = the squad has the key;
 //   G  the switch OFF at runtime: every door released, the builder leaves back (visible, blocking sight, walk-through) - as before R1.
 // Enemies are parked far away; no pressure / PMC encounters.
 
@@ -17,7 +23,9 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "AI/PmcSquadSubsystem.h"
 #include "Characters/EnemyCharacter.h"
+#include "Characters/FirePostureRules.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/Explosion.h"
@@ -35,6 +43,7 @@
 #include "Interactables/DoorActor.h"
 #include "Interactables/DoorRules.h"
 #include "Interactables/DoorSubsystem.h"
+#include "Interactables/LootCrateActor.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
 #include "Survival/ColdShelterSubsystem.h"
@@ -71,6 +80,21 @@ namespace DoorsSmoke
 		int32 AutoOpensBefore = 0;
 		bool bCrossedLocked = false;
 		FVector2D LastLockedLocal = FVector2D::ZeroVector;
+		// R2
+		int32 ClipsBefore = 0;
+		int32 MontagesBefore = 0;
+		TWeakObjectPtr<AOperativeCharacter> Fighter;
+		FVector FighterStart = FVector::ZeroVector;
+		FVector FighterGoal = FVector::ZeroVector;
+		int32 BreachOpensBefore = 0;
+		int32 Run = 0;
+		FString FirstTrace;
+		int32 RemainsBefore = 0;
+		FVector Outside = FVector::ZeroVector;
+		TArray<TWeakObjectPtr<ADoorActor>> Candidates;
+		int32 Candidate = 0;
+		bool bCandidateLocked = false;
+		TWeakObjectPtr<ADoorActor> BreachDoor;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -184,6 +208,55 @@ namespace DoorsSmoke
 		return true;
 	}
 
+	/** The door clips chosen since ClipsBefore (keys like "open_r"), joined. */
+	FString ClipsSince(const UDoorSubsystem& Doors, int32 ClipsBefore)
+	{
+		const TArray<FString>& Log = Doors.GetClipLog();
+		TArray<FString> Since;
+		for (int32 Index = FMath::Clamp(ClipsBefore, 0, Log.Num()); Index < Log.Num(); ++Index)
+		{
+			Since.Add(Log[Index]);
+		}
+		return FString::Join(Since, TEXT(" "));
+	}
+
+	/** R2: the clip of kind Prefix ("open_", "push_", "kick_") was chosen; when its montage asset exists it played (name logged). */
+	void CheckClip(FState& State, const UDoorSubsystem& Doors, const TCHAR* Prefix, const TCHAR* What)
+	{
+		const FString Since = ClipsSince(Doors, State.ClipsBefore);
+		Check(State, Since.Contains(Prefix), FString::Printf(TEXT("%s: the %s* clip chosen (%s)"), What, Prefix, *Since));
+		FString Key;
+		TArray<FString> Keys;
+		Since.ParseIntoArray(Keys, TEXT(" "));
+		for (const FString& Entry : Keys)
+		{
+			Key = Entry.StartsWith(Prefix) ? Entry : Key;
+		}
+		const FString Path = Key.IsEmpty() ? FString() : DoorRules::FindClipPath(DoorTuning::Get(), TEXT(""), true, Key.StartsWith(TEXT("kick_"))
+			? EDoorClip::Kick : Key.StartsWith(TEXT("push_")) ? EDoorClip::Push : EDoorClip::Open, Key.EndsWith(TEXT("_l")) ? EDoorSide::Left : EDoorSide::Right);
+		const bool bAsset = !Path.IsEmpty() && FSoftObjectPath(Path).TryLoad() != nullptr;
+		if (bAsset)
+		{
+			Check(State, Doors.GetMontagesPlayed() > State.MontagesBefore, FString::Printf(TEXT("%s: the montage played (%d played, last %s)"), What,
+				Doors.GetMontagesPlayed() - State.MontagesBefore, *Doors.GetLastMontageName()));
+		}
+		else
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s: no montage asset at '%s' (the untracked pack's montages not made here: setup_door_animation.py) - the timings held"),
+				What, *Path);
+		}
+		State.ClipsBefore = Doors.GetClipLog().Num();
+		State.MontagesBefore = Doors.GetMontagesPlayed();
+	}
+
+	/** A complete navmesh path From -> To for Agent. */
+	bool Reaches(UWorld* World, const AOperativeCharacter& Agent, const FVector& From, const FVector& To)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(World, From, To, const_cast<AOperativeCharacter*>(&Agent)) : nullptr;
+		return Path && Path->IsValid() && !Path->IsPartial();
+	}
+
 	FHitResult FloorHit(const FVector& Point)
 	{
 		FHitResult Hit(nullptr, nullptr, Point, FVector::UpVector);
@@ -211,7 +284,7 @@ namespace DoorsSmoke
 		}
 		State->Time += StepSeconds;
 		State->StageTime += StepSeconds;
-		if (State->Time > 420.f)
+		if (State->Time > 600.f)
 		{
 			Check(*State, false, FString::Printf(TEXT("time out in stage %d"), State->Stage));
 			return Finish(*State, false);
@@ -320,6 +393,7 @@ namespace DoorsSmoke
 			}
 			Check(*State, Front->IsOpen(), FString::Printf(TEXT("B: the leader opened the S01 door by hand (%.1f s incl. the walk-up + hand_open_s %.1f, %.0f cm from it)"),
 				State->StageTime, DoorTuning::Get().HandOpenSeconds, FVector::Dist2D(Feet(*Leader), Front->GetActorLocation())));
+			CheckClip(*State, *Doors, TEXT("open_"), TEXT("B (R2)"));
 			Next(*State, 3); // stage 3 waits 1 s: the swing is over
 			return true;
 		}
@@ -498,7 +572,17 @@ namespace DoorsSmoke
 			Check(*State, Locked->IsOpen() && Locked->WasKicked(), FString::Printf(TEXT("F: the double click kicked the locked door open (%d kicks, %.1f s, kick_s %.1f)"),
 				Kicks, State->StageTime, DoorTuning::Get().KickSeconds));
 			Check(*State, Kicks == 2, TEXT("F: the first kick held, the second gave"));
-			Check(*State, State->StageTime >= 2.f * DoorTuning::Get().KickSeconds - 0.1f, TEXT("F: every kick took its time"));
+			const bool bKickClip = Doors->GetMontagesPlayed() > State->MontagesBefore;
+			Check(*State, State->StageTime >= 2.f * DoorRules::GetContactSeconds(EDoorClip::Kick, bKickClip, DoorTuning::Get()) - 0.1f,
+				FString::Printf(TEXT("F: every kick took its time (%s)"), bKickClip ? TEXT("the clip's impact frame") : TEXT("kick_s")));
+			{
+				TArray<FString> KickClips;
+				ClipsSince(*Doors, State->ClipsBefore).ParseIntoArray(KickClips, TEXT(" "));
+				KickClips.RemoveAll([](const FString& Key) { return !Key.StartsWith(TEXT("kick_")); });
+				Check(*State, KickClips.Num() >= 2 && KickClips[0] != KickClips[1], FString::Printf(TEXT("F (R2): the kicking legs alternate (%s)"),
+					*FString::Join(KickClips, TEXT(" "))));
+			}
+			CheckClip(*State, *Doors, TEXT("kick_"), TEXT("F (R2)"));
 			// The health loss goes through UHealthComponent::ApplyDirectHealthLoss (an immortal cheat on the map absorbs it: the health may stay).
 			Check(*State, Doors->GetKickInjuries() == State->InjuriesBefore + 1,
 				FString::Printf(TEXT("F: the bad kick hurt him (one injury; health %.0f -> %.0f)"), State->HealthBefore, Health ? Health->GetCurrentHealth() : 0.f));
@@ -553,6 +637,7 @@ namespace DoorsSmoke
 			}
 			Check(*State, Gable->IsOpen() && !Gable->WasKicked() && !Gable->WasLockShot(), FString::Printf(TEXT("K: with the key he unlocked it and opened it by hand (%.1f s)"),
 				State->StageTime - State->KeyClickAt));
+			CheckClip(*State, *Doors, TEXT("push_"), TEXT("K (R2): the push after the key"));
 			// S: S09's front door (locked by story 3): Ctrl + click = he shoots the lock.
 			ADoorActor* Front = State->FrontS09.Get();
 			const float In = InsideSign(World, *Front);
@@ -575,6 +660,8 @@ namespace DoorsSmoke
 				return true;
 			}
 			Doors->LockShotRollForTesting = 0.f;
+			State->ClipsBefore = Doors->GetClipLog().Num();
+			State->MontagesBefore = Doors->GetMontagesPlayed();
 			FHitResult Hit(Front, nullptr, Front->GetLockPoint() - Front->GetNormal() * (State->InsideSign * 3.f), -Front->GetNormal() * State->InsideSign);
 			Hit.bBlockingHit = true;
 			State->ClipBefore = Leader->CurrentClip;
@@ -593,6 +680,10 @@ namespace DoorsSmoke
 			}
 			Check(*State, Front->IsOpen() && Front->WasLockShot(), FString::Printf(TEXT("S: Ctrl + click shot the lock off (%.1f s, weapon %s, clip %d -> %d)"),
 				State->StageTime, Leader->CurrentWeapon ? *Leader->CurrentWeapon->WeaponId : TEXT("none"), State->ClipBefore, Leader->CurrentClip));
+			if (DoorTuning::Get().bLockShotPush)
+			{
+				CheckClip(*State, *Doors, TEXT("push_"), TEXT("S (R2): the shot broke the lock, he pushed it open"));
+			}
 			// X: a blast by S04's front door breaks it.
 			ADoorActor* Blasted = State->FrontS04.Get();
 			const float In = InsideSign(World, *Blasted);
@@ -610,6 +701,203 @@ namespace DoorsSmoke
 			Check(*State, Blasted->IsBroken() && Blasted->IsOpen(), TEXT("X: the explosion broke the closed S04 door (doorway open)"));
 			Check(*State, TraceAcross(World, *Blasted) == nullptr, TEXT("X: the broken doorway passes sight"));
 			Check(*State, !Blasted->CloseDoor(Leader), TEXT("X: a blown-off leaf cannot shut"));
+			// P (R2): an enemy breach. A room whose only way in is one door: an upper-storey door (no ground window / gable route round it)
+			// that, locked, seals the room off from the stair landing. Every candidate is tried in turn (stage 19).
+			if (Squad)
+			{
+				// Nobody fires on his own in this stage (the squad and the fighter: the breach is what is checked).
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					if (Member)
+					{
+						Member->bHasPostureOverride = true;
+						Member->PostureOverride = ESquadFirePosture::Passive;
+					}
+				}
+			}
+			if (IConsoleVariable* Seed = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Doors.Seed")))
+			{
+				Seed->Set(7, ECVF_SetByConsole);
+			}
+			ADoorActor* Locked = State->LockedS03.Get();
+			const float In = InsideSign(World, *Locked);
+			if (!OnNav(World, Locked->GetActorLocation() - Locked->GetNormal() * (In * 450.f), State->Outside))
+			{
+				Check(*State, false, TEXT("P: a navmesh point outside S03"));
+				return Finish(*State, false);
+			}
+			State->Candidates.Reset();
+			for (ADoorActor* Door : Doors->GetDoors())
+			{
+				if (Door && Door->GetFloor() >= 1 && Door->GetDoorState() == EDoorLeafState::Closed && !Door->IsBroken())
+				{
+					State->Candidates.Add(Door);
+				}
+			}
+			State->Candidate = 0;
+			State->bCandidateLocked = false;
+			Next(*State, 19);
+			return true;
+		}
+		case 19: // P: find a door that seals a room when locked
+		{
+			if (State->Candidate >= State->Candidates.Num() || State->Candidate >= 24)
+			{
+				Check(*State, false, FString::Printf(TEXT("P: an upper-storey door that seals a room (%d candidates tried)"), State->Candidate));
+				return Finish(*State, false);
+			}
+			ADoorActor* Door = State->Candidates[State->Candidate].Get();
+			if (!Door)
+			{
+				++State->Candidate;
+				return true;
+			}
+			if (!State->bCandidateLocked)
+			{
+				Door->ForceState(EDoorLeafState::Locked);
+				State->bCandidateLocked = true;
+				State->StageTime = 0.f;
+				return true;
+			}
+			if (State->StageTime < 1.5f || bNavBusy)
+			{
+				return true;
+			}
+			FVector A, B, Goal;
+			const bool bPoints = OnNav(World, Door->GetActorLocation() + Door->GetNormal() * 160.f, A) && OnNav(World, Door->GetActorLocation() - Door->GetNormal() * 160.f, B);
+			const bool bSealed = bPoints && !Reaches(World, *Leader, A, B);
+			const bool bAOut = bSealed && Reaches(World, *Leader, A, State->Outside);
+			const bool bBOut = bSealed && !bAOut && Reaches(World, *Leader, B, State->Outside);
+			const float Landing = bAOut ? 1.f : -1.f;
+			if (!(bAOut || bBOut) || !OnNav(World, Door->GetActorLocation() - Door->GetNormal() * (Landing * 250.f), Goal))
+			{
+				Door->ForceState(EDoorLeafState::Closed);
+				State->bCandidateLocked = false;
+				++State->Candidate;
+				return true;
+			}
+			const FVector Start = bAOut ? A : B;
+			UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+			AOperativeCharacter* Fighter = Pmc ? Pmc->SpawnFighter(1, Start + FVector(0.f, 0.f, 100.f), (-Door->GetNormal() * Landing).Rotation(), 7, 0) : nullptr;
+			Check(*State, Fighter != nullptr, FString::Printf(TEXT("P: a PMC fighter spawned on the landing by the locked %s %s (it seals the room: candidate %d)"),
+				*Door->GetBuildingId(), *Door->GetOpeningId(), State->Candidate));
+			if (!Fighter)
+			{
+				return Finish(*State, false);
+			}
+			Pmc->SetTeamCommanded(1, false); // the smoke orders him
+			Fighter->bHasPostureOverride = true;
+			Fighter->PostureOverride = ESquadFirePosture::Passive;
+			Teleport(*Fighter, Start, Goal - Start);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: P: landing %s, the room %s, door at %s"), *Start.ToCompactString(), *Goal.ToCompactString(),
+				*Door->GetActorLocation().ToCompactString());
+			State->BreachDoor = Door;
+			State->Fighter = Fighter;
+			State->FighterStart = Start;
+			State->FighterGoal = Goal;
+			State->Run = 0;
+			Next(*State, 20);
+			return true;
+		}
+		case 20: // P: a run of the breach (the navmesh settles after the doors were locked again)
+		{
+			AOperativeCharacter* Fighter = State->Fighter.Get();
+			if (!Fighter || State->StageTime < 2.f || bNavBusy)
+			{
+				return Fighter ? true : Finish(*State, false);
+			}
+			Fighter->CurrentClip = 30; // the same magazine every run (the trace must not depend on a reload)
+			Doors->ClearBreachTraces();
+			Doors->ClearGiveUps();
+			State->BreachOpensBefore = Doors->GetBreachOpens();
+			State->ClipsBefore = Doors->GetClipLog().Num();
+			State->MontagesBefore = Doors->GetMontagesPlayed();
+			const EOperativeOrderResult Result = Fighter->OrderMoveTo(State->FighterGoal + FVector(0.f, 0.f, Fighter->GetSimpleCollisionHalfHeight()), false);
+			Check(*State, Result == EOperativeOrderResult::Accepted, FString::Printf(TEXT("P run %d: his walk into the sealed room is accepted (a partial path to the locked door)"),
+				State->Run + 1));
+			Next(*State, 21);
+			return true;
+		}
+		case 21:
+		{
+			AOperativeCharacter* Fighter = State->Fighter.Get();
+			ADoorActor* Locked = State->BreachDoor.Get();
+			if (!Fighter || !Locked)
+			{
+				return Finish(*State, false);
+			}
+			const bool bThrough = Doors->GetBreachOpens() > State->BreachOpensBefore;
+			const bool bInside = FVector::Dist2D(Feet(*Fighter), State->FighterGoal) < 200.f && FMath::Abs(Feet(*Fighter).Z - State->FighterGoal.Z) < 100.f;
+			if ((!bThrough || !bInside) && State->StageTime < 60.f)
+			{
+				return true;
+			}
+			const FString Trace = Doors->GetBreachTrace(Fighter);
+			const FString Breached = FString::Printf(TEXT("%s %s %s%s%s%s"), *Locked->GetBuildingId(), *Locked->GetOpeningId(), DoorRules::StateName(Locked->GetDoorState()),
+				Locked->WasKicked() ? TEXT(", kicked") : TEXT(""), Locked->WasLockShot() ? TEXT(", lock shot") : TEXT(""), Locked->IsBroken() ? TEXT(", blown") : TEXT(""));
+			Check(*State, bThrough && Locked->IsOpen(), FString::Printf(TEXT("P run %d: the PMC fighter breached the locked door (%s; %s; %.1f s)"), State->Run + 1,
+				*Trace, *Breached, State->StageTime));
+			Check(*State, bInside, FString::Printf(TEXT("P run %d: he walked on into the room (%.0f cm from the goal, feet %s)"), State->Run + 1,
+				FVector::Dist(Feet(*Fighter), State->FighterGoal), *Feet(*Fighter).ToCompactString()));
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: P run %d: clips %s, montages %d (last %s)"), State->Run + 1, *ClipsSince(*Doors, State->ClipsBefore),
+				Doors->GetMontagesPlayed() - State->MontagesBefore, *Doors->GetLastMontageName());
+			if (State->Run == 0)
+			{
+				State->FirstTrace = Trace;
+				State->Run = 1;
+				// Run 2: the same seed, the same doors, the same man from the same spot - the same breach.
+				Locked->ForceState(EDoorLeafState::Locked);
+				Teleport(*Fighter, State->FighterStart, State->FighterGoal - State->FighterStart);
+				Next(*State, 20);
+				return true;
+			}
+			Check(*State, !Trace.IsEmpty() && Trace == State->FirstTrace, FString::Printf(TEXT("P: deterministic - the same seed gave the same breach (%s | %s)"),
+				*State->FirstTrace, *Trace));
+			// KD: he carries a key; he falls - his body holds it, the leader takes it.
+			Doors->GiveKeyToPawn(Fighter, TEXT("S04_rubble_escape"));
+			State->RemainsBefore = Doors->GetKeyRemainsSpawned();
+			Fighter->HealthComponent->ApplyDirectHealthLoss(100000.f, TEXT("DoorsSmoke"));
+			Next(*State, 22);
+			return true;
+		}
+		case 22:
+		{
+			if (Doors->GetKeyRemainsSpawned() <= State->RemainsBefore && State->StageTime < 6.f)
+			{
+				return true;
+			}
+			ALootCrateActor* Remains = Doors->GetLastKeyRemains();
+			Check(*State, Remains != nullptr && Doors->GetKeyRemainsSpawned() > State->RemainsBefore, TEXT("KD: the dead key carrier left searchable remains"));
+			if (!Remains)
+			{
+				return Finish(*State, false);
+			}
+			const TArray<FLootEntry> Items = Remains->GetItems();
+			Check(*State, Items.Num() == 1 && Items[0].Item == ELootItem::DoorKey, FString::Printf(TEXT("KD: the remains hold the key (%s)"),
+				Items.Num() > 0 ? *Items[0].GetLabel().ToString() : TEXT("nothing")));
+			Remains->TakeAll(Leader);
+			Check(*State, Doors->GetSquadKeys().Contains(TEXT("S04_rubble_escape")) && Remains->IsLooted(), TEXT("KD: searched - the squad has the key"));
+			// KC: a loot container in a room holding a key.
+			const FVector At = SmokeUtils::FreeSpot(World, Leader->GetActorLocation() + Leader->GetActorForwardVector() * 150.f, Leader);
+			ALootCrateActor* Crate = World->SpawnActorDeferred<ALootCrateActor>(ALootCrateActor::StaticClass(), FTransform(At + FVector(0.f, 0.f, 40.f)), nullptr, nullptr,
+				ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (!Crate)
+			{
+				Check(*State, false, TEXT("KC: a key container spawned"));
+				return Finish(*State, false);
+			}
+			Crate->Contents.DestroyAll();
+			Crate->Contents.KeyIds = { TEXT("S10_snow_drift") };
+			Crate->FinishSpawning(FTransform(At + FVector(0.f, 0.f, 40.f)));
+			const TArray<FLootEntry> CrateItems = Crate->GetItems();
+			Check(*State, CrateItems.Num() == 1 && CrateItems[0].Item == ELootItem::DoorKey, TEXT("KC: the container lists the key"));
+			Crate->TakeAll(Leader);
+			Check(*State, Doors->GetSquadKeys().Contains(TEXT("S10_snow_drift")), FString::Printf(TEXT("KC: taken from the container - the squad has the key (keys %s)"),
+				*FString::Join(Doors->GetSquadKeys(), TEXT(", "))));
+			if (IConsoleVariable* Seed = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Doors.Seed")))
+			{
+				Seed->Set(-1, ECVF_SetByConsole);
+			}
 			// G: the switch off.
 			SetDoorsSwitch(0);
 			Next(*State, 15);
