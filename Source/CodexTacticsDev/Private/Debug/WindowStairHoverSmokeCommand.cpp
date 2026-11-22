@@ -261,7 +261,10 @@ namespace WindowStairHoverSmoke
 			PC->bFreezeMantleHoverForTesting = true; // the real (off-window) cursor must not clear the hover the smoke sets
 			Check(bHit && PC->UpdateWindowHover(Leader, &Hit) && PC->IsWindowHoverShown(), TEXT("W: the hover silhouette shows past the window"));
 			DescribeGhost(TEXT("W"), PC->GetWindowHoverGhost(), R.SillCenter + FVector(0.f, 0.f, 60.f));
-			Shot(*World, *PC, Eye, Glass, TEXT("window_hover"));
+			// Straight through the window opening at glass height (no wall between the camera and a silhouette standing in / past the window).
+			const ACoverGhostActor* WGhost = PC->GetWindowHoverGhost();
+			const FVector GhostAt = WGhost ? WGhost->GetComponentsBoundingBox(true).GetCenter() : Glass;
+			Shot(*World, *PC, Glass + R.Across * (R.StartSide * 350.f) + FVector(0.f, 0.f, 20.f), GhostAt, TEXT("window_hover"));
 			R.PendingClick = Hit;
 			Go(EStep::WindowShot);
 			return true;

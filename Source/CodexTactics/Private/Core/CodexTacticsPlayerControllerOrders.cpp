@@ -848,9 +848,9 @@ bool ACodexTacticsPlayerController::CanOrderMantleClick(const FHitResult& Hit) c
 
 namespace WindowHoverLocal
 {
-	/** 1 = the window hover silhouette in the climbing frame on the sill; 0 (default until that pose renders) = standing past the window. */
-	TAutoConsoleVariable<int32> CVarClimbSilhouette(TEXT("Codex.Window.ClimbSilhouette"), 0,
-		TEXT("Window hover silhouette: 1 = the climbing frame on the sill (WIP: not drawn yet), 0 = standing past the window (default)"));
+	/** 1 (default) = the window hover silhouette in the climbing frame on the sill; 0 = standing past the window. */
+	TAutoConsoleVariable<int32> CVarClimbSilhouette(TEXT("Codex.Window.ClimbSilhouette"), 1,
+		TEXT("Window hover silhouette: 1 = the climbing frame on the sill (default), 0 = standing past the window"));
 }
 
 bool ACodexTacticsPlayerController::FindWindowSillTarget(const AActor& Sill, const AOperativeCharacter& Operative, FVector& OutFeet, float& OutYaw) const
