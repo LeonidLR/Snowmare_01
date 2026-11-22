@@ -74,7 +74,8 @@ namespace SquadSubsystemFormationLocal
 	/**
 	 * A follower's goal ON the leader's floor (designer 2026-11-22, "stuck on the stairwell": a slot over the stairwell opening has no floor
 	 * at the leader's level - the move projected it onto the flight above / below and he climbed there and pushed, FormationStairSmoke S10).
-	 * FloorZ is a FEET height (not the capsule centre). The navmesh at XY within FormationYieldLevelCm of FloorZ, else the nearest such point on rings out to 3 m, else XY at FloorZ unchanged.
+	 * FloorZ is a FEET height (not the capsule centre). The navmesh at XY within FormationYieldLevelCm of FloorZ; only when XY has navmesh on
+	 * another level alone (a stairwell), the nearest point of his floor on rings out to 3 m; else XY at FloorZ unchanged.
 	 */
 	FVector SnapGoalToFloor(const UWorld* World, const FVector2D& XY, float FloorZ)
 	{
@@ -83,11 +84,27 @@ namespace SquadSubsystemFormationLocal
 		{
 			return FVector(XY.X, XY.Y, FloorZ);
 		}
-		for (const float Radius : { 0.f, 60.f, 120.f, 180.f, 240.f, 300.f })
+		// Only over a stairwell / another level's floor: no navmesh right at XY on his floor, but some above / below it. In a wall or off
+		// the mesh altogether the move's own projection decides as before (the ring search would pick a floor point behind the wall).
 		{
-			for (int32 Step = 0; Step < (Radius > 0.f ? 8 : 1); ++Step)
+			FNavLocation Here;
+			if (Nav->ProjectPointToNavigation(FVector(XY.X, XY.Y, FloorZ + 20.f), Here, FVector(40.f, 40.f, 50.f))
+				&& FMath::Abs(static_cast<float>(Here.Location.Z) - FloorZ) <= FormationYieldLevelCm)
 			{
-				const FVector2D Offset = Radius > 0.f ? FVector2D(FMath::Cos(Step * UE_PI / 4.f), FMath::Sin(Step * UE_PI / 4.f)) * Radius : FVector2D::ZeroVector;
+				return Here.Location;
+			}
+			FNavLocation Other;
+			if (!Nav->ProjectPointToNavigation(FVector(XY.X, XY.Y, FloorZ), Other, FVector(40.f, 40.f, 400.f))
+				|| FMath::Abs(static_cast<float>(Other.Location.Z) - FloorZ) <= FormationYieldLevelCm)
+			{
+				return FVector(XY.X, XY.Y, FloorZ + 20.f);
+			}
+		}
+		for (const float Radius : { 60.f, 120.f, 180.f, 240.f, 300.f })
+		{
+			for (int32 Step = 0; Step < 8; ++Step)
+			{
+				const FVector2D Offset = FVector2D(FMath::Cos(Step * UE_PI / 4.f), FMath::Sin(Step * UE_PI / 4.f)) * Radius;
 				FNavLocation OnNav;
 				if (Nav->ProjectPointToNavigation(FVector(XY.X + Offset.X, XY.Y + Offset.Y, FloorZ + 20.f), OnNav, FVector(40.f, 40.f, 50.f))
 					&& FMath::Abs(static_cast<float>(OnNav.Location.Z) - FloorZ) <= FormationYieldLevelCm)
