@@ -66,6 +66,38 @@ namespace SquadSubsystemFormationLocal
 		TEXT("Bug 2026-10-28 (CoverSmoke): 1 = a formation follower on the leader's way while the leader walks an own order (cover / move) steps aside out of it, then takes his slot again; 0 = the old follow (he may stand in the leader's way: the walk ends Blocked, A/B)"));
 	/** A yield point must project onto the nav mesh this close (it is no point inside / at a wall), cm. */
 	constexpr float FormationYieldNavSnapCm = 30.f;
+	/** A yield aside point must be on the yielding man's own level (feet), within this - not on the stair flight above / below. */
+	constexpr float FormationYieldLevelCm = 60.f;
+	/** A follower this far above / below the leader's floor walks the navmesh way to his slot (no 2D follow law across a stair flight). */
+	constexpr float FollowerLevelCm = 100.f;
+
+	/**
+	 * A follower's goal ON the leader's floor (designer 2026-11-22, "stuck on the stairwell": a slot over the stairwell opening has no floor
+	 * at the leader's level - the move projected it onto the flight above / below and he climbed there and pushed, FormationStairSmoke S10).
+	 * The navmesh at XY within FormationYieldLevelCm of FloorZ, else the nearest such point on rings out to 3 m, else XY at FloorZ unchanged.
+	 */
+	FVector SnapGoalToFloor(const UWorld* World, const FVector2D& XY, float FloorZ)
+	{
+		const UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+		if (!Nav)
+		{
+			return FVector(XY.X, XY.Y, FloorZ);
+		}
+		for (const float Radius : { 0.f, 60.f, 120.f, 180.f, 240.f, 300.f })
+		{
+			for (int32 Step = 0; Step < (Radius > 0.f ? 8 : 1); ++Step)
+			{
+				const FVector2D Offset = Radius > 0.f ? FVector2D(FMath::Cos(Step * UE_PI / 4.f), FMath::Sin(Step * UE_PI / 4.f)) * Radius : FVector2D::ZeroVector;
+				FNavLocation OnNav;
+				if (Nav->ProjectPointToNavigation(FVector(XY.X + Offset.X, XY.Y + Offset.Y, FloorZ + 20.f), OnNav, FVector(40.f, 40.f, 50.f))
+					&& FMath::Abs(static_cast<float>(OnNav.Location.Z) - FloorZ) <= FormationYieldLevelCm)
+				{
+					return OnNav.Location;
+				}
+			}
+		}
+		return FVector(XY.X, XY.Y, FloorZ);
+	}
 	/** A step-round point (FormationWallEnd::StepRound) must lie on the nav mesh this exactly ... */
 	constexpr float FormationStepRoundNavSnapCm = 5.f;
 	/** ... and this much farther out still be on it (not on the mesh's edge at the passage's other wall), cm. */
@@ -1428,7 +1460,11 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 			FNavLocation OnNav;
 			const FVector Probe(Point.X, Point.Y, Operative.GetActorLocation().Z);
 			FVector NavHit;
+			// On HIS level only (designer 2026-11-22, "stuck on the stairwell too": with the 250 cm search the aside point of a man yielding on a
+			// landing snapped onto the flight above / below - he walked up the next flight and stood there, FormationStairSmoke S10).
+			const float FeetZ = static_cast<float>(Operative.GetActorLocation().Z - Operative.GetSimpleCollisionHalfHeight());
 			if (!Nav || (Nav->ProjectPointToNavigation(Probe, OnNav, FVector(FormationYieldNavSnapCm, FormationYieldNavSnapCm, 250.f))
+				&& FMath::Abs(static_cast<float>(OnNav.Location.Z) - FeetZ) <= FormationYieldLevelCm
 				&& FVector2D::Distance(FVector2D(OnNav.Location), Point) <= FormationYieldNavSnapCm
 				&& (!bRouteYield || !UNavigationSystemV1::NavigationRaycast(GetWorld(), Operative.GetActorLocation(), OnNav.Location, NavHit))))
 			{
@@ -1447,11 +1483,15 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	Follower.bYielding = bYield;
 	// On another level than the leader (2026-11-02): he walks to his slot on the leader's level by the nav mesh's way (a ramp / stair / ladder;
 	// the ladder's queue holds him) - the 2D distance to the slot means nothing across levels (right above it he would park on the rim).
-	if (bLeaderLevel && !FormationGuardRuntime::IsSameLevelLeg(static_cast<float>(Operative.GetActorLocation().Z), LeaderFloorZ))
+	// Designer 2026-11-22 ("stuck on the stairwell"): a man on the next flight right over his slot (152 cm up, FormationStairSmoke S10) passed the
+	// 150 cm bypass level test as "the same level" - 40 cm off his slot in 2D, the follow law crawled him at ~0 and he stood on the stairs. For
+	// following, half a flight (FollowerLevelCm) already is another level: he walks the navmesh way to his slot.
+	if (bLeaderLevel && FMath::Abs(static_cast<float>(Operative.GetActorLocation().Z) - LeaderFloorZ) > FollowerLevelCm)
 	{
 		Follower.bParked = false;
 		Follower.bCatchUp = true;
-		Operative.FollowTo(SlotLocation, SquadWoundPaceRules::CapFixedSpeed(FormationTuning::Get().PaceWalkSpeed, Top, bWoundCap, SquadWoundPaceTuning::Get(), bWoundCap));
+		Operative.FollowTo(SnapGoalToFloor(GetWorld(), FVector2D(SlotLocation), LeaderFloorZ),
+			SquadWoundPaceRules::CapFixedSpeed(FormationTuning::Get().PaceWalkSpeed, Top, bWoundCap, SquadWoundPaceTuning::Get(), bWoundCap));
 		return true;
 	}
 	const FormationRuntime::FFollowerMove Move = FormationRuntime::FollowerMove(Here, static_cast<float>(Operative.GetActorRotation().Yaw), MoveTarget,
@@ -1473,7 +1513,7 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	const FVector2D Destination = FormationRuntime::LeadDestination(MoveTarget, SlotVelocity);
 	// Item 2 (2026-11-03): into a wall order's place the path's own braking is short - FollowerMove's arrival law already slows him (with both
 	// the last metre was a 2-40 cm/s crawl for seconds: the "shuffle in place").
-	const EOperativeOrderResult Result = Operative.FollowTo(FVector(Destination.X, Destination.Y, SlotLocation.Z), Move.Speed,
+	const EOperativeOrderResult Result = Operative.FollowTo(SnapGoalToFloor(GetWorld(), Destination, static_cast<float>(SlotLocation.Z)), Move.Speed,
 		Sectors.bWallOrder && bWall ? SquadWallTuning::Get().WallPathBrakingCm : -1.f);
 	if (CVarFormationDebug.GetValueOnGameThread() >= 2)
 	{
