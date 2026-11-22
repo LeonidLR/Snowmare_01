@@ -485,6 +485,7 @@ void UDoorSubsystem::TickCloseBehind(float DeltaTime)
 
 int32 UDoorSubsystem::CloseInteriorDoors()
 {
+	InnerLocked = 0;
 	if (!DoorTuning::Get().bStartInteriorClosed || !GetWorld())
 	{
 		return 0;
@@ -508,6 +509,15 @@ int32 UDoorSubsystem::CloseInteriorDoors()
 		if (bInner && Door->ForceState(EDoorLeafState::Closed, nullptr))
 		{
 			++Shut;
+			// Designer 2026-11-22: some of them, at random, are locked (kick / shoot the lock / a key); a stable roll per door (its place).
+			const FVector At = Door->GetActorLocation();
+			const uint32 Salt = FCrc::StrCrc32(*FString::Printf(TEXT("inner_lock_%s_%d_%d_%d"), *Door->GetBuildingId(), FMath::RoundToInt(At.X / 10.f),
+				FMath::RoundToInt(At.Y / 10.f), FMath::RoundToInt(At.Z / 10.f)));
+			if (DoorRules::DeterministicRoll(DoorTuning::GetRollSeed(), Salt) < DoorTuning::Get().StartInteriorLockedShare
+				&& Door->ForceState(EDoorLeafState::Locked, nullptr))
+			{
+				++InnerLocked;
+			}
 		}
 	}
 	return Shut;
@@ -656,7 +666,8 @@ int32 UDoorSubsystem::AdoptLeaves()
 		KitInstancesLifted, Tuning.bBreachEnabled ? TEXT("on") : TEXT("off"), DoorTuning::GetRollSeed());
 	if (ShutInner > 0)
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("Doors: start_interior_closed - %d inner door(s) open from the start are shut"), ShutInner);
+		UE_LOG(LogCodexTactics, Display, TEXT("Doors: start_interior_closed - %d inner door(s) open from the start are shut, %d of them locked (start_interior_locked_share %.2f)"),
+			ShutInner, InnerLocked, Tuning.StartInteriorLockedShare);
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Doors: strengths of the shut doors - wood %d, steel %d, reinforced %d (%d layout door openings read)"), ByStrength[0], ByStrength[1],
 		ByStrength[2], LayoutDoors.Num());

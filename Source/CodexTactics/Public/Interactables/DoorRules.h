@@ -196,6 +196,12 @@ struct CODEXTACTICS_API FDoorTuning
 	 * adoption every door open from the start whose both sides are under a roof (an inner door: flat / room / hall doors) is shut.
 	 */
 	bool bStartInteriorClosed = true;
+	/**
+	 * "start_interior_locked_share" (designer 2026-11-22: "some inner doors, at random, must be locked - kick, shoot or key them; inner doors are
+	 * a little weaker than the entrances"): of the inner doors shut at the start this share is LOCKED (a stable roll per door from the doors'
+	 * roll seed and its place). Their strength stays the inner one (wood: kick 0.55, pistol 0.6) - weaker than the steel entrances.
+	 */
+	float StartInteriorLockedShare = 0.25f;
 	float CloseBehindSeconds = 1.5f;
 	float CloseBehindRadiusCm = 300.f;
 	float SwingMinDeg = 30.f;

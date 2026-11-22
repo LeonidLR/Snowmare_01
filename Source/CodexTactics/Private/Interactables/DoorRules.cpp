@@ -1063,6 +1063,7 @@ FDoorTuning DoorTuning::FromJson(const FJsonObject& Json, const FDoorTuning& Bas
 	ReadDoorFlag(Json, TEXT("swing_fixed"), Tuning.bSwingFixed);
 	ReadDoorFlag(Json, TEXT("swing_from_opener"), Tuning.bSwingFromOpener);
 	ReadDoorFlag(Json, TEXT("start_interior_closed"), Tuning.bStartInteriorClosed);
+	ReadDoorNumber(Json, TEXT("start_interior_locked_share"), Tuning.StartInteriorLockedShare, 0.f, 1.f);
 	ReadDoorNumber(Json, TEXT("close_behind_s"), Tuning.CloseBehindSeconds, 0.f, 60.f);
 	ReadDoorNumber(Json, TEXT("close_behind_radius_cm"), Tuning.CloseBehindRadiusCm, 0.f, 3000.f);
 	ReadDoorNumber(Json, TEXT("swing_min_deg"), Tuning.SwingMinDeg, 0.f, 180.f);

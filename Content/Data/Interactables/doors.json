@@ -11,6 +11,8 @@
   "swing_from_opener": 1,
   "_comment_start_interior_closed": "start_interior_closed (designer 2026-11-22, agents test: many inner doors stood open - for now every inner door is shut): 1 = at the adoption every door open from the start whose both sides are under a roof is shut (entrances and outside doors keep their state).",
   "start_interior_closed": 1,
+  "_comment_start_interior_locked": "start_interior_locked_share (designer 2026-11-22: some inner doors, at random, are locked - kick, shoot the lock or a key; inner doors are a little weaker than the entrances): this share of the inner doors shut at the start is locked, a stable roll per door (roll_seed + its place). Their strength stays the inner one (wood by default, entrances steel).",
+  "start_interior_locked_share": 0.25,
   "close_behind_s": 1.5,
   "close_behind_radius_cm": 300,
   "swing_min_deg": 30,

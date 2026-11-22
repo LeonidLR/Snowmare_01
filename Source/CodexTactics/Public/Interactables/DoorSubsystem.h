@@ -354,6 +354,8 @@ private:
 	void ChooseSwings();
 	/** start_interior_closed: shuts every inner door open from the start (both sides under a roof); returns how many. */
 	int32 CloseInteriorDoors();
+	/** How many of the inner doors CloseInteriorDoors shut are locked (start_interior_locked_share). */
+	int32 GetInnerLockedCount() const { return InnerLocked; }
 	/** +1 / -1: the side of Door's frame outside its building's footprint (0 unknown). */
 	float OutwardSign(const ADoorActor& Door) const;
 	int32 SwingLimited = 0;
@@ -373,6 +375,7 @@ private:
 	TArray<float> KitDoorOffsets;
 	int32 KitDoorOffsetSamples = 0;
 	float CloseBehindAccum = 0.f;
+	int32 InnerLocked = 0;
 	int32 CloseBehindCount = 0;
 	TArray<FProxy> Proxies;
 	TArray<FPendingOrder> Orders;
