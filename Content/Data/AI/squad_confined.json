@@ -22,5 +22,16 @@
   "jamb_sample_cm": 20,
   "gap_factor": 1.5,
   "throat_clear_cm": 30,
-  "hold_places": 1
+  "hold_places": 1,
+  "_comment_entry_queue": "Entry order 2026-11-22 (the STUCK legs: a follower held at the door by his team-mate's body on a place by the door). entry_queue 1 = the depth queue: the squad's navmesh way in (the leader's path to the pocket centre) gives an inside entry point (the first point of its last run inside the pocket and the room, sampled every entry_step_cm) and an outside one entry_back_cm back along it (the door side: the jamb line test and the entry line); places rank by their distance from the inside point, the man first through the door (navmesh way to the inside point; neighbours flip only past queue_hysteresis_cm) takes the deepest, the next the next, a later place never on an earlier man's way in; a man through the door keeps his place; a man standing (below block_speed_cm_s for block_s) with a team-mate within block_radius_cm on his way swaps places with him (not again for block_cooldown_s). 0 = the round-3 cost rule (A/B; console Codex.Formation.ConfinedQueue).",
+  "entry_queue": 1,
+  "entry_back_cm": 60,
+  "entry_step_cm": 10,
+  "queue_hysteresis_cm": 40,
+  "block_speed_cm_s": 20,
+  "block_s": 0.6,
+  "block_radius_cm": 95,
+  "block_cooldown_s": 2.0,
+  "_comment_body_clear": "body_clear_cm: a follower whose straight way to his confined place passes a standing body (the leader, a team-mate) closer than this (head on, not a graze the capsules slide past) walks first to a step-round point beside it (min_spacing_cm + 5 out, on the way's side, the other side when that is off the navmesh; the navmesh ignores bodies and the followers' crowd avoidance is off while compressed). 0 = off.",
+  "body_clear_cm": 55
 }
