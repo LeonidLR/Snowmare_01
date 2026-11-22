@@ -12,7 +12,7 @@ import { buildingToAscii } from '../src/levelgen/buildings/planAscii.ts';
 import { routeCostHash, computeBuildingRoutes } from '../src/levelgen/buildingRoutes.ts';
 import { withRoles } from '../src/levelgen/buildingRoles.ts';
 import type { StoryId } from '../src/levelgen/buildingStories.ts';
-import { applyStory, storySubSeed } from '../src/levelgen/buildingStories.ts';
+import { applySlotBalconies, applyStory, storySubSeed } from '../src/levelgen/buildingStories.ts';
 import { validateBuilding } from '../src/levelgen/buildingTraversal.ts';
 import type { Draft, Side } from '../src/levelgen/generate.ts';
 import { addBuilding, finalizeDraftToLayout } from '../src/levelgen/generate.ts';
@@ -104,6 +104,10 @@ for (const s of specs) {
     const held = res;
     cur = { ...cur, buildings: cur.buildings.map((x) => (x.id === s.id ? held.building : x)), ...(held.ladders ? { ladders: held.ladders } : {}) };
   }
+  // designer 2026-11-22: usable balconies on the balcony slots of every house (door + slab + low-vault rail; none beside story 4's escape)
+  const slotBalconies = applySlotBalconies(cur, b, 2);
+  if (slotBalconies) console.log(`${s.id}: ${slotBalconies} slot balconies`);
+  cur = { ...cur, buildings: cur.buildings.map((x) => (x.id === s.id ? b : x)) };
   const routes = computeBuildingRoutes(cur, b, { baseline: { layout: before, building: pristine } });
   if (routes.key_route) b.key_route = routes.key_route;
   if (routes.breach_route) b.breach_route = routes.breach_route;

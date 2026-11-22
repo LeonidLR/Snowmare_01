@@ -12378,33 +12378,6 @@
      "vaultable": false
     },
     {
-     "id": "S01_open_f1_w2",
-     "kind": "window",
-     "pos": [
-      1300,
-      -6350
-     ],
-     "floor": 1,
-     "wall": "S01_open_S",
-     "width": 150,
-     "sill_height": 95,
-     "top_height": 245,
-     "yaw": 180,
-     "links": [
-      "S01_open_r_f1_c3",
-      "street"
-     ],
-     "role": "window",
-     "module": "wall_window_200",
-     "slot": "balcony",
-     "structure": "load_bearing",
-     "material": "concrete_panel",
-     "sill_cm": 95,
-     "width_cm": 150,
-     "vault_onto": "none",
-     "vaultable": false
-    },
-    {
      "id": "S01_open_f1_w3",
      "kind": "window",
      "pos": [
@@ -12449,33 +12422,6 @@
      ],
      "role": "window",
      "module": "wall_window_200",
-     "structure": "load_bearing",
-     "material": "concrete_panel",
-     "sill_cm": 95,
-     "width_cm": 150,
-     "vault_onto": "none",
-     "vaultable": false
-    },
-    {
-     "id": "S01_open_f1_w5",
-     "kind": "window",
-     "pos": [
-      1300,
-      -5550
-     ],
-     "floor": 1,
-     "wall": "S01_open_S",
-     "width": 150,
-     "sill_height": 95,
-     "top_height": 245,
-     "yaw": 180,
-     "links": [
-      "S01_open_r_f1_c10",
-      "street"
-     ],
-     "role": "window",
-     "module": "wall_window_200",
-     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -12614,6 +12560,44 @@
      "width_cm": 150,
      "vault_onto": "none",
      "vaultable": false
+    },
+    {
+     "id": "S01_open_bal_S01_open_col_s0A_f1_door",
+     "kind": "door",
+     "pos": [
+      1300,
+      -6350
+     ],
+     "floor": 1,
+     "width": 150,
+     "wall": "S01_open_S",
+     "sill_height": 0,
+     "top_height": 240,
+     "links": [
+      "S01_open_r_f1_c3",
+      "balcony:S01_open_bal_S01_open_col_s0A_f1"
+     ],
+     "role": "balcony",
+     "module": "wall_door_200"
+    },
+    {
+     "id": "S01_open_bal_S01_open_col_s0B_f1_door",
+     "kind": "door",
+     "pos": [
+      1300,
+      -5550
+     ],
+     "floor": 1,
+     "width": 150,
+     "wall": "S01_open_S",
+     "sill_height": 0,
+     "top_height": 240,
+     "links": [
+      "S01_open_r_f1_c10",
+      "balcony:S01_open_bal_S01_open_col_s0B_f1"
+     ],
+     "role": "balcony",
+     "module": "wall_door_200"
     }
    ],
    "partitions": [
@@ -15318,8 +15302,8 @@
      "door_ids": [
       "S01_open_f1_d10",
       "S01_open_f1_d11",
-      "S01_open_f1_w2",
-      "S01_open_f1_w3"
+      "S01_open_f1_w3",
+      "S01_open_bal_S01_open_col_s0A_f1_door"
      ],
      "anchor": [
       1525,
@@ -15519,7 +15503,7 @@
      "door_ids": [
       "S01_open_f1_d4",
       "S01_open_f1_d5",
-      "S01_open_f1_w5"
+      "S01_open_bal_S01_open_col_s0B_f1_door"
      ],
      "anchor": [
       1500,
@@ -16029,27 +16013,6 @@
      "wall": "S01_open_W"
     },
     {
-     "id": "me_S01_open_f1_w2",
-     "start": [
-      1300,
-      -6425
-     ],
-     "end": [
-      1300,
-      -6275
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      -1,
-      0
-     ],
-     "kind": "window",
-     "building": "S01_open",
-     "wall": "S01_open_S"
-    },
-    {
      "id": "me_S01_open_f1_w3",
      "start": [
       1575,
@@ -16079,27 +16042,6 @@
      "end": [
       1300,
       -5825
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      -1,
-      0
-     ],
-     "kind": "window",
-     "building": "S01_open",
-     "wall": "S01_open_S"
-    },
-    {
-     "id": "me_S01_open_f1_w5",
-     "start": [
-      1300,
-      -5625
-     ],
-     "end": [
-      1300,
-      -5475
      ],
      "floor": 1,
      "base_z": 300,
@@ -16488,6 +16430,40 @@
      "bricks": [],
      "seed": 2059477477,
      "author": "cold"
+    }
+   ],
+   "balconies": [
+    {
+     "id": "S01_open_bal_S01_open_col_s0A_f1",
+     "floor": 1,
+     "rect": [
+      [
+       1190,
+       -6500
+      ],
+      [
+       1300,
+       -6200
+      ]
+     ],
+     "door_id": "S01_open_bal_S01_open_col_s0A_f1_door",
+     "rail_cm": 95
+    },
+    {
+     "id": "S01_open_bal_S01_open_col_s0B_f1",
+     "floor": 1,
+     "rect": [
+      [
+       1190,
+       -5700
+      ],
+      [
+       1300,
+       -5400
+      ]
+     ],
+     "door_id": "S01_open_bal_S01_open_col_s0B_f1_door",
+     "rail_cm": 95
     }
    ],
    "key_route": {
@@ -17036,33 +17012,6 @@
      "vaultable": false
     },
     {
-     "id": "S03_locked_door_f1_w5",
-     "kind": "window",
-     "pos": [
-      2500,
-      -2000
-     ],
-     "floor": 1,
-     "wall": "S03_locked_door_N",
-     "width": 150,
-     "sill_height": 95,
-     "top_height": 245,
-     "yaw": 0,
-     "links": [
-      "S03_locked_door_r_f1_c9",
-      "street"
-     ],
-     "role": "window",
-     "module": "wall_window_200",
-     "slot": "balcony",
-     "structure": "load_bearing",
-     "material": "concrete_panel",
-     "sill_cm": 95,
-     "width_cm": 150,
-     "vault_onto": "none",
-     "vaultable": false
-    },
-    {
      "id": "S03_locked_door_f1_w6",
      "kind": "window",
      "pos": [
@@ -17081,33 +17030,6 @@
      ],
      "role": "window",
      "module": "wall_window_200",
-     "structure": "load_bearing",
-     "material": "concrete_panel",
-     "sill_cm": 95,
-     "width_cm": 150,
-     "vault_onto": "none",
-     "vaultable": false
-    },
-    {
-     "id": "S03_locked_door_f1_w7",
-     "kind": "window",
-     "pos": [
-      2500,
-      -1200
-     ],
-     "floor": 1,
-     "wall": "S03_locked_door_N",
-     "width": 150,
-     "sill_height": 95,
-     "top_height": 245,
-     "yaw": 0,
-     "links": [
-      "S03_locked_door_r_f1_c15",
-      "street"
-     ],
-     "role": "window",
-     "module": "wall_window_200",
-     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -17192,6 +17114,44 @@
      "width_cm": 150,
      "vault_onto": "none",
      "vaultable": false
+    },
+    {
+     "id": "S03_locked_door_bal_S03_locked_door_col_s0A_f1_door",
+     "kind": "door",
+     "pos": [
+      2500,
+      -1200
+     ],
+     "floor": 1,
+     "width": 150,
+     "wall": "S03_locked_door_N",
+     "sill_height": 0,
+     "top_height": 240,
+     "links": [
+      "S03_locked_door_r_f1_c15",
+      "balcony:S03_locked_door_bal_S03_locked_door_col_s0A_f1"
+     ],
+     "role": "balcony",
+     "module": "wall_door_200"
+    },
+    {
+     "id": "S03_locked_door_bal_S03_locked_door_col_s0B_f1_door",
+     "kind": "door",
+     "pos": [
+      2500,
+      -2000
+     ],
+     "floor": 1,
+     "width": 150,
+     "wall": "S03_locked_door_N",
+     "sill_height": 0,
+     "top_height": 240,
+     "links": [
+      "S03_locked_door_r_f1_c9",
+      "balcony:S03_locked_door_bal_S03_locked_door_col_s0B_f1"
+     ],
+     "role": "balcony",
+     "module": "wall_door_200"
     }
    ],
    "partitions": [
@@ -20065,7 +20025,7 @@
      "door_ids": [
       "S03_locked_door_f1_d4",
       "S03_locked_door_f1_d5",
-      "S03_locked_door_f1_w5"
+      "S03_locked_door_bal_S03_locked_door_col_s0B_f1_door"
      ],
      "anchor": [
       2300,
@@ -20238,8 +20198,8 @@
      "door_ids": [
       "S03_locked_door_f1_d10",
       "S03_locked_door_f1_d11",
-      "S03_locked_door_f1_w7",
-      "S03_locked_door_f1_w8"
+      "S03_locked_door_f1_w8",
+      "S03_locked_door_bal_S03_locked_door_col_s0A_f1_door"
      ],
      "anchor": [
       2275,
@@ -20670,27 +20630,6 @@
      "wall": "S03_locked_door_N"
     },
     {
-     "id": "me_S03_locked_door_f1_w5",
-     "start": [
-      2500,
-      -2075
-     ],
-     "end": [
-      2500,
-      -1925
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      1,
-      0
-     ],
-     "kind": "window",
-     "building": "S03_locked_door",
-     "wall": "S03_locked_door_N"
-    },
-    {
      "id": "me_S03_locked_door_f1_w6",
      "start": [
       2500,
@@ -20699,27 +20638,6 @@
      "end": [
       2500,
       -1575
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      1,
-      0
-     ],
-     "kind": "window",
-     "building": "S03_locked_door",
-     "wall": "S03_locked_door_N"
-    },
-    {
-     "id": "me_S03_locked_door_f1_w7",
-     "start": [
-      2500,
-      -1275
-     ],
-     "end": [
-      2500,
-      -1125
      ],
      "floor": 1,
      "base_z": 300,
@@ -21069,6 +20987,40 @@
      ],
      "seed": 4030095790,
      "author": "decay"
+    }
+   ],
+   "balconies": [
+    {
+     "id": "S03_locked_door_bal_S03_locked_door_col_s0A_f1",
+     "floor": 1,
+     "rect": [
+      [
+       2500,
+       -1350
+      ],
+      [
+       2610,
+       -1050
+      ]
+     ],
+     "door_id": "S03_locked_door_bal_S03_locked_door_col_s0A_f1_door",
+     "rail_cm": 95
+    },
+    {
+     "id": "S03_locked_door_bal_S03_locked_door_col_s0B_f1",
+     "floor": 1,
+     "rect": [
+      [
+       2500,
+       -2150
+      ],
+      [
+       2610,
+       -1850
+      ]
+     ],
+     "door_id": "S03_locked_door_bal_S03_locked_door_col_s0B_f1_door",
+     "rail_cm": 95
     }
    ],
    "key_route": {
@@ -28287,33 +28239,6 @@
      "vaultable": false
     },
     {
-     "id": "S07_roof_outside_f1_w2",
-     "kind": "window",
-     "pos": [
-      -1300,
-      -6350
-     ],
-     "floor": 1,
-     "wall": "S07_roof_outside_N",
-     "width": 150,
-     "sill_height": 95,
-     "top_height": 245,
-     "yaw": 0,
-     "links": [
-      "S07_roof_outside_r_f1_c3",
-      "street"
-     ],
-     "role": "window",
-     "module": "wall_window_200",
-     "slot": "balcony",
-     "structure": "load_bearing",
-     "material": "concrete_panel",
-     "sill_cm": 95,
-     "width_cm": 150,
-     "vault_onto": "none",
-     "vaultable": false
-    },
-    {
      "id": "S07_roof_outside_f1_w3",
      "kind": "window",
      "pos": [
@@ -28358,33 +28283,6 @@
      ],
      "role": "window",
      "module": "wall_window_200",
-     "structure": "load_bearing",
-     "material": "concrete_panel",
-     "sill_cm": 95,
-     "width_cm": 150,
-     "vault_onto": "none",
-     "vaultable": false
-    },
-    {
-     "id": "S07_roof_outside_f1_w5",
-     "kind": "window",
-     "pos": [
-      -1300,
-      -5550
-     ],
-     "floor": 1,
-     "wall": "S07_roof_outside_N",
-     "width": 150,
-     "sill_height": 95,
-     "top_height": 245,
-     "yaw": 0,
-     "links": [
-      "S07_roof_outside_r_f1_c10",
-      "street"
-     ],
-     "role": "window",
-     "module": "wall_window_200",
-     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -28577,33 +28475,6 @@
      "vaultable": false
     },
     {
-     "id": "S07_roof_outside_f2_w2",
-     "kind": "window",
-     "pos": [
-      -1300,
-      -6350
-     ],
-     "floor": 2,
-     "wall": "S07_roof_outside_N",
-     "width": 150,
-     "sill_height": 95,
-     "top_height": 245,
-     "yaw": 0,
-     "links": [
-      "S07_roof_outside_r_f2_c3",
-      "street"
-     ],
-     "role": "window",
-     "module": "wall_window_200",
-     "slot": "balcony",
-     "structure": "load_bearing",
-     "material": "concrete_panel",
-     "sill_cm": 95,
-     "width_cm": 150,
-     "vault_onto": "none",
-     "vaultable": false
-    },
-    {
      "id": "S07_roof_outside_f2_w3",
      "kind": "window",
      "pos": [
@@ -28648,33 +28519,6 @@
      ],
      "role": "window",
      "module": "wall_window_200",
-     "structure": "load_bearing",
-     "material": "concrete_panel",
-     "sill_cm": 95,
-     "width_cm": 150,
-     "vault_onto": "none",
-     "vaultable": false
-    },
-    {
-     "id": "S07_roof_outside_f2_w5",
-     "kind": "window",
-     "pos": [
-      -1300,
-      -5550
-     ],
-     "floor": 2,
-     "wall": "S07_roof_outside_N",
-     "width": 150,
-     "sill_height": 95,
-     "top_height": 245,
-     "yaw": 0,
-     "links": [
-      "S07_roof_outside_r_f2_c10",
-      "street"
-     ],
-     "role": "window",
-     "module": "wall_window_200",
-     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -28813,6 +28657,82 @@
      "width_cm": 150,
      "vault_onto": "none",
      "vaultable": false
+    },
+    {
+     "id": "S07_roof_outside_bal_S07_roof_outside_col_s0A_f1_door",
+     "kind": "door",
+     "pos": [
+      -1300,
+      -6350
+     ],
+     "floor": 1,
+     "width": 150,
+     "wall": "S07_roof_outside_N",
+     "sill_height": 0,
+     "top_height": 240,
+     "links": [
+      "S07_roof_outside_r_f1_c3",
+      "balcony:S07_roof_outside_bal_S07_roof_outside_col_s0A_f1"
+     ],
+     "role": "balcony",
+     "module": "wall_door_200"
+    },
+    {
+     "id": "S07_roof_outside_bal_S07_roof_outside_col_s0A_f2_door",
+     "kind": "door",
+     "pos": [
+      -1300,
+      -6350
+     ],
+     "floor": 2,
+     "width": 150,
+     "wall": "S07_roof_outside_N",
+     "sill_height": 0,
+     "top_height": 240,
+     "links": [
+      "S07_roof_outside_r_f2_c3",
+      "balcony:S07_roof_outside_bal_S07_roof_outside_col_s0A_f2"
+     ],
+     "role": "balcony",
+     "module": "wall_door_200"
+    },
+    {
+     "id": "S07_roof_outside_bal_S07_roof_outside_col_s0B_f1_door",
+     "kind": "door",
+     "pos": [
+      -1300,
+      -5550
+     ],
+     "floor": 1,
+     "width": 150,
+     "wall": "S07_roof_outside_N",
+     "sill_height": 0,
+     "top_height": 240,
+     "links": [
+      "S07_roof_outside_r_f1_c10",
+      "balcony:S07_roof_outside_bal_S07_roof_outside_col_s0B_f1"
+     ],
+     "role": "balcony",
+     "module": "wall_door_200"
+    },
+    {
+     "id": "S07_roof_outside_bal_S07_roof_outside_col_s0B_f2_door",
+     "kind": "door",
+     "pos": [
+      -1300,
+      -5550
+     ],
+     "floor": 2,
+     "width": 150,
+     "wall": "S07_roof_outside_N",
+     "sill_height": 0,
+     "top_height": 240,
+     "links": [
+      "S07_roof_outside_r_f2_c10",
+      "balcony:S07_roof_outside_bal_S07_roof_outside_col_s0B_f2"
+     ],
+     "role": "balcony",
+     "module": "wall_door_200"
     }
    ],
    "partitions": [
@@ -32476,8 +32396,8 @@
      "door_ids": [
       "S07_roof_outside_f1_d10",
       "S07_roof_outside_f1_d11",
-      "S07_roof_outside_f1_w2",
-      "S07_roof_outside_f1_w3"
+      "S07_roof_outside_f1_w3",
+      "S07_roof_outside_bal_S07_roof_outside_col_s0A_f1_door"
      ],
      "anchor": [
       -1475,
@@ -32677,7 +32597,7 @@
      "door_ids": [
       "S07_roof_outside_f1_d4",
       "S07_roof_outside_f1_d5",
-      "S07_roof_outside_f1_w5"
+      "S07_roof_outside_bal_S07_roof_outside_col_s0B_f1_door"
      ],
      "anchor": [
       -1500,
@@ -33019,8 +32939,8 @@
      "door_ids": [
       "S07_roof_outside_f2_d10",
       "S07_roof_outside_f2_d11",
-      "S07_roof_outside_f2_w2",
-      "S07_roof_outside_f2_w3"
+      "S07_roof_outside_f2_w3",
+      "S07_roof_outside_bal_S07_roof_outside_col_s0A_f2_door"
      ],
      "anchor": [
       -1475,
@@ -33220,7 +33140,7 @@
      "door_ids": [
       "S07_roof_outside_f2_d4",
       "S07_roof_outside_f2_d5",
-      "S07_roof_outside_f2_w5"
+      "S07_roof_outside_bal_S07_roof_outside_col_s0B_f2_door"
      ],
      "anchor": [
       -1500,
@@ -33730,27 +33650,6 @@
      "wall": "S07_roof_outside_W"
     },
     {
-     "id": "me_S07_roof_outside_f1_w2",
-     "start": [
-      -1300,
-      -6425
-     ],
-     "end": [
-      -1300,
-      -6275
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      1,
-      0
-     ],
-     "kind": "window",
-     "building": "S07_roof_outside",
-     "wall": "S07_roof_outside_N"
-    },
-    {
      "id": "me_S07_roof_outside_f1_w3",
      "start": [
       -1375,
@@ -33780,27 +33679,6 @@
      "end": [
       -1300,
       -5825
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      1,
-      0
-     ],
-     "kind": "window",
-     "building": "S07_roof_outside",
-     "wall": "S07_roof_outside_N"
-    },
-    {
-     "id": "me_S07_roof_outside_f1_w5",
-     "start": [
-      -1300,
-      -5625
-     ],
-     "end": [
-      -1300,
-      -5475
      ],
      "floor": 1,
      "base_z": 300,
@@ -33961,27 +33839,6 @@
      "wall": "S07_roof_outside_W"
     },
     {
-     "id": "me_S07_roof_outside_f2_w2",
-     "start": [
-      -1300,
-      -6425
-     ],
-     "end": [
-      -1300,
-      -6275
-     ],
-     "floor": 2,
-     "base_z": 600,
-     "height_cm": 95,
-     "normal": [
-      1,
-      0
-     ],
-     "kind": "window",
-     "building": "S07_roof_outside",
-     "wall": "S07_roof_outside_N"
-    },
-    {
      "id": "me_S07_roof_outside_f2_w3",
      "start": [
       -1375,
@@ -34011,27 +33868,6 @@
      "end": [
       -1300,
       -5825
-     ],
-     "floor": 2,
-     "base_z": 600,
-     "height_cm": 95,
-     "normal": [
-      1,
-      0
-     ],
-     "kind": "window",
-     "building": "S07_roof_outside",
-     "wall": "S07_roof_outside_N"
-    },
-    {
-     "id": "me_S07_roof_outside_f2_w5",
-     "start": [
-      -1300,
-      -5625
-     ],
-     "end": [
-      -1300,
-      -5475
      ],
      "floor": 2,
      "base_z": 600,
@@ -34478,6 +34314,72 @@
      ],
      "seed": 3700140105,
      "author": "decay"
+    }
+   ],
+   "balconies": [
+    {
+     "id": "S07_roof_outside_bal_S07_roof_outside_col_s0A_f1",
+     "floor": 1,
+     "rect": [
+      [
+       -1300,
+       -6500
+      ],
+      [
+       -1190,
+       -6200
+      ]
+     ],
+     "door_id": "S07_roof_outside_bal_S07_roof_outside_col_s0A_f1_door",
+     "rail_cm": 95
+    },
+    {
+     "id": "S07_roof_outside_bal_S07_roof_outside_col_s0A_f2",
+     "floor": 2,
+     "rect": [
+      [
+       -1300,
+       -6500
+      ],
+      [
+       -1190,
+       -6200
+      ]
+     ],
+     "door_id": "S07_roof_outside_bal_S07_roof_outside_col_s0A_f2_door",
+     "rail_cm": 95
+    },
+    {
+     "id": "S07_roof_outside_bal_S07_roof_outside_col_s0B_f1",
+     "floor": 1,
+     "rect": [
+      [
+       -1300,
+       -5700
+      ],
+      [
+       -1190,
+       -5400
+      ]
+     ],
+     "door_id": "S07_roof_outside_bal_S07_roof_outside_col_s0B_f1_door",
+     "rail_cm": 95
+    },
+    {
+     "id": "S07_roof_outside_bal_S07_roof_outside_col_s0B_f2",
+     "floor": 2,
+     "rect": [
+      [
+       -1300,
+       -5700
+      ],
+      [
+       -1190,
+       -5400
+      ]
+     ],
+     "door_id": "S07_roof_outside_bal_S07_roof_outside_col_s0B_f2_door",
+     "rail_cm": 95
     }
    ],
    "key_route": {
@@ -34927,33 +34829,6 @@
      "vaultable": false
     },
     {
-     "id": "S09_broken_back_windows_f1_w2",
-     "kind": "window",
-     "pos": [
-      -2500,
-      -2600
-     ],
-     "floor": 1,
-     "wall": "S09_broken_back_windows_S",
-     "width": 150,
-     "sill_height": 95,
-     "top_height": 245,
-     "yaw": 180,
-     "links": [
-      "S09_broken_back_windows_r_f1_c3",
-      "street"
-     ],
-     "role": "window",
-     "module": "wall_window_200",
-     "slot": "balcony",
-     "structure": "load_bearing",
-     "material": "concrete_panel",
-     "sill_cm": 95,
-     "width_cm": 150,
-     "vault_onto": "none",
-     "vaultable": false
-    },
-    {
      "id": "S09_broken_back_windows_f1_w3",
      "kind": "window",
      "pos": [
@@ -34998,33 +34873,6 @@
      ],
      "role": "window",
      "module": "wall_window_200",
-     "structure": "load_bearing",
-     "material": "concrete_panel",
-     "sill_cm": 95,
-     "width_cm": 150,
-     "vault_onto": "none",
-     "vaultable": false
-    },
-    {
-     "id": "S09_broken_back_windows_f1_w5",
-     "kind": "window",
-     "pos": [
-      -2500,
-      -1850
-     ],
-     "floor": 1,
-     "wall": "S09_broken_back_windows_S",
-     "width": 150,
-     "sill_height": 95,
-     "top_height": 245,
-     "yaw": 180,
-     "links": [
-      "S09_broken_back_windows_r_f1_c10",
-      "street"
-     ],
-     "role": "window",
-     "module": "wall_window_200",
-     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -35163,6 +35011,44 @@
      "width_cm": 150,
      "vault_onto": "none",
      "vaultable": false
+    },
+    {
+     "id": "S09_broken_back_windows_bal_S09_broken_back_windows_col_s0A_f1_door",
+     "kind": "door",
+     "pos": [
+      -2500,
+      -2600
+     ],
+     "floor": 1,
+     "width": 150,
+     "wall": "S09_broken_back_windows_S",
+     "sill_height": 0,
+     "top_height": 240,
+     "links": [
+      "S09_broken_back_windows_r_f1_c3",
+      "balcony:S09_broken_back_windows_bal_S09_broken_back_windows_col_s0A_f1"
+     ],
+     "role": "balcony",
+     "module": "wall_door_200"
+    },
+    {
+     "id": "S09_broken_back_windows_bal_S09_broken_back_windows_col_s0B_f1_door",
+     "kind": "door",
+     "pos": [
+      -2500,
+      -1850
+     ],
+     "floor": 1,
+     "width": 150,
+     "wall": "S09_broken_back_windows_S",
+     "sill_height": 0,
+     "top_height": 240,
+     "links": [
+      "S09_broken_back_windows_r_f1_c10",
+      "balcony:S09_broken_back_windows_bal_S09_broken_back_windows_col_s0B_f1"
+     ],
+     "role": "balcony",
+     "module": "wall_door_200"
     }
    ],
    "partitions": [
@@ -37836,8 +37722,8 @@
      "door_ids": [
       "S09_broken_back_windows_f1_d10",
       "S09_broken_back_windows_f1_d11",
-      "S09_broken_back_windows_f1_w2",
-      "S09_broken_back_windows_f1_w3"
+      "S09_broken_back_windows_f1_w3",
+      "S09_broken_back_windows_bal_S09_broken_back_windows_col_s0A_f1_door"
      ],
      "anchor": [
       -2325,
@@ -38037,7 +37923,7 @@
      "door_ids": [
       "S09_broken_back_windows_f1_d4",
       "S09_broken_back_windows_f1_d5",
-      "S09_broken_back_windows_f1_w5"
+      "S09_broken_back_windows_bal_S09_broken_back_windows_col_s0B_f1_door"
      ],
      "anchor": [
       -2300,
@@ -38547,27 +38433,6 @@
      "wall": "S09_broken_back_windows_W"
     },
     {
-     "id": "me_S09_broken_back_windows_f1_w2",
-     "start": [
-      -2500,
-      -2675
-     ],
-     "end": [
-      -2500,
-      -2525
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      -1,
-      0
-     ],
-     "kind": "window",
-     "building": "S09_broken_back_windows",
-     "wall": "S09_broken_back_windows_S"
-    },
-    {
      "id": "me_S09_broken_back_windows_f1_w3",
      "start": [
       -2275,
@@ -38597,27 +38462,6 @@
      "end": [
       -2500,
       -2125
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      -1,
-      0
-     ],
-     "kind": "window",
-     "building": "S09_broken_back_windows",
-     "wall": "S09_broken_back_windows_S"
-    },
-    {
-     "id": "me_S09_broken_back_windows_f1_w5",
-     "start": [
-      -2500,
-      -1925
-     ],
-     "end": [
-      -2500,
-      -1775
      ],
      "floor": 1,
      "base_z": 300,
@@ -39017,6 +38861,40 @@
      ],
      "seed": 101014753,
      "author": "survivors"
+    }
+   ],
+   "balconies": [
+    {
+     "id": "S09_broken_back_windows_bal_S09_broken_back_windows_col_s0A_f1",
+     "floor": 1,
+     "rect": [
+      [
+       -2610,
+       -2750
+      ],
+      [
+       -2500,
+       -2450
+      ]
+     ],
+     "door_id": "S09_broken_back_windows_bal_S09_broken_back_windows_col_s0A_f1_door",
+     "rail_cm": 95
+    },
+    {
+     "id": "S09_broken_back_windows_bal_S09_broken_back_windows_col_s0B_f1",
+     "floor": 1,
+     "rect": [
+      [
+       -2610,
+       -2000
+      ],
+      [
+       -2500,
+       -1700
+      ]
+     ],
+     "door_id": "S09_broken_back_windows_bal_S09_broken_back_windows_col_s0B_f1_door",
+     "rail_cm": 95
     }
    ],
    "key_route": {
@@ -39760,33 +39638,6 @@
      "vaultable": false
     },
     {
-     "id": "S10_snow_drift_f1_w5",
-     "kind": "window",
-     "pos": [
-      -1800,
-      2600
-     ],
-     "floor": 1,
-     "wall": "S10_snow_drift_W",
-     "width": 150,
-     "sill_height": 95,
-     "top_height": 245,
-     "yaw": 270,
-     "links": [
-      "S10_snow_drift_r_f1_c9",
-      "street"
-     ],
-     "role": "window",
-     "module": "wall_window_200",
-     "slot": "balcony",
-     "structure": "load_bearing",
-     "material": "concrete_panel",
-     "sill_cm": 95,
-     "width_cm": 150,
-     "vault_onto": "none",
-     "vaultable": false
-    },
-    {
      "id": "S10_snow_drift_f1_w6",
      "kind": "window",
      "pos": [
@@ -39805,33 +39656,6 @@
      ],
      "role": "window",
      "module": "wall_window_200",
-     "structure": "load_bearing",
-     "material": "concrete_panel",
-     "sill_cm": 95,
-     "width_cm": 150,
-     "vault_onto": "none",
-     "vaultable": false
-    },
-    {
-     "id": "S10_snow_drift_f1_w7",
-     "kind": "window",
-     "pos": [
-      -2600,
-      2600
-     ],
-     "floor": 1,
-     "wall": "S10_snow_drift_W",
-     "width": 150,
-     "sill_height": 95,
-     "top_height": 245,
-     "yaw": 270,
-     "links": [
-      "S10_snow_drift_r_f1_c15",
-      "street"
-     ],
-     "role": "window",
-     "module": "wall_window_200",
-     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -40102,6 +39926,44 @@
      "width_cm": 150,
      "vault_onto": "none",
      "vaultable": false
+    },
+    {
+     "id": "S10_snow_drift_bal_S10_snow_drift_col_s0A_f1_door",
+     "kind": "door",
+     "pos": [
+      -2600,
+      2600
+     ],
+     "floor": 1,
+     "width": 150,
+     "wall": "S10_snow_drift_W",
+     "sill_height": 0,
+     "top_height": 240,
+     "links": [
+      "S10_snow_drift_r_f1_c15",
+      "balcony:S10_snow_drift_bal_S10_snow_drift_col_s0A_f1"
+     ],
+     "role": "balcony",
+     "module": "wall_door_200"
+    },
+    {
+     "id": "S10_snow_drift_bal_S10_snow_drift_col_s0B_f1_door",
+     "kind": "door",
+     "pos": [
+      -1800,
+      2600
+     ],
+     "floor": 1,
+     "width": 150,
+     "wall": "S10_snow_drift_W",
+     "sill_height": 0,
+     "top_height": 240,
+     "links": [
+      "S10_snow_drift_r_f1_c9",
+      "balcony:S10_snow_drift_bal_S10_snow_drift_col_s0B_f1"
+     ],
+     "role": "balcony",
+     "module": "wall_door_200"
     }
    ],
    "partitions": [
@@ -45609,7 +45471,7 @@
      "door_ids": [
       "S10_snow_drift_f1_d4",
       "S10_snow_drift_f1_d5",
-      "S10_snow_drift_f1_w5"
+      "S10_snow_drift_bal_S10_snow_drift_col_s0B_f1_door"
      ],
      "anchor": [
       -1800,
@@ -45781,7 +45643,7 @@
      "door_ids": [
       "S10_snow_drift_f1_d10",
       "S10_snow_drift_f1_d11",
-      "S10_snow_drift_f1_w7"
+      "S10_snow_drift_bal_S10_snow_drift_col_s0A_f1_door"
      ],
      "anchor": [
       -2575,
@@ -46888,27 +46750,6 @@
      "wall": "S10_snow_drift_W"
     },
     {
-     "id": "me_S10_snow_drift_f1_w5",
-     "start": [
-      -1725,
-      2600
-     ],
-     "end": [
-      -1875,
-      2600
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      0,
-      -1
-     ],
-     "kind": "window",
-     "building": "S10_snow_drift",
-     "wall": "S10_snow_drift_W"
-    },
-    {
      "id": "me_S10_snow_drift_f1_w6",
      "start": [
       -2075,
@@ -46916,27 +46757,6 @@
      ],
      "end": [
       -2225,
-      2600
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      0,
-      -1
-     ],
-     "kind": "window",
-     "building": "S10_snow_drift",
-     "wall": "S10_snow_drift_W"
-    },
-    {
-     "id": "me_S10_snow_drift_f1_w7",
-     "start": [
-      -2525,
-      2600
-     ],
-     "end": [
-      -2675,
       2600
      ],
      "floor": 1,
@@ -47625,6 +47445,40 @@
      "author": "cold"
     }
    ],
+   "balconies": [
+    {
+     "id": "S10_snow_drift_bal_S10_snow_drift_col_s0A_f1",
+     "floor": 1,
+     "rect": [
+      [
+       -2750,
+       2490
+      ],
+      [
+       -2450,
+       2600
+      ]
+     ],
+     "door_id": "S10_snow_drift_bal_S10_snow_drift_col_s0A_f1_door",
+     "rail_cm": 95
+    },
+    {
+     "id": "S10_snow_drift_bal_S10_snow_drift_col_s0B_f1",
+     "floor": 1,
+     "rect": [
+      [
+       -1950,
+       2490
+      ],
+      [
+       -1650,
+       2600
+      ]
+     ],
+     "door_id": "S10_snow_drift_bal_S10_snow_drift_col_s0B_f1_door",
+     "rail_cm": 95
+    }
+   ],
    "key_route": {
     "legs": [
      {
@@ -48044,27 +47898,6 @@
    "wall": "S01_open_W"
   },
   {
-   "id": "me_S01_open_f1_w2",
-   "start": [
-    1300,
-    -6425
-   ],
-   "end": [
-    1300,
-    -6275
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "window",
-   "building": "S01_open",
-   "wall": "S01_open_S"
-  },
-  {
    "id": "me_S01_open_f1_w3",
    "start": [
     1575,
@@ -48094,27 +47927,6 @@
    "end": [
     1300,
     -5825
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "window",
-   "building": "S01_open",
-   "wall": "S01_open_S"
-  },
-  {
-   "id": "me_S01_open_f1_w5",
-   "start": [
-    1300,
-    -5625
-   ],
-   "end": [
-    1300,
-    -5475
    ],
    "floor": 1,
    "base_z": 300,
@@ -48649,27 +48461,6 @@
    "wall": "S03_locked_door_N"
   },
   {
-   "id": "me_S03_locked_door_f1_w5",
-   "start": [
-    2500,
-    -2075
-   ],
-   "end": [
-    2500,
-    -1925
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "window",
-   "building": "S03_locked_door",
-   "wall": "S03_locked_door_N"
-  },
-  {
    "id": "me_S03_locked_door_f1_w6",
    "start": [
     2500,
@@ -48678,27 +48469,6 @@
    "end": [
     2500,
     -1575
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "window",
-   "building": "S03_locked_door",
-   "wall": "S03_locked_door_N"
-  },
-  {
-   "id": "me_S03_locked_door_f1_w7",
-   "start": [
-    2500,
-    -1275
-   ],
-   "end": [
-    2500,
-    -1125
    ],
    "floor": 1,
    "base_z": 300,
@@ -49859,27 +49629,6 @@
    "wall": "S07_roof_outside_W"
   },
   {
-   "id": "me_S07_roof_outside_f1_w2",
-   "start": [
-    -1300,
-    -6425
-   ],
-   "end": [
-    -1300,
-    -6275
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "window",
-   "building": "S07_roof_outside",
-   "wall": "S07_roof_outside_N"
-  },
-  {
    "id": "me_S07_roof_outside_f1_w3",
    "start": [
     -1375,
@@ -49909,27 +49658,6 @@
    "end": [
     -1300,
     -5825
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "window",
-   "building": "S07_roof_outside",
-   "wall": "S07_roof_outside_N"
-  },
-  {
-   "id": "me_S07_roof_outside_f1_w5",
-   "start": [
-    -1300,
-    -5625
-   ],
-   "end": [
-    -1300,
-    -5475
    ],
    "floor": 1,
    "base_z": 300,
@@ -50090,27 +49818,6 @@
    "wall": "S07_roof_outside_W"
   },
   {
-   "id": "me_S07_roof_outside_f2_w2",
-   "start": [
-    -1300,
-    -6425
-   ],
-   "end": [
-    -1300,
-    -6275
-   ],
-   "floor": 2,
-   "base_z": 600,
-   "height_cm": 95,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "window",
-   "building": "S07_roof_outside",
-   "wall": "S07_roof_outside_N"
-  },
-  {
    "id": "me_S07_roof_outside_f2_w3",
    "start": [
     -1375,
@@ -50140,27 +49847,6 @@
    "end": [
     -1300,
     -5825
-   ],
-   "floor": 2,
-   "base_z": 600,
-   "height_cm": 95,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "window",
-   "building": "S07_roof_outside",
-   "wall": "S07_roof_outside_N"
-  },
-  {
-   "id": "me_S07_roof_outside_f2_w5",
-   "start": [
-    -1300,
-    -5625
-   ],
-   "end": [
-    -1300,
-    -5475
    ],
    "floor": 2,
    "base_z": 600,
@@ -50632,27 +50318,6 @@
    "wall": "S09_broken_back_windows_W"
   },
   {
-   "id": "me_S09_broken_back_windows_f1_w2",
-   "start": [
-    -2500,
-    -2675
-   ],
-   "end": [
-    -2500,
-    -2525
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "window",
-   "building": "S09_broken_back_windows",
-   "wall": "S09_broken_back_windows_S"
-  },
-  {
    "id": "me_S09_broken_back_windows_f1_w3",
    "start": [
     -2275,
@@ -50682,27 +50347,6 @@
    "end": [
     -2500,
     -2125
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "window",
-   "building": "S09_broken_back_windows",
-   "wall": "S09_broken_back_windows_S"
-  },
-  {
-   "id": "me_S09_broken_back_windows_f1_w5",
-   "start": [
-    -2500,
-    -1925
-   ],
-   "end": [
-    -2500,
-    -1775
    ],
    "floor": 1,
    "base_z": 300,
@@ -51384,27 +51028,6 @@
    "wall": "S10_snow_drift_W"
   },
   {
-   "id": "me_S10_snow_drift_f1_w5",
-   "start": [
-    -1725,
-    2600
-   ],
-   "end": [
-    -1875,
-    2600
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    0,
-    -1
-   ],
-   "kind": "window",
-   "building": "S10_snow_drift",
-   "wall": "S10_snow_drift_W"
-  },
-  {
    "id": "me_S10_snow_drift_f1_w6",
    "start": [
     -2075,
@@ -51412,27 +51035,6 @@
    ],
    "end": [
     -2225,
-    2600
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    0,
-    -1
-   ],
-   "kind": "window",
-   "building": "S10_snow_drift",
-   "wall": "S10_snow_drift_W"
-  },
-  {
-   "id": "me_S10_snow_drift_f1_w7",
-   "start": [
-    -2525,
-    2600
-   ],
-   "end": [
-    -2675,
     2600
    ],
    "floor": 1,

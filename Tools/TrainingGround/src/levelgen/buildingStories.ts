@@ -369,6 +369,58 @@ function planSlotSpot(l: GenLayout, b: GenBuilding, room: GenRoom, storeys: read
   return { side, along, rooms, slots };
 }
 
+/** Depth of a usable slot balcony (the kit balcony panel is ~102 cm deep: designer 2026-11-22 "the decorative balconies are too narrow"). */
+export const SLOT_BALCONY_DEPTH = 110;
+
+/**
+ * Usable balconies on the balcony SLOTS of a planned block (designer 2026-11-22: "balconies on every building - step out, a position behind
+ * the parapet (low cover), vault the rail and drop by height; the decorative ones get a balcony door"). Up to `maxColumns` flat columns
+ * (in column order, the spot checked like the escape's: wall, stairs, ground doors, outside clear) get, on every storey of that column's
+ * slot windows, a balcony door in place of the window and a balcony slab SLOT_BALCONY_DEPTH deep with a low-vault rail - no fire escape
+ * (the rail + the fall rules are the way down). A building with balconies already (story 4's escape) is left alone. Mutates `b`; returns how
+ * many balconies were added.
+ */
+export function applySlotBalconies(l: GenLayout, b: GenBuilding, maxColumns = 2): number {
+  if (!b.enterable || b.hollow || (b.balconies ?? []).length || maxColumns <= 0) return 0;
+  const all = slotWindows(b);
+  const columns = [...new Set(all.map((x) => x.column))].sort();
+  const realRooms = new Set(b.rooms ?? []);
+  const O = BUILDING_PLANS.constants.openings;
+  const half = FACADE.balconyWidth / 2;
+  let added = 0;
+  let usedColumns = 0;
+  for (const column of columns) {
+    if (usedColumns >= maxColumns) break;
+    const mine = all.filter((x) => x.column === column).sort((x, y) => (x.op.floor ?? 0) - (y.op.floor ?? 0));
+    const storeys = [...new Set(mine.map((x) => x.op.floor ?? 0))].filter((f) => f >= 1 && f < b.floors);
+    if (!storeys.length) continue;
+    const lowest = mine.find((x) => (x.op.floor ?? 0) === storeys[0]);
+    const spot = lowest ? planSlotSpot(l, b, lowest.room, storeys, all) : null;
+    if (!spot || !spot.slots) continue;
+    const taken = new Set<string>([...unifyOpenings(b).map((o) => o.id ?? ''), ...(b.balconies ?? []).map((x) => x.id)]);
+    storeys.forEach((f, i) => {
+      const slot = spot.slots![i], rm = spot.rooms[i];
+      const balconyId = uniqueId(taken, `${b.id}_bal_${column}_f${f}`);
+      taken.add(balconyId);
+      const doorId = uniqueId(taken, `${balconyId}_door`);
+      taken.add(doorId);
+      b.openings = editableOpenings(b).filter((o) => o.id !== slot.id);
+      b.mantle_edges = (b.mantle_edges ?? []).filter((m) => m.id !== `me_${slot.id}`);
+      if (realRooms.has(rm)) rm.door_ids = (rm.door_ids ?? []).filter((x) => x !== slot.id);
+      editableOpenings(b).push({
+        id: doorId, kind: 'door', pos: slot.pos, floor: f, width: O.door_cm, ...(slot.wall ? { wall: slot.wall } : {}),
+        sill_height: 0, top_height: O.door_top_cm, links: [rm.id, `balcony:${balconyId}`] as [string, string], role: 'balcony' as const, module: 'wall_door_200',
+      });
+      if (realRooms.has(rm)) rm.door_ids = [...(rm.door_ids ?? []), doorId];
+      (b.balconies ??= []).push({ id: balconyId, floor: f, rect: outBox(b, spot.side, spot.along, half, SLOT_BALCONY_DEPTH), door_id: doorId,
+        rail_cm: obstacleHeight('low_vault') });
+      added += 1;
+    });
+    usedColumns += 1;
+  }
+  return added;
+}
+
 /** A facade spot for the escape: `room` and a room above on every storey reach the facade there, wall and ground are free. */
 function planEscapeSpot(l: GenLayout, b: GenBuilding, room: GenRoom, storeys: readonly number[]): EscapeSpot | null {
   const viaSlot = planSlotSpot(l, b, room, storeys);

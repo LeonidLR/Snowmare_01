@@ -74,8 +74,9 @@ if ($StepList -contains "bake") {
     if ($LASTEXITCODE -ne 0) { Write-Host "kit dress: navmesh bake failed" -ForegroundColor Red; exit 5 }
 }
 if ($StepList -contains "smoke") {
-    & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "smoke.ps1") -Command "CodexTactics.LevelGenBuildingsSmoke" -Map $Target `
+    & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "smoke.ps1") -Command "Codex.Doors.InnerLockedShare 0, CodexTactics.LevelGenBuildingsSmoke" -Map $Target `
         -Extra "-LevelGenBuildingsSmokeMaxFail=10" -Log "KitDressSmoke-$Leaf.log" -TimeoutSeconds 900
+    # (2026-11-22: the showcase maps have the doors on and a quarter of the inner doors locked - the path check runs with none locked.)
     if ($LASTEXITCODE -ne 0) { $Failed = $true; Write-Host "kit dress: LevelGenBuildingsSmoke failed" -ForegroundColor Red }
 }
 if ($StepList -contains "shots" -and -not $Grey) {
