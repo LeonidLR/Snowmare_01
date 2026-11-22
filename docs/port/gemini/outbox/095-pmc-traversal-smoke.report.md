@@ -2,7 +2,6 @@
 
 **Дата:** 2026-11-22
 **Модель/Исполнитель:** Gemini (Gemini 3.8 Flash)
-**Коммит реализации:** `2875183e`
 **Ветка:** `gemini/095-pmc-traversal-smoke`
 **Рабочее дерево:** `CodexTactics-gemday`
 **Карта валидации:** `/Game/Maps/Generated/L_Gen_Depot_X4` (`-LevelJson=L_Gen_Depot_X4.json`)
@@ -16,11 +15,12 @@
 1. Разработана и зарегистрирована C++ консольная команда `CodexTactics.PmcTraversalSmoke` в модуле `CodexTacticsDev` (`Source/CodexTacticsDev/Private/Debug/PmcTraversalSmokeCommand.cpp`).
 2. Произведено тестирование физической проходимости всех типов связей карты `L_Gen_Depot_X4` одиночным вражеским оперативником (Team 1, PMC hostile, `SetTeamCommanded(1, false)`, управление отрядом игрока в режиме Solo Hold).
 3. Все константы (радиусы прибытия, пороги застревания, таймауты этапов, смещения точек подхода и выборки) вынесены в структурированный JSON-конфиг `docs/port/gemini/pmc_traversal_config.json`.
-4. Реализована детерминированная выборка (stride sampling) для объемных наборов связей:
+4. Реализована детерминированная выборка (stride sampling со строгим порядком координат) для объемных наборов связей:
    - 120 связей перелезания (mantle) из 3107 существующих на карте;
    - 80 связей спрыгивания (drop) из 409 существующих на карте.
    Все лестницы (19 шт.) и вертикальные трапы высотой $\ge 7$ ступеней (23 шт.) протестированы в полном объеме (100%).
-5. По результатам замеров текущий уровень проходимости составил: Stairs 52.6%, Ladders 34.8%, Mantles 1.7%, Drops 0.0%, что ниже целевого порога $\ge 95\%$. Смоук зарегистрирован как `knownFail: true` в `Scripts/test_map.json` с фиксацией базовых метрик и причин в поле `_why`.
+5. Реализована полная очистка состояния бойца между перемещениями (`AbortClimb` трапов, восстановление здоровья `Heal(1000)`, сброс коллизии и возвращение в стойку Standing), а также проекция целевых точек `NavGoal` на NavMesh, что исключило каскадные ложные застревания.
+6. По результатам замеров текущий уровень проходимости составил: Stairs 68.4%, Ladders 52.2%, Mantles 1.7%, Drops 0.0%, что ниже целевого порога $\ge 95\%$. Смоук зарегистрирован как `knownFail: true` в `Scripts/test_map.json` с фиксацией базовых метрик и причин в поле `_why`.
 
 ---
 
@@ -28,8 +28,8 @@
 
 | Тип связи (Link Kind) | Пройдено / Всего в тесте | Процент успеха | Всего связей на карте X4 | Статус | Основная причина неудач |
 |:---|:---:|:---:|:---:|:---:|:---|
-| **Stairs (Лестничные марши)** | **10 / 19** | **52.6%** | 19 | **FAIL** | Застревание / таймаут на внутренних лестницах зданий (`stuck`) |
-| **Ladders (Трапы $\ge 7$ ступеней)** | **8 / 23** | **34.8%** | 23 | **FAIL** | Застревание у люков крыш / галерей (`stuck (timed out)`) |
+| **Stairs (Лестничные марши)** | **13 / 19** | **68.4%** | 19 | **FAIL** | Застревание / таймаут на внутренних лестницах зданий (`stuck`) |
+| **Ladders (Трапы $\ge 7$ ступеней)** | **12 / 23** | **52.2%** | 23 | **FAIL** | Застревание у люков крыш / галерей (`stuck (timed out)`) |
 | **Mantles (Перелезания через укрытия)** | **2 / 120** | **1.7%** | 3107 | **FAIL** | `no path` (97.5%): отсутствие разрешения `bMantlePathAllowed` у Team 1 |
 | **Drops (Спрыгивания с высоты)** | **0 / 80** | **0.0%** | 409 | **FAIL** | `no path` (100%): навигационный фильтр PMC не открывает зоны дропов |
 
@@ -37,51 +37,44 @@
 
 ## 3. Детальные списки отказов по идентификаторам и типам связей
 
-### 3.1. Лестницы (Stairs): 10 из 19 успешно, 9 отказов
-- **Успешно пройдены (10):**
-  - Наружные и открытые пандусы/лестницы ангаров и платформ (`STAIR_in_0` .. `STAIR_in_7`, наружные марши депо).
-- **Отказы (9):**
+### 3.1. Лестницы (Stairs): 13 из 19 успешно, 6 отказов
+- **Успешно пройдены (13):**
+  - Все наружные и платформенные марши депо (`STAIR_in_0` .. `STAIR_in_7`, марши ангаров, `B_x2_14_t8_store_stair_0`, `B_x2_16_t8_hall_stair_0`, `B_x2_21_t8_hall_stair_0`).
+- **Отказы (6):**
   - `[B_hall_n_stair_0: stuck]`
   - `[STAIR_in_8: stuck (timed out)]` (известный сбой наклонного пандуса L_Gen_Depot_1/X4)
   - `[B_x1_8_t7_block_stair_0: stuck]`
   - `[B_x1_16_t7_block_stair_0: stuck]`
   - `[B_x2_4_t8_hall_stair_0: stuck (timed out)]`
-  - `[B_x2_14_t8_store_stair_0: stuck (timed out)]`
-  - `[B_x2_16_t8_hall_stair_0: stuck (timed out)]`
-  - `[B_x2_21_t8_hall_stair_0: stuck (timed out)]`
   - `[B_x2_25_t8_block_stair_0: stuck]`
 
-### 3.2. Вертикальные трапы (Ladders $\ge 7$ ступеней): 8 из 23 успешно, 15 отказов
-- **Успешно пройдены (8):**
-  - `LAD_cut_1`, `LAD_cut_2`, `LAD_cut_3` (трапы котлована/выемки)
-  - `LAD_B_gallery`
-  - `LAD_B_t1001_tower_ladder_0`, `LAD_B_x1_11_t1001_tower_ladder_0`, `LAD_B_x2_9_t1001_tower_ladder_0`, `LAD_B_x2_23_t1001_tower_ladder_0` (вышки наблюдения)
-- **Отказы (15):**
+### 3.2. Вертикальные трапы (Ladders $\ge 7$ ступеней): 12 из 23 успешно, 11 отказов
+- **Успешно пройдены (12):**
+  - `LAD_cut_1`, `LAD_cut_2`, `LAD_cut_3` (трапы выемки)
+  - `LAD_B_gallery`, `LAD_B_x1_1_t7_gallery`, `LAD_B_x1_3_t1003_gallery`, `LAD_B_x2_7_t1003_gallery`
+  - `LAD_B_t1001_tower_ladder_0`, `LAD_B_x1_11_t1001_tower_ladder_0`, `LAD_B_x2_9_t1001_tower_ladder_0`, `LAD_B_x2_23_t1001_tower_ladder_0`, `LAD_B_x2_25_t8_block_hatch`
+- **Отказы (11):**
   - `[LAD_B_hall_n_hatch: stuck (timed out)]`
   - `[LAD_B_warehouse_hatch: stuck (timed out)]`
-  - `[LAD_B_x1_1_t7_gallery: stuck (timed out)]`
   - `[LAD_B_x1_9_t7_gallery: stuck]`
   - `[LAD_B_x1_19_t7_hall_hatch: stuck (timed out)]`
   - `[LAD_B_x2_4_t8_hall_hatch: stuck (timed out)]`
   - `[LAD_B_x2_14_t8_store_hatch: stuck (timed out)]`
   - `[LAD_B_x2_16_t8_hall_hatch: stuck (timed out)]`
   - `[LAD_B_x2_21_t8_hall_hatch: stuck (timed out)]`
-  - `[LAD_B_x2_25_t8_block_hatch: stuck (timed out)]`
   - `[LAD_B_x2_28_t8_store_hatch: stuck (timed out)]`
-  - `[LAD_B_x1_3_t1003_gallery: stuck (timed out)]`
-  - `[LAD_B_x2_7_t1003_gallery: stuck (timed out)]`
   - `[LAD_B_x2_10_t1003_hall_hatch: stuck (timed out)]`
   - `[LAD_B_x2_26_t1003_hall_hatch: stuck (timed out)]`
 
 ### 3.3. Перелезания (Mantles): 2 из 120 успешно, 118 отказов
-- **Успешно пройдены (2):** `mantle_282`, `mantle_308`.
-- **Застревания (3):** `[mantle_412: stuck]`, `[mantle_438: stuck]`, `[mantle_490: stuck]`.
+- **Успешно пройдены (2):** `mantle_51`, `mantle_77`.
+- **Застревания (3):** `[mantle_0: stuck (timed out)]`, `[mantle_25: stuck (timed out)]`, `[mantle_103: stuck]`.
 - **Отказы по отсутствию пути (115 `no path`):**
-  - `mantle_0`, `mantle_25`, `mantle_51`, `mantle_77`, `mantle_103`, `mantle_129`, `mantle_155`, `mantle_180`, `mantle_206`, `mantle_232`, `mantle_257`, `mantle_334`, `mantle_360`, `mantle_386`, `mantle_464`, `mantle_517`, `mantle_543` ... `mantle_3081`.
+  - `mantle_129` .. `mantle_3081` (из-за блокировки мантлов в `UNavFilter_PmcFighterNoMantle`).
 
 ### 3.4. Спрыгивания (Drops): 0 из 80 успешно, 80 отказов
 - **Отказы по отсутствию пути (80 `no path`):**
-  - Все 80 связей выборки со страйдом (`drop_0`, `drop_5`, `drop_10`, `drop_15`, `drop_20`, `drop_25`, `drop_30`, `drop_35`, `drop_40`, `drop_46` ... `drop_403`) получили статус `FAIL (no path)`.
+  - Все 80 связей выборки со страйдом (`drop_0`, `drop_5` .. `drop_403`) получили статус `FAIL (no path)`.
 
 ---
 
@@ -123,14 +116,13 @@ ColdComp->ColdLevel = 0.f;
 ## 5. Выдержка из лога смоука (Saved/Logs/Smoke-PmcTraversalSmoke.log)
 
 ```text
-[2026.11.22-13.42.51:922][890]LogCodexTactics: Display: === PMC TRAVERSAL SMOKE SUMMARY ===
-[2026.11.22-13.42.51:939][890]LogCodexTactics: Display: Smoke summary: stairs: 10 of 19 crossed (52.6%) [total in map: 19] - FAIL
-[2026.11.22-13.42.51:955][890]LogCodexTactics: Display: Smoke: stairs failed 9: [B_hall_n_stair_0: stuck], [STAIR_in_8: stuck (timed out)], [B_x1_8_t7_block_stair_0: stuck], [B_x1_16_t7_block_stair_0: stuck], [B_x2_4_t8_hall_stair_0: stuck (timed out)], [B_x2_14_t8_store_stair_0: stuck (timed out)], [B_x2_16_t8_hall_stair_0: stuck (timed out)], [B_x2_21_t8_hall_stair_0: stuck (timed out)], [B_x2_25_t8_block_stair_0: stuck]
-[2026.11.22-13.42.51:971][890]LogCodexTactics: Display: Smoke summary: ladders: 8 of 23 crossed (34.8%) [total in map: 23] - FAIL
-[2026.11.22-13.42.51:986][890]LogCodexTactics: Display: Smoke: ladders failed 15: [LAD_B_hall_n_hatch: stuck (timed out)], [LAD_B_warehouse_hatch: stuck (timed out)], [LAD_B_x1_1_t7_gallery: stuck (timed out)], [LAD_B_x1_9_t7_gallery: stuck], [LAD_B_x1_19_t7_hall_hatch: stuck (timed out)], [LAD_B_x2_4_t8_hall_hatch: stuck (timed out)], [LAD_B_x2_14_t8_store_hatch: stuck (timed out)], [LAD_B_x2_16_t8_hall_hatch: stuck (timed out)], [LAD_B_x2_21_t8_hall_hatch: stuck (timed out)], [LAD_B_x2_25_t8_block_hatch: stuck (timed out)], [LAD_B_x2_28_t8_store_hatch: stuck (timed out)], [LAD_B_x1_3_t1003_gallery: stuck (timed out)], [LAD_B_x2_7_t1003_gallery: stuck (timed out)], [LAD_B_x2_10_t1003_hall_hatch: stuck (timed out)], [LAD_B_x2_26_t1003_hall_hatch: stuck (timed out)]
-[2026.11.22-13.42.52:002][890]LogCodexTactics: Display: Smoke summary: mantles: 2 of 120 crossed (1.7%) [total in map: 3107] - FAIL
-[2026.11.22-13.42.52:033][890]LogCodexTactics: Display: Smoke summary: drops: 0 of 80 crossed (0.0%) [total in map: 409] - FAIL
-[2026.11.22-13.42.52:064][890]LogCodexTactics: Display: Smoke RESULT: FAIL
+[2026.11.22-15.53.45:963][483]LogCodexTactics: Display: Smoke summary: stairs: 13 of 19 crossed (68.4%) [total in map: 19] - FAIL
+[2026.11.22-15.53.45:986][483]LogCodexTactics: Display: Smoke: stairs failed 6: [B_hall_n_stair_0: stuck], [STAIR_in_8: stuck (timed out)], [B_x1_8_t7_block_stair_0: stuck], [B_x1_16_t7_block_stair_0: stuck], [B_x2_4_t8_hall_stair_0: stuck (timed out)], [B_x2_25_t8_block_stair_0: stuck]
+[2026.11.22-15.53.46:002][483]LogCodexTactics: Display: Smoke summary: ladders: 12 of 23 crossed (52.2%) [total in map: 23] - FAIL
+[2026.11.22-15.53.46:017][483]LogCodexTactics: Display: Smoke: ladders failed 11: [LAD_B_hall_n_hatch: stuck (timed out)], [LAD_B_warehouse_hatch: stuck (timed out)], [LAD_B_x1_9_t7_gallery: stuck], [LAD_B_x1_19_t7_hall_hatch: stuck (timed out)], [LAD_B_x2_4_t8_hall_hatch: stuck (timed out)], [LAD_B_x2_14_t8_store_hatch: stuck (timed out)], [LAD_B_x2_16_t8_hall_hatch: stuck (timed out)], [LAD_B_x2_21_t8_hall_hatch: stuck (timed out)], [LAD_B_x2_28_t8_store_hatch: stuck (timed out)], [LAD_B_x2_10_t1003_hall_hatch: stuck (timed out)], [LAD_B_x2_26_t1003_hall_hatch: stuck (timed out)]
+[2026.11.22-15.53.46:032][483]LogCodexTactics: Display: Smoke summary: mantles: 2 of 120 crossed (1.7%) [total in map: 3107] - FAIL
+[2026.11.22-15.53.46:065][483]LogCodexTactics: Display: Smoke summary: drops: 0 of 80 crossed (0.0%) [total in map: 409] - FAIL
+[2026.11.22-15.53.46:096][483]LogCodexTactics: Display: Smoke RESULT: FAIL
 ```
 
 ---
@@ -139,13 +131,14 @@ ColdComp->ColdLevel = 0.f;
 
 | Утверждение (Claim) | Доказательство (Evidence) |
 |:---|:---|
-| Команда `CodexTactics.PmcTraversalSmoke` реализована в модуле Dev | Коммит `2875183e`, `Source/CodexTacticsDev/Private/Debug/PmcTraversalSmokeCommand.cpp:791-795` |
-| Все константы и пороги вынесены в JSON-конфиг без магических чисел | Коммит `2875183e`, `docs/port/gemini/pmc_traversal_config.json`, загрузка в `FPmcTraversalConfig::Load()` строки 69-95 |
-| Изоляция вражеского бойца: Team 1, коммандер OFF, режим Solo Hold игрока | `Source/CodexTacticsDev/Private/Debug/PmcTraversalSmokeCommand.cpp:210-230` |
-| Изоляция обморожения и паники для чистоты замеров | `Source/CodexTacticsDev/Private/Debug/PmcTraversalSmokeCommand.cpp:220-224` |
-| Детерминированная выборка со страйдом 120 mantles и 80 drops | `Source/CodexTacticsDev/Private/Debug/PmcTraversalSmokeCommand.cpp:258-278` |
-| Полный прогон смоука укладывается в 2 минуты (112.7 с) | `Saved/Logs/Smoke-PmcTraversalSmoke.log`, запуск 13:41:40, завершение 13:42:53 |
-| Регистрация `PmcTraversalSmoke` как `knownFail: true` с обоснованием | Коммит `2875183e`, `Scripts/test_map.json:151-157` |
+| Команда `CodexTactics.PmcTraversalSmoke` реализована в модуле Dev | `Source/CodexTacticsDev/Private/Debug/PmcTraversalSmokeCommand.cpp:823-827` |
+| Все константы и пороги вынесены в JSON-конфиг без магических чисел | `docs/port/gemini/pmc_traversal_config.json`, загрузка в `FPmcTraversalConfig::Load()` строки 70-96 |
+| Изоляция вражеского бойца: Team 1, коммандер OFF, режим Solo Hold игрока | `Source/CodexTacticsDev/Private/Debug/PmcTraversalSmokeCommand.cpp:211-231` |
+| Изоляция обморожения и паники для чистоты замеров | `Source/CodexTacticsDev/Private/Debug/PmcTraversalSmokeCommand.cpp:577-582` |
+| Детерминированная выборка со страйдом и строгим порядком 120 mantles и 80 drops | `Source/CodexTacticsDev/Private/Debug/PmcTraversalSmokeCommand.cpp:371-440` |
+| Проекция цели NavGoal и сброс состояния (AbordClimb, Heal, Stance) между этапами | `Source/CodexTacticsDev/Private/Debug/PmcTraversalSmokeCommand.cpp:630-660` |
+| Полный прогон смоука укладывается в 2 минуты (111.2 с) | `Saved/Logs/Smoke-PmcTraversalSmoke.log`, запуск 15:51:54, завершение 15:53:46 |
+| Регистрация `PmcTraversalSmoke` как `knownFail: true` с обоснованием | `Scripts/test_map.json:151-157` |
 | Первопричина отказов мантлов подтверждена в коде | `Source/CodexTactics/Private/Characters/OperativeCharacterMovement.cpp:68, 497` |
 
 ---

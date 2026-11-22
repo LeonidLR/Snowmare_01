@@ -153,7 +153,7 @@
       "extra": "-LevelJson=L_Gen_Depot_X4.json",
       "timeout": 1200,
       "knownFail": true,
-      "_why": "smart enemies T-12 baseline: stairs 10/19 (52.6%), ladders 8/23 (34.8%), mantles 2/120 (1.7%), drops 0/80 (0.0%) - PMC fighter lacks mantle permission (bMantlePathAllowed gates on player squad solo mode) and drop nav filters; fixes are Phase 2 tasks (T-07)"
+      "_why": "smart enemies T-12 baseline: stairs 13/19 (68.4%), ladders 12/23 (52.2%), mantles 2/120 (1.7%), drops 0/80 (0.0%) - PMC fighter lacks mantle permission (bMantlePathAllowed gates on player squad solo mode) and drop nav filters; fixes are Phase 2 tasks (T-07)"
     },
     "LevelGenLaddersSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "extra": "-LevelJson=L_Gen_Depot_1.json", "timeout": 1200, "_why": "game designer bug report 2026-11-02 on the generated map (docs/design/levelgen/LEVEL_GENERATOR.md 8): every ladder of the layout faces away from its wall and is climbed up and down by move orders through its nav link; the squad walks into the cut and out by the ramp crossing, across the bridge, out of and into the cut by the V3 cut ladder - each ladder / entry reported by id. Any generated map: map=<L_Gen_...> with that map loaded" },
     "LevelGenBuildingsSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelGenBuildingsSmokeMaxFail=10", "timeout": 180, "_why": "048: report complete operative nav paths from every exterior door to every room, landing and walkable roof on the old X6 layout" },
@@ -298,9 +298,16 @@
       "smokes": ["LeaderSwitchMoveSmoke", "LeaderSwitchLadderSmoke", "RealtimeSelectSmoke", "GroupSelectSmoke", "SoloRejoinSmoke", "SoloStanceSmoke", "SquadControlSmoke", "LadderQueueSmoke"]
     },
     {
+      "name": "pmc-traversal-2026-11-22",
+      "_comment": "smart enemies T-12 traversal smoke on generated map: stairs, ladders, mantles, drops",
+      "globs": ["Source/**/Debug/PmcTraversalSmoke*", "docs/port/gemini/pmc_traversal_config.json"],
+      "tests": ["CodexTactics.Falls", "CodexTactics.Ladder"],
+      "smokes": ["PmcTraversalSmoke", "LevelGenLaddersSmoke", "LevelGenRampSmoke"]
+    },
+    {
       "name": "pmc-squad-ai-2026-11-03",
       "_comment": "PMC squads on the operative body (user request 2026-11-03, docs/systems/pmc-squad-ai.md): teams (AOperativeCharacter::TeamId), UPmcSquadSubsystem (team sight, targets, the utility commander), the shared SquadOrderCatalog, PmcCommanderRules / PmcOperatorRules, the self-play arena (CodexTactics.PmcArena) and its level JSON.",
-      "globs": ["Source/**/AI/Pmc*", "Source/**/AI/SquadOrderCatalog*", "Source/**/Debug/Pmc*", "Content/Data/AI/pmc_*.json", "Content/Data/LevelJson/L_PmcArena.json", "Content/Data/LevelJson/L_PmcArenaDepot.json", "Content/Data/LevelJson/L_Gen_Depot_1.json", "Source/**/UI/MinimapSubsystem*",
+      "globs": ["Source/**/AI/Pmc*", "Source/**/AI/SquadOrderCatalog*", "Source/**/Debug/PmcArena*", "Content/Data/AI/pmc_*.json", "Content/Data/LevelJson/L_PmcArena.json", "Content/Data/LevelJson/L_PmcArenaDepot.json", "Content/Data/LevelJson/L_Gen_Depot_1.json", "Source/**/UI/MinimapSubsystem*",
         "Source/**/Characters/OperativeCharacterInternal*", "Source/**/Characters/OperativeCharacterCombat*", "Source/**/Characters/OperativeCharacterHealth*", "Source/**/Combat/TacticalSightSubsystem*", "Source/**/Combat/CombatCheats*", "Source/**/Combat/WaveSubsystem*"],
       "tests": ["CodexTactics.AI.PmcCommander", "CodexTactics.AI.PmcArena", "CodexTactics.AI.PmcTactical", "CodexTactics.AI.PmcEncounter", "CodexTactics.AI.PmcOperators", "CodexTactics.AI.SquadOrderCatalog", "CodexTactics.Combat.Sight", "CodexTactics.Combat.Cheats", "CodexTactics.LevelJson"],
       "smokes": ["StealthDetectionSmoke", "PmcTeamSmoke", "PmcUnderFireSmoke", "PmcFireLineSmoke", "CornerStandoffSmoke", "CornerExitSmoke", "UnderFireManoeuvreSmoke", "PmcDeathPoseSmoke", "FireArcSmoke", "PmcCommanderSmoke", "PmcStandoffSmoke", "PmcArenaSmoke", "PmcArenaObjectiveSmoke", "TacticalPmcSmoke", "PmcArenaTacticalSmoke", "PmcStalemateSmoke", "PmcRoofDefenceSmoke", "PmcEncounterSmoke", "PmcEncounterHuntSmoke", "PmcPostsSmoke", "PmcOwnedChargesSmoke", "SquadFireSmoke", "SightSmoke", "EnemyAISmoke", "SuppressionSmoke", "SaveLoadSmoke", "CoverSmoke", "FormationLabCombatSmoke"]
@@ -341,7 +348,7 @@
       "globs": ["Source/**/Falls/**", "Source/**/Debug/FallDrop*", "Source/**/Debug/FallSmokeUtils*", "Source/**/Debug/DropSoftlock*", "Source/**/Debug/DropLinkReach*", "Source/**/Debug/DropReachSweep*", "Source/**/Characters/OperativeCharacterFall*", "Source/**/UI/CodexTacticsHUDDrops*", "Content/Data/Movement/**",
         "Source/**/Characters/EnemyAIController*", "Source/**/Characters/OperativeAnimInstance*", "Content/Characters/Operatives/ABP_Operative*", "Source/CodexTacticsEditor/**/OperativeAnimGraphLibrary*"],
       "tests": ["CodexTactics.Falls", "CodexTactics.Ladder", "CodexTactics.Combat.Knockdown", "CodexTactics.LevelJson"],
-      "smokes": ["PmcTraversalSmoke", "FallDropSmoke", "DropSoftlockSmoke", "DropLinkReachSmoke", "LevelGenLaddersSmoke", "LevelGenRouteSmoke", "LevelGenRampSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "CorpseFallSmoke", "KnockdownSmoke", "KnockdownCoverSmoke", "MovementSmoke"]
+      "smokes": ["FallDropSmoke", "DropSoftlockSmoke", "DropLinkReachSmoke", "LevelGenLaddersSmoke", "LevelGenRouteSmoke", "LevelGenRampSmoke", "LadderClimbSmoke", "LadderEnemySmoke", "CorpseFallSmoke", "KnockdownSmoke", "KnockdownCoverSmoke", "MovementSmoke"]
     },
     {
       "name": "formation-far-side-2026-11-01",

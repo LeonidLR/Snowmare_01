@@ -25,6 +25,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/HealthComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Containers/Ticker.h"
 #include "Dom/JsonObject.h"
@@ -147,6 +148,7 @@ namespace PmcTraversalSmoke
 		FVector StartSpot = FVector::ZeroVector;
 		FRotator StartFacing = FRotator::ZeroRotator;
 		FVector Goal = FVector::ZeroVector;
+		FVector NavGoal = FVector::ZeroVector;
 		float GoalZ = 0.f;
 	};
 
@@ -368,11 +370,19 @@ namespace PmcTraversalSmoke
 				State.Stats[static_cast<int32>(ELinkKind::Mantle)].TotalInMap = Mantles.Num();
 				Mantles.Sort([](const FMantleLink& A, const FMantleLink& B)
 				{
-					if (!FMath::IsNearlyEqual(A.Start.X, B.Start.X, 1.f)) return A.Start.X < B.Start.X;
-					if (!FMath::IsNearlyEqual(A.Start.Y, B.Start.Y, 1.f)) return A.Start.Y < B.Start.Y;
-					if (!FMath::IsNearlyEqual(A.Start.Z, B.Start.Z, 1.f)) return A.Start.Z < B.Start.Z;
-					if (!FMath::IsNearlyEqual(A.End.X, B.End.X, 1.f)) return A.End.X < B.End.X;
-					return A.End.Y < B.End.Y;
+					const int64 Asx = FMath::RoundToInt64(A.Start.X);
+					const int64 Bsx = FMath::RoundToInt64(B.Start.X);
+					if (Asx != Bsx) return Asx < Bsx;
+					const int64 Asy = FMath::RoundToInt64(A.Start.Y);
+					const int64 Bsy = FMath::RoundToInt64(B.Start.Y);
+					if (Asy != Bsy) return Asy < Bsy;
+					const int64 Asz = FMath::RoundToInt64(A.Start.Z);
+					const int64 Bsz = FMath::RoundToInt64(B.Start.Z);
+					if (Asz != Bsz) return Asz < Bsz;
+					const int64 Aex = FMath::RoundToInt64(A.End.X);
+					const int64 Bex = FMath::RoundToInt64(B.End.X);
+					if (Aex != Bex) return Aex < Bex;
+					return FMath::RoundToInt64(A.End.Y) < FMath::RoundToInt64(B.End.Y);
 				});
 
 				const int32 Total = Mantles.Num();
@@ -412,11 +422,19 @@ namespace PmcTraversalSmoke
 				State.Stats[static_cast<int32>(ELinkKind::Drop)].TotalInMap = Drops.Num();
 				Drops.Sort([](const FDropLink& A, const FDropLink& B)
 				{
-					if (!FMath::IsNearlyEqual(A.Start.X, B.Start.X, 1.f)) return A.Start.X < B.Start.X;
-					if (!FMath::IsNearlyEqual(A.Start.Y, B.Start.Y, 1.f)) return A.Start.Y < B.Start.Y;
-					if (!FMath::IsNearlyEqual(A.Start.Z, B.Start.Z, 1.f)) return A.Start.Z < B.Start.Z;
-					if (!FMath::IsNearlyEqual(A.End.X, B.End.X, 1.f)) return A.End.X < B.End.X;
-					return A.End.Y < B.End.Y;
+					const int64 Asx = FMath::RoundToInt64(A.Start.X);
+					const int64 Bsx = FMath::RoundToInt64(B.Start.X);
+					if (Asx != Bsx) return Asx < Bsx;
+					const int64 Asy = FMath::RoundToInt64(A.Start.Y);
+					const int64 Bsy = FMath::RoundToInt64(B.Start.Y);
+					if (Asy != Bsy) return Asy < Bsy;
+					const int64 Asz = FMath::RoundToInt64(A.Start.Z);
+					const int64 Bsz = FMath::RoundToInt64(B.Start.Z);
+					if (Asz != Bsz) return Asz < Bsz;
+					const int64 Aex = FMath::RoundToInt64(A.End.X);
+					const int64 Bex = FMath::RoundToInt64(B.End.X);
+					if (Aex != Bex) return Aex < Bex;
+					return FMath::RoundToInt64(A.End.Y) < FMath::RoundToInt64(B.End.Y);
 				});
 
 				const int32 Total = Drops.Num();
@@ -464,8 +482,9 @@ namespace PmcTraversalSmoke
 		{
 			const ELinkKind Kind = static_cast<ELinkKind>(k);
 			const FKindStats& KS = State.Stats[k];
-			const double Rate = KS.Sampled > 0 ? (100.0 * static_cast<double>(KS.Crossed) / static_cast<double>(KS.Sampled)) : 100.0;
-			const bool bKindPass = KS.Sampled == 0 || Rate >= 95.0;
+			const double Rate = KS.Sampled > 0 ? (100.0 * static_cast<double>(KS.Crossed) / static_cast<double>(KS.Sampled)) : 0.0;
+			const bool bFilterExcluded = (!State.OnlyFilter.IsEmpty() || (!State.KindsFilter.IsEmpty() && !State.KindsFilter.Contains(FString(KindName(Kind)).ToLower())));
+			const bool bKindPass = bFilterExcluded ? (KS.Sampled == 0 || Rate >= 95.0) : (KS.Sampled > 0 && Rate >= 95.0);
 			bAllPassed &= bKindPass;
 
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke summary: %s: %d of %d crossed (%.1f%%) [total in map: %d] - %s"),
@@ -512,9 +531,15 @@ namespace PmcTraversalSmoke
 			const bool bDropReady = DropSub && DropSub->HasGenerated();
 			const bool bMantleReady = MantleSub && MantleSub->HasGenerated();
 
-			if ((!bDropReady || !bMantleReady) && State.PhaseTime < 180.f)
+			if (!bDropReady || !bMantleReady)
 			{
-				return true;
+				if (State.PhaseTime < 180.f)
+				{
+					return true;
+				}
+				UE_LOG(LogCodexTactics, Error, TEXT("Smoke FAIL: subsystems failed to generate within 180s (drop ready: %d, mantle ready: %d)"),
+					bDropReady ? 1 : 0, bMantleReady ? 1 : 0);
+				return Finish(State);
 			}
 
 			// Disable background combat pressure and random PMC encounters during traversal test
@@ -602,12 +627,18 @@ namespace PmcTraversalSmoke
 				return Finish(State);
 			}
 
-			// Ensure operative is in standing stance with 0 cold level before each leg
+			// Thoroughly reset character state before each leg to prevent failure cascade
 			Hostile->ColdLevel = 0.f;
-			if (Hostile->GetStance() != EOperativeStance::Standing && !Hostile->IsKnockedDown())
+			if (Hostile->LadderClimb && Hostile->LadderClimb->IsClimbing())
 			{
-				Hostile->SetStance(EOperativeStance::Standing);
+				Hostile->LadderClimb->AbortClimb(ELadderAbortReason::None);
 			}
+			if (Hostile->HealthComponent)
+			{
+				Hostile->HealthComponent->Heal(1000.f);
+			}
+			Hostile->SetActorEnableCollision(true);
+			Hostile->SetStance(EOperativeStance::Standing);
 
 			const FLeg& Leg = State.Legs[State.LegIndex];
 			FVector NavStart = Leg.StartSpot;
@@ -625,6 +656,7 @@ namespace PmcTraversalSmoke
 				State.LegIndex++;
 				return true;
 			}
+			State.Legs[State.LegIndex].NavGoal = NavGoal;
 
 			const float HalfHeight = Hostile->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 			Hostile->TeleportTo(NavStart + FVector(0.f, 0.f, HalfHeight + 5.f), Leg.StartFacing, false, true);
@@ -647,10 +679,7 @@ namespace PmcTraversalSmoke
 			}
 
 			const FLeg& Leg = State.Legs[State.LegIndex];
-			FVector NavGoal = Leg.Goal;
-			ProjectNav(World, Leg.Goal, NavGoal);
-
-			const EOperativeOrderResult OrderRes = Hostile->OrderMoveTo(NavGoal, false);
+			const EOperativeOrderResult OrderRes = Hostile->OrderMoveTo(Leg.NavGoal, false);
 			if (OrderRes == EOperativeOrderResult::Unreachable || OrderRes == EOperativeOrderResult::NoController)
 			{
 				RecordFailure(State, Leg.Kind, Leg.Id, TEXT("no path"));
@@ -686,8 +715,8 @@ namespace PmcTraversalSmoke
 			const double Now = World->GetTimeSeconds();
 			const FVector CurrentPos = Hostile->GetActorLocation();
 			const float CurrentFeetZ = FeetZ(*Hostile);
-			const float Dist2D = static_cast<float>(FVector::Dist2D(CurrentPos, Leg.Goal));
-			const float DistZ = FMath::Abs(CurrentFeetZ - Leg.GoalZ);
+			const float Dist2D = static_cast<float>(FVector::Dist2D(CurrentPos, Leg.NavGoal));
+			const float DistZ = FMath::Abs(CurrentFeetZ - Leg.NavGoal.Z);
 			const float Radius = (Leg.Kind == ELinkKind::Ladder) ? State.Config.LadderArriveRadiusCm : State.Config.ArriveRadiusCm;
 
 			if (Hostile->LadderClimb && Hostile->LadderClimb->IsClimbing())
@@ -780,6 +809,21 @@ namespace PmcTraversalSmoke
 		if (FParse::Value(FCommandLine::Get(), TEXT("-TraversalDropSample="), DropCli) && DropCli > 0)
 		{
 			State->DropSampleCount = DropCli;
+		}
+		FString KindsCli;
+		if (FParse::Value(FCommandLine::Get(), TEXT("-TraversalKinds="), KindsCli))
+		{
+			TArray<FString> KindStrs;
+			KindsCli.ParseIntoArray(KindStrs, TEXT(","), true);
+			for (const FString& K : KindStrs)
+			{
+				State->KindsFilter.Add(K.ToLower());
+			}
+		}
+		FString OnlyCli;
+		if (FParse::Value(FCommandLine::Get(), TEXT("-TraversalOnly="), OnlyCli))
+		{
+			State->OnlyFilter = OnlyCli;
 		}
 
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float DeltaTime)
