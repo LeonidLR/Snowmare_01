@@ -113,9 +113,13 @@ Series now: **`panel_1-464`** (the kit's Facade series = its 5-storey block L_SH
 ## Instancing
 
 One actor per building (`StaticMeshActor` `Kit_<id>`, tags `KitDress`, `kit_building=`, `kit_series=`) with one
-`InstancedStaticMeshComponent` per mesh / material / mirror / group, added through `SubobjectDataSubsystem` (they are saved with the map;
-the build reads the count back). Group `roof` (parapets, cornice, roof planes, roof props) carries the component tag `kit_roof` (the shots
-hide it for the roof-off views). NoCollision, CanEverAffectNavigation false. The ISM path needs the kit materials' **Used with Instanced
+`InstancedStaticMeshComponent` per mesh / material / mirror / group / **storey**, added through `SubobjectDataSubsystem` (they are saved with
+the map; the build reads the count back). Group `roof` (parapets, cornice, roof planes, roof props) carries the component tag `kit_roof` (the
+shots hide it for the roof-off views). **Storeys (2026-11-22, designer bug: the in-game cutaway showed nothing inside the dressed houses):**
+every instance has a storey (`kit_dress_lib.storey_of_z`: bottom + 50 cm over the 300 cm storey, 0 .. floors; the roof group = floors = the
+roof slab's `floor=`; the ceiling under slab f+1 = f+1; stair glass column modules by their centre; drains one pipe per storey), and every
+component carries `building=<id>` + `floor=<n>` - the builder's own tags, read by the roof cutaway's storey rule (`URoofCutawaySubsystem`,
+`docs/systems/camera-hud-minimap.md`): the storeys above the selected operative's are hidden whole. Showcase: 271 components (161 before). NoCollision, CanEverAffectNavigation false. The ISM path needs the kit materials' **Used with Instanced
 Static Meshes** flag (without it the game draws the default checker material): the build sets it on the base materials it instances and
 saves them - a local change of the untracked pack, once per checkout.
 
@@ -150,8 +154,8 @@ instance its grey boxes (S2_ROOMS_PLAN risk 2, unchanged here).
 
 1. **Fake openings**: stair glass and balcony-door bays are visual only (the proxy wall behind is solid: they block sight and are not
    reachable); `slot: balcony` balconies have no collision.
-2. **Roof cutaway** (in game) does not hide the kit visuals (no collision for its trace); the shots use their own camera and hide the
-   `kit_roof` components.
+2. **Roof cutaway** (in game): fixed 2026-11-22 - the storey rule hides the kit storeys above the selected operative (per-storey
+   components, tags above). The kit shots still use their own camera and hide the `kit_roof` components themselves.
 3. **Stairs**: switchback steps within ~13 cm of our ramp (kit flight 196 cm vs our 215 cm; kit floor landing 234 cm deep vs 229 cm to the
    outer wall); single flights are stacked step blocks (risers 19 cm).
 4. **Doors** are wider than the kit's (150 vs 80 / 102 / 130 cm): flat doors are pairs of interior leaves, entrances x 1.1.

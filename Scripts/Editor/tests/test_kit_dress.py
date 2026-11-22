@@ -347,5 +347,58 @@ class StoryCamerasTest(unittest.TestCase):
             self.assertTrue(all(math.isfinite(v) for v in loc), name)
 
 
+class StoreyCutawayDressTest(unittest.TestCase):
+    """The roof cutaway's storey rule (designer bug 2026-11-22: "squad on the ground floor -> storeys above and the roof invisible"): every
+    kit instance has a storey, an ISM component never spans two storeys, and its tags name the building and the storey (building=<id>,
+    floor=<n> - the same tags as the builder's grey pieces, read by URoofCutawaySubsystem)."""
+
+    def test_storey_of_z(self):
+        self.assertEqual(K.storey_of_z(0.0, 0.0, 3), 0)
+        self.assertEqual(K.storey_of_z(-45.0, 0.0, 3), 0)       # the plinth under the ground
+        self.assertEqual(K.storey_of_z(249.0, 0.0, 3), 0)       # a canopy / lintel strip of the ground floor
+        self.assertEqual(K.storey_of_z(280.0, 0.0, 3), 1)       # a balcony slab 20 cm under storey 1
+        self.assertEqual(K.storey_of_z(300.0, 0.0, 3), 1)
+        self.assertEqual(K.storey_of_z(600.0, 0.0, 3), 2)
+        self.assertEqual(K.storey_of_z(900.0, 0.0, 3), 3)       # the roof
+        self.assertEqual(K.storey_of_z(1500.0, 0.0, 3), 3)      # never above the roof
+        self.assertEqual(K.storey_of_z(1300.0, 1000.0, 3), 1)   # a raised ground
+
+    def test_showcase_instances_per_storey(self):
+        path = os.path.join(PROJECT_DIR, "Content", "Data", "LevelGen", "accepted", "gen_story_showcase.json")
+        if not os.path.exists(path):
+            self.skipTest("no gen_story_showcase layout")
+        B, layout, specs, dressed, t = DressLayoutTest.plan(path)
+        sys.modules.pop("kit_dress", None)
+        import kit_dress  # noqa: E402
+        gz = float(layout.get("ground_z", 0.0))
+        for b in layout["buildings"]:
+            d = dressed[b["id"]]
+            floors = int(b["floors"])
+            seen = set()
+            for i in d["instances"]:
+                st = i["storey"]
+                self.assertTrue(0 <= st <= floors, (b["id"], i))
+                seen.add(st)
+                if i["group"] == "roof":
+                    self.assertEqual(st, floors, (b["id"], i["part"]))
+                elif i["part"] == "ceiling_plane":
+                    # the ceiling over storey f hides with the slab of f + 1 (the ceiling over the operative's head)
+                    self.assertEqual(st, int(math.floor((i["loc"][2] - gz) / K.STOREY)) + 1, (b["id"], i["loc"]))
+                elif i["part"] in ("floor_plane", "window", "facade_solid", "facade_window_bay"):
+                    self.assertEqual(st, int(math.floor((i["loc"][2] - gz + 1.0) / K.STOREY)), (b["id"], i["part"], i["loc"]))
+            self.assertEqual(seen, set(range(floors + 1)), b["id"])   # every storey and the roof
+            keys = {kit_dress.ism_key(i) for i in d["instances"]}
+            self.assertLessEqual(len(keys), 60 * (floors + 1), b["id"])
+            for key in keys:
+                tags = kit_dress.ism_tags(b["id"], key, "x")
+                self.assertIn("building=%s" % b["id"], tags)
+                self.assertIn("floor=%d" % key[4], tags)
+                self.assertEqual("kit_roof" in tags, key[3] == "roof")
+
+    @classmethod
+    def tearDownClass(cls):
+        os.environ.pop("KIT_DRESS_LAYOUT", None)
+
+
 if __name__ == "__main__":
     unittest.main()

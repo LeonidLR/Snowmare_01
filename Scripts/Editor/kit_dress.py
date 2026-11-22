@@ -7,8 +7,9 @@ the accepted layout, and kit_dress_lib.Dresser reads each building's own specs +
 stairs, tags) - so it follows whatever plans the generator produced. The builder pieces a kit visual replaces stay as HIDDEN proxies
 (hidden in game + invisible; collision, navigation and tags unchanged: cover, sight lines, mantle edges, door states and the walking
 ramps are the generator's, bit for bit); anything not replaced stays visible grey box. Kit visuals: ONE actor per building
-(StaticMeshActor "Kit_<id>") holding one InstancedStaticMeshComponent per mesh / material / mirror / group (group "roof" carries the
-component tag kit_roof), NoCollision, CanEverAffectNavigation false.
+(StaticMeshActor "Kit_<id>") holding one InstancedStaticMeshComponent per mesh / material / mirror / group / storey (group "roof" carries the
+component tag kit_roof; every component the tags building=<id> + floor=<storey> - the roof cutaway's storey rule hides the storeys above
+the selected operative's, designer bug 2026-11-22), NoCollision, CanEverAffectNavigation false.
 
 Modes (env KIT_DRESS_MODE, or the first argument under system python):
   build (default, editor commandlet):
@@ -183,10 +184,21 @@ def plan_all():
     return B, layout, out, dressed, table
 
 
+def ism_key(i):
+    """The ISM component an instance goes into: mesh, material, mirrored, group, storey (one component per storey: the roof cutaway hides a
+    whole component, so a component never spans storeys)."""
+    return (i["mesh"], i.get("mat"), i["scale"][0] < 0, i["group"], int(i.get("storey", 0)))
+
+
+def ism_tags(bid, key, part):
+    """Component tags of an ISM component: kit_part=, kit_roof (group roof), building=<id> + floor=<storey> (the roof cutaway's storey rule)."""
+    return ["kit_part=" + part] + (["kit_roof"] if key[3] == "roof" else []) + ["building=%s" % bid, "floor=%d" % key[4]]
+
+
 def summary(specs, dressed):
     per = {}
     for bid, d in dressed.items():
-        groups = {(i["mesh"], i.get("mat"), i["scale"][0] < 0, i["group"]) for i in d["instances"]}
+        groups = {ism_key(i) for i in d["instances"]}
         per[bid] = {"series": d["series"], "archetype": d["archetype"], "kit_actors": 1, "ism_components": len(groups), "instances": len(d["instances"]),
                     "hidden_proxies": len(d["consumed"]), "builder_pieces": d["own_specs"], "visible_builder_pieces": d["own_specs"] - len(d["consumed"]),
                     "parts": d["parts"], "stretch": d["stretch"], "notes": d["notes"]}
@@ -319,7 +331,7 @@ class KitPlacer:
     def place_building(self, bid, d):
         groups = {}
         for i in d["instances"]:
-            groups.setdefault((i["mesh"], i.get("mat"), i["scale"][0] < 0, i["group"]), []).append(i)
+            groups.setdefault(ism_key(i), []).append(i)
         c = d["centre"]
         a = self.actors.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(*c), unreal.Rotator(pitch=0.0, yaw=0.0, roll=0.0))
         a.set_actor_label("Kit_%s" % bid)
@@ -329,28 +341,28 @@ class KitPlacer:
         root.set_mobility(unreal.ComponentMobility.STATIC)
         self.visual_only(root)
         self.stats["kit_actors"] += 1
-        for n, ((mp, mat, mirrored, group), insts) in enumerate(sorted(groups.items(), key=lambda kv: (kv[0][0], str(kv[0][1]), kv[0][2], kv[0][3]))):
+        for n, (key, insts) in enumerate(sorted(groups.items(), key=lambda kv: (kv[0][0], str(kv[0][1]), kv[0][2], kv[0][3], kv[0][4]))):
+            mp, mat, mirrored, group, storey = key
             mesh = self.mesh(mp)
             if mesh is None:
                 continue
             mi = self.material(mat) if mat else None
             if mat:
                 self.used_mats.add(mat)
-            name = "ISM_%02d_%s%s%s%s" % (n, mp.rsplit("/", 1)[-1].replace("SM_SH_", "").replace(".", "_"), "_" + mat.replace("MI_SH_", "") if mat else "",
-                                           "_mirror" if mirrored else "", "_roof" if group == "roof" else "")
+            name = "ISM_%03d_%s%s%s%s_f%d" % (n, mp.rsplit("/", 1)[-1].replace("SM_SH_", "").replace(".", "_"), "_" + mat.replace("MI_SH_", "") if mat else "",
+                                              "_mirror" if mirrored else "", "_roof" if group == "roof" else "", storey)
             try:
                 comp = self.add_ism(a, name)
             except Exception as exc:
                 report("REVIEW: %s: ISM component not added (%r) - %d single actors instead" % (bid, exc, len(insts)))
-                self.fallback(bid, insts, mesh, mi)
+                self.fallback(bid, insts, mesh, mi, storey)
                 continue
             comp.set_static_mesh(mesh)
             if mi is not None:
                 comp.set_material(0, mi)
             comp.set_mobility(unreal.ComponentMobility.STATIC)
             self.visual_only(comp)
-            tags = ["kit_part=" + insts[0]["part"]] + (["kit_roof"] if group == "roof" else [])
-            comp.set_editor_property("component_tags", [unreal.Name(t) for t in tags])
+            comp.set_editor_property("component_tags", [unreal.Name(t) for t in ism_tags(bid, key, insts[0]["part"])])
             xf = [unreal.Transform(unreal.Vector(*i["loc"]), unreal.Rotator(pitch=i["rot"][0], yaw=i["rot"][1], roll=i["rot"][2]), unreal.Vector(*i["scale"])) for i in insts]
             try:
                 comp.add_instances(xf, False, True)
@@ -397,12 +409,13 @@ class KitPlacer:
                 fixed.append(path)
         report("ISM material usage: %d base materials (only those under the pack are touched), set 'Used with Instanced Static Meshes' on %d: %s" % (len(bases), len(fixed), ", ".join(fixed) or "-"))
 
-    def fallback(self, bid, insts, mesh, mi):
+    def fallback(self, bid, insts, mesh, mi, storey=0):
         for i in insts:
             a = self.actors.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(*i["loc"]), unreal.Rotator(pitch=i["rot"][0], yaw=i["rot"][1], roll=i["rot"][2]))
             a.set_folder_path("%s/Kit/%s/Single" % (self.B.FOLDER, bid))
             a.set_actor_scale3d(unreal.Vector(*i["scale"]))
-            a.set_editor_property("tags", [unreal.Name(self.B.TAG), unreal.Name(KIT_TAG)] + ([unreal.Name("kit_roof")] if i["group"] == "roof" else []))
+            a.set_editor_property("tags", [unreal.Name(self.B.TAG), unreal.Name(KIT_TAG)] + ([unreal.Name("kit_roof")] if i["group"] == "roof" else [])
+                                  + [unreal.Name("building=%s" % bid), unreal.Name("floor=%d" % storey)])
             a.static_mesh_component.set_static_mesh(mesh)
             if mi is not None:
                 a.static_mesh_component.set_material(0, mi)

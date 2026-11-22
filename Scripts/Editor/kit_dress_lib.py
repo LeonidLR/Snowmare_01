@@ -15,7 +15,7 @@ from the specs and the layout records - never a building id or a plan kind:
     switchback set, a single flight gets stacked kit step blocks;
   - parapets (also firing-gap sills): every builder piece tagged `parapet`;
   - floors / ceilings / roof: room records x the builder's slab pieces.
-Output: instance dicts {mesh, mat, loc, rot [pitch, yaw, roll], scale, group, part} and the labels of the builder pieces they replace
+Output: instance dicts {mesh, mat, loc, rot [pitch, yaw, roll], scale, group, part, storey} and the labels of the builder pieces they replace
 (kit_dress.py hides those: hidden in game + invisible, collision / navigation / tags unchanged). A piece nothing replaces stays visible.
 Godot reference: none (UE-only).
 """
@@ -29,6 +29,7 @@ FLOOR_CELL = 200.0      # cm: floor / ceiling finish planes (UV 0..1 per plane)
 FLOOR_LIFT = 0.5        # cm above a slab top (below a slab bottom for ceilings)
 STAIR_LIFT = 0.6        # cm: a kit stair's floor landing above our slab top
 EDGE_TOL = 20.0         # cm: an opening / wall piece belongs to a footprint side within this distance of its line
+STOREY_TOL = 50.0       # cm: an instance whose bottom lies up to this far under a storey's base counts on that storey (a balcony slab)
 DOOR_ROLES_NO_LEAF = ("portal",)
 
 
@@ -325,6 +326,13 @@ def plane(mesh, rect, z, mat, part, group="main", down=False):
             "scale": [(x1 - x0) / 100.0, (y1 - y0) / 100.0, 1.0], "group": group, "part": part}
 
 
+def storey_of_z(z, gz, floors, tol=STOREY_TOL):
+    """The storey of a kit instance whose bottom (or, for a tall piece, centre) is at z: 0 = ground floor .. floors = the roof (the
+    builder's roof slab is tagged floor=<floors>). The roof cutaway hides every storey above the selected operative's (designer bug
+    2026-11-22): instances are grouped per storey into their own ISM components tagged building=<id> / floor=<n>."""
+    return max(0, min(int(floors), int(math.floor((float(z) - float(gz) + tol) / STOREY))))
+
+
 def globalize(instances, c, deg):
     """Instances planned in a rotated building's own frame turned into the world (location about c, yaw + deg)."""
     if not deg:
@@ -477,19 +485,26 @@ class Dresser:
     def m(self, rel):
         return mesh_path(self.T, rel)
 
-    def add(self, mesh_rel, wx, wy, anchor, local=(0.0, 0.0, 0.0), scale=(1.0, 1.0, 1.0), part="", group="main", mat=None):
+    def storey(self, z, group="main"):
+        """Storey of an instance at z: the roof group is the roof storey (floors), the rest by height (storey_of_z)."""
+        return self.floors if group == "roof" else storey_of_z(z, self.gz, self.floors)
+
+    def add(self, mesh_rel, wx, wy, anchor, local=(0.0, 0.0, 0.0), scale=(1.0, 1.0, 1.0), part="", group="main", mat=None, storey=None):
         mp = self.m(mesh_rel)
         if not mp:
             return None
         i = inst(mp, wx, wy, anchor, local, scale, part, group, mat)
+        i["storey"] = storey if storey is not None else self.storey(i["loc"][2], group)
         self.out.append(i)
         self.counts[part] = self.counts.get(part, 0) + 1
         name = mp.rsplit("/", 1)[-1]
         self.stretch.setdefault(name, []).append((abs(scale[0]), scale[1], scale[2]))
         return i
 
-    def add_plane(self, rect, z, mat, part, group="main", down=False):
-        self.out.append(plane(self.plane_mesh, rect, z, mat, part, group, down))
+    def add_plane(self, rect, z, mat, part, group="main", down=False, storey=None):
+        i = plane(self.plane_mesh, rect, z, mat, part, group, down)
+        i["storey"] = storey if storey is not None else self.storey(z, group)
+        self.out.append(i)
         self.counts[part] = self.counts.get(part, 0) + 1
 
     def note(self, line):
@@ -860,9 +875,10 @@ class Dresser:
         hm = float(sc.get("height_cm", 280)) * sz
         anchor = e.at(col["c0"], e.t / 2.0)
         while top - z >= hm - 1.0:
-            self.add(sc["wall"], e.d, e.n, (anchor[0], anchor[1], z), scale=(col["sx"], 1.0, sz), part="facade_stairwell_bay")
+            st = self.storey(z + hm / 2.0)
+            self.add(sc["wall"], e.d, e.n, (anchor[0], anchor[1], z), scale=(col["sx"], 1.0, sz), part="facade_stairwell_bay", storey=st)
             if sc.get("glass"):
-                self.add(sc["glass"], e.d, e.n, (anchor[0], anchor[1], z), scale=(col["sx"], 1.0, sz), part="stairwell_glass")
+                self.add(sc["glass"], e.d, e.n, (anchor[0], anchor[1], z), scale=(col["sx"], 1.0, sz), part="stairwell_glass", storey=st)
             z += hm
         if top - z > 1.0 and sc.get("strip"):
             self.add(sc["strip"], e.d, e.n, (anchor[0], anchor[1], z), scale=(col["sx"], 1.0, (top - z) / float(sc.get("strip_height_cm", 140))), part="stairwell_top_strip")
@@ -894,8 +910,9 @@ class Dresser:
         if not dr or not e.long:
             return
         busy = [(s - w / 2.0 - 40.0, s + w / 2.0 + 40.0) for (en, f), lst in ops.items() if en == e.name for _, s, w in lst]
-        H = STOREY * self.floors
-        n, sz = tile_vertical(H, float(dr.get("height_cm", 698)))
+        # one pipe length per storey (stretched to the storey): the roof cutaway hides the storeys above the operative's, a pipe
+        # spanning storeys would stand over the cut
+        n, sz = self.floors, STOREY / float(dr.get("height_cm", 698))
         for s in (e.lo + 35.0, e.L / 2.0, e.hi - 35.0):
             if any(a <= s <= b for a, b in busy):
                 alts = [x for x in (s - 150.0, s + 150.0, s - 300.0, s + 300.0) if e.lo + 20 <= x <= e.hi - 20 and not any(a <= x <= b for a, b in busy)]
@@ -904,7 +921,7 @@ class Dresser:
                 s = alts[0]
             p = e.at(s, e.t / 2.0 + 0.5)
             for i in range(n):
-                self.add(dr["mesh"], e.d, e.n, (p[0], p[1], self.gz + i * float(dr.get("height_cm", 698)) * sz), scale=(1.0, 1.0, sz), part="drain")
+                self.add(dr["mesh"], e.d, e.n, (p[0], p[1], self.gz + i * STOREY), scale=(1.0, 1.0, sz), part="drain", storey=i)
 
     # -- interior --------------------------------------------------------------------------------------------------------------
     def in_stairwell(self, p, f, margin=2.0):
@@ -1153,7 +1170,7 @@ class Dresser:
                     i = rect_and((rx0, ry0, rx1, ry1), rect)
                     if i:
                         for c in cells(i, FLOOR_CELL):
-                            self.add_plane(c, bot - FLOOR_LIFT, cm, "ceiling_plane", down=True)
+                            self.add_plane(c, bot - FLOOR_LIFT, cm, "ceiling_plane", down=True, storey=min(f + 1, self.floors))
         roof = self.S.get("roof") or {}
         rz = self.gz + STOREY * self.floors + FLOOR_LIFT
         if roof.get("material"):
