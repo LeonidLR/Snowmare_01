@@ -151,7 +151,7 @@
     "PmcTraversalSmoke": {
       "map": "/Game/Maps/Generated/L_Gen_Depot_X4",
       "extra": "-LevelJson=L_Gen_Depot_X4.json",
-      "timeout": 1200,
+      "timeout": 2700,
       "knownFail": true,
       "_why": "smart enemies T-12 baseline (strict link passage verified): stairs 13/19 (68.4%), ladders 12/23 (52.2%), mantles 52/120 (43.3%), drops 73/80 (91.2%); remaining failures due to PMC navigation constraints and architectural mantle path gating; fixes are Phase 2 tasks (T-07)"
     },
@@ -300,8 +300,8 @@
     {
       "name": "pmc-traversal-2026-11-22",
       "_comment": "smart enemies T-12 traversal smoke on generated map: stairs, ladders, mantles, drops",
-      "globs": ["Source/**/Debug/PmcTraversalSmoke*", "docs/port/gemini/pmc_traversal_config.json"],
-      "tests": ["CodexTactics.Falls", "CodexTactics.Ladder"],
+      "globs": ["Source/**/Debug/PmcTraversalSmoke*", "Source/**/Characters/PmcTraversalRules*", "Source/CodexTacticsTests/Private/AI/PmcTraversalRulesTest*", "docs/port/gemini/pmc_traversal_config.json", "Content/Data/AI/pmc_traversal.json"],
+      "tests": ["CodexTactics.AI.PmcTraversal", "CodexTactics.Falls", "CodexTactics.Ladder"],
       "smokes": ["PmcTraversalSmoke", "LevelGenLaddersSmoke", "LevelGenRampSmoke"]
     },
     {
