@@ -134,6 +134,8 @@
 namespace PmcArena
 {
 	constexpr float StepSeconds = 0.1f;
+	/** The ai.nav.GNavmeshSynchronousTileGeneration value before an arena run forced it on (INDEX_NONE: not forced). */
+	int32 SavedSyncNavTiles = INDEX_NONE;
 	constexpr int32 TeamA = 1;
 	constexpr int32 TeamB = 2;
 
@@ -3030,6 +3032,14 @@ namespace PmcArena
 			{
 				Random->Unseed(); // back to the global draws (an arena run in a PIE / editor world)
 			}
+			if (SavedSyncNavTiles != INDEX_NONE)
+			{
+				if (IConsoleVariable* SyncNav = IConsoleManager::Get().FindConsoleVariable(TEXT("ai.nav.GNavmeshSynchronousTileGeneration")))
+				{
+					SyncNav->Set(SavedSyncNavTiles, ECVF_SetByConsole);
+				}
+				SavedSyncNavTiles = INDEX_NONE;
+			}
 			if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
 			{
 				Pmc->DestroyTeam(TeamA);
@@ -4037,6 +4047,17 @@ namespace PmcArena
 			// T-03 merged: scenario smokes are judged against the scripted opponent (GDD Acceptance Criteria), not self-play, so
 			// every seed sees the same attacker walk (the navmesh path from B's spawn to the point). script=run until T-07.
 			State->Options.Opponent = EOpponent::Script;
+		}
+		// Determinism (2026-11-22): navmesh tiles rebuilt during the fight land on a load-dependent frame when generated in the background,
+		// and a 1 cm path difference grows into another fight (Jobs 4 split 3/10). Synchronous tile generation for the arena's life makes
+		// one seed one fight (RoofDefence x20 at Jobs 4: 20/20 identical tracks); Finish restores the previous value.
+		if (IConsoleVariable* SyncNav = IConsoleManager::Get().FindConsoleVariable(TEXT("ai.nav.GNavmeshSynchronousTileGeneration")))
+		{
+			if (SavedSyncNavTiles == INDEX_NONE)
+			{
+				SavedSyncNavTiles = SyncNav->GetInt();
+			}
+			SyncNav->Set(1, ECVF_SetByConsole);
 		}
 		State->bWeightsALoaded = PmcCommanderRules::LoadWeightsFile(State->Options.WeightsA, State->WeightsA);
 		State->bWeightsBLoaded = PmcCommanderRules::LoadWeightsFile(State->Options.WeightsB, State->WeightsB);
