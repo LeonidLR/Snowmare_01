@@ -1,5 +1,13 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**Doors: the open leaf's side (`claude/bgen-test`, 2026-11-22, designer test item 3; game C++ + doors.json).** Every door now opens to one
+side chosen at the adoption (`DoorRules::ChooseSwing`, `doors.json swing_fixed`): clear of walls, of every other doorway's approach zone
+(leafless layout doorways too) and of stair mouths; entrances open OUTWARD; where neither side is free the angle is limited (>= 30 deg).
+`DoorsSmoke` A3: 0 open leaves over another doorway / stair mouth (grey 0/111, dressed 0/635), entrances outward 12/12; test
+`CodexTactics.Doors.Swing.SideClearOfDoorways`. Also fixed: a96c07f3 committed the PMC agent's RM-P diagnostics into DoorsSmoke stage 22
+(KC, `Fighter` undeclared: the pushed head did not compile on its own) - moved back into stage 21 unchanged. Rule:
+`docs/systems/interactables-traps-loot.md` "The open leaf's side".
+
 **Doors: one strength + the handle try (`claude/bgen-test`, 2026-11-22, designer test items 2 / 1 / 4; game C++ + doors.json, behind
 `Codex.Doors.Openable`).** Item 2: every door has a strength class (wood / steel / reinforced) from its tag / the layout role (entry steel,
 flat doors a stable wood/steel mix, room doors wood, story-locked doors reinforced) and ONE rule judges kicks and lock shots

@@ -425,6 +425,68 @@ namespace DoorsSmoke
 					&& DoorRules::GetLockShotChance(TEXT("pistol"), EDoorStrength::Steel, Shipped) >= DoorRules::GetKickChance(EDoorLeafState::Locked, EDoorStrength::Steel, Shipped),
 					TEXT("A2: one strength rule - no kick on reinforced, a kick never likelier than the pistol"));
 			}
+			// A3 (designer 2026-11-22, item 3): no open leaf lies over another doorway's approach zone or a stair mouth; entrances open outward.
+			{
+				const float Depth = DoorTuning::Get().SwingZoneDepthCm;
+				int32 Leaves = 0;
+				int32 Overlapping = 0;
+				int32 Entrances = 0;
+				int32 Outward = 0;
+				int32 Limited = 0;
+				FString Bad;
+				for (const ADoorActor* Door : Doors->GetDoors())
+				{
+					if (!Door)
+					{
+						continue;
+					}
+					Limited += Door->GetOpenDeg() < DoorTuning::Get().SwingDegrees - 0.5f ? 1 : 0;
+					TArray<TPair<FVector, FVector>> Segments;
+					Door->GetOpenLeafSegments(Segments);
+					if (Door->GetRole() == TEXT("entry"))
+					{
+						++Entrances;
+						// Outward: the leaf's free end lies outside the building (no ceiling over it).
+						const FVector End = Segments.IsEmpty() ? Door->GetActorLocation() : Segments[0].Value;
+						FHitResult Ceiling;
+						const FVector Up = End + FVector(0.f, 0.f, 100.f);
+						Outward += World->LineTraceSingleByChannel(Ceiling, Up, Up + FVector(0.f, 0.f, 500.f), ECC_Visibility,
+							FCollisionQueryParams(FName(TEXT("DoorsSmokeOutward")), false)) ? 0 : 1;
+					}
+					for (const TPair<FVector, FVector>& Segment : Segments)
+					{
+						++Leaves;
+						bool bHit = false;
+						for (const DoorRules::FLayoutPlace& Place : Doors->GetLayoutPlaces())
+						{
+							if (bHit || FMath::Abs(Place.Center.Z - Door->GetActorLocation().Z) > 120.f || (!Place.bStair && (Place.Id == Door->GetOpeningId()
+								|| FVector::Dist2D(Place.Center, Door->GetActorLocation()) < 30.f)))
+							{
+								continue;
+							}
+							// Independent world-space test: samples along the leaf inside the place's zone (the doorway's own frame).
+							const FVector2D N = Place.bStair ? FVector2D(1.f, 0.f) : Place.Normal.GetSafeNormal();
+							const FVector2D T(-N.Y, N.X);
+							const float HalfT = Place.bStair ? Place.WidthCm * 0.5f : Place.WidthCm * 0.5f + 10.f;
+							const float HalfN = Place.bStair ? Place.WidthCm * 0.5f : Depth;
+							for (int32 Sample = 1; Sample <= 10 && !bHit; ++Sample)
+							{
+								const FVector2D P = FMath::Lerp(FVector2D(Segment.Key), FVector2D(Segment.Value), Sample / 10.f) - FVector2D(Place.Center);
+								bHit = FMath::Abs(FVector2D::DotProduct(P, T)) < HalfT - 1.f && FMath::Abs(FVector2D::DotProduct(P, N)) < HalfN - 1.f;
+							}
+							if (bHit && Bad.Len() < 700)
+							{
+								Bad += FString::Printf(TEXT(" [%s %s over %s %s]"), *Door->GetBuildingId(), *Door->GetOpeningId(), Place.bStair ? TEXT("stair") : TEXT("doorway"), *Place.Id);
+							}
+						}
+						Overlapping += bHit ? 1 : 0;
+					}
+				}
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: A3: %d open leaves, %d entrances (%d open outward), %d doors with a limited angle"), Leaves, Entrances, Outward, Limited);
+				Check(*State, DoorTuning::Get().bSwingFixed && Leaves > 0 && Overlapping == 0,
+					FString::Printf(TEXT("A3: no open leaf over another doorway's approach zone or a stair mouth (%d of %d leaves)%s"), Overlapping, Leaves, *Bad));
+				Check(*State, Entrances > 0 && Outward == Entrances, FString::Printf(TEXT("A3: every entrance opens outward (%d / %d)"), Outward, Entrances));
+			}
 			if (!Front || !Back || !Locked || !Gable)
 			{
 				return Finish(*State, false);
@@ -951,6 +1013,42 @@ namespace DoorsSmoke
 			{
 				return Finish(*State, false);
 			}
+			// RM-P diagnostics: for 1.2 s after a door clip starts on him, every montage instance on his anim instance (an interrupted clip
+			// shows here) + why a clip would not move him (root motion mode / instance, movement mode, controller, path following, tick option).
+			if (const USkeletalMeshComponent* Body = Fighter->GetMesh())
+			{
+				UAnimInstance* Anim = Body->GetAnimInstance();
+				const double Now = World->GetTimeSeconds();
+				if (Doors->GetMontagesPlayed() != State->FighterMontagesSeen)
+				{
+					State->FighterMontagesSeen = Doors->GetMontagesPlayed();
+					State->FighterSampleUntil = Doors->GetLastMontageName().StartsWith(TEXT("AM_Door_")) ? Now + 1.2 : -1.0;
+				}
+				if (Anim && Now <= State->FighterSampleUntil && Now - State->FighterSampleAt >= 0.1)
+				{
+					State->FighterSampleAt = Now;
+					FString Instances;
+					for (const FAnimMontageInstance* Instance : Anim->MontageInstances)
+					{
+						if (Instance && Instance->Montage)
+						{
+							Instances += FString::Printf(TEXT("%s[%s %s active %d playing %d w %.2f pos %.2f rm %d]"), Instances.IsEmpty() ? TEXT("") : TEXT(" "),
+								*Instance->Montage->GetName(), *Instance->Montage->GetGroupName().ToString(),
+								Instance->IsActive() ? 1 : 0, Instance->IsPlaying() ? 1 : 0, Instance->GetWeight(), Instance->GetPosition(), Instance->Montage->HasRootMotion() ? 1 : 0);
+						}
+					}
+					const UCharacterMovementComponent* Move = Fighter->GetCharacterMovement();
+					const AAIController* Ai = Cast<AAIController>(Fighter->GetController());
+					const UPathFollowingComponent* Follow = Ai ? Ai->GetPathFollowingComponent() : nullptr;
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: RM-P diag %s: montages {%s}; anim %s mode %d, root motion instance %d, mesh playing root motion %d, movement mode %d, anim root motion %d, velocity %s, rvo %d, controller %s yaw %d, path following %d, tick option %d, URO %d, feet %s"),
+						*Fighter->GetName(), *Instances, *Anim->GetClass()->GetName(), static_cast<int32>(Anim->RootMotionMode.GetValue()),
+						Anim->GetRootMotionMontageInstance() ? 1 : 0, Body->IsPlayingRootMotion() ? 1 : 0, Move ? static_cast<int32>(Move->MovementMode.GetValue()) : -1,
+						Move && Move->HasAnimRootMotion() ? 1 : 0, Move ? *Move->Velocity.ToCompactString() : TEXT("-"), Move && Move->bUseRVOAvoidance ? 1 : 0,
+						Fighter->GetController() ? *Fighter->GetController()->GetClass()->GetName() : TEXT("none"), Fighter->bUseControllerRotationYaw ? 1 : 0,
+						Follow ? static_cast<int32>(Follow->GetStatus()) : -1, static_cast<int32>(Body->VisibilityBasedAnimTickOption),
+						Body->bEnableUpdateRateOptimizations ? 1 : 0, *Feet(*Fighter).ToCompactString());
+				}
+			}
 			const bool bThrough = Doors->GetBreachOpens() > State->BreachOpensBefore;
 			const bool bInside = FVector::Dist2D(Feet(*Fighter), State->FighterGoal) < 200.f && FMath::Abs(Feet(*Fighter).Z - State->FighterGoal.Z) < 100.f;
 			if ((!bThrough || !bInside) && State->StageTime < 60.f)
@@ -1013,42 +1111,6 @@ namespace DoorsSmoke
 			}
 			Crate->Contents.DestroyAll();
 			Crate->Contents.KeyIds = { TEXT("S10_snow_drift") };
-			// RM-P diagnostics: for 1.2 s after a door clip starts on him, every montage instance on his anim instance (an interrupted clip
-			// shows here) + why a clip would not move him (root motion mode / instance, movement mode, controller, path following, tick option).
-			if (const USkeletalMeshComponent* Body = Fighter->GetMesh())
-			{
-				UAnimInstance* Anim = Body->GetAnimInstance();
-				const double Now = World->GetTimeSeconds();
-				if (Doors->GetMontagesPlayed() != State->FighterMontagesSeen)
-				{
-					State->FighterMontagesSeen = Doors->GetMontagesPlayed();
-					State->FighterSampleUntil = Doors->GetLastMontageName().StartsWith(TEXT("AM_Door_")) ? Now + 1.2 : -1.0;
-				}
-				if (Anim && Now <= State->FighterSampleUntil && Now - State->FighterSampleAt >= 0.1)
-				{
-					State->FighterSampleAt = Now;
-					FString Instances;
-					for (const FAnimMontageInstance* Instance : Anim->MontageInstances)
-					{
-						if (Instance && Instance->Montage)
-						{
-							Instances += FString::Printf(TEXT("%s[%s %s active %d playing %d w %.2f pos %.2f rm %d]"), Instances.IsEmpty() ? TEXT("") : TEXT(" "),
-								*Instance->Montage->GetName(), *Instance->Montage->GetGroupName().ToString(),
-								Instance->IsActive() ? 1 : 0, Instance->IsPlaying() ? 1 : 0, Instance->GetWeight(), Instance->GetPosition(), Instance->Montage->HasRootMotion() ? 1 : 0);
-						}
-					}
-					const UCharacterMovementComponent* Move = Fighter->GetCharacterMovement();
-					const AAIController* Ai = Cast<AAIController>(Fighter->GetController());
-					const UPathFollowingComponent* Follow = Ai ? Ai->GetPathFollowingComponent() : nullptr;
-					UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: RM-P diag %s: montages {%s}; anim %s mode %d, root motion instance %d, mesh playing root motion %d, movement mode %d, anim root motion %d, velocity %s, rvo %d, controller %s yaw %d, path following %d, tick option %d, URO %d, feet %s"),
-						*Fighter->GetName(), *Instances, *Anim->GetClass()->GetName(), static_cast<int32>(Anim->RootMotionMode.GetValue()),
-						Anim->GetRootMotionMontageInstance() ? 1 : 0, Body->IsPlayingRootMotion() ? 1 : 0, Move ? static_cast<int32>(Move->MovementMode.GetValue()) : -1,
-						Move && Move->HasAnimRootMotion() ? 1 : 0, Move ? *Move->Velocity.ToCompactString() : TEXT("-"), Move && Move->bUseRVOAvoidance ? 1 : 0,
-						Fighter->GetController() ? *Fighter->GetController()->GetClass()->GetName() : TEXT("none"), Fighter->bUseControllerRotationYaw ? 1 : 0,
-						Follow ? static_cast<int32>(Follow->GetStatus()) : -1, static_cast<int32>(Body->VisibilityBasedAnimTickOption),
-						Body->bEnableUpdateRateOptimizations ? 1 : 0, *Feet(*Fighter).ToCompactString());
-				}
-			}
 			Crate->FinishSpawning(FTransform(At + FVector(0.f, 0.f, 40.f)));
 			const TArray<FLootEntry> CrateItems = Crate->GetItems();
 			Check(*State, CrateItems.Num() == 1 && CrateItems[0].Item == ELootItem::DoorKey, TEXT("KC: the container lists the key"));

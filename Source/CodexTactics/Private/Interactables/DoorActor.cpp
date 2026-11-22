@@ -166,7 +166,7 @@ void ADoorActor::ApplyNav()
 
 void ADoorActor::ApplyLeafPose()
 {
-	const float Yaw = SwingSign_ * OpenAlpha * DoorTuning::Get().SwingDegrees;
+	const float Yaw = SwingSign_ * OpenAlpha * (OpenDeg_ > 0.f ? OpenDeg_ : DoorTuning::Get().SwingDegrees);
 	HingeA->SetRelativeRotation(FRotator(0.f, Yaw, 0.f));
 	HingeB->SetRelativeRotation(FRotator(0.f, -Yaw, 0.f));
 }
@@ -295,6 +295,30 @@ bool ADoorActor::BlastDoor(AActor* InstigatorActor)
 	return true;
 }
 
+void ADoorActor::SetFixedSwing(float Sign, float OpenDeg)
+{
+	bFixedSwing = true;
+	FixedSign_ = Sign >= 0.f ? 1.f : -1.f;
+	OpenDeg_ = OpenDeg;
+	if (OpenAlpha > 0.f)
+	{
+		SwingSign_ = FixedSign_; // an open door (a kit-open leaf) stands on its own side at once
+		ApplyLeafPose();
+	}
+}
+
+void ADoorActor::GetOpenLeafSegments(TArray<TPair<FVector, FVector>>& OutSegments) const
+{
+	OutSegments.Reset();
+	TArray<TPair<FVector2D, FVector2D>> Local;
+	DoorRules::OpenLeafSegments(Setup_.WidthCm, LeafCount, bFixedSwing ? FixedSign_ : SwingSign_, OpenDeg_ > 0.f ? OpenDeg_ : DoorTuning::Get().SwingDegrees, Local);
+	const FVector Origin = GetActorLocation();
+	for (const TPair<FVector2D, FVector2D>& Segment : Local)
+	{
+		OutSegments.Emplace(Origin + GetTangent() * Segment.Key.X + GetNormal() * Segment.Key.Y, Origin + GetTangent() * Segment.Value.X + GetNormal() * Segment.Value.Y);
+	}
+}
+
 bool ADoorActor::IsHeavy() const
 {
 	return Setup_.bHeavyTag || Setup_.Strength != EDoorStrength::Wood || DoorRules::IsHeavy(Setup_.WidthCm, DoorTuning::Get());
@@ -340,7 +364,9 @@ void ADoorActor::StartSwing(bool bOpen, float Sign)
 {
 	if (bOpen)
 	{
-		SwingSign_ = Sign;
+		// The door's own side (designer 2026-11-22, item 3: chosen at the adoption so the open leaf lies clear of doorways / stairs), else away
+		// from the opener (R1).
+		SwingSign_ = bFixedSwing ? FixedSign_ : Sign;
 		ApplyCollision(false); // passes at once: nobody is swept by the leaf
 		ApplyNav();
 	}

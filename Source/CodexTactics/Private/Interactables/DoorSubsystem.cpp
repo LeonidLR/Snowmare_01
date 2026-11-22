@@ -18,6 +18,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/OverlapResult.h"
 #include "Engine/StaticMeshActor.h"
 #include "Data/LevelJsonRules.h"
 #include "Data/WeaponDataAsset.h"
@@ -216,6 +217,8 @@ void UDoorSubsystem::Tick(float DeltaTime)
 void UDoorSubsystem::LoadLayoutDoors()
 {
 	LayoutDoors.Reset();
+	LayoutPlaces.Reset();
+	LayoutFootprints.Reset();
 	const UWorld* World = GetWorld();
 	if (!World)
 	{
@@ -240,6 +243,7 @@ void UDoorSubsystem::LoadLayoutDoors()
 		return;
 	}
 	LayoutDoors = DoorRules::ParseLayoutDoors(*Layout);
+	DoorRules::ParseLayoutPlaces(*Layout, LayoutPlaces, LayoutFootprints);
 }
 
 void UDoorSubsystem::ApplyLayoutStrength(FDoorSetup& Setup, const FString& StrengthTag) const
@@ -248,6 +252,141 @@ void UDoorSubsystem::ApplyLayoutStrength(FDoorSetup& Setup, const FString& Stren
 	Setup.Role = Layout ? Layout->Role : FString();
 	Setup.Strength = DoorRules::ResolveStrength(!StrengthTag.IsEmpty() ? StrengthTag : (Layout ? Layout->Strength : FString()), Setup.Role,
 		Layout && Layout->bStoryLocked, Setup.OpeningId, DoorTuning::Get());
+}
+
+TArray<DoorRules::FDoorSwingObstacle> UDoorSubsystem::GatherSwingObstacles(const ADoorActor& Door) const
+{
+	TArray<DoorRules::FDoorSwingObstacle> Obstacles;
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return Obstacles;
+	}
+	const FDoorTuning& Tuning = DoorTuning::Get();
+	const float Width = Door.GetWidthCm();
+	const float Leaf = Width / FMath::Max(1, Door.GetLeafCount());
+	const FVector Origin = Door.GetActorLocation();
+	const float DoorZ = static_cast<float>(Origin.Z);
+	const auto LocalBox = [&Door](const TArray<FVector2D>& Corners, float ShrinkCm)
+	{
+		FBox2D Box(ForceInit);
+		for (const FVector2D& Corner : Corners)
+		{
+			Box += Door.ToLocal(FVector(Corner, 0.f) + FVector(0.f, 0.f, Door.GetActorLocation().Z));
+		}
+		Box.Min += FVector2D(ShrinkCm);
+		Box.Max -= FVector2D(ShrinkCm);
+		return Box.Min.X < Box.Max.X && Box.Min.Y < Box.Max.Y ? Box : FBox2D(ForceInit);
+	};
+	// 1. Walls and fixed pieces round the doorway (their collision boxes; the grey pieces - hidden kit proxies too - are axis-aligned boxes),
+	// from 20 cm over the threshold to 180 cm (no floor slab, no lintel).
+	TArray<FOverlapResult> Overlaps;
+	const float Reach = Leaf + 40.f;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(DoorSwingWalls), false, &Door);
+	World->OverlapMultiByObjectType(Overlaps, Origin + FVector(0.f, 0.f, 100.f), Door.GetActorQuat(), FCollisionObjectQueryParams(ECC_WorldStatic),
+		FCollisionShape::MakeBox(FVector(Width * 0.5f + Reach, Reach, 80.f)), Params);
+	TSet<const UPrimitiveComponent*> Seen;
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		const UPrimitiveComponent* Piece = Overlap.GetComponent();
+		const AActor* Owner = Piece ? Piece->GetOwner() : nullptr;
+		if (!Piece || Seen.Contains(Piece) || Cast<ADoorActor>(Owner) || Cast<APawn>(Owner))
+		{
+			continue;
+		}
+		Seen.Add(Piece);
+		const FBox Box = Piece->Bounds.GetBox();
+		if (Box.Max.Z < DoorZ + 20.f || Box.Min.Z > DoorZ + 180.f)
+		{
+			continue;
+		}
+		const TArray<FVector2D> Corners = { FVector2D(Box.Min.X, Box.Min.Y), FVector2D(Box.Max.X, Box.Min.Y), FVector2D(Box.Max.X, Box.Max.Y), FVector2D(Box.Min.X, Box.Max.Y) };
+		const FBox2D Local = LocalBox(Corners, 2.f); // 2 cm in: the jamb a leaf rests against is no obstacle
+		if (Local.bIsValid)
+		{
+			Obstacles.Add({ Local, 0 });
+		}
+	}
+	// 2. Every other doorway's approach zone (the layout's openings: leafless open doorways too) and the stair mouths at the door's level.
+	for (const DoorRules::FLayoutPlace& Place : LayoutPlaces)
+	{
+		const double Planar = FVector::Dist2D(Place.Center, Origin);
+		if (FMath::Abs(Place.Center.Z - DoorZ) > 120.f || Planar > Width + Leaf + Tuning.SwingZoneDepthCm + 200.f
+			|| (!Place.bStair && (Place.Id == Door.GetOpeningId() || Planar < 30.0)))
+		{
+			continue;
+		}
+		const FVector2D C(Place.Center);
+		TArray<FVector2D> Corners;
+		if (Place.bStair)
+		{
+			const float Half = Place.WidthCm * 0.5f;
+			Corners = { C + FVector2D(-Half, -Half), C + FVector2D(Half, -Half), C + FVector2D(Half, Half), C + FVector2D(-Half, Half) };
+		}
+		else
+		{
+			const FVector2D N = Place.Normal.GetSafeNormal();
+			const FVector2D T(-N.Y, N.X);
+			const float Half = Place.WidthCm * 0.5f + 10.f;
+			const float Depth = Tuning.SwingZoneDepthCm;
+			Corners = { C + T * Half + N * Depth, C - T * Half + N * Depth, C - T * Half - N * Depth, C + T * Half - N * Depth };
+		}
+		const FBox2D Local = LocalBox(Corners, 0.f);
+		if (Local.bIsValid)
+		{
+			Obstacles.Add({ Local, static_cast<uint8>(Place.bStair ? 2 : 1) });
+		}
+	}
+	return Obstacles;
+}
+
+float UDoorSubsystem::OutwardSign(const ADoorActor& Door) const
+{
+	const FBox2D* Footprint = LayoutFootprints.Find(Door.GetBuildingId());
+	if (!Footprint)
+	{
+		return 0.f;
+	}
+	const FVector Plus = Door.GetActorLocation() + Door.GetNormal() * 150.f;
+	return Footprint->IsInside(FVector2D(Plus)) ? -1.f : 1.f;
+}
+
+void UDoorSubsystem::ChooseSwings()
+{
+	const FDoorTuning& Tuning = DoorTuning::Get();
+	SwingLimited = 0;
+	SwingOutward = 0;
+	SwingOneSideBlocked = 0;
+	int32 ObstacleCount = 0;
+	if (!Tuning.bSwingFixed)
+	{
+		return;
+	}
+	for (ADoorActor* Door : Doors)
+	{
+		if (!Door || Door->IsBroken())
+		{
+			continue;
+		}
+		// An entrance opens outward, like a real building's (designer 2026-11-22) - when that side is free.
+		const float Preferred = Door->GetRole() == TEXT("entry") ? OutwardSign(*Door) : 0.f;
+		const TArray<DoorRules::FDoorSwingObstacle> Obstacles = GatherSwingObstacles(*Door);
+		ObstacleCount += Obstacles.Num();
+		const DoorRules::FDoorSwingChoice Choice = DoorRules::ChooseSwing(Door->GetWidthCm(), Door->GetLeafCount(), Preferred, Obstacles,
+			Tuning.SwingDegrees, Tuning.SwingMinDeg);
+		// A side that does not swing fully: the R1 rule (away from the opener) would have put the leaf there for an opener on the other side.
+		SwingOneSideBlocked += FMath::Min(Choice.FreeDegPlus, Choice.FreeDegMinus) < Tuning.SwingDegrees - 0.5f ? 1 : 0;
+		Door->SetFixedSwing(Choice.Sign, Choice.OpenDeg);
+		SwingLimited += Choice.OpenDeg < Tuning.SwingDegrees - 0.5f ? 1 : 0;
+		SwingOutward += Preferred != 0.f && Choice.Sign == Preferred ? 1 : 0;
+		static const TCHAR* const Kinds[] = { TEXT("a wall"), TEXT("a doorway"), TEXT("a stair") };
+		UE_LOG(LogCodexTactics, Verbose, TEXT("Doors: %s (%s %s, %s): opens to %+.0f, %.0f deg (free +%.0f / -%.0f%s%s)"), *Door->GetName(), *Door->GetBuildingId(),
+			*Door->GetOpeningId(), Door->GetRole().IsEmpty() ? TEXT("-") : *Door->GetRole(), Choice.Sign, Choice.OpenDeg, Choice.FreeDegPlus, Choice.FreeDegMinus,
+			Preferred != 0.f ? (Choice.Sign == Preferred ? TEXT(", outward") : TEXT(", INWARD: outward blocked")) : TEXT(""),
+			Choice.BlockKind >= 0 ? *FString::Printf(TEXT(", stopped by %s"), Kinds[FMath::Clamp(Choice.BlockKind, 0, 2)]) : TEXT(""));
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("Doors: swing sides chosen for %d door(s) - %d entrance(s) outward, %d with a limited angle, %d with one side blocked (R1 would swing into it from the other side); %d obstacles (%d layout doorways / stair mouths)"),
+		Doors.Num(), SwingOutward, SwingLimited, SwingOneSideBlocked, ObstacleCount, LayoutPlaces.Num());
 }
 
 bool UDoorSubsystem::IsKnownLocked(const ADoorActor& Door) const
@@ -360,6 +499,7 @@ int32 UDoorSubsystem::AdoptLeaves()
 		++Made;
 	}
 	OpenKitDoors = AdoptKitOpenLeaves();
+	ChooseSwings();
 	Made += OpenKitDoors;
 	Held.Init(0.f, Doors.Num());
 	Keys.Reset();

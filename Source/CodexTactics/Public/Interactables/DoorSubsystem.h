@@ -76,6 +76,11 @@ public:
 	 * door says how else from afar; on an unknown one he walks up and tries it first.
 	 */
 	bool IsKnownLocked(const ADoorActor& Door) const;
+	/** What a door's open leaves must stay clear of, in its frame: walls / fixed pieces, other doorways' approach zones, stair mouths (smokes). */
+	TArray<DoorRules::FDoorSwingObstacle> GatherSwingObstacles(const ADoorActor& Door) const;
+	/** The layout's doorways and stair mouths (smokes). */
+	const TArray<DoorRules::FLayoutPlace>& GetLayoutPlaces() const { return LayoutPlaces; }
+
 	/** Handle tries that found a door locked since the adoption (smokes). */
 	int32 GetLockedTries() const { return LockedTries; }
 
@@ -340,6 +345,16 @@ private:
 	void ApplyLayoutStrength(struct FDoorSetup& Setup, const FString& StrengthTag) const;
 
 	TMap<FString, DoorRules::FLayoutDoor> LayoutDoors;
+	/** The layout's doorways / stair mouths and building footprints (the swing sides). */
+	TArray<DoorRules::FLayoutPlace> LayoutPlaces;
+	TMap<FString, FBox2D> LayoutFootprints;
+	/** Picks every door's open side / angle (DoorRules::ChooseSwing; doors.json swing_fixed). */
+	void ChooseSwings();
+	/** +1 / -1: the side of Door's frame outside its building's footprint (0 unknown). */
+	float OutwardSign(const ADoorActor& Door) const;
+	int32 SwingLimited = 0;
+	int32 SwingOutward = 0;
+	int32 SwingOneSideBlocked = 0;
 	/** Doors the squad found locked (a handle try, a kick that held). */
 	TSet<TWeakObjectPtr<const ADoorActor>> KnownLocked;
 	int32 LockedTries = 0;

@@ -178,6 +178,14 @@ struct CODEXTACTICS_API FDoorTuning
 	float SingleLeafMaxCm = 130.f;
 	/** "swing_deg": an open leaf stands this far round its hinge. */
 	float SwingDegrees = 90.f;
+	/**
+	 * "swing_fixed" (designer 2026-11-22, item 3): every door opens to ONE side chosen at the adoption (DoorRules::ChooseSwing: clear of walls,
+	 * other doorways' approach zones and stair mouths, an entrance outward; a limited angle where neither side is free, never below
+	 * "swing_min_deg"); 0 = R1 (away from whoever opens it). "swing_zone_depth_cm": a doorway's approach zone reaches this far each side.
+	 */
+	bool bSwingFixed = true;
+	float SwingMinDeg = 30.f;
+	float SwingZoneDepthCm = 100.f;
 	/** "nav_entering_cost_cm": the navmesh price of a closed door (t_open x walk speed, opening-states F1). */
 	float NavEnteringCostCm = 350.f;
 	/** "nav_box_depth_cm": depth of the doorway's nav modifier box across the wall. */
@@ -406,6 +414,59 @@ namespace DoorRules
 
 	/** The door openings of a levelgen layout (buildings[].openings + partitions[].openings, kind "door") by opening id. */
 	CODEXTACTICS_API TMap<FString, FLayoutDoor> ParseLayoutDoors(const FJsonObject& Layout);
+
+	// --- The open leaf's side (designer 2026-11-22, item 3: "in the entrance tambour the open leaf swung across the neighbouring door") ---
+
+	/** Where a doorway / stair mouth lies, from the layout (world cm; Z = its floor). */
+	struct FLayoutPlace
+	{
+		FString Id;
+		FString BuildingId;
+		FVector Center = FVector::ZeroVector;
+		/** Doorways: the wall normal (opening yaw) and width; stair mouths: Normal unused, Width the flight width. */
+		FVector2D Normal = FVector2D(1.f, 0.f);
+		float WidthCm = 0.f;
+		bool bStair = false;
+	};
+
+	/** Every door opening (leafless open ones too) and every stair mouth (flight bottom and top) of a layout; Footprints = building rectangles. */
+	CODEXTACTICS_API void ParseLayoutPlaces(const FJsonObject& Layout, TArray<FLayoutPlace>& OutPlaces, TMap<FString, FBox2D>& OutFootprints);
+
+	/** What blocks an open leaf, in the door frame (X along the wall from the doorway centre, Y across): a box, and what it is. */
+	struct FDoorSwingObstacle
+	{
+		FBox2D Box = FBox2D(ForceInit);
+		/** 0 a wall / fixed piece, 1 another doorway's approach zone, 2 a stair mouth. */
+		uint8 Kind = 0;
+	};
+
+	/** The chosen swing: the side (+1 = the leaf ends on the frame's +Y side), the open angle, the free angle of each side (+ / -). */
+	struct FDoorSwingChoice
+	{
+		float Sign = 1.f;
+		float OpenDeg = 90.f;
+		float FreeDegPlus = 0.f;
+		float FreeDegMinus = 0.f;
+		/** What stopped the chosen side short of MaxDeg (-1 = nothing). */
+		int32 BlockKind = -1;
+	};
+
+	/** The open leaves at Deg on side Sign (door frame: hinge A at -X running +X, hinge B at +X running -X for a pair): their segments. */
+	CODEXTACTICS_API void OpenLeafSegments(float WidthCm, int32 LeafCount, float Sign, float Deg, TArray<TPair<FVector2D, FVector2D>>& OutSegments);
+
+	/** Segment A-B crosses (or lies in) Box. */
+	CODEXTACTICS_API bool SegmentHitsBox(const FVector2D& A, const FVector2D& B, const FBox2D& Box);
+
+	/** How far the leaves swing on side Sign before one of them meets an obstacle (3 deg steps; MaxDeg when nothing is met); OutKind what stopped it. */
+	CODEXTACTICS_API float FreeSwingDeg(float WidthCm, int32 LeafCount, float Sign, const TArray<FDoorSwingObstacle>& Obstacles, float MaxDeg, int32* OutKind = nullptr);
+
+	/**
+	 * The side a door opens to, for good (designer 2026-11-22): the open leaf must lie clear of walls, other doorways' approach zones and stair
+	 * mouths. PreferredSign (an entrance: outward, +1 / -1; 0 none) wins when it swings fully; else the side that swings farther; a tie -> the
+	 * preferred one, else +1. The open angle is that side's free angle (never below MinDeg: where no side is free the angle is limited).
+	 */
+	CODEXTACTICS_API FDoorSwingChoice ChooseSwing(float WidthCm, int32 LeafCount, float PreferredSign, const TArray<FDoorSwingObstacle>& Obstacles, float MaxDeg,
+		float MinDeg = 30.f);
 
 	/** Does one of Keys open this door: "*", the opening id, the building id (every locked door of it) or the door's own key tag. */
 	CODEXTACTICS_API bool KeyFits(const TSet<FString>& Keys, const FString& BuildingId, const FString& OpeningId, const FString& DoorKeyId);

@@ -162,6 +162,26 @@ Switch off = nothing of R2 runs (no doors, no breach, no clips); keys in loot ar
   has the goal behind it (within `breach.goal_door_cm`), he is sent to try that door (the try above, forced even when known) instead of
   walking to the nearest reachable spot outside.
 
+### The open leaf's side (2026-11-22, the designer's test of the kit showcase, item 3)
+
+"In the entrance tambour the opened leaf swung across and blocked the neighbouring door": R1 swung a leaf away from whoever opened it, so
+an entrance opened from the street fell into the tambour over the inner door. Now (`doors.json` `swing_fixed` 1) every door opens to ONE
+side chosen at the adoption, `UDoorSubsystem::ChooseSwings` -> pure `DoorRules::ChooseSwing`: obstacles in the door frame
+(`GatherSwingObstacles`) - the collision boxes of walls / fixed pieces round the doorway (20-180 cm over the threshold: no slab, no lintel;
+2 cm in, so the jamb is no obstacle; hidden kit proxies included), every other doorway's approach zone (the layout's door openings,
+leafless open ones too: width + 10 cm each side, `swing_zone_depth_cm` 100 each side) and the stair mouths (flight bottom / top, the flight
+width square; `DoorRules::ParseLayoutPlaces`). Each side's free angle = how far the leaves swing (3 deg steps, `FreeSwingDeg`) before a
+leaf segment meets one. An entrance (layout role `entry`) opens OUTWARD (the side off its building's footprint) when that side swings fully;
+else the freer side; a tie -> +Y. The open angle = that side's free angle, never below `swing_min_deg` 30 (where neither side is free the
+angle is limited). `ADoorActor::SetFixedSwing` (all opens: hand, auto-open, kick, shot lock); `swing_fixed` 0 = R1. Log `Doors: swing sides
+chosen ...`. Grey showcase: 56 doors, 12 entrances all outward, 12 doors had one side blocked (R1 would have swung into it from the other
+side), 0 limited; dressed showcase: 318 doors (262 kit-open), 12 / 12 outward, 94 with a side blocked, 4 limited. Tests
+`CodexTactics.Doors.Swing.SideClearOfDoorways` (the tambour, a blocked outward side, both blocked -> a limited angle clear of the obstacle,
+the minimum angle, the jamb); `DoorsSmoke` A3 (every door's open leaves sampled in world space against every other doorway's approach zone
+and stair mouth: 0 / 111 leaves grey, 0 / 635 dressed; every entrance outward 12 / 12). Pictures: `CodexTactics.StoryShowcaseFixShots`
+-> `Saved/StoryShowcase/fixes/*_entrance_swing*.png`. Open: the hand-open clip is a push; an outward door opened from the street is a
+pull (the clip still plays as a push - a pull clip from the pack would fit; designer call).
+
 ## Spotted trap -> the squad holds in Solo (old §5)
 
 - **Spotted trap -> the squad holds in Solo (rev 5h, game designer play-test 2026-10-15, every level):** a hidden level mine (`AProximityMineActor::HandleSpotted`) or PMC tripwire (`ATripwireActor::RevealBy`) spotted with a spotter calls `AInteractableActor::NotifyTrapSpotted` -> `USquadSubsystem::HoldForSpottedTrap(Spotter, TrapName)`: every member `StopOperative` (the Godot rule) and, by pure `Interactables/TrapSpotRules::DecideSquadResponse(bFormationActive, bAutonomy, LivingMembers)` (`HoldAndSolo` only exploring with the formation, AUTO off, 2+ alive; else `HoldOnly`), a box-selected group drops to the leader (`SetSelectedGroup`), `EnterSoloModeInternal(bForTrap)` (followers crouch except one in cover; no "[SOLO MODE: ON]" line) and the feed line "{Mine|Tripwire} spotted - squad holding. Move them one by one (B regroups)." (speaker SQUAD). `bTrapSolo` (`IsTrapSolo`): no 25 m leash in `Tick` until `ExitSoloMode`; saved as `is_trap_solo` (`RestoreTrapSolo` after the Solo state). Events: `TrapSpotted` (Subject = the spotter) for both kinds, besides `MineSpotted` / `TripwireSpotted`. AUTO keeps the old stop (its paths avoid known traps). Tests `CodexTactics.Interactables.TrapSpot.SquadResponse`; smoke `TrapSoloSmoke`.

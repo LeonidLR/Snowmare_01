@@ -744,5 +744,55 @@ bool FDoorsClickPriorityTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("closed -> open"), DoorRules::ChooseClickAction(EDoorLeafState::Closed, false, false, false, false, Action) && Action == EDoorAction::Open);
 	return true;
 }
+DOORS_TEST(FDoorsSwingSideTest, "Swing.SideClearOfDoorways")
+bool FDoorsSwingSideTest::RunTest(const FString& Parameters)
+{
+	// Designer 2026-11-22, item 3: "in the entrance tambour the opened leaf swung across and blocked the neighbouring door". Door frame: X along
+	// the wall from the doorway centre, Y across; a 100 cm single leaf hinged at x -50.
+	using namespace DoorRules;
+	const auto Box = [](float X0, float Y0, float X1, float Y1, uint8 Kind)
+	{
+		return FDoorSwingObstacle{ FBox2D(FVector2D(X0, Y0), FVector2D(X1, Y1)), Kind };
+	};
+	TArray<TPair<FVector2D, FVector2D>> Segments;
+	OpenLeafSegments(100.f, 1, 1.f, 90.f, Segments);
+	TestTrue(TEXT("a leaf open 90 deg to +Y lies along x -50 from the hinge"), Segments.Num() == 1 && FMath::IsNearlyEqual(Segments[0].Value.X, -50.f, 0.1f)
+		&& FMath::IsNearlyEqual(Segments[0].Value.Y, 100.f, 0.1f));
+	OpenLeafSegments(160.f, 2, -1.f, 90.f, Segments);
+	TestTrue(TEXT("a pair opens both leaves to the same side"), Segments.Num() == 2 && Segments[0].Value.Y < 0.f && Segments[1].Value.Y < 0.f
+		&& FMath::IsNearlyEqual(Segments[1].Value.X, 80.f, 0.1f));
+	TestTrue(TEXT("a segment through a box hits it"), SegmentHitsBox(FVector2D(-10.f, 0.f), FVector2D(10.f, 0.f), FBox2D(FVector2D(-1.f), FVector2D(1.f))));
+	TestFalse(TEXT("a segment beside a box does not"), SegmentHitsBox(FVector2D(-10.f, 5.f), FVector2D(10.f, 5.f), FBox2D(FVector2D(-1.f), FVector2D(1.f))));
+
+	TArray<FDoorSwingObstacle> None;
+	FDoorSwingChoice Choice = ChooseSwing(100.f, 1, -1.f, None, 90.f, 30.f);
+	TestTrue(TEXT("nothing round it: the preferred side (an entrance outward), fully"), Choice.Sign == -1.f && FMath::IsNearlyEqual(Choice.OpenDeg, 90.f));
+	Choice = ChooseSwing(100.f, 1, 0.f, None, 90.f, 30.f);
+	TestTrue(TEXT("no preference: +Y, fully"), Choice.Sign == 1.f && FMath::IsNearlyEqual(Choice.OpenDeg, 90.f));
+
+	// The tambour: inside (+Y) the next doorway's approach zone starts 30 cm behind the hinge jamb; outside (-Y) is the street.
+	TArray<FDoorSwingObstacle> Tambour = { Box(-140.f, 20.f, -40.f, 160.f, 1) };
+	Choice = ChooseSwing(100.f, 1, 0.f, Tambour, 90.f, 30.f);
+	TestTrue(TEXT("tambour, no preference: the leaf goes to the free side"), Choice.Sign == -1.f && FMath::IsNearlyEqual(Choice.OpenDeg, 90.f));
+	TestTrue(TEXT("tambour: the +Y side is blocked short"), Choice.FreeDegPlus < 90.f);
+	// The preferred side blocked by a wall (a porch pillar outside): the other side.
+	TArray<FDoorSwingObstacle> Porch = { Box(-60.f, -70.f, -30.f, -60.f, 0) };
+	Choice = ChooseSwing(100.f, 1, -1.f, Porch, 90.f, 30.f);
+	TestTrue(TEXT("the outward side blocked: inward, fully"), Choice.Sign == 1.f && FMath::IsNearlyEqual(Choice.OpenDeg, 90.f));
+	// Both sides blocked: the freer one with a limited angle, never below the minimum.
+	TArray<FDoorSwingObstacle> Both = { Box(-60.f, 60.f, 60.f, 70.f, 0), Box(-60.f, -30.f, 60.f, -20.f, 2) };
+	Choice = ChooseSwing(100.f, 1, 0.f, Both, 90.f, 10.f);
+	TestTrue(FString::Printf(TEXT("both blocked: the freer +Y side (free +%.0f / -%.0f)"), Choice.FreeDegPlus, Choice.FreeDegMinus), Choice.Sign == 1.f
+		&& Choice.FreeDegPlus > Choice.FreeDegMinus);
+	TestTrue(FString::Printf(TEXT("both blocked: a limited angle (%.0f deg)"), Choice.OpenDeg), Choice.OpenDeg < 90.f && Choice.OpenDeg >= 10.f);
+	OpenLeafSegments(100.f, 1, Choice.Sign, Choice.OpenDeg, Segments);
+	TestFalse(TEXT("the limited leaf stays clear of the obstacle"), SegmentHitsBox(Segments[0].Key, Segments[0].Value, Both[0].Box));
+	Choice = ChooseSwing(100.f, 1, 0.f, { Box(-60.f, 5.f, 60.f, 8.f, 0), Box(-60.f, -8.f, 60.f, -5.f, 0) }, 90.f, 30.f);
+	TestTrue(TEXT("never below swing_min_deg"), FMath::IsNearlyEqual(Choice.OpenDeg, 30.f));
+	// The jamb the leaf rests against is no obstacle (the wall the doorway is cut in, shrunk 2 cm by the runtime).
+	TArray<FDoorSwingObstacle> Jamb = { Box(-200.f, -8.f, -52.f, 8.f, 0), Box(52.f, -8.f, 200.f, 8.f, 0) };
+	TestEqual(TEXT("the doorway's own wall does not stop the swing"), FreeSwingDeg(100.f, 1, 1.f, Jamb, 90.f), 90.f);
+	return true;
+}
 
 #endif // WITH_DEV_AUTOMATION_TESTS

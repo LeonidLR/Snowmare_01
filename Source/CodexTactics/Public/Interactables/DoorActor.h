@@ -115,6 +115,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Doors")
 	bool BlastDoor(AActor* InstigatorActor);
 
+	/**
+	 * The side and angle the leaves always open to (designer 2026-11-22, item 3; UDoorSubsystem picks them with DoorRules::ChooseSwing at the
+	 * adoption: clear of walls, other doorways and stair mouths, an entrance outward). Without it a leaf swings away from whoever opens it (R1).
+	 */
+	void SetFixedSwing(float Sign, float OpenDeg);
+	bool HasFixedSwing() const { return bFixedSwing; }
+	float GetFixedSwingSign() const { return FixedSign_; }
+	float GetOpenDeg() const { return OpenDeg_ > 0.f ? OpenDeg_ : DoorTuning::Get().SwingDegrees; }
+	/** The open leaves' segments on the floor (world, at the leaf's full open pose; smokes: no leaf over another doorway). */
+	void GetOpenLeafSegments(TArray<TPair<FVector, FVector>>& OutSegments) const;
+	/** The number of leaves (1, or 2 for a wide doorway). */
+	int32 GetLeafCount() const { return LeafCount; }
+
 	/** Heavy (tag door_heavy or doors.json heavy_min_width_cm): a harder, riskier kick. */
 	bool IsHeavy() const;
 	/** The leaf was blown off. */
@@ -235,6 +248,10 @@ private:
 	float OpenAlpha = 0.f;
 	float TargetAlpha = 0.f;
 	float SwingSign_ = 1.f;
+	bool bFixedSwing = false;
+	float FixedSign_ = 1.f;
+	/** The open angle (0 = doors.json swing_deg). */
+	float OpenDeg_ = 0.f;
 	bool bSwinging = false;
 	bool bKicked = false;
 	bool bLockShot = false;

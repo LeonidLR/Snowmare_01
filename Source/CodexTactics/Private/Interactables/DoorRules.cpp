@@ -424,6 +424,250 @@ TMap<FString, DoorRules::FLayoutDoor> DoorRules::ParseLayoutDoors(const FJsonObj
 	return Out;
 }
 
+void DoorRules::ParseLayoutPlaces(const FJsonObject& Layout, TArray<FLayoutPlace>& OutPlaces, TMap<FString, FBox2D>& OutFootprints)
+{
+	OutPlaces.Reset();
+	OutFootprints.Reset();
+	const double GroundZ = Layout.HasField(TEXT("ground_z")) ? Layout.GetNumberField(TEXT("ground_z")) : 0.0;
+	const TArray<TSharedPtr<FJsonValue>>* Buildings = nullptr;
+	if (!Layout.TryGetArrayField(TEXT("buildings"), Buildings) || !Buildings)
+	{
+		return;
+	}
+	const auto Point = [](const TSharedPtr<FJsonValue>& Value, FVector2D& Out)
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Pair = nullptr;
+		if (!Value.IsValid() || !Value->TryGetArray(Pair) || !Pair || Pair->Num() < 2)
+		{
+			return false;
+		}
+		Out = FVector2D((*Pair)[0]->AsNumber(), (*Pair)[1]->AsNumber());
+		return true;
+	};
+	for (const TSharedPtr<FJsonValue>& BuildingValue : *Buildings)
+	{
+		const TSharedPtr<FJsonObject> Building = BuildingValue.IsValid() ? BuildingValue->AsObject() : nullptr;
+		if (!Building.IsValid())
+		{
+			continue;
+		}
+		const FString BuildingId = Building->GetStringField(TEXT("id"));
+		const TArray<TSharedPtr<FJsonValue>>* Footprint = nullptr;
+		FVector2D A;
+		FVector2D B;
+		if (Building->TryGetArrayField(TEXT("footprint"), Footprint) && Footprint && Footprint->Num() >= 2 && Point((*Footprint)[0], A) && Point((*Footprint)[1], B))
+		{
+			OutFootprints.Add(BuildingId, FBox2D(FVector2D(FMath::Min(A.X, B.X), FMath::Min(A.Y, B.Y)), FVector2D(FMath::Max(A.X, B.X), FMath::Max(A.Y, B.Y))));
+		}
+		// Storey heights: floors_detail[].height_z (absolute), storey 0 on the ground.
+		TMap<int32, double> FloorZ;
+		FloorZ.Add(0, GroundZ);
+		const TArray<TSharedPtr<FJsonValue>>* Details = nullptr;
+		if (Building->TryGetArrayField(TEXT("floors_detail"), Details) && Details)
+		{
+			for (const TSharedPtr<FJsonValue>& DetailValue : *Details)
+			{
+				const TSharedPtr<FJsonObject> Detail = DetailValue.IsValid() ? DetailValue->AsObject() : nullptr;
+				if (Detail.IsValid() && Detail->HasField(TEXT("floor")) && Detail->HasField(TEXT("height_z")))
+				{
+					FloorZ.Add(static_cast<int32>(Detail->GetNumberField(TEXT("floor"))), Detail->GetNumberField(TEXT("height_z")));
+				}
+			}
+		}
+		const auto ZOf = [&FloorZ, GroundZ](int32 Floor)
+		{
+			const double* Z = FloorZ.Find(Floor);
+			return Z ? *Z : GroundZ + 300.0 * Floor;
+		};
+		const auto AddOpenings = [&](const FJsonObject& Holder)
+		{
+			const TArray<TSharedPtr<FJsonValue>>* Openings = nullptr;
+			if (!Holder.TryGetArrayField(TEXT("openings"), Openings) || !Openings)
+			{
+				return;
+			}
+			for (const TSharedPtr<FJsonValue>& OpeningValue : *Openings)
+			{
+				const TSharedPtr<FJsonObject> Opening = OpeningValue.IsValid() ? OpeningValue->AsObject() : nullptr;
+				const TArray<TSharedPtr<FJsonValue>>* Pos = nullptr;
+				FVector2D P;
+				if (!Opening.IsValid() || Opening->GetStringField(TEXT("kind")) != TEXT("door") || !Opening->TryGetArrayField(TEXT("pos"), Pos) || !Pos
+					|| Pos->Num() < 2)
+				{
+					continue;
+				}
+				P = FVector2D((*Pos)[0]->AsNumber(), (*Pos)[1]->AsNumber());
+				FLayoutPlace& Place = OutPlaces.AddDefaulted_GetRef();
+				Place.Id = Opening->GetStringField(TEXT("id"));
+				Place.BuildingId = BuildingId;
+				const int32 Floor = Opening->HasField(TEXT("floor")) ? static_cast<int32>(Opening->GetNumberField(TEXT("floor"))) : 0;
+				Place.Center = FVector(P.X, P.Y, ZOf(Floor));
+				const double Yaw = Opening->HasField(TEXT("yaw")) ? Opening->GetNumberField(TEXT("yaw")) : 0.0;
+				Place.Normal = FVector2D(FMath::Cos(FMath::DegreesToRadians(Yaw)), FMath::Sin(FMath::DegreesToRadians(Yaw)));
+				Place.WidthCm = Opening->HasField(TEXT("width")) ? static_cast<float>(Opening->GetNumberField(TEXT("width"))) : 100.f;
+			}
+		};
+		AddOpenings(*Building);
+		const TArray<TSharedPtr<FJsonValue>>* Partitions = nullptr;
+		if (Building->TryGetArrayField(TEXT("partitions"), Partitions) && Partitions)
+		{
+			for (const TSharedPtr<FJsonValue>& PartitionValue : *Partitions)
+			{
+				if (const TSharedPtr<FJsonObject> Partition = PartitionValue.IsValid() ? PartitionValue->AsObject() : nullptr; Partition.IsValid())
+				{
+					AddOpenings(*Partition);
+				}
+			}
+		}
+		const TArray<TSharedPtr<FJsonValue>>* Stairs = nullptr;
+		if (Building->TryGetArrayField(TEXT("stairs"), Stairs) && Stairs)
+		{
+			for (const TSharedPtr<FJsonValue>& StairValue : *Stairs)
+			{
+				const TSharedPtr<FJsonObject> Stair = StairValue.IsValid() ? StairValue->AsObject() : nullptr;
+				if (!Stair.IsValid())
+				{
+					continue;
+				}
+				const float Width = Stair->HasField(TEXT("width")) ? static_cast<float>(Stair->GetNumberField(TEXT("width"))) : 150.f;
+				const int32 From = Stair->HasField(TEXT("from")) ? static_cast<int32>(Stair->GetNumberField(TEXT("from"))) : 0;
+				const int32 To = Stair->HasField(TEXT("to")) ? static_cast<int32>(Stair->GetNumberField(TEXT("to"))) : From + 1;
+				const TPair<const TCHAR*, int32> Mouths[] = { { TEXT("pos"), From }, { TEXT("top"), To } };
+				for (const TPair<const TCHAR*, int32>& Mouth : Mouths)
+				{
+					const TArray<TSharedPtr<FJsonValue>>* Pos = nullptr;
+					if (Stair->TryGetArrayField(Mouth.Key, Pos) && Pos && Pos->Num() >= 2)
+					{
+						FLayoutPlace& Place = OutPlaces.AddDefaulted_GetRef();
+						Place.Id = Stair->GetStringField(TEXT("id")) + TEXT(":") + Mouth.Key;
+						Place.BuildingId = BuildingId;
+						Place.Center = FVector((*Pos)[0]->AsNumber(), (*Pos)[1]->AsNumber(), ZOf(Mouth.Value));
+						Place.WidthCm = Width;
+						Place.bStair = true;
+					}
+				}
+			}
+		}
+	}
+}
+
+void DoorRules::OpenLeafSegments(float WidthCm, int32 LeafCount, float Sign, float Deg, TArray<TPair<FVector2D, FVector2D>>& OutSegments)
+{
+	OutSegments.Reset();
+	const int32 Count = FMath::Clamp(LeafCount, 1, 2);
+	const float Leaf = WidthCm / Count;
+	const float Rad = FMath::DegreesToRadians(Deg);
+	const float S = Sign >= 0.f ? 1.f : -1.f;
+	constexpr float HingeGapCm = 4.f; // the leaf's own hinge edge touches the jamb
+	const FVector2D HingeA(-WidthCm * 0.5f, 0.f);
+	const FVector2D DirA(FMath::Cos(Rad), S * FMath::Sin(Rad));
+	OutSegments.Emplace(HingeA + DirA * HingeGapCm, HingeA + DirA * Leaf);
+	if (Count == 2)
+	{
+		const FVector2D HingeB(WidthCm * 0.5f, 0.f);
+		const FVector2D DirB(-FMath::Cos(Rad), S * FMath::Sin(Rad));
+		OutSegments.Emplace(HingeB + DirB * HingeGapCm, HingeB + DirB * Leaf);
+	}
+}
+
+bool DoorRules::SegmentHitsBox(const FVector2D& A, const FVector2D& B, const FBox2D& Box)
+{
+	if (!Box.bIsValid)
+	{
+		return false;
+	}
+	// Liang-Barsky clip of A-B against the box.
+	double T0 = 0.0;
+	double T1 = 1.0;
+	const FVector2D D = B - A;
+	const double P[4] = { -D.X, D.X, -D.Y, D.Y };
+	const double Q[4] = { A.X - Box.Min.X, Box.Max.X - A.X, A.Y - Box.Min.Y, Box.Max.Y - A.Y };
+	for (int32 I = 0; I < 4; ++I)
+	{
+		if (FMath::IsNearlyZero(P[I]))
+		{
+			if (Q[I] < 0.0)
+			{
+				return false;
+			}
+			continue;
+		}
+		const double T = Q[I] / P[I];
+		if (P[I] < 0.0)
+		{
+			T0 = FMath::Max(T0, T);
+		}
+		else
+		{
+			T1 = FMath::Min(T1, T);
+		}
+		if (T0 > T1)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+float DoorRules::FreeSwingDeg(float WidthCm, int32 LeafCount, float Sign, const TArray<FDoorSwingObstacle>& Obstacles, float MaxDeg, int32* OutKind)
+{
+	constexpr float StepDeg = 3.f;
+	if (OutKind)
+	{
+		*OutKind = -1;
+	}
+	TArray<TPair<FVector2D, FVector2D>> Segments;
+	float Free = 0.f;
+	for (float Deg = StepDeg; Deg <= MaxDeg + 0.01f; Deg += StepDeg)
+	{
+		OpenLeafSegments(WidthCm, LeafCount, Sign, FMath::Min(Deg, MaxDeg), Segments);
+		for (const FDoorSwingObstacle& Obstacle : Obstacles)
+		{
+			for (const TPair<FVector2D, FVector2D>& Segment : Segments)
+			{
+				if (SegmentHitsBox(Segment.Key, Segment.Value, Obstacle.Box))
+				{
+					if (OutKind)
+					{
+						*OutKind = Obstacle.Kind;
+					}
+					return Free;
+				}
+			}
+		}
+		Free = FMath::Min(Deg, MaxDeg);
+	}
+	return MaxDeg;
+}
+
+DoorRules::FDoorSwingChoice DoorRules::ChooseSwing(float WidthCm, int32 LeafCount, float PreferredSign, const TArray<FDoorSwingObstacle>& Obstacles, float MaxDeg,
+	float MinDeg)
+{
+	FDoorSwingChoice Choice;
+	int32 KindPlus = -1;
+	int32 KindMinus = -1;
+	Choice.FreeDegPlus = FreeSwingDeg(WidthCm, LeafCount, 1.f, Obstacles, MaxDeg, &KindPlus);
+	Choice.FreeDegMinus = FreeSwingDeg(WidthCm, LeafCount, -1.f, Obstacles, MaxDeg, &KindMinus);
+	const float Preferred = PreferredSign > 0.f ? 1.f : PreferredSign < 0.f ? -1.f : 0.f;
+	const float PreferredFree = Preferred > 0.f ? Choice.FreeDegPlus : Choice.FreeDegMinus;
+	if (Preferred != 0.f && PreferredFree >= MaxDeg - 0.01f)
+	{
+		Choice.Sign = Preferred;
+	}
+	else if (!FMath::IsNearlyEqual(Choice.FreeDegPlus, Choice.FreeDegMinus, 0.01f))
+	{
+		Choice.Sign = Choice.FreeDegPlus > Choice.FreeDegMinus ? 1.f : -1.f;
+	}
+	else
+	{
+		Choice.Sign = Preferred != 0.f ? Preferred : 1.f;
+	}
+	const float Free = Choice.Sign > 0.f ? Choice.FreeDegPlus : Choice.FreeDegMinus;
+	Choice.BlockKind = Choice.Sign > 0.f ? KindPlus : KindMinus;
+	Choice.OpenDeg = FMath::Clamp(Free, FMath::Min(MinDeg, MaxDeg), MaxDeg);
+	return Choice;
+}
+
 FDoorKickOutcome DoorRules::ResolveKick(EDoorLeafState State, EDoorStrength Strength, bool bHeavy, float HealthFraction, float RollOpen, float RollInjury,
 	const FDoorTuning& Tuning)
 {
@@ -786,6 +1030,9 @@ FDoorTuning DoorTuning::FromJson(const FJsonObject& Json, const FDoorTuning& Bas
 	ReadDoorNumber(Json, TEXT("interact_timeout_s"), Tuning.InteractTimeoutSeconds, 1.f, 120.f);
 	ReadDoorNumber(Json, TEXT("single_leaf_max_cm"), Tuning.SingleLeafMaxCm, 40.f, 400.f);
 	ReadDoorNumber(Json, TEXT("swing_deg"), Tuning.SwingDegrees, 10.f, 180.f);
+	ReadDoorFlag(Json, TEXT("swing_fixed"), Tuning.bSwingFixed);
+	ReadDoorNumber(Json, TEXT("swing_min_deg"), Tuning.SwingMinDeg, 0.f, 180.f);
+	ReadDoorNumber(Json, TEXT("swing_zone_depth_cm"), Tuning.SwingZoneDepthCm, 0.f, 400.f);
 	ReadDoorNumber(Json, TEXT("nav_entering_cost_cm"), Tuning.NavEnteringCostCm, 0.f, 10000.f);
 	ReadDoorNumber(Json, TEXT("nav_box_depth_cm"), Tuning.NavBoxDepthCm, 10.f, 300.f);
 	ReadDoorFlag(Json, TEXT("kick_enabled"), Tuning.bKickEnabled);
