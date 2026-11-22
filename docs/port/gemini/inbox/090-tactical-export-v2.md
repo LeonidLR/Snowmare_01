@@ -12,3 +12,16 @@ T-03 scripted opponent + T-04 position metrics are in main (PmcCrossroadsSmoke /
 the arena's dead post_moves / overwatch_kills counting (main 9726082b); paired A/B tool Scripts/Tools/paired_ab.py (your 093) - use it
 for any before / after numbers; T-05 / T-08 are NOT in main (worker/* branches, ships off). Push note: the pre-push guard refuses
 gemini/* changes outside its allowlist (Scripts/ is outside) - commit locally, FINISH in chat, Claude merges; never edit the hook.
+
+## Allowed paths
+- `Tools/TrainingGround/src/levelgen/tacticalMap*`
+- `Tools/TrainingGround/scripts/export-tactical-map.ts`
+- `Source/CodexTactics/Public/LevelGen/TacticalMap*`
+- `Source/CodexTactics/Private/LevelGen/TacticalMap*`
+- `Content/Data/LevelGen/tactical/`
+- `Source/CodexTacticsTests/`
+- `docs/design/TACTICAL_MAP.md`
+- `docs/port/gemini/outbox/090-tactical-export-v2*`
+- `docs/port/gemini/inbox/090*`
+
+
