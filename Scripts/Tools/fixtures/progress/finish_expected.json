@@ -1,0 +1,107 @@
+{
+ "713": {
+  "hash": "21e103fe",
+  "num": "082",
+  "status": "done"
+ },
+ "716": {
+  "hash": "70fc5c10",
+  "num": "083",
+  "status": "done"
+ },
+ "723": {
+  "hash": "130d9da0",
+  "num": "083",
+  "status": "done"
+ },
+ "724": {
+  "hash": "ca420a9d",
+  "num": "044",
+  "status": "done"
+ },
+ "729": {
+  "hash": "4def1703",
+  "num": "G007",
+  "status": "\u0433\u043e\u0442\u043e\u0432\u043e"
+ },
+ "733": {
+  "hash": "f0534a91",
+  "num": "083",
+  "status": "done"
+ },
+ "739": {
+  "hash": "8b79a5f2",
+  "num": "G008",
+  "status": "\u0433\u043e\u0442\u043e\u0432\u043e"
+ },
+ "742": {
+  "hash": "b92f7b2c",
+  "num": "045",
+  "status": "partial"
+ },
+ "752": {
+  "hash": "558736a1",
+  "num": "085",
+  "status": "558736a1"
+ },
+ "759": {
+  "hash": "2ad52ed7",
+  "num": "046",
+  "status": "done"
+ },
+ "770": {
+  "hash": "6862b7ec",
+  "num": "085",
+  "status": "6862b7ec"
+ },
+ "783": {
+  "hash": "981660b1",
+  "num": "048",
+  "status": "DONE"
+ },
+ "838": {
+  "hash": "150bfc6a",
+  "num": "092",
+  "status": "PASS"
+ },
+ "840": {
+  "hash": "2e9acda0",
+  "num": "093",
+  "status": "PASS (local commit 2e9acda0)"
+ },
+ "850": {
+  "hash": "cacde70b",
+  "num": "G013",
+  "status": "READY"
+ },
+ "851": {
+  "hash": "5dbc61a8",
+  "num": "089",
+  "status": "PASS"
+ },
+ "853": {
+  "hash": "efc72d5e",
+  "num": "091",
+  "status": "PASS"
+ },
+ "855": {
+  "hash": "0b8ee2c7",
+  "num": "094",
+  "status": "PASS"
+ },
+ "858": {
+  "hash": "81663acb",
+  "num": "090",
+  "status": "PASS"
+ },
+ "865": {
+  "hash": "86636934",
+  "num": "097",
+  "status": "done"
+ },
+ "869": {
+  "hash": "9e3f254b",
+  "num": "089",
+  "status": "PASS"
+ }
+}
