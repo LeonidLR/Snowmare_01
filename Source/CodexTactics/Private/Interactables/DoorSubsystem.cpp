@@ -66,6 +66,12 @@ namespace DoorSubsystemLocal
 	constexpr float BashReachSlackCm = 60.f;
 	/** A path whose end lies this close to its goal was not cut short. */
 	constexpr float PathShortCm = 150.f;
+	/** A locked door on the way to an unreachable goal (RedirectMoveToLockedDoor): searched this far from the man, ... */
+	constexpr float OnTheWaySearchCm = 3000.f;
+	/** ... the nearest this many tested (two path queries each), ... */
+	constexpr int32 OnTheWayMaxDoors = 8;
+	/** ... its two sides probed this far out from the leaf, cm. */
+	constexpr float OnTheWaySideCm = 70.f;
 	/** A close order stands this far in front of the leaf plane, and acts only once his feet are OutOfDoorwayCm out of it (his 40 cm capsule
 	 * clear of the doorway's 45 cm occupancy box). */
 	constexpr float CloseStandCm = 140.f;
@@ -1224,6 +1230,42 @@ bool UDoorSubsystem::RedirectMoveToLockedDoor(AOperativeCharacter& Operative, co
 		{
 			Best = Door;
 			BestCm = Cm;
+		}
+	}
+	if (!Best)
+	{
+		// A locked door ON THE WAY (Lead 2026-11-23, FormationStairSmoke S04: a randomly locked storey-0 door cut the way to the stairs / escape
+		// of a goal one storey up - not at the goal's level, so the check above never saw it and he walked under the goal). The nearest locked
+		// door he can walk up to, from whose far side the goal is reachable: it is the one in the way.
+		TArray<ADoorActor*> OnTheWay;
+		for (ADoorActor* Door : Doors)
+		{
+			if (Door && Door->GetDoorState() == EDoorLeafState::Locked
+				&& FVector::Dist(Door->GetActorLocation(), Operative.GetActorLocation()) <= DoorSubsystemLocal::OnTheWaySearchCm)
+			{
+				OnTheWay.Add(Door);
+			}
+		}
+		const FVector From = Operative.GetActorLocation();
+		OnTheWay.Sort([&From](const ADoorActor& A, const ADoorActor& B) { return FVector::DistSquared(A.GetActorLocation(), From) < FVector::DistSquared(B.GetActorLocation(), From); });
+		const auto Reaches = [](const UNavigationPath* P, const FVector& To) { return P && P->IsValid() && !P->IsPartial()
+			&& (P->PathPoints.IsEmpty() || FVector::Dist2D(P->PathPoints.Last(), To) <= DoorSubsystemLocal::PathShortCm); };
+		for (int32 Index = 0; Index < FMath::Min(OnTheWay.Num(), DoorSubsystemLocal::OnTheWayMaxDoors) && !Best; ++Index)
+		{
+			ADoorActor* Door = OnTheWay[Index];
+			const float NearSide = Door->ToLocal(From).Y >= 0.f ? 1.f : -1.f;
+			const FVector Near = Door->GetActorLocation() + Door->GetNormal() * (NearSide * DoorSubsystemLocal::OnTheWaySideCm) + FVector(0.f, 0.f, 20.f);
+			const FVector Far = Door->GetActorLocation() - Door->GetNormal() * (NearSide * DoorSubsystemLocal::OnTheWaySideCm) + FVector(0.f, 0.f, 20.f);
+			FNavLocation NearNav, FarNav;
+			if (!Nav->ProjectPointToNavigation(Near, NearNav, FVector(40.f, 40.f, 80.f)) || !Nav->ProjectPointToNavigation(Far, FarNav, FVector(40.f, 40.f, 80.f)))
+			{
+				continue;
+			}
+			if (Reaches(Nav->FindPathToLocationSynchronously(World, From, NearNav.Location, &Operative), NearNav.Location)
+				&& Reaches(Nav->FindPathToLocationSynchronously(World, FarNav.Location, Goal, &Operative), Goal))
+			{
+				Best = Door;
+			}
 		}
 	}
 	if (!Best)

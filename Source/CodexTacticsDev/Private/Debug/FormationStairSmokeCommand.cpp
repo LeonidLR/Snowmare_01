@@ -28,6 +28,8 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationPath.h"
 #include "EngineUtils.h"
+#include "Interactables/DoorActor.h"
+#include "Interactables/DoorSubsystem.h"
 #include "Interactables/MantleNavigation.h"
 #include "NavigationSystem.h"
 
@@ -48,7 +50,7 @@ namespace FormationStairSmoke
 		FVector Goal = FVector::ZeroVector;
 	};
 
-	enum class EStep : uint8 { Warmup, Plan, Place, Walk, Done };
+	enum class EStep : uint8 { Warmup, Plan, Place, Walk, LockedCheck, Done };
 
 	struct FRunner
 	{
@@ -58,6 +60,10 @@ namespace FormationStairSmoke
 		int32 Passed = 0;
 		TArray<FCase> Cases;
 		int32 CaseIndex = 0;
+		/** After the stair legs: case 1 again with a door on its way locked (Lead 2026-11-23) - the click must send the leader to try it. */
+		bool bLockedWay = false;
+		TWeakObjectPtr<ADoorActor> LockedDoor;
+		int32 LockedFrame = -1;
 		FDelegateHandle EndFrameHandle;
 	};
 
@@ -249,8 +255,14 @@ namespace FormationStairSmoke
 		{
 			if (R.CaseIndex >= R.Cases.Num())
 			{
-				Finish();
-				return true;
+				if (R.bLockedWay || R.Cases.IsEmpty())
+				{
+					Finish();
+					return true;
+				}
+				R.bLockedWay = true;
+				R.CaseIndex = 0;
+				R.StepFrame = 1;
 			}
 			const FCase& C = R.Cases[R.CaseIndex];
 			if (R.StepFrame == 1)
@@ -285,6 +297,39 @@ namespace FormationStairSmoke
 			{
 				return true;
 			}
+			if (R.bLockedWay && R.LockedFrame < 0)
+			{
+				// Lock the first open / shut door the leader's way to the goal crosses, then wait for the navmesh to take it.
+				const UNavigationPath* Way = UNavigationSystemV1::FindPathToLocationSynchronously(World, Leader->GetActorLocation(), C.Goal, Leader);
+				ADoorActor* OnWay = nullptr;
+				for (int32 Index = 1; Way && Index < Way->PathPoints.Num() && !OnWay; ++Index)
+				{
+					const FVector A = Way->PathPoints[Index - 1], B = Way->PathPoints[Index];
+					for (TActorIterator<ADoorActor> It(World); It; ++It)
+					{
+						if (It->GetDoorState() != EDoorLeafState::Locked && FMath::LineBoxIntersection(It->GetComponentsBoundingBox(true).ExpandBy(20.f), A, B, B - A))
+						{
+							OnWay = *It;
+							break;
+						}
+					}
+				}
+				if (!OnWay)
+				{
+					Check(false, FString::Printf(TEXT("%s: a door on the way to storey %d to lock"), *C.Building, C.From + 1));
+					Finish();
+					return true;
+				}
+				OnWay->ForceState(EDoorLeafState::Locked);
+				R.LockedDoor = OnWay;
+				R.LockedFrame = R.StepFrame;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: locked-way case: %s (%s) locked on %s's way to storey %d"), *OnWay->GetName(), *OnWay->GetOpeningId(), *C.Building, C.From + 1);
+				return true;
+			}
+			if (R.bLockedWay && (R.StepFrame < R.LockedFrame + 30 || (BuildNav && BuildNav->IsNavigationBuildInProgress() && R.StepFrame < R.LockedFrame + 600)))
+			{
+				return true;
+			}
 			if (AActor* Window = WindowOnTheWay(*World, *Leader, C.Goal))
 			{
 				// Lead 2026-11-23: no story makes a storey window-only (S04's escape is a ladder + a balcony DOOR) - a gap, never worked round.
@@ -297,6 +342,11 @@ namespace FormationStairSmoke
 				Click.Location = C.Goal;
 				Click.TraceStart = C.Goal + FVector(0.f, 0.f, 1200.f);
 				PC->HandlePlayerClick(Click);
+			}
+			if (R.bLockedWay)
+			{
+				Go(EStep::LockedCheck);
+				return true;
 			}
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: case %d/%d %s storey %d -> %d: from %s to %s (formation, %d men)"), R.CaseIndex + 1, R.Cases.Num(), *C.Building,
 				C.From, C.From + 1, *C.Start.ToCompactString(), *C.Goal.ToCompactString(), Squad->GetMembers().Num());
@@ -345,6 +395,23 @@ namespace FormationStairSmoke
 			Check(bAll, FString::Printf(TEXT("%s storey %d -> %d: the formation is up together (%.1f s)%s"), *C.Building, C.From, C.From + 1, Seconds, *Who));
 			++R.CaseIndex;
 			Go(EStep::Place);
+			return true;
+		}
+		case EStep::LockedCheck:
+		{
+			UDoorSubsystem* Doors = World->GetSubsystem<UDoorSubsystem>();
+			const bool bTries = Doors && Doors->HasPendingInteraction(Leader);
+			if (!bTries && R.StepFrame < 240)
+			{
+				return true;
+			}
+			Check(bTries, FString::Printf(TEXT("%s: a click on storey %d behind the locked %s on the way sends the leader to try it (%.1f s; leader at %s)"),
+				*R.Cases[0].Building, R.Cases[0].From + 1, *GetNameSafe(R.LockedDoor.Get()), R.StepFrame / 60.f, *Leader->GetActorLocation().ToCompactString()));
+			if (ADoorActor* Door = R.LockedDoor.Get())
+			{
+				Door->ForceState(EDoorLeafState::Closed);
+			}
+			Finish();
 			return true;
 		}
 		default:
