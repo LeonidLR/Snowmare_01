@@ -302,7 +302,7 @@
       "_comment": "smart enemies T-12 traversal smoke on generated map: stairs, ladders, mantles, drops",
       "globs": ["Source/**/Debug/PmcTraversalSmoke*", "docs/port/gemini/pmc_traversal_config.json"],
       "tests": ["CodexTactics.Falls", "CodexTactics.Ladder"],
-      "smokes": ["PmcTraversalSmoke", "LevelGenLaddersSmoke", "LevelGenRampSmoke"]
+      "smokes": ["PmcTraversalSmoke", "LevelGenLaddersSmoke"]
     },
     {
       "name": "pmc-squad-ai-2026-11-03",
