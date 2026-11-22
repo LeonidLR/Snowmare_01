@@ -55,6 +55,7 @@ export interface StructuredOpening {
 export interface StructuredStair {
   id: string;
   supported_by?: string[];
+  needs?: number;
   on_fail?: 'blocked_rubble' | 'none';
   [key: string]: unknown;
 }
@@ -126,16 +127,20 @@ export function isSlabPanel(val: unknown): val is SlabPanel {
     o.rect[0].length !== 2 ||
     o.rect[1].length !== 2 ||
     typeof o.rect[0][0] !== 'number' ||
+    !Number.isFinite(o.rect[0][0]) ||
     typeof o.rect[0][1] !== 'number' ||
+    !Number.isFinite(o.rect[0][1]) ||
     typeof o.rect[1][0] !== 'number' ||
-    typeof o.rect[1][1] !== 'number'
+    !Number.isFinite(o.rect[1][0]) ||
+    typeof o.rect[1][1] !== 'number' ||
+    !Number.isFinite(o.rect[1][1])
   ) {
     return false;
   }
   if (!Array.isArray(o.supported_by) || !o.supported_by.every((s) => typeof s === 'string')) {
     return false;
   }
-  if (typeof o.needs !== 'number' || o.needs < 0) return false;
+  if (typeof o.needs !== 'number' || !Number.isFinite(o.needs) || o.needs < 0) return false;
   if (o.on_fail !== 'floor_hole' && o.on_fail !== 'none') return false;
   if (o.protected !== undefined && typeof o.protected !== 'boolean') return false;
   return true;
