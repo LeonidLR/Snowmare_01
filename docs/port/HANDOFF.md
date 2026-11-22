@@ -1,5 +1,26 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**Confined entry: door mouth + the leader makes room (`claude/bgen-test`, 2026-11-22, Lead day plan row 4; designer 2026-11-21 "everybody
+must get in"; isolated formation code, cherry-pickable).** The walk smoke's FOLLOWER_STUCK hall legs had no mesh behind them: the "stuck
+mesh" actors of the morning digest (kit StaticMeshActor_258 / _1024 / _1200, grey _2853 / _2951) all lie 40-55 cm from a 150 cm flat-door
+centre and 22-34 cm off its partition = the door JAMB corners (no leaf: doors OFF / ON give the same legs, an open door has no leaf), and the
+current runs log no "stuck and failed to move" at all - the follower stands with velocity 0 pushing into a BODY. Causes (S01 with
+`Codex.Formation.Debug 2` + `Codex.Debug.MoveTrace 1`): (1) a man in the door mouth counted as "through the door" and was dealt from there,
+his own straight line cut by the jamb - the entry point itself (depth 5): he stood in the door for good (S01 / S07, S04); (2) the leader stands
+at his click 70-85 cm inside a 2.3 m hall door - no body's width between him and the jambs / the hall wall; the first man's path ran straight
+through him, no step-round side was walkable, he pushed into the leader in the door mouth and the man behind waited on the landing. Fix
+(`FormationConfinedRules` + runtime): `door_mouth_cm` 70 - a man within it of the inside entry point is not through (dealt from the entry
+point), a door-mouth place goes only to the last man in; `leader_room_cm` 130 / `leader_room_max_cm` 60 - a follower near the door with the
+standing leader first on his way and no side to step round him (or a step point whose way passes him under 70 cm) asks the leader to step
+straight away from the inside entry point to 130 cm from it (at most 60 cm, on the navmesh, once per player order; log "[Formation] confined:
+the leader makes room"); pure `FirstBodyOnWay` / `LeaderRoomStep`, request in `SquadSubsystemFormation.cpp`, the step in
+`SquadSubsystemFormationConfined.cpp`. Both keys 0 = the rule before (that is how the "before" runs below were made, same binary). Tests
+`CodexTactics.Formation.Confined.Queue.DoorMouthManDealtFromTheDoor`, `Queue.LeaderMakesRoom` (Confined 18/18). Walk smoke (local, fixed
+60 fps, -SquadStart=formation, budget 1500, `walk_smoke_digest.py`, two runs each, identical): grey showcase doors OFF flat entries 73 -> 82/84
+(STUCK 10 -> 1, ratio 1 -> 1, buildings 0 -> 4/6), doors ON 73 / 72 -> 81/84 (STUCK 10-11 -> 1, ratio 1 -> 2); L_Gen_BgenPlans 70 -> 75/78
+(STUCK 4 -> 3, ratio 2 -> 0, other 2 -> 0, buildings 6 -> 8/9). Left: S04 f1 (a 1-body hall: the second man's only place is in the door
+mouth), S01 f0 ratio 2.10 (2.5 s vs solo 1.2 s), doors ON S07 f1 ratio, B_b18 f0 / f1 STUCK x3. Reports `Saved/LevelGen/mouth_ab/` (untracked).
+
 **Openable doors R2 (`claude/bgen-test`, 2026-11-22; designer decisions 2026-11-22): still behind `Codex.Doors.Openable` (off by default:
 nothing of R2 runs).** (1) CLIPS from the designer's pack `/Game/Free_Interaction_Animation/Animations/Door` (UE5 Manny skeleton): open by hand
 `anim_OpenDoor_L/R`, kick `..._Kick_L/R` (legs alternate per attempt), push `..._Push_L/R` after the key / a shot lock (a shot now breaks
@@ -28,6 +49,17 @@ doors got kit leaves (98 instances; R1 42 / 56). Walk smoke (fixed 60, -SquadSta
 Open (R2): the pack clips' forward travel without root motion (bake root motion from the pelvis, or start them farther back - designer
 call); the PMC commander does not price locked doors itself (it only learns at the partial path); monsters never shoot / blow locks; the
 props generator does not place keys in containers yet (KeyIds per placed crate in the editor works); keys / door states in saves.
+
+**Doors R2b (`claude/bgen-test`, 2026-11-22, designer bugs on the kit showcase + root motion option a).** OPEN doors are doors on kit-dressed
+maps (the kit's open leaves -> 262 open `ADoorActor`s on the showcase kit; click = shut / open; grey maps have leafless open doorways); the
+cursor ray through an open leaf or the floor at a shut doorway is the door and beats the cover hug; hand cursor over doors; he steps out of
+the doorway before shutting; only capsules occupy a doorway. Kick facing: `AOperativeCharacter::SetDoorFacingLock` holds him square to the
+leaf through every attempt / the lock shot / the key / the push (smoke: 2 kicks, 0 deg off). ROOT MOTION: the clips move the capsule
+(open / push / kick root 81 / 214 / 115 cm; montage blends 0.1 s), he starts each clip at its start pose (`montage_approach_cm` 95 / 240 /
+95, square to the leaf; the push waits for the lock burst); measured on the kit map: open 75-76 cm (from 120 to 44 cm before the leaf plane),
+push after the shot 199 cm (264 -> 66 cm), a held kick 74 cm (stops at the leaf, 43 cm), 0-9 cm after the end (no pop). The designer only
+needs `Codex.Doors.Openable 1` in the console (doors.json keeps it 0). Open: the PMC body plays the door clips in place (its root motion
+does not come through the bone-name playback - retarget the clips onto SK_PmcOperator like the launcher set); grey maps' open doorways.
 
 **Openable doors R1 (`claude/bgen-test`, 2026-11-22; designer 2026-11-21, Lead day plan row 5): behind `Codex.Doors.Openable`, OFF by default
 (`Content/Data/Interactables/doors.json` `"enabled": 0`; on in main only after the enemy-AI session's A/B).** Game C++ only, no builder / map

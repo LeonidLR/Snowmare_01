@@ -104,6 +104,22 @@ Switch off = nothing of R2 runs (no doors, no breach, no clips); keys in loot ar
   and a separate leaf fills it (`SM_SH_Door_Int` scaled to the 130 x 205 hole, `MI_SH_SteelDoor` / `MI_SH_Door`, part `entrance_leaf`); a
   shut balcony / fire-escape door gets a leaf in its door hole (part `balcony_door_leaf`). `UDoorSubsystem::LiftKitLeaves` lifts both onto
   the hinges (showcase plan: 12 entrance + 2 escape leaves = the 14 R1 doors without a kit leaf).
+- **R2b fixes (designer bugs 2026-11-22 on the kit showcase)**: (a) OPEN doors are doors: the builder places no leaf for an open door, but
+  kit_dress places open leaves (`kit_part=door_leaf_open`); at the adoption they become open `ADoorActor`s (`AdoptKitOpenLeaves`,
+  `DoorRules::PairKitOpenLeaves`: pairs / singles, the doorway on the leaf's -Y side; tag `door_from_kit_open_leaf`) - click = shut, click
+  again = open (showcase kit: 262 open doorways; grey maps: leafless open doorways, nothing to click). (b) The click: the cursor ray through
+  an open leaf (`ADoorActor::IsRayOnOpenLeaf`, `DoorRules::RayHitsLeaf`; open leaves have no collision) or the floor in / at a shut doorway
+  (`IsInShutDoorwaySnap`, 45 cm) is the door and beats the cover hug / cover ghost; the hand cursor over a door. (c) Shutting: he steps out
+  of the doorway first (stands 140 cm out, acts once 90 cm out); only a pawn's CAPSULE occupies a doorway. (d) Kick facing ("the first kick
+  at the door, the second into the air"): `AOperativeCharacter::SetDoorFacingLock` - while he works a door (every attempt, the lock shot,
+  the key, the push, to the end of its clip) `UDoorSubsystem::TickFacingLocks` holds his yaw square to the leaf; `UpdateCombatFacing` lets
+  nothing else turn him (facing return, threat turn, formation sector, idle facing). (e) ROOT MOTION (designer option a): the clips' root
+  travel moves the capsule (`setup_door_animation.py` bakes the pelvis's smoothed travel into the open clips' root; the kick / push clips
+  had it on the root already; montage blends 0.1 / 0.1 s - a blend scales root motion). He starts each clip at its start pose
+  (`montage_approach_cm` open 95 / kick 95 / push 240, square to the leaf, `montage_approach_slack_cm` 25; after the key he steps back to the
+  push pose; the push waits for the lock burst to end); `montage_root_cm` 81 / 115 / 214; every clip's capsule move is measured and logged
+  (`Doors: <pawn> <clip> moved X cm forward ... from the leaf plane A -> B cm`, `GetClipMoves`). The PMC body's set plays in place for now
+  (its root motion does not come through the bone-name playback - open).
 - Tests `CodexTactics.Doors.Clips.*` / `Breach.*` / `Rolls.Deterministic` / `Keys.LootItem` / `Keys.MissionGoalGrant`; `test_kit_dress.py`
   `test_entrance_and_escape_doors_get_separate_leaves`; smoke `DoorsSmoke` stages B / F / K / S (clips), P (a PMC fighter breaches S03 with
   both doors locked, twice with the same seed: the same trace), KD (key from his body), KC (key from a container).
