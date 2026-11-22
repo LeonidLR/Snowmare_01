@@ -438,7 +438,7 @@ namespace FormationConfinedLocal
 						BestRoom = Room;
 					}
 				}
-				if (BestRoom < 0.5f * Tuning.MinSpacingCm)
+				if (BestRoom < Tuning.TightMinShare * Tuning.MinSpacingCm)
 				{
 					Given.Add(Result.Places[Index]);
 					continue;
@@ -888,6 +888,7 @@ FFormationConfinedTuning FormationConfinedTuning::FromJson(const FJsonObject& Js
 	ReadConfinedNumber(Json, TEXT("block_cooldown_s"), Tuning.BlockCooldownSeconds, 0.f, 30.f);
 	ReadConfinedNumber(Json, TEXT("body_clear_cm"), Tuning.BodyClearCm, 0.f, 200.f);
 	ReadConfinedNumber(Json, TEXT("door_mouth_cm"), Tuning.DoorMouthCm, 0.f, 200.f);
+	ReadConfinedNumber(Json, TEXT("tight_min_share"), Tuning.TightMinShare, 0.f, 1.f);
 	ReadConfinedNumber(Json, TEXT("leader_room_cm"), Tuning.LeaderRoomCm, 0.f, 400.f);
 	ReadConfinedNumber(Json, TEXT("leader_room_max_cm"), Tuning.LeaderRoomMaxCm, 0.f, 200.f);
 	return Tuning;

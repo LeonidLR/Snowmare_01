@@ -151,6 +151,12 @@ struct CODEXTACTICS_API FFormationConfinedTuning
 	 */
 	float DoorMouthCm = 70.f;
 	/**
+	 * "tight_min_share" (2026-11-22, the walk smoke's 1-body hall legs - a follower squeezed 40 cm from a team-mate pushed and stood "STUCK"):
+	 * when no spaced place is left, the place farthest from everyone is taken only if it keeps this share of min_spacing_cm; else the man keeps
+	 * his formation slot (waits outside). 0.5 = the rule before.
+	 */
+	float TightMinShare = 0.5f;
+	/**
 	 * Entry order, the LEADER MAKES ROOM (2026-11-22, the same STUCK legs): the leader standing at his click just inside a hall door (85 cm in,
 	 * the 2.3 m hall's middle) leaves no body's width between himself and the jambs - the first man in pushed into him from the door mouth
 	 * (velocity 0, no walkable side to step round him) and the man behind waited on the landing. When a follower near the door has the
