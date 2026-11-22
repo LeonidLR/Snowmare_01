@@ -1,0 +1,10 @@
+{
+ "at": "2026-11-22T12:43:38.383Z",
+ "note": "Standalone combat lab layout for smart enemies T-02 (layouts part); score and AI verdicts not computed",
+ "summary": [
+  "# Level generator - gen_lab_crossroads (Lab Crossroads)",
+  "Combat lab layout for smart enemies roadmap (T-02). Map: L_Lab_Crossroads",
+  "bounds: [-3750, -3750] .. [3750, 3750] cm",
+  "buildings: 0, covers: 5, routes: 1"
+ ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "codex.mission_goals/1",
+  "map": "L_Lab_Crossroads",
+  "layout": "gen_lab_crossroads",
+  "order": "free",
+  "default_radius_cm": 300,
+  "floor_tolerance_cm": 150,
+  "goals": [
+    {
+      "id": "GOAL_crossroads",
+      "kind": "street",
+      "layer": "ground",
+      "pos": [
+        3500,
+        0,
+        0
+      ],
+      "radius_cm": 300
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+ "at": "2026-11-22T12:43:38.391Z",
+ "note": "Standalone combat lab layout for smart enemies T-02 (layouts part); score and AI verdicts not computed",
+ "summary": [
+  "# Level generator - gen_lab_bridge (Lab Bridge)",
+  "Combat lab layout for smart enemies roadmap (T-02). Map: L_Lab_Bridge",
+  "bounds: [-3000, -2500] .. [3000, 2500] cm",
+  "buildings: 1, covers: 3, routes: 1"
+ ]
+}

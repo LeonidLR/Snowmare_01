@@ -1,0 +1,350 @@
+{
+ "schema": "codex.levelgen_layout/1",
+ "name": "gen_lab_crossroads",
+ "profile": "lab_crossroads",
+ "seed": 1,
+ "params": {
+  "size_m": [
+   75,
+   75
+  ],
+  "density": 1,
+  "variants": 1,
+  "verticality": 1
+ },
+ "comment": "L_Lab_Crossroads accepted layout for smart enemies T-02",
+ "bounds": {
+  "min": [
+   -3750,
+   -3750
+  ],
+  "max": [
+   3750,
+   3750
+  ]
+ },
+ "ground_z": 0,
+ "spawn": {
+  "pos": [
+   -3500,
+   0
+  ],
+  "yaw": 90
+ },
+ "end": [
+  3500,
+  0
+ ],
+ "walls": [
+  {
+   "id": "W_cross_near_S",
+   "a": [
+    -2200,
+    400
+   ],
+   "b": [
+    -2200,
+    1600
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "wall"
+  },
+  {
+   "id": "W_cross_near_W",
+   "a": [
+    -2200,
+    400
+   ],
+   "b": [
+    -800,
+    400
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "wall"
+  },
+  {
+   "id": "W_cross_near_N",
+   "a": [
+    -800,
+    400
+   ],
+   "b": [
+    -800,
+    1600
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "wall"
+  },
+  {
+   "id": "W_cross_near_E1",
+   "a": [
+    -2200,
+    1600
+   ],
+   "b": [
+    -1600,
+    1600
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "wall"
+  },
+  {
+   "id": "W_cross_near_E2",
+   "a": [
+    -1400,
+    1600
+   ],
+   "b": [
+    -800,
+    1600
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "wall"
+  }
+ ],
+ "buildings": [],
+ "ladders": [],
+ "covers": [
+  {
+   "id": "cov_cross_1",
+   "kind": "crate",
+   "pos": [
+    1000,
+    -250
+   ],
+   "size": [
+    160,
+    120,
+    85
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "cov_cross_2",
+   "kind": "crate",
+   "pos": [
+    1000,
+    250
+   ],
+   "size": [
+    160,
+    120,
+    85
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "cov_cross_3",
+   "kind": "sandbag",
+   "pos": [
+    1500,
+    -400
+   ],
+   "size": [
+    260,
+    75,
+    95
+   ],
+   "yaw": 180
+  },
+  {
+   "id": "cov_cross_4",
+   "kind": "sandbag",
+   "pos": [
+    1500,
+    400
+   ],
+   "size": [
+    260,
+    75,
+    95
+   ],
+   "yaw": 180
+  },
+  {
+   "id": "cov_cross_5",
+   "kind": "jersey",
+   "pos": [
+    2000,
+    0
+   ],
+   "size": [
+    280,
+    65,
+    95
+   ],
+   "yaw": 90
+  }
+ ],
+ "zones": [
+  {
+   "id": "Z_ST_crossroads",
+   "kind": "open",
+   "set_piece": "street",
+   "poly": [
+    [
+     -1000,
+     -1000
+    ],
+    [
+     1000,
+     -1000
+    ],
+    [
+     1000,
+     1000
+    ],
+    [
+     -1000,
+     1000
+    ]
+   ]
+  }
+ ],
+ "routes": [
+  {
+   "id": "R_main",
+   "pace": "walk",
+   "points": [
+    [
+     -3500,
+     0
+    ],
+    [
+     -2000,
+     0
+    ],
+    [
+     0,
+     0
+    ],
+    [
+     2000,
+     0
+    ],
+    [
+     3500,
+     0
+    ]
+   ],
+   "mandatory": true
+  }
+ ],
+ "spawn_points": [
+  {
+   "id": "SP_crossroads_spawn",
+   "pos": [
+    -3500,
+    0
+   ],
+   "kind": "edge"
+  }
+ ],
+ "ambush_points": [],
+ "patrol_routes": [],
+ "mantle_edges": [
+  {
+   "id": "me_cov_cross_1",
+   "start": [
+    1000,
+    -327
+   ],
+   "end": [
+    1000,
+    -173
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_cov_cross_2",
+   "start": [
+    1000,
+    173
+   ],
+   "end": [
+    1000,
+    327
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_cov_cross_5",
+   "start": [
+    2000,
+    -134
+   ],
+   "end": [
+    2000,
+    134
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "obstacle"
+  }
+ ],
+ "pressure": {
+  "first_event_sec": 30,
+  "interval_sec": 90,
+  "group_min": 2,
+  "group_max": 4,
+  "max_alive": 8,
+  "patrol_share": 0.3,
+  "seed": 1,
+  "ambush": {
+   "points": [],
+   "coordinated": {
+    "share": 0.5,
+    "max_alive": 8
+   }
+  }
+ },
+ "objectives": {
+  "version": 1,
+  "seed": 1,
+  "order": "free",
+  "start": {
+   "pos": [
+    -3500,
+    0
+   ],
+   "yaw": 90,
+   "layer": "ground",
+   "source": "spawn"
+  },
+  "goals": [
+   {
+    "id": "GOAL_crossroads",
+    "pos": [
+     3500,
+     0
+    ],
+    "layer": "ground",
+    "kind": "street"
+   }
+  ]
+ }
+}

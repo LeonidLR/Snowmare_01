@@ -1,0 +1,572 @@
+{
+ "schema": "codex.levelgen_layout/1",
+ "name": "gen_lab_bridge",
+ "profile": "lab_bridge",
+ "seed": 3,
+ "params": {
+  "size_m": [
+   50,
+   60
+  ],
+  "density": 1,
+  "variants": 1,
+  "verticality": 1
+ },
+ "comment": "L_Lab_Bridge accepted layout for smart enemies T-02",
+ "bounds": {
+  "min": [
+   -3000,
+   -2500
+  ],
+  "max": [
+   3000,
+   2500
+  ]
+ },
+ "ground_z": 0,
+ "spawn": {
+  "pos": [
+   -2500,
+   0
+  ],
+  "yaw": 90
+ },
+ "end": [
+  2500,
+  0
+ ],
+ "walls": [
+  {
+   "id": "B_overlook_N_0",
+   "a": [
+    1800,
+    -1800
+   ],
+   "b": [
+    1800,
+    -1145
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_overlook"
+  },
+  {
+   "id": "B_overlook_N_1",
+   "a": [
+    1800,
+    -965
+   ],
+   "b": [
+    1800,
+    -300
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_overlook"
+  },
+  {
+   "id": "B_overlook_S_0",
+   "a": [
+    650,
+    -1800
+   ],
+   "b": [
+    650,
+    -300
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_overlook"
+  },
+  {
+   "id": "B_overlook_W_0",
+   "a": [
+    1800,
+    -1800
+   ],
+   "b": [
+    650,
+    -1800
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_overlook"
+  },
+  {
+   "id": "B_overlook_E_0",
+   "a": [
+    1800,
+    -300
+   ],
+   "b": [
+    650,
+    -300
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_overlook"
+  }
+ ],
+ "buildings": [
+  {
+   "id": "B_overlook",
+   "footprint": [
+    [
+     650,
+     -1800
+    ],
+    [
+     1800,
+     -300
+    ]
+   ],
+   "height": 300,
+   "floors": 1,
+   "enterable": true,
+   "roof_walkable": false,
+   "doors": [
+    {
+     "pos": [
+      1800,
+      -1055
+     ],
+     "floor": 0,
+     "wall": "B_overlook_N"
+    }
+   ],
+   "openings": [
+    {
+     "id": "B_overlook_door_north_1",
+     "kind": "door",
+     "pos": [
+      1800,
+      -1055
+     ],
+     "floor": 0,
+     "wall": "B_overlook_N",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_overlook_win_east_f0_1",
+     "kind": "window",
+     "pos": [
+      1367,
+      -300
+     ],
+     "floor": 0,
+     "wall": "B_overlook_E",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_overlook_win_east_f0_2",
+     "kind": "window",
+     "pos": [
+      1083,
+      -300
+     ],
+     "floor": 0,
+     "wall": "B_overlook_E",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 90
+    }
+   ],
+   "partitions": [],
+   "floors_detail": [],
+   "hatches": [],
+   "parapets": [],
+   "rooms": [
+    {
+     "id": "B_overlook_r_f0_0",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       650,
+       -1800
+      ],
+      "max": [
+       1800,
+       -300
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_overlook_door_north_1"
+     ]
+    }
+   ],
+   "mantle_edges": [
+    {
+     "id": "me_B_overlook_win_east_f0_1",
+     "start": [
+      1427,
+      -300
+     ],
+     "end": [
+      1307,
+      -300
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_overlook",
+     "wall": "B_overlook_E"
+    },
+    {
+     "id": "me_B_overlook_win_east_f0_2",
+     "start": [
+      1143,
+      -300
+     ],
+     "end": [
+      1023,
+      -300
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_overlook",
+     "wall": "B_overlook_E"
+    }
+   ],
+   "stairs": [],
+   "roof_holes": [],
+   "floor_holes": [],
+   "set_piece": "facade"
+  }
+ ],
+ "cut": {
+  "poly": [
+   [
+    -300,
+    -2300
+   ],
+   [
+    300,
+    -2300
+   ],
+   [
+    300,
+    2300
+   ],
+   [
+    -300,
+    2300
+   ]
+  ],
+  "level": -1,
+  "floor_z": -300,
+  "crossings": [
+   {
+    "id": "crossing_deck",
+    "pos": [
+     25,
+     30
+    ],
+    "width": 4,
+    "kind": "bridge",
+    "poly": [
+     [
+      -300,
+      -200
+     ],
+     [
+      300,
+      -200
+     ],
+     [
+      300,
+      200
+     ],
+     [
+      -300,
+      200
+     ]
+    ]
+   }
+  ]
+ },
+ "ladders": [],
+ "covers": [
+  {
+   "id": "cov_bridge_near_1",
+   "kind": "crate",
+   "pos": [
+    -450,
+    -100
+   ],
+   "size": [
+    160,
+    120,
+    85
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "cov_bridge_near_2",
+   "kind": "crate",
+   "pos": [
+    -450,
+    100
+   ],
+   "size": [
+    160,
+    120,
+    85
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "cov_bridge_far_mantle",
+   "kind": "crate",
+   "pos": [
+    450,
+    250
+   ],
+   "size": [
+    160,
+    120,
+    85
+   ],
+   "yaw": 90
+  }
+ ],
+ "zones": [
+  {
+   "id": "Z_ST_bridge",
+   "kind": "open",
+   "set_piece": "street",
+   "poly": [
+    [
+     -1000,
+     -1000
+    ],
+    [
+     1000,
+     -1000
+    ],
+    [
+     1000,
+     1000
+    ],
+    [
+     -1000,
+     1000
+    ]
+   ]
+  }
+ ],
+ "routes": [
+  {
+   "id": "R_main",
+   "pace": "walk",
+   "points": [
+    [
+     -2500,
+     0
+    ],
+    [
+     -600,
+     0
+    ],
+    [
+     -300,
+     0
+    ],
+    [
+     0,
+     0
+    ],
+    [
+     300,
+     0
+    ],
+    [
+     600,
+     0
+    ],
+    [
+     2500,
+     0
+    ]
+   ],
+   "mandatory": true
+  }
+ ],
+ "spawn_points": [
+  {
+   "id": "SP_bridge_spawn",
+   "pos": [
+    -2500,
+    0
+   ],
+   "kind": "edge"
+  }
+ ],
+ "ambush_points": [],
+ "patrol_routes": [],
+ "mantle_edges": [
+  {
+   "id": "me_cov_bridge_near_1",
+   "start": [
+    -450,
+    -177
+   ],
+   "end": [
+    -450,
+    -23
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_cov_bridge_near_2",
+   "start": [
+    -450,
+    23
+   ],
+   "end": [
+    -450,
+    177
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_cov_bridge_far_mantle",
+   "start": [
+    450,
+    173
+   ],
+   "end": [
+    450,
+    327
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_B_overlook_win_east_f0_1",
+   "start": [
+    1427,
+    -300
+   ],
+   "end": [
+    1307,
+    -300
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_overlook",
+   "wall": "B_overlook_E"
+  },
+  {
+   "id": "me_B_overlook_win_east_f0_2",
+   "start": [
+    1143,
+    -300
+   ],
+   "end": [
+    1023,
+    -300
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_overlook",
+   "wall": "B_overlook_E"
+  }
+ ],
+ "pressure": {
+  "first_event_sec": 30,
+  "interval_sec": 90,
+  "group_min": 2,
+  "group_max": 4,
+  "max_alive": 8,
+  "patrol_share": 0.3,
+  "seed": 3,
+  "ambush": {
+   "points": [],
+   "coordinated": {
+    "share": 0.5,
+    "max_alive": 8
+   }
+  }
+ },
+ "objectives": {
+  "version": 1,
+  "seed": 3,
+  "order": "free",
+  "start": {
+   "pos": [
+    -2500,
+    0
+   ],
+   "yaw": 90,
+   "layer": "ground",
+   "source": "spawn"
+  },
+  "goals": [
+   {
+    "id": "GOAL_bridge",
+    "pos": [
+     2500,
+     0
+    ],
+    "layer": "ground",
+    "kind": "street"
+   }
+  ]
+ }
+}

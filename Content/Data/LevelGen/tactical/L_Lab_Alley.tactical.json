@@ -1,0 +1,76 @@
+{
+  "schema": "codex.tactical_map/2",
+  "map": "L_Lab_Alley",
+  "layout": "gen_lab_alley",
+  "geometry_hash": "f4e39bda701aba8b",
+  "analysis_version": 1,
+  "analysis_source": "computed",
+  "conditions": {
+    "weather": "clear",
+    "time_of_day": "day"
+  },
+  "ground_z": 0,
+  "thresholds": {
+    "narrow_width_m": 6,
+    "clutter_min_obstacles": 4,
+    "clutter_blocked_fraction": 0.12,
+    "lane_width_m": 2.5,
+    "canyon_tall_cm": 230,
+    "canyon_side_max_m": 8,
+    "detour_critical_m": 40,
+    "drop_reach_cm": 400,
+    "drop_min_cm": 150,
+    "drop_max_cm": 650,
+    "window_range_m": 60,
+    "sniper_range_m": 110,
+    "reveal_close_m": 12,
+    "stealth_sight_m": 48,
+    "min_score": 0.25,
+    "ladder_only_factor": 0.65
+  },
+  "chokepoints": [
+    {"id":"CP_01","kind":"drop_ambush","kind_name":"засада сверху (спрыгивание)","tags":["narrow","canyon","drop_ambush","window_fire","sniper","hiding"],"score":0.86,"layer":"ground","pos":[-1500,0,0],"line":[[-2100,0,0],[-1900,0,0],[-1700,0,0],[-1500,0,0],[-1300,0,0],[-1100,0,0],[-900,0,0],[-700,0,0],[-500,0,0],[-300,0,0],[-100,0,0],[100,0,0],[300,0,0],[500,0,0],[700,0,0],[900,0,0],[1100,0,0],[1300,0,0],[1350,0,0]],"poly":[[-2100,186],[-1900,186],[-1700,186],[-1500,186],[-1300,186],[-1100,186],[-900,186],[-700,186],[-500,186],[-300,186],[-100,186],[100,186],[300,186],[500,186],[700,186],[900,186],[1100,186],[1300,186],[1350,186],[1350,-186],[1300,-186],[1100,-186],[900,-186],[700,-186],[500,-186],[300,-186],[100,-186],[-100,-186],[-300,-186],[-500,-186],[-700,-186],[-900,-186],[-1100,-186],[-1300,-186],[-1500,-186],[-1700,-186],[-1900,-186],[-2100,-186]],"length_m":34.5,"width_m":3.73,"lane_m":3.73,"route":"mandatory","sources":["objectives","route:R_main","route:V1_back_route","street:Z_ST_alley"],"alternative":"n/a","detour_m":null,"drop_spots":["DA_01","DA_03","DA_04"],"windows":["B_low_win_west_f0_1","B_low_win_west_f0_2","B_low_win_west_f0_4","B_low_win_west_f0_5","B_low_win_west_f0_6","B_two_storey_win_south_f0_1","B_two_storey_win_south_f1_1","B_two_storey_win_south_f1_2","B_two_storey_win_south_f0_3","B_two_storey_win_south_f1_3","B_two_storey_win_south_f0_4","B_two_storey_win_south_f1_4"],"overwatch":["B_two_storey"],"hiding_spots":["HS_01","HS_02","HS_04","HS_05","HS_08"],"reveal_m":2.9,"reveal_stealth_m":2.9,"building":"B_low","floor":0},
+    {"id":"CP_02","kind":"drop_ambush","kind_name":"засада сверху (спрыгивание)","tags":["narrow","canyon","drop_ambush","window_fire","sniper","hiding"],"score":0.822,"layer":"ground","pos":[1374,969,0],"line":[[1388,1519,0],[1383,1319,0],[1378,1119,0],[1373,919,0],[1368,719,0],[1363,519,0],[1358,319,0],[1353,120,0],[1350,0,0]],"poly":[[1523,1516],[1518,1316],[1513,1116],[1508,916],[1503,716],[1498,516],[1493,316],[1488,116],[1485,-3],[1215,3],[1218,123],[1223,323],[1228,523],[1233,723],[1238,923],[1243,1123],[1248,1323],[1253,1522]],"length_m":15.2,"width_m":2.7,"lane_m":2.7,"route":"variant","sources":["route:V1_back_route"],"alternative":"n/a","detour_m":null,"drop_spots":["DA_02"],"windows":["B_two_storey_win_south_f1_2","B_two_storey_win_south_f0_3","B_two_storey_win_south_f1_3","B_two_storey_win_south_f0_4","B_two_storey_win_south_f1_4"],"overwatch":["B_two_storey"],"hiding_spots":["HS_06"],"reveal_m":9.8,"reveal_stealth_m":9.8,"building":"B_two_storey","floor":0}
+  ],
+  "drop_spots": [
+    {"id":"DA_01","surface":"roof:B_two_storey","kind":"roof","layer":"roof:B_two_storey","land_layer":"ground","edge":[1500,0,600],"land":[1300,0,0],"drop_cm":600,"gap_cm":200,"access":"stairs","ladder_only":false,"jumpers":["cutter","frost_hound"],"line":"route:R_main","places":["CP_01"]},
+    {"id":"DA_02","surface":"roof:B_two_storey","kind":"roof","layer":"roof:B_two_storey","land_layer":"ground","edge":[1500,919,600],"land":[1373,919,0],"drop_cm":600,"gap_cm":127,"access":"stairs","ladder_only":false,"jumpers":["cutter","frost_hound"],"line":"route:V1_back_route","places":["CP_02"]},
+    {"id":"DA_03","surface":"roof:B_two_storey","kind":"roof","layer":"roof:B_two_storey","land_layer":"ground","edge":[1500,0,600],"land":[1300,0,0],"drop_cm":600,"gap_cm":200,"access":"stairs","ladder_only":false,"jumpers":["cutter","frost_hound"],"line":"objectives","places":["CP_01"]},
+    {"id":"DA_04","surface":"roof:B_two_storey","kind":"roof","layer":"roof:B_two_storey","land_layer":"ground","edge":[1500,0,600],"land":[1300,0,0],"drop_cm":600,"gap_cm":200,"access":"stairs","ladder_only":false,"jumpers":["cutter","frost_hound"],"line":"street:Z_ST_alley","places":["CP_01"]}
+  ],
+  "windows": [
+    {"id":"B_low_win_west_f0_1","building":"B_low","floor":0,"layer":"ground","kind":"window","pos":[707,200,0],"stand":[707,260,0],"yaw":-90,"covered_m":36,"min_dist_m":1.6,"places":["CP_01"]},
+    {"id":"B_low_win_west_f0_2","building":"B_low","floor":0,"layer":"ground","kind":"window","pos":[364,200,0],"stand":[364,260,0],"yaw":-90,"covered_m":36,"min_dist_m":1.7,"places":["CP_01"]},
+    {"id":"B_low_win_west_f0_4","building":"B_low","floor":0,"layer":"ground","kind":"window","pos":[-321,200,0],"stand":[-321,260,0],"yaw":-90,"covered_m":36,"min_dist_m":1.6,"places":["CP_01"]},
+    {"id":"B_low_win_west_f0_5","building":"B_low","floor":0,"layer":"ground","kind":"window","pos":[-664,200,0],"stand":[-664,260,0],"yaw":-90,"covered_m":36,"min_dist_m":1.6,"places":["CP_01"]},
+    {"id":"B_low_win_west_f0_6","building":"B_low","floor":0,"layer":"ground","kind":"window","pos":[-1007,200,0],"stand":[-1007,260,0],"yaw":-90,"covered_m":36,"min_dist_m":1.9,"places":["CP_01"]},
+    {"id":"B_two_storey_win_south_f0_1","building":"B_two_storey","floor":0,"layer":"ground","kind":"window","pos":[1500,-510,0],"stand":[1560,-510,0],"yaw":180,"covered_m":12,"min_dist_m":5.3,"places":["CP_01"]},
+    {"id":"B_two_storey_win_south_f1_1","building":"B_two_storey","floor":1,"layer":"floor:B_two_storey:1","kind":"window","pos":[1500,-510,300],"stand":[1560,-510,300],"yaw":180,"covered_m":16,"min_dist_m":5.3,"places":["CP_01"]},
+    {"id":"B_two_storey_win_south_f1_2","building":"B_two_storey","floor":1,"layer":"floor:B_two_storey:1","kind":"window","pos":[1500,-170,300],"stand":[1560,-170,300],"yaw":180,"covered_m":116,"min_dist_m":2.3,"places":["CP_01","CP_02"]},
+    {"id":"B_two_storey_win_south_f0_3","building":"B_two_storey","floor":0,"layer":"ground","kind":"window","pos":[1500,170,0],"stand":[1560,170,0],"yaw":180,"covered_m":120,"min_dist_m":1.2,"places":["CP_01","CP_02"]},
+    {"id":"B_two_storey_win_south_f1_3","building":"B_two_storey","floor":1,"layer":"floor:B_two_storey:1","kind":"window","pos":[1500,170,300],"stand":[1560,170,300],"yaw":180,"covered_m":120,"min_dist_m":1.2,"places":["CP_01","CP_02"]},
+    {"id":"B_two_storey_win_south_f0_4","building":"B_two_storey","floor":0,"layer":"ground","kind":"window","pos":[1500,510,0],"stand":[1560,510,0],"yaw":180,"covered_m":20,"min_dist_m":1,"places":["CP_01","CP_02"]},
+    {"id":"B_two_storey_win_south_f1_4","building":"B_two_storey","floor":1,"layer":"floor:B_two_storey:1","kind":"window","pos":[1500,510,300],"stand":[1560,510,300],"yaw":180,"covered_m":20,"min_dist_m":1,"places":["CP_01","CP_02"]}
+  ],
+  "overwatch_roofs": [
+    {"building":"B_two_storey","layer":"roof:B_two_storey","level":2,"floor":2,"z":600,"height_cm":600,"range_m":110,"access":["stair:B_two_storey_stair_1","ladder:LAD_B_two_storey"],"access_kind":"stairs","access_points":[{"id":"LAD_B_two_storey","kind":"ladder","top":[1600,-250,600]},{"id":"B_two_storey_stair_1","kind":"stairs","top":[2350,-451,600]}],"ladder_only":false,"spots":[{"pos":[2600,-300,600],"facing_yaw":171.2,"covered_m":102,"longest_los_m":51.1,"building":"B_two_storey","floor":2},{"pos":[2600,300,600],"facing_yaw":-177.7,"covered_m":96,"longest_los_m":51.1,"building":"B_two_storey","floor":2}],"places":["CP_01","CP_02"]}
+  ],
+  "hiding_spots": [
+    {"id":"HS_01","layer":"ground","pos":[1275,-225,0],"facing_yaw":83.7,"reveal_normal_m":2.9,"reveal_stealth_m":2.9,"stealth_only":false,"blind":false,"rush_m":2.7,"cover":"wall:W_alley_south","cover_height_cm":300,"threatens":{"line":"route:R_main","route":"R_main","pos":[1300,0,0]},"place":"CP_01"},
+    {"id":"HS_02","layer":"ground","pos":[-1175,-275,0],"facing_yaw":152.4,"reveal_normal_m":5.9,"reveal_stealth_m":5.9,"stealth_only":false,"blind":true,"rush_m":7.4,"cover":"wall:W_alley_south","cover_height_cm":300,"threatens":{"line":"route:R_main","route":"R_main","pos":[-1700,0,0]},"place":"CP_01"},
+    {"id":"HS_03","layer":"ground","pos":[-1375,1675,0],"facing_yaw":80.2,"reveal_normal_m":6.2,"reveal_stealth_m":6.2,"stealth_only":false,"blind":false,"rush_m":3.7,"cover":"wall:B_low_E_0","cover_height_cm":300,"threatens":{"line":"route:V1_back_route","route":"V1_back_route","pos":[-1319,2000,0]},"building":"B_low","floor":0},
+    {"id":"HS_04","layer":"ground","pos":[1375,-725,0],"facing_yaw":95.9,"reveal_normal_m":7.3,"reveal_stealth_m":7.3,"stealth_only":false,"blind":false,"rush_m":7.7,"cover":"wall:B_two_storey_S_0","cover_height_cm":600,"threatens":{"line":"route:R_main","route":"R_main","pos":[1300,0,0]},"place":"CP_01","building":"B_two_storey","floor":0},
+    {"id":"HS_05","layer":"ground","pos":[-1625,175,0],"facing_yaw":-113.2,"reveal_normal_m":8.9,"reveal_stealth_m":8.9,"stealth_only":false,"blind":false,"rush_m":1.7,"cover":"wall:B_low_S_0","cover_height_cm":300,"threatens":{"line":"route:R_main","route":"R_main","pos":[-1700,0,0]},"place":"CP_01","building":"B_low","floor":0},
+    {"id":"HS_06","layer":"ground","pos":[1525,1125,0],"facing_yaw":-177.8,"reveal_normal_m":9.8,"reveal_stealth_m":9.8,"stealth_only":false,"blind":false,"rush_m":1.5,"cover":"wall:B_two_storey_E_0","cover_height_cm":600,"threatens":{"line":"route:V1_back_route","route":"V1_back_route","pos":[1378,1119,0]},"place":"CP_02","building":"B_two_storey","floor":0},
+    {"id":"HS_07","layer":"ground","pos":[-875,1675,0],"facing_yaw":97.7,"reveal_normal_m":10.3,"reveal_stealth_m":10.3,"stealth_only":false,"blind":false,"rush_m":3.7,"cover":"wall:B_low_E_0","cover_height_cm":300,"threatens":{"line":"route:V1_back_route","route":"V1_back_route","pos":[-919,2000,0]},"building":"B_low","floor":0},
+    {"id":"HS_08","layer":"ground","pos":[-1625,775,0],"facing_yaw":-178.1,"reveal_normal_m":11.7,"reveal_stealth_m":11.7,"stealth_only":false,"blind":false,"rush_m":6,"cover":"wall:B_low_S_0","cover_height_cm":300,"threatens":{"line":"route:V1_back_route","route":"V1_back_route","pos":[-2236,755,0]},"place":"CP_01","building":"B_low","floor":0}
+  ],
+  "ladder_only_roofs": [],
+  "walkable_roofs": [
+    {"building":"B_two_storey","layer":"roof:B_two_storey","floor":2,"z":600,"access":[{"id":"LAD_B_two_storey","kind":"ladder","top":[1600,-250,600]},{"id":"B_two_storey_stair_1","kind":"stairs","top":[2350,-451,600]}],"ladder_only":false}
+  ],
+  "open_crossings": [
+    {"id":"OC_V1_back_route_1","route":"V1_back_route","start":[-2500,0,0],"end":[1393,1719,0],"length_m":55.7,"nearest_cover_cm":212,"seeing_covers":[]}
+  ],
+  "goal_sites": []
+}
