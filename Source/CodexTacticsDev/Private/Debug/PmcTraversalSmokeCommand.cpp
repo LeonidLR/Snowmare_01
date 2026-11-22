@@ -269,6 +269,7 @@ namespace PmcTraversalSmoke
 		bool bWasMantling = false;
 		bool bWasOnLadder = false;
 		int32 InitialMantleCount = 0;
+		int32 InitialDescentCount = 0;
 		int32 InitialDropCount = 0;
 		int32 InitialHurt = 0;
 		int32 InitialRescues = 0;
@@ -367,8 +368,8 @@ namespace PmcTraversalSmoke
 		else
 		{
 			Stats.Failures.Add({ Leg.Id, Reason, Leg.LinkStart, Leg.LinkEnd });
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: [%s] %s %s FAIL (%s) link %s -> %s, walker at %s"), *Pass.Name, KindName(Leg.Kind),
-				*Leg.Id, *Reason, *Vec(Leg.LinkStart), *Vec(Leg.LinkEnd), Walker ? *Vec(Walker->GetActorLocation()) : TEXT("-"));
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: [%s] %s %s FAIL (%s) link %s -> %s, nav goal %s, walker feet %s"), *Pass.Name,
+				KindName(Leg.Kind), *Leg.Id, *Reason, *Vec(Leg.LinkStart), *Vec(Leg.LinkEnd), *Vec(Leg.NavGoal), Walker ? *Vec(Feet(*Walker)) : TEXT("-"));
 		}
 		++State.LegCursor;
 		State.Phase = EPhase::PrepareLeg;
@@ -1112,6 +1113,7 @@ namespace PmcTraversalSmoke
 			FPass& Pass = CurrentPass(State);
 			const FLeg& Leg = CurrentLeg(State);
 			State.InitialMantleCount = Walker->GetMantleCount();
+			State.InitialDescentCount = Walker->GetMantleDescentCount();
 			State.InitialDropCount = Walker->LedgeFall ? Walker->LedgeFall->GetDropCount() : 0;
 			State.InitialHurt = HurtCount(*Walker);
 			State.InitialRescues = Walker->LedgeFall ? Walker->LedgeFall->GetRescueCount() : 0;
@@ -1198,7 +1200,26 @@ namespace PmcTraversalSmoke
 				}
 				break;
 			case ELinkKind::Mantle:
-				if (!State.bWasMantling && (Walker->IsMantling() || Walker->GetMantleCount() > State.InitialMantleCount))
+				if (Leg.bMantleDown)
+				{
+					// A down link is no climb clip: the batch 2 descent (walk off the edge + fall; GetMantleDescentCount) or the old hop
+					// (a vault-like arc, IsVaulting) - HandleMantleLink. Evidence: it started near this link's top.
+					const bool bDescent = Walker->IsMantleDescending() || Walker->GetMantleDescentCount() > State.InitialDescentCount;
+					const bool bHop = Walker->IsVaulting();
+					if (!State.bWasMantling && (bDescent || bHop))
+					{
+						State.bWasMantling = true;
+						const bool bThis = bDescent
+							? FVector::Dist2D(Walker->GetMantleDescentLanding(), Leg.LinkEnd) <= State.Config.MantleBaseToleranceCm
+							: FVector::Dist2D(FeetNow, Leg.LinkStart) <= State.Config.MantleBaseToleranceCm;
+						State.bOnLink |= bThis;
+						State.bOtherLink |= !bThis;
+						UE_LOG(LogCodexTactics, Log, TEXT("Smoke: %s down started (%s), feet %s, landing %s (link %s -> %s)"), *Leg.Id,
+							bDescent ? TEXT("descent") : TEXT("hop"), *Vec(FeetNow), *Vec(Walker->GetMantleDescentLanding()), *Vec(Leg.LinkStart),
+							*Vec(Leg.LinkEnd));
+					}
+				}
+				else if (!State.bWasMantling && (Walker->IsMantling() || Walker->GetMantleCount() > State.InitialMantleCount))
 				{
 					// Review 095 item 1: a pass proves a climb happened - and at this link's start, not another obstacle.
 					State.bWasMantling = true;
@@ -1229,7 +1250,7 @@ namespace PmcTraversalSmoke
 			Arrival.FeetDistZCm = static_cast<float>(FMath::Abs(FeetNow.Z - Leg.NavGoal.Z));
 			Arrival.bMovingOnGround = Move && Move->IsMovingOnGround();
 			Arrival.VelocityZ = Move ? static_cast<float>(Move->Velocity.Z) : 0.f;
-			Arrival.bBusyTraversing = Walker->IsMantling() || (Walker->LadderClimb && Walker->LadderClimb->IsOnLadder()) ||
+			Arrival.bBusyTraversing = Walker->IsMantling() || Walker->IsMantleDescending() || Walker->IsVaulting() || (Walker->LadderClimb && Walker->LadderClimb->IsOnLadder()) ||
 				(Walker->LedgeFall && Walker->LedgeFall->IsBusy());
 			const float Radius = Leg.Kind == ELinkKind::Ladder ? State.Config.LadderArriveRadiusCm : State.Config.ArriveRadiusCm;
 			if (PmcTraversalRules::HasArrived(Arrival, Radius, State.Config.LevelToleranceCm))
