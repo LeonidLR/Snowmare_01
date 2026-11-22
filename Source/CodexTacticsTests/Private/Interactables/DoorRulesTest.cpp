@@ -834,3 +834,26 @@ bool FDoorsSwingFromOpenerTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("a free side stays open"), ShouldCloseBehind(false, false, false, 5.f, 1.5f));
 	return true;
 }
+
+DOORS_TEST(FDoorsEnabledMapsTest, "Switch.EnabledMaps")
+bool FDoorsEnabledMapsTest::RunTest(const FString& Parameters)
+{
+	// Designer 2026-11-22: "doors on by default on this map" - doors.json enabled_maps; the console switch still wins both ways.
+	FDoorTuning Tuning;
+	Tuning.bEnabled = false;
+	Tuning.EnabledMaps = { TEXT("L_Gen_StoryShowcase_Kit") };
+	TestTrue(TEXT("a listed map: on"), DoorTuning::ResolveSwitchForMap(-1, Tuning, TEXT("L_Gen_StoryShowcase_Kit")));
+	TestTrue(TEXT("the name case does not matter"), DoorTuning::ResolveSwitchForMap(-1, Tuning, TEXT("l_gen_storyshowcase_kit")));
+	TestFalse(TEXT("another map: off"), DoorTuning::ResolveSwitchForMap(-1, Tuning, TEXT("L_Gen_Depot_1_X6")));
+	TestFalse(TEXT("Codex.Doors.Openable 0 wins on a listed map"), DoorTuning::ResolveSwitchForMap(0, Tuning, TEXT("L_Gen_StoryShowcase_Kit")));
+	TestTrue(TEXT("Codex.Doors.Openable 1 wins elsewhere"), DoorTuning::ResolveSwitchForMap(1, Tuning, TEXT("L_Gen_Depot_1_X6")));
+	FString Text;
+	TSharedPtr<FJsonObject> Json;
+	if (FFileHelper::LoadFileToString(Text, *DoorTuning::GetDefaultPath()) && FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) && Json.IsValid())
+	{
+		const FDoorTuning File = DoorTuning::FromJson(*Json);
+		TestTrue(TEXT("the shipped file lists the dressed showcase"), File.EnabledMaps.Contains(TEXT("L_Gen_StoryShowcase_Kit")));
+		TestFalse(TEXT("the shipped file keeps the global switch off"), File.bEnabled);
+	}
+	return true;
+}

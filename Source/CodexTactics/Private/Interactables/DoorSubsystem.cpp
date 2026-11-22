@@ -199,7 +199,7 @@ void UDoorSubsystem::Tick(float DeltaTime)
 	}
 	// Keys outlive the switch: a carrier's body leaves his keys whether the doors are openable or not.
 	TickKeyCarriers();
-	const bool bOn = DoorTuning::IsOpenableOn();
+	const bool bOn = DoorTuning::IsOpenableOnFor(LevelJsonRules::NormalizeMapName(World->GetMapName())); // designer 2026-11-22: enabled_maps
 	if (bOn && !bAdopted)
 	{
 		AdoptLeaves();

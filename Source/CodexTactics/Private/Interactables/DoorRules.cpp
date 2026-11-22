@@ -1062,6 +1062,18 @@ FDoorTuning DoorTuning::FromJson(const FJsonObject& Json, const FDoorTuning& Bas
 	ReadDoorNumber(Json, TEXT("swing_deg"), Tuning.SwingDegrees, 10.f, 180.f);
 	ReadDoorFlag(Json, TEXT("swing_fixed"), Tuning.bSwingFixed);
 	ReadDoorFlag(Json, TEXT("swing_from_opener"), Tuning.bSwingFromOpener);
+	const TArray<TSharedPtr<FJsonValue>>* Maps = nullptr;
+	if (Json.TryGetArrayField(TEXT("enabled_maps"), Maps) && Maps)
+	{
+		for (const TSharedPtr<FJsonValue>& Map : *Maps)
+		{
+			FString Name;
+			if (Map.IsValid() && Map->TryGetString(Name) && !Name.IsEmpty())
+			{
+				Tuning.EnabledMaps.Add(Name);
+			}
+		}
+	}
 	ReadDoorFlag(Json, TEXT("start_interior_closed"), Tuning.bStartInteriorClosed);
 	ReadDoorNumber(Json, TEXT("start_interior_locked_share"), Tuning.StartInteriorLockedShare, 0.f, 1.f);
 	ReadDoorNumber(Json, TEXT("close_behind_s"), Tuning.CloseBehindSeconds, 0.f, 60.f);
@@ -1327,6 +1339,20 @@ const FDoorTuning& DoorTuning::Get()
 bool DoorTuning::ResolveSwitch(int32 Console, const FDoorTuning& Tuning)
 {
 	return Console < 0 ? Tuning.bEnabled : Console > 0;
+}
+
+bool DoorTuning::ResolveSwitchForMap(int32 Console, const FDoorTuning& Tuning, const FString& MapName)
+{
+	if (Console >= 0)
+	{
+		return Console > 0;
+	}
+	return Tuning.bEnabled || (!MapName.IsEmpty() && Tuning.EnabledMaps.ContainsByPredicate([&MapName](const FString& Each) { return Each.Equals(MapName, ESearchCase::IgnoreCase); }));
+}
+
+bool DoorTuning::IsOpenableOnFor(const FString& MapName)
+{
+	return ResolveSwitchForMap(DoorRulesLocal::CVarDoorsOpenable.GetValueOnGameThread(), Get(), MapName);
 }
 
 bool DoorTuning::IsOpenableOn()

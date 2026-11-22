@@ -1,6 +1,8 @@
 {
   "_comment": "Openable doors R1 (designer 2026-11-21: generated buildings need doors that can be OPENED; door spec 2026-11-22; roadmap docs/port/ROADMAP_THREE_TRACKS_2026-11-21.md: doors change sight / cover / paths, so they sit BEHIND A SWITCH, OFF BY DEFAULT - turning it on in main needs the enemy-AI A/B). Read by DoorTuning (C++, Source/CodexTactics/Public/Interactables/DoorRules.h). With the switch on every builder leaf tagged door_state=closed|locked (build_levelgen_map.py opening_state_specs) becomes an ADoorActor: closed (UNLOCKED) and locked leaves block sight, bullets and bodies; an unlocked door is priced on the navmesh (UNavArea_DoorClosed, nav_entering_cost_cm), a locked one blocked (NavArea_Null); open = nothing blocks. Barricaded / sealed doors stay the builder's blocking pieces. Console Codex.Doors.Openable -1 = this file's enabled (default), 0 = off, 1 = on (read every tick: switching adopts / releases the leaves). All numbers are the designer's to tune.",
   "enabled": 0,
+  "_comment_enabled_maps": "enabled_maps (designer 2026-11-22: doors on by default on the showcase maps): maps where the switch is on although enabled is 0 (Codex.Doors.Openable 1 / 0 still wins). Everywhere else the doors stay off until the enemy-AI A/B.",
+  "enabled_maps": ["L_Gen_StoryShowcase_Kit", "L_Gen_StoryShowcase"],
   "_comment_swing": "open_s / close_s: the leaf's swing; swing_deg: how far round its hinge an open leaf stands; single_leaf_max_cm: wider doorways get two leaves (kit leaf sizes 80-130 cm single).",
   "open_s": 0.45,
   "close_s": 0.6,

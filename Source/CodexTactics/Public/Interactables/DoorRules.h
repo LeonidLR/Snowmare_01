@@ -191,6 +191,8 @@ struct CODEXTACTICS_API FDoorTuning
 	 * ("close_behind_s" quiet, nobody within "close_behind_radius_cm" on the opener's side or with a path through it). Wins over swing_fixed.
 	 */
 	bool bSwingFromOpener = true;
+	/** "enabled_maps" (designer 2026-11-22: "doors on by default on this map"): maps (level names) where the switch is on although "enabled" is 0. */
+	TArray<FString> EnabledMaps;
 	/**
 	 * "start_interior_closed" (designer 2026-11-22, agents test: "many doors inside are open - for now every inner door is shut"): at the
 	 * adoption every door open from the start whose both sides are under a roof (an inner door: flat / room / hall doors) is shut.
@@ -639,6 +641,10 @@ namespace DoorTuning
 
 	/** The switch rule: Console -1 = the file's "enabled", 0 = off, >= 1 = on. */
 	CODEXTACTICS_API bool ResolveSwitch(int32 Console, const FDoorTuning& Tuning);
+
+	/** The switch on map MapName (a level name, PIE prefix stripped): Codex.Doors.Openable 1 / 0 wins; -1 = doors.json "enabled" or the map in "enabled_maps". */
+	CODEXTACTICS_API bool ResolveSwitchForMap(int32 Console, const FDoorTuning& Tuning, const FString& MapName);
+	CODEXTACTICS_API bool IsOpenableOnFor(const FString& MapName);
 
 	/** The switch now: Codex.Doors.Openable (default -1 = doors.json "enabled", default 0). Off = the game exactly as before R1. */
 	CODEXTACTICS_API bool IsOpenableOn();
