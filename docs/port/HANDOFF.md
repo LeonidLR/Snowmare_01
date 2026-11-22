@@ -1,5 +1,16 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**Stairwell / window night fixes (`claude/bgen-test`, 2026-11-23 night; designer "stuck on the stairwell too").** (1) Follower goals are snapped
+to the leader's FEET floor (`SnapGoalToFloor`, the capsule-centre height put them on the next flight), ring search only over a stairwell (XY has
+navmesh on another level alone). (2) RampFile single file now holds on STEPPED stairs: a floor piece tagged `stair=*` counts as a ramp when its
+height gradient over +-40 cm is a slope (the dressed kit stairs are steps, the normal test never fired). (3) `FindWindowSillAt`: a ray through
+a window opening is a window click only when it lands within 150 cm of the sill (a far floor click became a window order). (4) `TryVault`: no
+knee-height auto-vault through a SHUT window in formation without a window order (the leader broke a window on a plain walk); broken windows
+stay ordinary vaults. Smokes: `FormationStairSmoke` (kit map, `-DPCVars=Codex.Doors.InnerLockedShare=0`, flags window-only storeys as gaps),
+`CutawayClickSmoke` (locked-door redirects / window clicks counted apart). Open gap: a click onto a storey cut off by a randomly LOCKED door on
+the way (not at the goal's level) is not redirected to try that door (`RedirectMoveToLockedDoor` checks the goal's level only) - the leader walks
+under the goal.
+
 **Story-showcase labels (`claude/bgen-test`, 2026-11-22, designer test item 6; dev overlay, CodexTacticsDev).** `UStoryLabelSubsystem` draws
 on the game canvas (debug draw "Game": PIE, -game, screenshots) the story of every house ("3 · Запертая дверь", layout `buildings[].stories`)
 over its roof and the state of every shut door ("заперта" / "закрыта" / "заколочена" / "завалена" from the leaf tags; with the doors on the
