@@ -32,6 +32,7 @@
 #include "Interactables/DoorActor.h"
 #include "Interactables/DoorSubsystem.h"
 #include "Interactables/MantleNavigation.h"
+#include "Interactables/WindowBreakage.h"
 #include "NavigationPath.h"
 #include "HAL/PlatformMisc.h"
 #include "Kismet/GameplayStatics.h"
@@ -160,6 +161,8 @@ namespace CutawayClickSmoke
 		int32 LockedRedirects = 0;
 		/** Clicks on a spot of his storey reachable only through a window (the formation never paths through one): he goes as near as he can. */
 		int32 WindowOnly = 0;
+		/** Clicks landing just behind a window opening the ray passed (WindowBreakage::FindWindowSillAt): a window order by the designer's rule. */
+		int32 WindowClicks = 0;
 		int32 CoverOrders = 0;
 		FString Examples;
 	};
@@ -276,7 +279,12 @@ namespace CutawayClickSmoke
 						// the move ends where the no-window path does - expected when the goal is at that path's end and a window path gets there.
 						bool bWindowOnly = false;
 						FString PathWhy;
-						if (!bGoalOk && !bLockedRedirect)
+						const bool bWindowClick = !bGoalOk && !bLockedRedirect && WindowBreakage::FindWindowSillAt(*World, Hit) != nullptr;
+						if (bWindowClick)
+						{
+							++T.WindowClicks;
+						}
+						if (!bGoalOk && !bLockedRedirect && !bWindowClick)
 						{
 							const FVector From = Home;
 							const UNavigationPath* Any = UNavigationSystemV1::FindPathToLocationSynchronously(World, From, Hit.ImpactPoint, &Leader, nullptr); // the default filter: windows and mantles open
@@ -297,7 +305,7 @@ namespace CutawayClickSmoke
 								}
 							}
 						}
-						if (!bGoalOk && !bLockedRedirect && !bWindowOnly)
+						if (!bGoalOk && !bLockedRedirect && !bWindowOnly && !bWindowClick)
 						{
 							++T.BadGoals;
 							if (T.Examples.Len() < 900)
@@ -316,9 +324,9 @@ namespace CutawayClickSmoke
 				}
 			}
 		}
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s storey %d (base %.0f, ceiling %.0f), ThroughCutaway %d: %d targets, %d rays - room floor %d, other floor of his storey %d, occluded by his storey %d, pawn %d, miss %d, UPPER STOREY %d, WALL TOP %d; clicks %d, bad goals %d, locked-door redirects %d, window-only %d, cover orders %d%s"),
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s storey %d (base %.0f, ceiling %.0f), ThroughCutaway %d: %d targets, %d rays - room floor %d, other floor of his storey %d, occluded by his storey %d, pawn %d, miss %d, UPPER STOREY %d, WALL TOP %d; clicks %d, bad goals %d, locked-door redirects %d, window-only %d, window clicks %d, cover orders %d%s"),
 			*Runner->BuildingId, Storey, BaseZ, CeilZ, bJudge ? 1 : 0, Targets.Num(), T.Rays, T.RoomFloor, T.OtherFloor, T.Occluded, T.Pawn, T.Miss, T.Upper, T.WallTop,
-			T.Clicks, T.BadGoals, T.LockedRedirects, T.WindowOnly, T.CoverOrders, *T.Examples);
+			T.Clicks, T.BadGoals, T.LockedRedirects, T.WindowOnly, T.WindowClicks, T.CoverOrders, *T.Examples);
 		if (bJudge)
 		{
 			Check(Targets.Num() > 0, FString::Printf(TEXT("%s storey %d: far floor points to click (%d)"), *Runner->BuildingId, Storey, Targets.Num()));

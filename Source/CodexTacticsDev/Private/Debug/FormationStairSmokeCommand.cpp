@@ -241,7 +241,10 @@ namespace FormationStairSmoke
 				}
 				Squad->SetLeader(Members[0]);
 			}
-			if (R.StepFrame < SettleFrames)
+			// Wait out the runtime navmesh rebuild (the doors shut at the start, broken windows re-area tiles): a click while the goal's storey
+			// tiles are still empty sent the leader to the floor below the goal (worker 2026-11-22, S04).
+			UNavigationSystemV1* BuildNav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+			if (R.StepFrame < SettleFrames || (BuildNav && BuildNav->IsNavigationBuildInProgress() && R.StepFrame < SettleFrames + 600))
 			{
 				return true;
 			}
