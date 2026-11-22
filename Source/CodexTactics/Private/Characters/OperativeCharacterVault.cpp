@@ -137,6 +137,15 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 			bVaultResume = true;
 		}
 	}
+	// The ping-pong guard (VaultRules::DecideResume): back over the obstacle the previous vault of this walk crossed?
+	const float Now = World->GetTimeSeconds();
+	bVaultRecrossing = bVaultResume && VaultRules::IsRecrossing(LastVaultObstacle.Get() == Front.GetActor(), bLastVaultResumed, LastVaultDirection,
+		Direction, LastVaultGoal, VaultResumeTarget, Now - LastVaultTime);
+	LastVaultObstacle = Front.GetActor();
+	LastVaultDirection = Direction;
+	LastVaultGoal = bVaultResume ? VaultResumeTarget : FVector::ZeroVector;
+	LastVaultTime = Now;
+	bLastVaultResumed = false;
 	if (AController* OwnerController = GetController())
 	{
 		OwnerController->StopMovement();
@@ -173,6 +182,7 @@ bool AOperativeCharacter::UpdateObstacleStepOff(float DeltaTime)
 	ObstacleTopTime = 0.f;
 	bVaultResume = bHasMoveOrder;
 	VaultResumeTarget = LastMoveDestination;
+	bVaultRecrossing = false;
 	if (AController* OwnerController = GetController())
 	{
 		OwnerController->StopMovement();
@@ -209,17 +219,30 @@ void AOperativeCharacter::UpdateVault(float DeltaTime)
 	SetActorLocation(VaultLanding);
 	SetActorEnableCollision(true);
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-	// Godot vault_resume_target: carry on unless the destination was the landing spot (or behind it).
-	const FVector VaultDirection = (VaultLanding - VaultStart).GetSafeNormal2D();
-	const FVector ToTarget = VaultResumeTarget - VaultLanding;
-	if (bVaultResume && ToTarget.Size2D() > 60.f && FVector::DotProduct(VaultDirection, ToTarget.GetSafeNormal2D()) >= 0.1f)
+	// The walk goes on from the landing on a new navmesh path, whatever the angle to the goal (VaultRules::DecideResume; bug 2026-11-22:
+	// the Godot ~84 deg gate stopped him behind a window whose room goal lay to the side).
+	VaultRules::FVaultResumeFacts Facts;
+	Facts.bHasOrder = bVaultResume;
+	Facts.Start = VaultStart;
+	Facts.Landing = VaultLanding;
+	Facts.Goal = VaultResumeTarget;
+	Facts.bRecrossing = bVaultRecrossing;
+	const VaultRules::EVaultResume Verdict = VaultRules::DecideResume(Facts);
+	bLastVaultResumed = Verdict == VaultRules::EVaultResume::Resume;
+	if (bLastVaultResumed)
 	{
 		ApplyMovementParams();
 		RequestMove(VaultResumeTarget);
 	}
 	else
 	{
+		if (Verdict == VaultRules::EVaultResume::PingPong)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Vault] %s: back over the same obstacle and the goal behind it again - the walk ends here"),
+				*DisplayName.ToString());
+		}
 		bHasMoveOrder = false;
 	}
 	bVaultResume = false;
+	bVaultRecrossing = false;
 }

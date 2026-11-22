@@ -2659,6 +2659,14 @@ private:
 	FVector VaultLanding = FVector::ZeroVector;
 	FVector VaultResumeTarget = FVector::ZeroVector;
 	bool bVaultResume = false;
+	/** This arc crosses back over the obstacle the previous vault of the same walk crossed (VaultRules::IsRecrossing; the ping-pong guard). */
+	bool bVaultRecrossing = false;
+	/** The previous TryVault: its obstacle, direction, goal, start time and whether its walk went on after the landing. */
+	TWeakObjectPtr<const AActor> LastVaultObstacle;
+	FVector LastVaultDirection = FVector::ZeroVector;
+	FVector LastVaultGoal = FVector::ZeroVector;
+	float LastVaultTime = -1000.f;
+	bool bLastVaultResumed = false;
 	/** Seconds standing on a barricade / barrel top (VaultNavigation::IsStandingOnObstacle). */
 	float ObstacleTopTime = 0.f;
 	/** Jumps down off an obstacle top after 0.3 s there; true while starting that jump. */
