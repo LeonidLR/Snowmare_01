@@ -1,0 +1,15 @@
+{
+  "arrive_radius_cm": 150.0,
+  "level_tolerance_cm": 70.0,
+  "stuck_move_cm": 50.0,
+  "stuck_seconds": 4.0,
+  "leg_timeout_seconds": 15.0,
+  "ladder_arrive_radius_cm": 200.0,
+  "stair_inward_cm": 200.0,
+  "mantle_approach_offset_cm": 120.0,
+  "mantle_goal_offset_cm": 120.0,
+  "drop_approach_offset_cm": 150.0,
+  "drop_goal_offset_cm": 100.0,
+  "default_mantle_sample": 120,
+  "default_drop_sample": 80
+}
