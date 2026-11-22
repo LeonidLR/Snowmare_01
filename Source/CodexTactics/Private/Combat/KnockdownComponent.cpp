@@ -1,4 +1,5 @@
 #include "Combat/KnockdownComponent.h"
+#include "Core/CodexGameplayRandom.h"
 #include "Vehicles/VehicleSubsystem.h"
 
 #include "AI/WorldAIPauseSubsystem.h"
@@ -153,7 +154,7 @@ bool UKnockdownComponent::TryKnockDown(EKnockdownCause Cause, const FVector& Sou
 	Hit.Damage = Damage;
 	Hit.bCritical = bCritical;
 	Hit.ExplosionDistance = FVector::Dist(Owner->GetActorLocation(), SourceLocation);
-	Hit.ChanceRoll = FMath::FRand(); // KnockdownChance (Codex.Knockdown.Chance; smokes force 1) for heavy hits / blows
+	Hit.ChanceRoll = CodexRandom::FRand(ECodexRandomStream::Combat, this); // KnockdownChance (Codex.Knockdown.Chance; smokes force 1) for heavy hits / blows
 	FKnockdownTarget Target;
 	Target.bCanBeKnockedDown = bCanBeKnockedDown;
 	Target.bHeavyPoise = bHeavyPoise;

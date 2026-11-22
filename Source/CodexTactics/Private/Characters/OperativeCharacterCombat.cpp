@@ -4,6 +4,7 @@
 // is_behind_barricade, _notify_barricade_blocked). Fire posture: FirePostureRules (UE-only).
 
 #include "Characters/OperativeCharacter.h"
+#include "Core/CodexGameplayRandom.h"
 
 #include "Combat/CombatCheats.h"
 
@@ -1057,7 +1058,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 
 	// Cold misfire (Godot player.gd `_shoot_at_target`, balance.tres: >= 60 %, linear up to 30 %, never near heat).
 	bool bMisfire = bForceMisfireForTesting;
-	if (!bMisfire && ColdSurvival && FMath::FRand() < ColdSurvival->GetMisfireChance())
+	if (!bMisfire && ColdSurvival && CodexRandom::FRand(ECodexRandomStream::Combat, this) < ColdSurvival->GetMisfireChance())
 	{
 		bMisfire = true;
 	}
@@ -1160,7 +1161,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 
 	// Pellets (decision 2, 2026-11-08): a shotgun's pellets roll the chance each; one pellet = the single roll as before.
 	const int32 PelletCount = CurrentWeapon ? FMath::Max(1, CurrentWeapon->Stats.Pellets.Count) : 1;
-	const int32 PelletHits = WeaponBallisticsRules::RollPelletHits(PelletCount, HitChance, []() { return FMath::FRand(); }, bForceHitForTesting);
+	const int32 PelletHits = WeaponBallisticsRules::RollPelletHits(PelletCount, HitChance, [this]() { return CodexRandom::FRand(ECodexRandomStream::Combat, this); }, bForceHitForTesting);
 	const bool bHit = PelletHits > 0;
 	LastShotPelletHits = PelletHits;
 	if (!bHit)
@@ -1176,7 +1177,11 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	FVector RoundEnd = bBlindShot ? BlindAimPoint : (bExposedAimShot ? ExposedAimPoint : Target->GetActorLocation());
 	if (!bHit)
 	{
-		FVector Offset(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(20.f, 120.f));
+		// Sequenced draws (argument evaluation order is unspecified): the seeded arena replays the same offset.
+		const float OffsetX = CodexRandom::FRandRange(ECodexRandomStream::Combat, this, -140.f, 140.f);
+		const float OffsetY = CodexRandom::FRandRange(ECodexRandomStream::Combat, this, -140.f, 140.f);
+		const float OffsetZ = CodexRandom::FRandRange(ECodexRandomStream::Combat, this, 20.f, 120.f);
+		FVector Offset(OffsetX, OffsetY, OffsetZ);
 		if (Offset.SizeSquared() < 50.f * 50.f)
 		{
 			Offset = FVector(100.f, 0.f, 50.f);
@@ -1203,7 +1208,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 void AOperativeCharacter::ApplyRangedHit(AActor* Target, float Cover, int32 DistCells, bool bRagingShot, float PelletShare)
 {
 	// Godot _shoot_at_target: crit on luck (x2), elevation (+15 %), stance, cover and distance factors.
-	const float CritRoll = ForcedCritRollForTesting >= 0.f ? (ForcedCritRollForTesting >= 1.f ? 0.f : 1.f) : FMath::FRand();
+	const float CritRoll = ForcedCritRollForTesting >= 0.f ? (ForcedCritRollForTesting >= 1.f ? 0.f : 1.f) : CodexRandom::FRand(ECodexRandomStream::Combat, this);
 	ForcedCritRollForTesting = -1.f;
 	const bool bCrit = SquadFireRules::IsCrit(Luck + (bRagingShot ? 30.f : 0.f), CritRoll); // rage: +30 luck
 	const FElevationAdvantage Elevation = SquadFireRules::GetElevationAdvantage(

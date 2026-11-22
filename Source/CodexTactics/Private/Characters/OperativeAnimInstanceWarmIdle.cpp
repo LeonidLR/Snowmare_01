@@ -5,6 +5,7 @@
 // -> loop A ... and the End clip / a quick blend-out when it ends. Any movement, knockdown, death, cover or vault ends it at once.
 
 #include "Characters/OperativeAnimInstance.h"
+#include "Core/CodexGameplayRandom.h"
 
 #include "Animation/AnimMontage.h"
 #include "CodexTactics.h"
@@ -85,7 +86,7 @@ bool UOperativeAnimInstance::PlayWarmClip(EWarmClipStep Step, float BlendIn)
 	case EWarmClipStep::TransitBA: Clip = Set->TransitBA; break;
 	case EWarmClipStep::End: Clip = Set->End; break;
 	case EWarmClipStep::Variant:
-		Clip = ColdIdleVariants.IsEmpty() ? nullptr : ColdIdleVariants[FMath::RandRange(0, ColdIdleVariants.Num() - 1)].Get();
+		Clip = ColdIdleVariants.IsEmpty() ? nullptr : ColdIdleVariants[CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, 0, ColdIdleVariants.Num() - 1)].Get();
 		break;
 	default: break;
 	}
@@ -217,13 +218,13 @@ void UOperativeAnimInstance::UpdateWarmIdleLayer(const AOperativeCharacter& Oper
 				WarmLoopsDone = Next == WarmStep ? Done : 0;
 				if (Next != WarmStep && (Next == EWarmClipStep::LoopA || Next == EWarmClipStep::LoopB))
 				{
-					WarmLoopsTarget = FMath::RandRange(FMath::Max(1, WarmIdleLoopsMin), FMath::Max(WarmIdleLoopsMin, WarmIdleLoopsMax));
+					WarmLoopsTarget = CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, FMath::Max(1, WarmIdleLoopsMin), FMath::Max(WarmIdleLoopsMin, WarmIdleLoopsMax));
 				}
 				// Game designer 2026-10-15: now and then the cold idle variant instead of the next loop clip (not monotonous).
 				const FTacticalHeatConfig& Heat = TacticalHeatTuning::Get();
 				const bool bVariant = WarmActivePose == EWarmIdlePose::ColdIdle && bLoop
 					&& (Next == EWarmClipStep::LoopA || Next == EWarmClipStep::LoopB)
-					&& WarmIdleRules::ShouldPlayColdVariant(FMath::FRand(), Heat.ColdIdleVariantChance, static_cast<float>(Now - LastColdVariantTime),
+					&& WarmIdleRules::ShouldPlayColdVariant(CodexRandom::FRand(ECodexRandomStream::Cosmetic, this), Heat.ColdIdleVariantChance, static_cast<float>(Now - LastColdVariantTime),
 						Heat.ColdIdleVariantCooldownSeconds, !ColdIdleVariants.IsEmpty())
 					&& PlayWarmClip(EWarmClipStep::Variant, WarmIdleBlendSeconds);
 				if (bVariant)
@@ -248,7 +249,7 @@ void UOperativeAnimInstance::UpdateWarmIdleLayer(const AOperativeCharacter& Oper
 		WarmActivePose = WarmIdleRequest;
 		WarmLoopsDone = 0;
 		LastColdVariantTime = Now; // the variant cooldown counts from the pose start
-		WarmLoopsTarget = FMath::RandRange(FMath::Max(1, WarmIdleLoopsMin), FMath::Max(WarmIdleLoopsMin, WarmIdleLoopsMax));
+		WarmLoopsTarget = CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, FMath::Max(1, WarmIdleLoopsMin), FMath::Max(WarmIdleLoopsMin, WarmIdleLoopsMax));
 		if (!PlayWarmClip(EWarmClipStep::Start, WarmIdleBlendSeconds) && !PlayWarmClip(EWarmClipStep::LoopA, WarmIdleBlendSeconds))
 		{
 			ResetWarmState();

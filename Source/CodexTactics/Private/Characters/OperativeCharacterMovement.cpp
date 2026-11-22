@@ -4,6 +4,7 @@
 // _process_leader_movement).
 
 #include "Characters/OperativeCharacter.h"
+#include "Core/CodexGameplayRandom.h"
 #include "AI/PmcEncounterNav.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 
@@ -702,7 +703,7 @@ void AOperativeCharacter::HandleMoveFinished()
 			TEXT("🛡️ Behind the barricade, ready to fight!"), TEXT("🛡️ In position behind the shield, watching!") };
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Messages->PostMessage(DisplayName, FText::FromString(Callouts[FMath::RandRange(0, 3)]));
+			Messages->PostMessage(DisplayName, FText::FromString(Callouts[CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, 0, 3)]));
 		}
 	}
 }
