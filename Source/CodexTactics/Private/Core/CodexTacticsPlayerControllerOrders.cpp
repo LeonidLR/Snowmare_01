@@ -45,6 +45,8 @@
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Camera/RoofCutawaySubsystem.h"
+#include "NavigationSystem.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 #include "HAL/PlatformTime.h"
@@ -482,19 +484,33 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	// Designer 2026-11-22: a click on a ground-floor window sill = through that window - the leader goes to the window's far side (the side away
 	// from him) and climbs through on the way (breaking it the first time: loud); the window sills are open to every member's path for this
 	// order (SetWindowOrder), so the formation follows him through it. The click then goes on as a plain ground order to that point.
-	if (AActor* Sill = Hit.GetActor(); Sill && Sill->ActorHasTag(FName(TEXT("window_sill"))) && !GetActiveTurnBased())
+	// Designer 2026-11-22: a click on a stair flight inside his building, the storey above hidden by the cutaway = up to that storey's landing
+	// (the silhouette UpdateStairHover shows); the click then goes on as a plain ground order to that point (the formation follows).
 	{
-		const FBox Local = Sill->CalculateComponentsBoundingBoxInLocalSpace(false);
-		const FVector Size = Local.GetSize() * Sill->GetActorScale3D().GetAbs();
-		const FVector Across = (Size.X < Size.Y ? Sill->GetActorForwardVector() : Sill->GetActorRightVector()).GetSafeNormal2D();
-		const float Thickness = static_cast<float>(FMath::Min(Size.X, Size.Y));
-		const FVector Center = Sill->GetActorTransform().TransformPosition(Local.GetCenter());
-		const float Side = FVector::DotProduct(Leader->GetActorLocation() - Center, Across) >= 0.0 ? -1.f : 1.f;
-		const FVector Beyond = Center + Across * (Side * (Thickness * 0.5f + 120.f));
+		FVector StairFeet;
+		const URoofCutawaySubsystem* StairRoofs = GetWorld()->GetSubsystem<URoofCutawaySubsystem>();
+		if (!GetActiveTurnBased() && !IsAttackModifierDown() && StairRoofs && StairRoofs->FindStairUpTarget(Hit, *Leader, StairFeet))
+		{
+			UpdateStairHover(nullptr, nullptr);
+			const FVector StairTraceStart = Hit.TraceStart;
+			Hit = FHitResult();
+			Hit.bBlockingHit = true;
+			Hit.ImpactPoint = Hit.Location = StairFeet;
+			Hit.ImpactNormal = Hit.Normal = FVector::UpVector;
+			Hit.TraceStart = StairTraceStart;
+			UE_LOG(LogCodexTactics, Display, TEXT("Click on a stair flight: up to the hidden storey's landing at %s"), *StairFeet.ToCompactString());
+		}
+	}
+	FVector WindowFeet;
+	float WindowYaw = 0.f;
+	if (AActor* Sill = Hit.GetActor(); Sill && Sill->ActorHasTag(FName(TEXT("window_sill"))) && !GetActiveTurnBased()
+		&& FindWindowSillTarget(*Sill, *Leader, WindowFeet, WindowYaw))
+	{
+		UpdateWindowHover(nullptr, nullptr);
 		const FVector TraceStart = Hit.TraceStart;
 		Hit = FHitResult();
 		Hit.bBlockingHit = true;
-		Hit.ImpactPoint = Hit.Location = FVector(Beyond.X, Beyond.Y, Leader->GetActorLocation().Z - Leader->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+		Hit.ImpactPoint = Hit.Location = WindowFeet;
 		Hit.ImpactNormal = Hit.Normal = FVector::UpVector;
 		Hit.TraceStart = TraceStart;
 		Squad->SetWindowOrder(true);
@@ -817,6 +833,112 @@ bool ACodexTacticsPlayerController::CanOrderMantleClick(const FHitResult& Hit) c
 		OrderLock::CVarRealTimeOrders.GetValueOnGameThread() != 0) : ECombatOrderDispatch::Execute;
 	return MantleMode != ECodexCombatMode::TurnBased && MantleDispatch == ECombatOrderDispatch::Execute
 		&& !UTutorialSubsystem::FilterCommand(const_cast<ACodexTacticsPlayerController*>(this), PlayerCommands::Move).IsNone();
+}
+
+bool ACodexTacticsPlayerController::FindWindowSillTarget(const AActor& Sill, const AOperativeCharacter& Operative, FVector& OutFeet, float& OutYaw) const
+{
+	const FBox Local = Sill.CalculateComponentsBoundingBoxInLocalSpace(false);
+	if (!Local.IsValid)
+	{
+		return false;
+	}
+	const FVector Size = Local.GetSize() * Sill.GetActorScale3D().GetAbs();
+	const FVector Across = (Size.X < Size.Y ? Sill.GetActorForwardVector() : Sill.GetActorRightVector()).GetSafeNormal2D();
+	const float Thickness = static_cast<float>(FMath::Min(Size.X, Size.Y));
+	const FVector Center = Sill.GetActorTransform().TransformPosition(Local.GetCenter());
+	const float Side = FVector::DotProduct(Operative.GetActorLocation() - Center, Across) >= 0.0 ? -1.f : 1.f;
+	const FVector Beyond = Center + Across * (Side * (Thickness * 0.5f + 120.f));
+	const float FeetZ = static_cast<float>(Operative.GetActorLocation().Z - Operative.GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	OutFeet = FVector(Beyond.X, Beyond.Y, FeetZ);
+	OutYaw = static_cast<float>((Across * Side).Rotation().Yaw);
+	// The far side must be walkable ground at about his level (a window over a drop / into a wall is no way through).
+	if (const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
+	{
+		FNavLocation OnNav;
+		if (!Nav->ProjectPointToNavigation(OutFeet, OnNav, FVector(60.f, 60.f, 120.f)) || FMath::Abs(OnNav.Location.Z - FeetZ) > 120.f)
+		{
+			return false;
+		}
+		OutFeet = OnNav.Location;
+	}
+	return true;
+}
+
+bool ACodexTacticsPlayerController::IsStairHoverShown() const
+{
+	return StairGhost && StairGhost->IsShown();
+}
+
+bool ACodexTacticsPlayerController::UpdateStairHover(AOperativeCharacter* Operative, const FHitResult* Hit)
+{
+	const URoofCutawaySubsystem* Roofs = GetWorld() ? GetWorld()->GetSubsystem<URoofCutawaySubsystem>() : nullptr;
+	FVector Feet;
+	const bool bWanted = Operative && Hit && Roofs && !IsAttackModifierDown() && !GetActiveTurnBased() && Roofs->FindStairUpTarget(*Hit, *Operative, Feet);
+	if (!bWanted)
+	{
+		StairHoverFeet = FVector(TNumericLimits<float>::Max());
+		if (StairGhost && StairGhost->IsShown())
+		{
+			StairGhost->Hide();
+		}
+		return false;
+	}
+	if (StairGhost && StairGhost->IsShown() && FVector::DistSquared(StairHoverFeet, Feet) < FMath::Square(30.f))
+	{
+		return true;
+	}
+	StairHoverFeet = Feet;
+	if (!StairGhost)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		StairGhost = GetWorld()->SpawnActor<ACoverGhostActor>(Feet, FRotator::ZeroRotator, Params);
+	}
+	if (StairGhost)
+	{
+		const float Yaw = static_cast<float>((Feet - Operative->GetActorLocation()).GetSafeNormal2D().Rotation().Yaw);
+		StairGhost->ShowMantleFor(*Operative, Feet, Yaw, /*bCrouched*/ false);
+	}
+	return StairGhost != nullptr;
+}
+
+bool ACodexTacticsPlayerController::IsWindowHoverShown() const
+{
+	return WindowGhost && WindowGhost->IsShown();
+}
+
+bool ACodexTacticsPlayerController::UpdateWindowHover(AOperativeCharacter* Operative, const FHitResult* Hit)
+{
+	AActor* Sill = Hit && Hit->bBlockingHit ? Hit->GetActor() : nullptr;
+	FVector Feet;
+	float Yaw = 0.f;
+	const bool bWanted = Operative && Sill && Sill->ActorHasTag(FName(TEXT("window_sill"))) && !IsAttackModifierDown() && !GetActiveTurnBased()
+		&& FindWindowSillTarget(*Sill, *Operative, Feet, Yaw);
+	if (!bWanted)
+	{
+		WindowHoverActor.Reset();
+		if (WindowGhost && WindowGhost->IsShown())
+		{
+			WindowGhost->Hide();
+		}
+		return false;
+	}
+	if (WindowHoverActor.Get() == Sill && WindowGhost && WindowGhost->IsShown())
+	{
+		return true; // the same window: the silhouette stands
+	}
+	WindowHoverActor = Sill;
+	if (!WindowGhost)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		WindowGhost = GetWorld()->SpawnActor<ACoverGhostActor>(Feet, FRotator::ZeroRotator, Params);
+	}
+	if (WindowGhost)
+	{
+		WindowGhost->ShowMantleFor(*Operative, Feet, Yaw, /*bCrouched*/ false);
+	}
+	return WindowGhost != nullptr;
 }
 
 bool ACodexTacticsPlayerController::UpdateMantleHover(AOperativeCharacter* Operative, const FHitResult* Hit)

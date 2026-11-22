@@ -80,6 +80,9 @@ namespace VaultNavigation
 	/** Closes the window-sill vault area (UNavArea_WindowVault) in a filter: formation moves never path through a window (designer 2026-11-22). */
 	CODEXTACTICS_API void CloseWindowArea(TArray<struct FNavigationFilterArea>& Areas);
 
+	/** Makes the window-sill vault area free to enter (no entering cost, plain travel cost): a formation follower on a window order takes the window. */
+	CODEXTACTICS_API void FreeWindowArea(TArray<struct FNavigationFilterArea>& Areas);
+
 	/** The vault area MakeVaultable added to Actor (named "VaultNavModifier"); null for an actor that was never made vaultable. */
 	CODEXTACTICS_API UNavModifierComponent* FindVaultNavModifier(const AActor* Actor);
 }

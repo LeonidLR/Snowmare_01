@@ -17,6 +17,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Interactables/VaultNavigation.h"
+#include "Interactables/WindowBreakage.h"
 #include "Navigation/PathFollowingComponent.h"
 
 float AOperativeCharacter::GetVaultSpeed() const
@@ -184,6 +185,7 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 			UE_LOG(LogCodexTactics, Display, TEXT("[Window] %s breaks the window %s climbing through: noise %.0f m, %d enemies heard it"), *DisplayName.ToString(),
 				*Sill->GetName(), VaultRules::WindowBreakNoiseCm / 100.f, Heard);
 		}
+		WindowBreakage::HideBrokenWindow(*Sill); // designer 2026-11-22: a broken window shows - its glass is hidden (not destroyed)
 		GameplayEvents::Raise(this, FName(TEXT("WindowBroken")), Sill);
 	}
 	return true;

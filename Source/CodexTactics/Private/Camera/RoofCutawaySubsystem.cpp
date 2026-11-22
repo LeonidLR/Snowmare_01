@@ -13,6 +13,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "HAL/IConsoleManager.h"
+#include "NavigationSystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 
 namespace
@@ -513,6 +514,41 @@ TArray<FBox> URoofCutawaySubsystem::GetStoreySlabs(const FString& BuildingId) co
 {
 	const FStoreyBuilding* Building = StoreyBuildings.FindByPredicate([&BuildingId](const FStoreyBuilding& B) { return B.Id == BuildingId; });
 	return Building ? Building->Slabs : TArray<FBox>();
+}
+
+bool URoofCutawaySubsystem::FindStairUpTarget(const FHitResult& Hit, const AOperativeCharacter& Selected, FVector& OutFeet) const
+{
+	const UPrimitiveComponent* Piece = Hit.GetComponent();
+	if (!Hit.bBlockingHit || !Piece || !IsStairPiece(*Piece) || CVarRoofCutawayStoreys.GetValueOnGameThread() == 0 || StoreyBuildings.IsEmpty())
+	{
+		return false;
+	}
+	FVector Location;
+	const float FeetZ = GetFloorFeetZ(Selected, Location);
+	int32 Storey = INDEX_NONE;
+	const int32 BuildingIndex = FindOperativeStorey(Location, FeetZ, LastStoreyBuilding.Find(&Selected), Storey);
+	if (BuildingIndex == INDEX_NONE)
+	{
+		return false;
+	}
+	if (const TPair<int32, int32>* Of = StoreyOfPiece.Find(TObjectKey<UPrimitiveComponent>(Piece)); Of && Of->Key != BuildingIndex)
+	{
+		return false; // a stair of another building
+	}
+	const float NextBaseZ = GetStoreyCeilingZ(BuildingIndex, Storey);
+	if (NextBaseZ >= TNumericLimits<float>::Max() * 0.5f || NextBaseZ - FeetZ < 150.f)
+	{
+		return false;
+	}
+	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	FNavLocation OnNav;
+	if (!Nav || !Nav->ProjectPointToNavigation(FVector(Hit.ImpactPoint.X, Hit.ImpactPoint.Y, NextBaseZ + 50.f), OnNav, FVector(250.f, 250.f, 90.f))
+		|| FMath::Abs(OnNav.Location.Z - NextBaseZ) > 70.f)
+	{
+		return false;
+	}
+	OutFeet = OnNav.Location;
+	return true;
 }
 
 float URoofCutawaySubsystem::GetStoreyCeilingZ(int32 BuildingIndex, int32 Storey) const

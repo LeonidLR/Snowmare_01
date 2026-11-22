@@ -516,8 +516,21 @@ TSubclassOf<UNavigationQueryFilter> AOperativeCharacter::ChooseMoveFilter() cons
 	const TSubclassOf<UNavigationQueryFilter> Chosen = bMantlePathAllowed ? Filter : MantleNavigation::NoMantleVariant(Filter);
 	// Window sills (designer 2026-11-22): Solo / a box selection may climb through a window on the way (faster, loud - no tactical entry);
 	// in FORMATION the men follow their commander through the doors only.
-	// A click on a window sill (SetWindowOrder) opens them for the whole order: the formation follows its commander through the window.
-	return MoveSquad && !MoveSquad->IsSoloMode() && !MoveSquad->IsWindowOrder() && !bMantlePathAllowed ? MantleNavigation::NoWindowVariant(Chosen) : Chosen;
+	// A click on a window sill (SetWindowOrder) opens them for the whole order: the formation follows its commander through the window (the
+	// followers' window costs nothing, so they take it rather than a door round); without one nobody in the formation, the leader included,
+	// paths through a window (designer 2026-11-22: "only the commander climbed, the two walked round - the formation must stay together").
+	if (MoveSquad && !MoveSquad->IsSoloMode())
+	{
+		if (!MoveSquad->IsWindowOrder())
+		{
+			return MantleNavigation::NoWindowVariant(Chosen, bMantlePathAllowed);
+		}
+		if (!bMantlePathAllowed)
+		{
+			return MantleNavigation::WindowFreeVariant(Chosen);
+		}
+	}
+	return Chosen;
 }
 
 bool AOperativeCharacter::SteerOwnMoveVia(const FVector& Via)

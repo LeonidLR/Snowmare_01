@@ -177,6 +177,16 @@ namespace VaultNavigation
 		Window.bIsExcluded = true;
 	}
 
+	void FreeWindowArea(TArray<FNavigationFilterArea>& Areas)
+	{
+		FNavigationFilterArea& Window = Areas.AddDefaulted_GetRef();
+		Window.AreaClass = UNavArea_WindowVault::StaticClass();
+		Window.bOverrideEnteringCost = true;
+		Window.EnteringCostOverride = 0.f;
+		Window.bOverrideTravelCost = true;
+		Window.TravelCostOverride = 1.f;
+	}
+
 	void MakeVaultable(AActor* Actor)
 	{
 		if (!Actor || Actor->FindComponentByClass<UNavModifierComponent>())

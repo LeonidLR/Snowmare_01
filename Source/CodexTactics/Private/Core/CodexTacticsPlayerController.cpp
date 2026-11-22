@@ -414,6 +414,13 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		{
 			UpdateMantleHover(PeekTurnBased || bCornerPeekCursor ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
 		}
+		// Designer 2026-11-22: over a ground-floor window sill, the silhouette where a click sends him (past the window).
+		if (!bFreezeMantleHoverForTesting)
+		{
+			UpdateWindowHover(PeekTurnBased || bCornerPeekCursor || bClickPreview ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
+			// Designer 2026-11-22: over a stair flight, the silhouette on the hidden storey's landing above.
+			UpdateStairHover(PeekTurnBased || bCornerPeekCursor || bClickPreview ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
+		}
 		// Bug C 2026-10-26: the squad in the formation wall layout - its guide lines along / round its wall under the cursor.
 		if (!bFreezeCoverHoverForTesting)
 		{

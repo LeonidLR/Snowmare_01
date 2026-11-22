@@ -252,6 +252,13 @@ public:
 	/** Hit is the floor inside a building of the storey index (RoofCutawayRules::IsInteriorFloorHit); OutBuilding / OutStorey when it is. */
 	bool IsInteriorFloor(const FHitResult& Hit, FString* OutBuilding = nullptr, int32* OutStorey = nullptr) const;
 
+	/**
+	 * Designer 2026-11-22: inside, the storeys above are cut - how to send the squad up a floor he cannot see. When Hit is a stair piece
+	 * (tag stair=<id>) of the building Selected stands in, the navmesh spot of the NEXT storey up (or the walkable roof) over the hit -
+	 * the landing the flight leads to - is OutFeet (the controller shows a silhouette there; a click walks the squad up).
+	 */
+	bool FindStairUpTarget(const FHitResult& Hit, const AOperativeCharacter& Selected, FVector& OutFeet) const;
+
 	/** The base height of Building's Storey (false when unknown). */
 	bool GetStoreyBaseZ(const FString& Building, int32 Storey, float& OutZ) const;
 
