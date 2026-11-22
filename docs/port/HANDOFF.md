@@ -39,8 +39,8 @@ slab f+1 = f+1, stair glass column modules by their centre, drains one pipe per 
 group / **storey**, component tags `building=<id>` + `floor=<n>`; the showcase has 271 components (was 161). Smoke
 `RoofCutawayStoreySmoke` (`building=`, `storeys=0+1+2`, `shots=1 dir=`): grey and dressed showcase S04 storeys 0 / 1 / 2 and dressed S07 PASS
 (before = `Storeys 0` logged per storey); pictures `Saved/StoryShowcase/cutaway/` (old dresser: `old_dresser/`). Dressed map rebuilt
-(untracked), LevelGenBuildingsSmoke 6/6. Open: the cut storeys still cast their shadows (old design: the interior is not sunlit) - the
-inside reads dark; a shadow-off variant is the designer's call.
+(untracked), LevelGenBuildingsSmoke 6/6. Designer decision the same day: cut pieces cast no shadow (CVar `Codex.RoofCutaway.HiddenShadow`
+0; 1 = the old dark interior; set on cut, restored with the piece; test `RoofCutaway.HiddenShadow`); pictures `*_noshadow.png`.
 
 **Building generator branch `claude/building-generator` (2026-11-21, not in main).** Residential blocks are planned from a template catalog (`building_plans.json` `recipes.block.templates`, default `block_khrushchevka`, series 1-464) with the kit pattern of the
 Soviet panel-block pack (three flats per landing round a half-landing switchback core on the court side, flats with hall / bath / kitchen /
