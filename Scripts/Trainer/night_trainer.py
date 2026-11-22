@@ -27,6 +27,7 @@ sys.path.insert(0, HERE)
 
 from nighttrainer.runner import InstanceLock  # noqa: E402
 from nighttrainer.trainer import Trainer  # noqa: E402
+from nighttrainer.gate import evaluate_training_gate  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
 
@@ -53,6 +54,11 @@ def parse_args(argv=None):
                          "fight-flow stats (<run>/check/flow_stats.json)")
     ap.add_argument("--check-jobs", type=int, default=1, help="with --check: arena jobs (different seeds)")
     ap.add_argument("--no-clips", action="store_true", help="with --check: skip the highlight clips")
+    ap.add_argument("--check-gate", action="store_true", help="run training gate checks and exit 0 (PASS) or 1 (BLOCKED)")
+    ap.add_argument("--gate-probe", help="path to probe arena result / track JSON for gate metric liveness")
+    ap.add_argument("--gate-baseline", help="path to baseline rounds JSON for gate baseline check")
+    ap.add_argument("--gate-sweep", help="path to sweep-result.json for gate smoke check")
+    ap.add_argument("--gate-out", help="path to write gate_result.json output")
     ap.add_argument("--repo-root", default=REPO_ROOT)
     return ap.parse_args(argv)
 
@@ -70,6 +76,10 @@ def main(argv=None) -> int:
     args = parse_args(argv)
     with open(args.config, "r", encoding="utf-8-sig") as f:
         cfg = json.load(f)
+
+    if args.check_gate:
+        return _check_gate(args, cfg)
+
     if args.population:
         cfg["evolution"]["population"] = args.population
     if args.rounds_per_job:
@@ -90,6 +100,67 @@ def main(argv=None) -> int:
     finally:
         if lock:
             lock.release()
+
+
+def _check_gate(args, cfg) -> int:
+    probe_data = None
+    if args.gate_probe and os.path.isfile(args.gate_probe):
+        with open(args.gate_probe, "r", encoding="utf-8-sig") as f:
+            probe_data = json.load(f)
+
+    baseline_data = None
+    baseline_path = args.gate_baseline or os.path.join(args.repo_root, "Saved", "Trainer", "baseline.json")
+    if os.path.isfile(baseline_path):
+        with open(baseline_path, "r", encoding="utf-8-sig") as f:
+            baseline_data = json.load(f)
+
+    sweep_data = None
+    sweep_path = args.gate_sweep or os.path.join(args.repo_root, "Saved", "Reports", "sweep-result.json")
+    if os.path.isfile(sweep_path):
+        with open(sweep_path, "r", encoding="utf-8-sig") as f:
+            sweep_data = json.load(f)
+
+    gate_res = evaluate_training_gate(cfg, probe_data=probe_data, baseline_data=baseline_data, sweep_data=sweep_data)
+
+    trainer_saved = os.path.join(args.repo_root, "Saved", "Trainer")
+    os.makedirs(trainer_saved, exist_ok=True)
+    pass_file = os.path.join(trainer_saved, "gate_pass.json")
+    blocked_file = os.path.join(trainer_saved, "gate_blocked.json")
+
+    out_path = args.gate_out
+    if not out_path:
+        out_path = pass_file if gate_res["passed"] else blocked_file
+
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(gate_res, f, indent=2)
+
+    # Stale gate pass deletion on BLOCKED (Review 091 Point 4)
+    if not gate_res["passed"]:
+        if os.path.isfile(pass_file):
+            try:
+                os.remove(pass_file)
+            except OSError:
+                pass
+    else:
+        if os.path.isfile(blocked_file):
+            try:
+                os.remove(blocked_file)
+            except OSError:
+                pass
+
+    status_str = "PASS" if gate_res["passed"] else "BLOCKED"
+    print(f"============================================================")
+    print(f" TRAINING GATE: {status_str}")
+    print(f"============================================================")
+    for check_name, check_info in gate_res["checks"].items():
+        c_status = "PASS" if check_info["passed"] else "FAIL"
+        print(f" • {check_name}: {c_status}")
+        for issue in check_info.get("issues", []):
+            print(f"     - {issue}")
+    print(f"Result written to {out_path}")
+    print(f"============================================================")
+    return 0 if gate_res["passed"] else 1
 
 
 def _run(args, cfg, run_id) -> int:
