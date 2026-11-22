@@ -1,5 +1,15 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**Cursor through the storey cutaway (`claude/bgen-test`, 2026-11-22, designer test of the dressed showcase items 5 + 4; isolated game C++,
+cherry-pickable).** Clicks with the storey cutaway on landed on the invisible upper storey (dressed S04: 70 / 96 far-floor rays stopped on a
+hidden grey proxy of a storey above - proxies carry the collision and are never "cut") and on his storey's wall tops under the cut storeys
+(grey S04: 19 / 96; a wall top is the cover rule's "high wall top" -> the exterior cover hug of item 4). `URoofCutawaySubsystem::RefineCursorHit`
+(`Codex.Cursor.ThroughCutaway` 1) re-traces the ray past cut pieces, pieces of the selected man's building above his storey and his storey's
+wall tops (not stairs); `ACodexTacticsPlayerController::GetCursorHit` serves every controller cursor trace; a visible interior floor is never
+"the ground behind a high wall" (`IsInteriorFloor`). Tests `CodexTactics.Camera.RoofCutaway.Cursor.*` (RoofCutaway 10/10); smoke
+`CutawayClickSmoke` PASS grey (storeys 0/1/2) and dressed (0/1): 0 hidden-storey / wall-top hits, 145 + 97 floor clicks all moves on his
+storey to the clicked point, 0 cover orders; `RoofCutawayStoreySmoke` PASS both maps. Doc: `docs/systems/camera-hud-minimap.md`.
+
 **Confined entry: door mouth + the leader makes room (`claude/bgen-test`, 2026-11-22, Lead day plan row 4; designer 2026-11-21 "everybody
 must get in"; isolated formation code, cherry-pickable).** The walk smoke's FOLLOWER_STUCK hall legs had no mesh behind them: the "stuck
 mesh" actors of the morning digest (kit StaticMeshActor_258 / _1024 / _1200, grey _2853 / _2951) all lie 40-55 cm from a 150 cm flat-door

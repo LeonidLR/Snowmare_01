@@ -45,6 +45,14 @@ struct FRoofCutawayConfig
 	float StoreyClaimMarginCm = 50.f;
 	/** The storey index (tags read from the level) is rebuilt this often: spawned / destroyed pieces, s. */
 	float StoreyIndexRefreshSeconds = 5.f;
+
+	// Cursor through the cutaway (designer bug 2026-11-22 on the dressed showcase: "clicks land on the invisible upper storey"; CVar
+	// Codex.Cursor.ThroughCutaway): the cursor ray skips what the storey rule hides for the selected operative.
+
+	/** A cursor hit on a piece of the selected man's own storey this close under its ceiling (a wall's top under the cut storey) is skipped, cm. */
+	float CursorCeilingSlackCm = 30.f;
+	/** Pieces one cursor ray may skip before it gives up (keeps the last hit). */
+	int32 CursorMaxSkips = 12;
 };
 
 /** Pure rules of the roof cutaway (tested in CodexTactics.Camera.RoofCutaway.*). */
@@ -150,6 +158,25 @@ namespace RoofCutawayRules
 
 	/** An untagged piece belongs to the building whose slabs span SlabBounds: its centre within MarginCm of them, no wider than them + 2 x MarginCm. */
 	CODEXTACTICS_API bool ClaimsUntaggedPiece(const FBox& SlabBounds, const FBox& Piece, float MarginCm);
+
+	// --- Cursor through the cutaway (designer bug 2026-11-22: "clicks hit the hidden storeys", "a click on the flat's floor hugs the
+	// exterior wall") ---
+
+	/**
+	 * The cursor ray passes through this hit (traced on): the piece is cut away now; or it is a piece of the selected man's building
+	 * (PieceStorey != INDEX_NONE, his storey SelectedStorey != INDEX_NONE) on a storey above his - hidden, a kit-dressed map's grey proxies
+	 * included (they carry the collision the kit lacks); or a piece of his storey hit within CeilingSlackCm under its ceiling (SelectedCeilingZ:
+	 * the base of the storey above) - the top of a wall under the cut storeys - unless it is a stair (bStairPiece: the flight up is visible).
+	 */
+	CODEXTACTICS_API bool ShouldSkipCursorHit(bool bCutAway, int32 PieceStorey, int32 SelectedStorey, float HitZ, float SelectedCeilingZ, bool bStairPiece,
+		float CeilingSlackCm);
+
+	/**
+	 * A hit is the floor INSIDE a building (it beats the cover hug on a wall: designer 2026-11-22): a floor-like surface (ImpactNormalZ >= 0.7)
+	 * over one of the building's slabs (DistanceToSlabsCm <= 0), from its lowest storey's base (- ToleranceCm) up to under its roof top
+	 * (RoofTopZ - ToleranceCm: the roof itself is outside).
+	 */
+	CODEXTACTICS_API bool IsInteriorFloorHit(float ImpactNormalZ, float DistanceToSlabsCm, float HitZ, float BottomZ, float RoofTopZ, float ToleranceCm);
 }
 
 /**
@@ -211,6 +238,23 @@ public:
 	/** Rebuilds the storey index now (smokes; a pass rebuilds it every StoreyIndexRefreshSeconds). */
 	void RebuildStoreyIndex();
 
+	/**
+	 * The cursor hit through the cutaway (designer bug 2026-11-22; Codex.Cursor.ThroughCutaway 0 = the hit as it is): while InOutHit is a piece
+	 * the ray must pass (RoofCutawayRules::ShouldSkipCursorHit for Selected, the selected operative: cut pieces, the hidden storeys above his
+	 * in his building, the wall tops under them), the ray (InOutHit.TraceStart -> TraceEnd) is traced again past it on Channel. Returns
+	 * whether a blocking hit is left. Every cursor trace of the player controller goes through it (move, cover, door, hover).
+	 */
+	bool RefineCursorHit(FHitResult& InOutHit, ECollisionChannel Channel, const AOperativeCharacter* Selected) const;
+
+	/** A cursor ray Start -> End on Channel, refined as RefineCursorHit (smokes: a click from any camera without a viewport). */
+	bool TraceCursorRay(const FVector& Start, const FVector& End, ECollisionChannel Channel, const AOperativeCharacter* Selected, FHitResult& OutHit) const;
+
+	/** Hit is the floor inside a building of the storey index (RoofCutawayRules::IsInteriorFloorHit); OutBuilding / OutStorey when it is. */
+	bool IsInteriorFloor(const FHitResult& Hit, FString* OutBuilding = nullptr, int32* OutStorey = nullptr) const;
+
+	/** The base height of Building's Storey (false when unknown). */
+	bool GetStoreyBaseZ(const FString& Building, int32 Storey, float& OutZ) const;
+
 	/** Cut / restore notifications (the dithered fade hook). */
 	FOnRoofCutawayChanged OnCutawayChanged;
 
@@ -246,6 +290,8 @@ private:
 	};
 	/** Index into StoreyBuildings of the building whose slabs he is over / under (INDEX_NONE: none) and his storey there. */
 	int32 FindOperativeStorey(const FVector& FloorLocation, float FeetZ, const FString* WasInside, int32& OutStorey) const;
+	/** The ceiling of a building's storey: the base of the storey above (the roof top over the top one), cm. */
+	float GetStoreyCeilingZ(int32 BuildingIndex, int32 Storey) const;
 	/** Feet height of Operative at his floor reference (the floor he left while on a ladder). */
 	static float GetFloorFeetZ(const AOperativeCharacter& Operative, FVector& OutLocation);
 	/** Traits of Piece (its owner's class / tags). */

@@ -117,7 +117,7 @@ void ACodexTacticsPlayerController::OnClick()
 	if (IsFormationPlacementActive())
 	{
 		FHitResult PlacementHit;
-		if (GetHitResultUnderCursor(ECC_Visibility, false, PlacementHit) && PlacementHit.bBlockingHit)
+		if (GetCursorHit(PlacementHit) && PlacementHit.bBlockingHit)
 		{
 			HandleFormationPlacementPress(PlacementHit);
 		}
@@ -139,7 +139,7 @@ void ACodexTacticsPlayerController::OnClick()
 	if (USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>(); Transfer && Transfer->IsTransferring() && !bOrdersLocked)
 	{
 		FHitResult Hit;
-		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+		if (GetCursorHit(Hit))
 		{
 			Transfer->HandleClick(Hit.ImpactPoint, Hit.GetActor());
 		}
@@ -235,7 +235,7 @@ void ACodexTacticsPlayerController::OnClickReleased()
 		return;
 	}
 	FHitResult Hit;
-	if (GetSquad() && GetSquad()->GetLeader() && GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+	if (GetSquad() && GetSquad()->GetLeader() && GetCursorHit(Hit))
 	{
 		HandlePlayerClick(Hit); // R17-3: the building click (first click = ghost, second = do it), else HandleWorldHit
 	}

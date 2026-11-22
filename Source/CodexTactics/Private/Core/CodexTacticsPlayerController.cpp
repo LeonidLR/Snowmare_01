@@ -20,6 +20,7 @@
 #include "UI/DialogueRules.h"
 #include "Tactics/CoverGhostActor.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Camera/RoofCutawaySubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/DoorSubsystem.h"
@@ -457,7 +458,7 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	if (UTurnBasedCombatSubsystem* HoverTurnBased = GetActiveTurnBased())
 	{
 		FHitResult Hit;
-		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+		if (GetCursorHit(Hit))
 		{
 			HoverTurnBased->SetHoveredPoint(Hit.ImpactPoint, Hit.GetActor());
 		}
@@ -466,7 +467,7 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	if (UTurnBasedCombatSubsystem* GhostTurnBased = GetActiveTurnBased(); GhostTurnBased && GhostTurnBased->IsRelocating())
 	{
 		FHitResult Hit;
-		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+		if (GetCursorHit(Hit))
 		{
 			GhostTurnBased->SetRelocationHover(Hit.ImpactPoint);
 		}
@@ -476,7 +477,7 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	if (USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>(); Transfer && Transfer->IsTransferring())
 	{
 		FHitResult Hit;
-		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+		if (GetCursorHit(Hit))
 		{
 			Transfer->UpdatePreview(Hit.ImpactPoint, Hit.GetActor());
 		}
@@ -510,7 +511,20 @@ bool ACodexTacticsPlayerController::CursorHitForHover(FHitResult& OutHit) const
 		OutHit = SimulatedCursorHitForTesting;
 		return OutHit.bBlockingHit;
 	}
-	return GetHitResultUnderCursor(ECC_Visibility, false, OutHit);
+	return GetCursorHit(OutHit);
+}
+
+bool ACodexTacticsPlayerController::GetCursorHit(FHitResult& OutHit) const
+{
+	if (!GetHitResultUnderCursor(ECC_Visibility, false, OutHit))
+	{
+		return false;
+	}
+	const URoofCutawaySubsystem* Roofs = GetWorld() ? GetWorld()->GetSubsystem<URoofCutawaySubsystem>() : nullptr;
+	const USquadSubsystem* Squad = GetSquad();
+	const UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased();
+	const AOperativeCharacter* Selected = TurnBased ? TurnBased->GetActiveUnit() : (Squad ? Squad->GetLeader() : nullptr);
+	return Roofs ? Roofs->RefineCursorHit(OutHit, ECC_Visibility, Selected) : true;
 }
 
 bool ACodexTacticsPlayerController::IsAttackModifierDown() const

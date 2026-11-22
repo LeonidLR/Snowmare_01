@@ -209,4 +209,40 @@ bool FRoofCutawayStoreyInsideTest::RunTest(const FString&)
 	return true;
 }
 
+ROOF_CUTAWAY_TEST(FRoofCutawayCursorSkipTest, "Cursor.SkipsHiddenStoreys")
+bool FRoofCutawayCursorSkipTest::RunTest(const FString&)
+{
+	// Designer bug 2026-11-22 (dressed showcase): the cursor ray passes what the storey cutaway hides for the selected man.
+	using namespace RoofCutawayRules;
+	const FRoofCutawayConfig Config;
+	const float Slack = Config.CursorCeilingSlackCm;
+	// He is on storey 0 (base 0), the storey above starts at 300.
+	TestTrue(TEXT("a cut piece is always passed"), ShouldSkipCursorHit(true, INDEX_NONE, INDEX_NONE, 0.f, 300.f, false, Slack));
+	TestTrue(TEXT("storey 1 of his building (hidden, a kit map's grey proxy too)"), ShouldSkipCursorHit(false, 1, 0, 310.f, 300.f, false, Slack));
+	TestTrue(TEXT("the roof storey of his building"), ShouldSkipCursorHit(false, 2, 0, 610.f, 300.f, false, Slack));
+	TestFalse(TEXT("his own floor"), ShouldSkipCursorHit(false, 0, 0, 5.f, 300.f, false, Slack));
+	TestFalse(TEXT("a wall face of his storey at chest height"), ShouldSkipCursorHit(false, 0, 0, 120.f, 300.f, false, Slack));
+	TestTrue(TEXT("the top of a wall of his storey under the cut storey"), ShouldSkipCursorHit(false, 0, 0, 290.f, 300.f, false, Slack));
+	TestFalse(TEXT("the top of the stair flight up (visible)"), ShouldSkipCursorHit(false, 0, 0, 295.f, 300.f, true, Slack));
+	TestFalse(TEXT("a storey below his (visible through the stair hole)"), ShouldSkipCursorHit(false, 0, 1, 5.f, 600.f, false, Slack));
+	TestFalse(TEXT("another building (no storey of his)"), ShouldSkipCursorHit(false, INDEX_NONE, 0, 900.f, 300.f, false, Slack));
+	TestFalse(TEXT("he is in no building"), ShouldSkipCursorHit(false, 1, INDEX_NONE, 310.f, TNumericLimits<float>::Max(), false, Slack));
+	TestFalse(TEXT("on the roof storey nothing is passed"), ShouldSkipCursorHit(false, 2, 2, 650.f, TNumericLimits<float>::Max(), false, Slack));
+	return true;
+}
+
+ROOF_CUTAWAY_TEST(FRoofCutawayInteriorFloorTest, "Cursor.InteriorFloor")
+bool FRoofCutawayInteriorFloorTest::RunTest(const FString&)
+{
+	// Designer bug 2026-11-22: a click on a visible floor inside a building beats the cover hug on its wall.
+	using namespace RoofCutawayRules;
+	TestTrue(TEXT("the floor of a ground-floor flat"), IsInteriorFloorHit(1.f, 0.f, 2.f, 0.f, 620.f, 50.f));
+	TestTrue(TEXT("the floor of storey 1"), IsInteriorFloorHit(1.f, 0.f, 305.f, 0.f, 620.f, 50.f));
+	TestFalse(TEXT("a wall face"), IsInteriorFloorHit(0.f, 0.f, 120.f, 0.f, 620.f, 50.f));
+	TestFalse(TEXT("the street beside the house"), IsInteriorFloorHit(1.f, 35.f, 0.f, 0.f, 620.f, 50.f));
+	TestFalse(TEXT("the roof top (outside)"), IsInteriorFloorHit(1.f, 0.f, 620.f, 0.f, 620.f, 50.f));
+	TestFalse(TEXT("a pit under the house"), IsInteriorFloorHit(1.f, 0.f, -200.f, 0.f, 620.f, 50.f));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

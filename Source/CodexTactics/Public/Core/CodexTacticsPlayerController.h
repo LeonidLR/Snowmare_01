@@ -317,6 +317,13 @@ public:
 	/** The cursor's hit for PlayerTick's hover block (the simulated one in smokes). */
 	bool CursorHitForHover(FHitResult& OutHit) const;
 
+	/**
+	 * Every cursor trace of the controller (move, cover, door, hover, placement; designer bug 2026-11-22 "clicks hit the hidden storeys"): the
+	 * hit under the cursor on Visibility, refined through the storey cutaway for the selected operative (URoofCutawaySubsystem::RefineCursorHit:
+	 * cut pieces, the storeys above his, the wall tops under them are passed through).
+	 */
+	bool GetCursorHit(FHitResult& OutHit) const;
+
 	// --- R17-5 doorway breach (designer 2026-11-17 with R17-3; DOORWAY_BREACH.md, CodexTacticsPlayerControllerBreach.cpp) ---
 
 	/** The breach session's phase: none, the stack walking to its slots, stacked (a click inside the room enters), entering, cleared. */

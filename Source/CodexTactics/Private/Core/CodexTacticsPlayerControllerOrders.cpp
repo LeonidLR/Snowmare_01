@@ -850,7 +850,7 @@ void ACodexTacticsPlayerController::AssignDefenseUnderCursor()
 	USquadAutonomySubsystem* Autonomy = GetWorld()->GetSubsystem<USquadAutonomySubsystem>();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	FHitResult Hit;
-	if (!Leader || !GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+	if (!Leader || !GetCursorHit(Hit))
 	{
 		return;
 	}
@@ -1308,7 +1308,7 @@ void ACodexTacticsPlayerController::VehicleKey(bool bSquadWide)
 	{
 		// The hovered vehicle wins when several are near (design 1.1).
 		FHitResult Hover;
-		AVehiclePawn* Hovered = GetHitResultUnderCursor(ECC_Visibility, false, Hover) ? Cast<AVehiclePawn>(Hover.GetActor()) : nullptr;
+		AVehiclePawn* Hovered = GetCursorHit(Hover) ? Cast<AVehiclePawn>(Hover.GetActor()) : nullptr;
 		HideCoverPreview();
 		Vehicles->HandleBoardKey(bSquadWide, Hovered);
 	}

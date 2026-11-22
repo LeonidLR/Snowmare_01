@@ -7,6 +7,7 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "Camera/PlayerCameraManager.h"
+#include "Camera/RoofCutawaySubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -115,6 +116,12 @@ bool ACodexTacticsPlayerController::ResolveWallSideSlot(const FHitResult& Hit, F
 
 	// 2. The ground right behind a high wall (the band it hides from the camera), the leader on its other side. Not his own cover object
 	// while he is in cover: the ground round it is his wrap along it (TryHandleCoverWrapClick), as before.
+	// Never a floor INSIDE a building (designer bug 2026-11-22: "a click on the flat's floor made him hug the exterior wall outside"): a
+	// visible interior floor is a move there, through the doors (the storey cutaway shows it; the wall in front of it is the building's own).
+	if (const URoofCutawaySubsystem* Roofs = World->GetSubsystem<URoofCutawaySubsystem>(); Roofs && Roofs->IsInteriorFloor(Hit))
+	{
+		return false;
+	}
 	const FVector Chest = Hit.ImpactPoint + FVector(0.f, 0.f, GroundProbeChestCm);
 	FHitResult Back;
 	if (!World->LineTraceSingleByChannel(Back, Chest, Chest - View * WallSideRules::FarGroundReachMaxCm, ECC_Visibility, Params)

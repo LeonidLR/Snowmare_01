@@ -27,6 +27,9 @@ namespace
 	TAutoConsoleVariable<int32> CVarRoofCutawayHiddenShadow(TEXT("Codex.RoofCutaway.HiddenShadow"), 0,
 		TEXT("Designer 2026-11-22: 0 = a cut-away roof / storey casts no shadow (and no distance-field shadow / AO): the interior is lit; 1 = it keeps casting its shadow (the old rule). Applied when a piece is cut; its own setting comes back on restore"));
 
+	TAutoConsoleVariable<int32> CVarCursorThroughCutaway(TEXT("Codex.Cursor.ThroughCutaway"), 1,
+		TEXT("Designer bug 2026-11-22 (dressed showcase: clicks land on the invisible upper storey): 1 = every cursor trace passes through what the storey cutaway hides for the selected operative - cut pieces, the storeys above his in his building (the kit map's hidden grey proxies too), the wall tops under them; 0 = the raw cursor hit (A/B)"));
+
 	/** A building's slab tags (the level generator: build_levelgen_map.py floor / roof slabs). */
 	const FName FloorSlabTag(TEXT("floor_slab"));
 	const FName RoofSlabTag(TEXT("roof_slab"));
@@ -205,6 +208,39 @@ namespace RoofCutawayRules
 		const bool bNotWider = Piece.Max.X - Piece.Min.X <= SlabBounds.Max.X - SlabBounds.Min.X + 2.f * MarginCm
 			&& Piece.Max.Y - Piece.Min.Y <= SlabBounds.Max.Y - SlabBounds.Min.Y + 2.f * MarginCm;
 		return bCentreIn && bNotWider;
+	}
+
+	bool ShouldSkipCursorHit(bool bCutAway, int32 PieceStorey, int32 SelectedStorey, float HitZ, float SelectedCeilingZ, bool bStairPiece, float CeilingSlackCm)
+	{
+		if (bCutAway)
+		{
+			return true;
+		}
+		if (PieceStorey == INDEX_NONE || SelectedStorey == INDEX_NONE)
+		{
+			return false; // another building, a piece without a storey, or he is in no building: the hit is what he sees
+		}
+		if (PieceStorey > SelectedStorey)
+		{
+			return true; // a storey the cutaway hides (or is about to)
+		}
+		return PieceStorey == SelectedStorey && !bStairPiece && HitZ >= SelectedCeilingZ - CeilingSlackCm;
+	}
+
+	bool IsInteriorFloorHit(float ImpactNormalZ, float DistanceToSlabsCm, float HitZ, float BottomZ, float RoofTopZ, float ToleranceCm)
+	{
+		return ImpactNormalZ >= 0.7f && DistanceToSlabsCm <= 0.f && HitZ >= BottomZ - ToleranceCm && HitZ <= RoofTopZ - ToleranceCm;
+	}
+}
+
+namespace
+{
+	/** The piece (its actor or itself) is a stair flight / landing of the generator (tag stair=<id>). */
+	bool IsStairPiece(const UPrimitiveComponent& Piece)
+	{
+		const auto IsStairTag = [](const FName& Tag) { return Tag.ToString().StartsWith(TEXT("stair="), ESearchCase::CaseSensitive); };
+		const AActor* Owner = Piece.GetOwner();
+		return Piece.ComponentTags.ContainsByPredicate(IsStairTag) || (Owner && Owner->Tags.ContainsByPredicate(IsStairTag));
 	}
 }
 
@@ -477,6 +513,167 @@ TArray<FBox> URoofCutawaySubsystem::GetStoreySlabs(const FString& BuildingId) co
 {
 	const FStoreyBuilding* Building = StoreyBuildings.FindByPredicate([&BuildingId](const FStoreyBuilding& B) { return B.Id == BuildingId; });
 	return Building ? Building->Slabs : TArray<FBox>();
+}
+
+float URoofCutawaySubsystem::GetStoreyCeilingZ(int32 BuildingIndex, int32 Storey) const
+{
+	if (!StoreyBuildings.IsValidIndex(BuildingIndex))
+	{
+		return TNumericLimits<float>::Max();
+	}
+	for (const RoofCutawayRules::FStoreyBase& Base : StoreyBuildings[BuildingIndex].Bases)
+	{
+		if (Base.Storey > Storey)
+		{
+			return Base.BaseZ; // Bases are sorted by storey: the next one up
+		}
+	}
+	return TNumericLimits<float>::Max(); // the roof storey: nothing over it is cut
+}
+
+bool URoofCutawaySubsystem::GetStoreyBaseZ(const FString& BuildingId, int32 Storey, float& OutZ) const
+{
+	if (const FStoreyBuilding* Building = StoreyBuildings.FindByPredicate([&BuildingId](const FStoreyBuilding& B) { return B.Id == BuildingId; }))
+	{
+		for (const RoofCutawayRules::FStoreyBase& Base : Building->Bases)
+		{
+			if (Base.Storey == Storey)
+			{
+				OutZ = Base.BaseZ;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool URoofCutawaySubsystem::RefineCursorHit(FHitResult& Hit, ECollisionChannel Channel, const AOperativeCharacter* Selected) const
+{
+	if (!Hit.bBlockingHit || CVarCursorThroughCutaway.GetValueOnGameThread() == 0 || CVarRoofCutaway.GetValueOnGameThread() == 0)
+	{
+		return Hit.bBlockingHit;
+	}
+	int32 SelectedBuilding = INDEX_NONE;
+	int32 SelectedStorey = INDEX_NONE;
+	float Ceiling = TNumericLimits<float>::Max();
+	if (Selected && CVarRoofCutawayStoreys.GetValueOnGameThread() != 0 && !StoreyBuildings.IsEmpty())
+	{
+		FVector Location;
+		const float FeetZ = GetFloorFeetZ(*Selected, Location);
+		SelectedBuilding = FindOperativeStorey(Location, FeetZ, LastStoreyBuilding.Find(Selected), SelectedStorey);
+		Ceiling = GetStoreyCeilingZ(SelectedBuilding, SelectedStorey);
+	}
+	const auto Skip = [this, SelectedBuilding, SelectedStorey, Ceiling](const FHitResult& Candidate)
+	{
+		const UPrimitiveComponent* Piece = Candidate.GetComponent();
+		if (!Piece)
+		{
+			return false;
+		}
+		int32 PieceStorey = INDEX_NONE;
+		if (SelectedBuilding != INDEX_NONE)
+		{
+			if (const TPair<int32, int32>* Of = StoreyOfPiece.Find(Piece); Of && Of->Key == SelectedBuilding)
+			{
+				PieceStorey = Of->Value;
+			}
+		}
+		return RoofCutawayRules::ShouldSkipCursorHit(IsCutAway(Piece), PieceStorey, SelectedStorey, static_cast<float>(Candidate.ImpactPoint.Z), Ceiling,
+			IsStairPiece(*Piece), Config.CursorCeilingSlackCm);
+	};
+	if (!Skip(Hit))
+	{
+		return true;
+	}
+	UWorld* World = GetWorld();
+	const FVector Start = Hit.TraceStart;
+	const FVector End = Hit.TraceEnd;
+	if (!World || Start.Equals(End, 1.0))
+	{
+		return true; // a constructed hit (no ray): kept
+	}
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(CursorThroughCutaway), false);
+	FString Skipped;
+	for (int32 Step = 0; Step < Config.CursorMaxSkips; ++Step)
+	{
+		UPrimitiveComponent* Piece = Hit.GetComponent();
+		if (!Piece)
+		{
+			break;
+		}
+		Params.AddIgnoredComponent(Piece);
+		if (Skipped.Len() < 400)
+		{
+			Skipped += FString::Printf(TEXT(" %s.%s@%.0f"), Piece->GetOwner() ? *Piece->GetOwner()->GetName() : TEXT("-"), *Piece->GetName(), Hit.ImpactPoint.Z);
+		}
+		FHitResult Next;
+		if (!World->LineTraceSingleByChannel(Next, Start, End, Channel, Params))
+		{
+			UE_LOG(LogCodexTactics, Verbose, TEXT("[Cursor] through the cutaway:%s -> nothing behind"), *Skipped);
+			Hit = FHitResult(1.f);
+			Hit.TraceStart = Start;
+			Hit.TraceEnd = End;
+			return false;
+		}
+		Hit = Next;
+		if (!Skip(Hit))
+		{
+			break;
+		}
+	}
+	UE_LOG(LogCodexTactics, Verbose, TEXT("[Cursor] through the cutaway (selected on storey %d):%s -> %s at %s"), SelectedStorey, *Skipped,
+		*GetNameSafe(Hit.GetActor()), *Hit.ImpactPoint.ToCompactString());
+	return Hit.bBlockingHit;
+}
+
+bool URoofCutawaySubsystem::TraceCursorRay(const FVector& Start, const FVector& End, ECollisionChannel Channel, const AOperativeCharacter* Selected,
+	FHitResult& OutHit) const
+{
+	OutHit = FHitResult(1.f);
+	OutHit.TraceStart = Start;
+	OutHit.TraceEnd = End;
+	UWorld* World = GetWorld();
+	if (!World || !World->LineTraceSingleByChannel(OutHit, Start, End, Channel, FCollisionQueryParams(SCENE_QUERY_STAT(ClickableTrace), false)))
+	{
+		return false;
+	}
+	return RefineCursorHit(OutHit, Channel, Selected);
+}
+
+bool URoofCutawaySubsystem::IsInteriorFloor(const FHitResult& Hit, FString* OutBuilding, int32* OutStorey) const
+{
+	if (!Hit.bBlockingHit)
+	{
+		return false;
+	}
+	const FVector2D P(Hit.ImpactPoint.X, Hit.ImpactPoint.Y);
+	const float Z = static_cast<float>(Hit.ImpactPoint.Z);
+	for (const FStoreyBuilding& Building : StoreyBuildings)
+	{
+		if (Building.Bases.IsEmpty() || !Building.SlabBounds.IsValid)
+		{
+			continue;
+		}
+		float Distance = TNumericLimits<float>::Max();
+		for (const FBox& Slab : Building.Slabs)
+		{
+			Distance = FMath::Min(Distance, RoofCutawayRules::DistanceToBox2D(Slab, P));
+		}
+		if (RoofCutawayRules::IsInteriorFloorHit(static_cast<float>(Hit.ImpactNormal.Z), Distance, Z, Building.Bases[0].BaseZ,
+			static_cast<float>(Building.SlabBounds.Max.Z), Config.StoreyToleranceCm))
+		{
+			if (OutBuilding)
+			{
+				*OutBuilding = Building.Id;
+			}
+			if (OutStorey)
+			{
+				*OutStorey = RoofCutawayRules::StoreyAt(Building.Bases, Z, Config.StoreyToleranceCm);
+			}
+			return true;
+		}
+	}
+	return false;
 }
 
 void URoofCutawaySubsystem::RebuildStoreyIndex()
