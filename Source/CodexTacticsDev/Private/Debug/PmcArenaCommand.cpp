@@ -3024,21 +3024,28 @@ namespace PmcArena
 		Check(State, Json->TryGetObjectField(TEXT("summary"), Summary) && (*Summary)->HasField(TEXT("A_wins")), TEXT("summary present"));
 	}
 
+	/** Puts ai.nav.GNavmeshSynchronousTileGeneration back to its value before the arena forced it on (no-op when it did not). */
+	void RestoreSyncNavTiles()
+	{
+		if (SavedSyncNavTiles == INDEX_NONE)
+		{
+			return;
+		}
+		if (IConsoleVariable* SyncNav = IConsoleManager::Get().FindConsoleVariable(TEXT("ai.nav.GNavmeshSynchronousTileGeneration")))
+		{
+			SyncNav->Set(SavedSyncNavTiles, ECVF_SetByConsole);
+		}
+		SavedSyncNavTiles = INDEX_NONE;
+	}
+
 	bool Finish(FState& State, UWorld* World, bool bComplete)
 	{
+		RestoreSyncNavTiles(); // also for a world already gone
 		if (World)
 		{
 			if (UCodexGameplayRandom* Random = UCodexGameplayRandom::Get(World))
 			{
 				Random->Unseed(); // back to the global draws (an arena run in a PIE / editor world)
-			}
-			if (SavedSyncNavTiles != INDEX_NONE)
-			{
-				if (IConsoleVariable* SyncNav = IConsoleManager::Get().FindConsoleVariable(TEXT("ai.nav.GNavmeshSynchronousTileGeneration")))
-				{
-					SyncNav->Set(SavedSyncNavTiles, ECVF_SetByConsole);
-				}
-				SavedSyncNavTiles = INDEX_NONE;
 			}
 			if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
 			{
@@ -3771,6 +3778,7 @@ namespace PmcArena
 		UWorld* World = WeakWorld.Get();
 		if (!World)
 		{
+			RestoreSyncNavTiles(); // the world went away mid-arena (PIE stopped): no Finish runs
 			return false;
 		}
 		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
@@ -3812,7 +3820,15 @@ namespace PmcArena
 				}
 				if (Now + KINDA_SMALL_NUMBER < State.StartGateWorldSeconds)
 				{
-					return true;
+					// Bounded: the grid is at most one quantum ahead of world time; a world whose clock stops (paused) fails the setup.
+					constexpr float StartGateTimeoutSeconds = 10.f;
+					if (State.StageTime < NavReadyTimeoutSeconds + StartGateTimeoutSeconds)
+					{
+						return true;
+					}
+					UE_LOG(LogCodexTactics, Error, TEXT("[PmcArenaNav] start-grid timeout: world %.3f s never reached %.1f s"), Now, State.StartGateWorldSeconds);
+					Check(State, false, TEXT("world time reaches the first round's start grid"));
+					return Finish(State, World, false);
 				}
 			}
 			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArenaNav] ready stage=%d waited=%.1fs nav=%s world=%.4f"), State.Stage, State.StageTime, *NavData->GetPathName(),

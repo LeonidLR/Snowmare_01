@@ -7,9 +7,10 @@
 
 namespace CodexRandomTrace
 {
-	/** Determinism hunt (2026-11-22): 1 logs every seeded gameplay draw - frame, stream, caller, value - so two runs of one seed can be diffed. */
+	/** Determinism hunt (2026-11-22): 1 logs every seeded gameplay draw - frame, stream, caller, value - so two runs of one seed can be diffed;
+	 *  2 also logs every operative's exact state per tick (AOperativeCharacter::Tick, non-shipping). */
 	static TAutoConsoleVariable<int32> CVarTrace(TEXT("Codex.Random.Trace"), 0,
-		TEXT("1: log every seeded gameplay random draw ([Rng] frame stream caller value) for determinism diffs."), ECVF_Default);
+		TEXT("Determinism diffs: 1 = log every seeded gameplay random draw ([Rng] frame stream caller value); 2 = also every operative's exact state per tick ([RngPos], non-shipping)."), ECVF_Default);
 }
 
 void FCodexRandomStreams::Seed(uint32 InSeed)
@@ -131,20 +132,22 @@ namespace CodexRandom
 			return Service && Service->IsSeeded() ? Service->GetStreams() : Unseeded;
 		}
 
-		void NoteText(const FCodexRandomStreams& S, ECodexRandomStream Category, const UObject* WorldContext, const FString& Value)
+		/** Whether the trace is on: checked before any string is built, so a normal (unseeded or untraced) draw pays one branch. */
+		bool TraceOn(const FCodexRandomStreams& S)
 		{
-			if (!S.IsSeeded() || CodexRandomTrace::CVarTrace.GetValueOnGameThread() <= 0)
-			{
-				return;
-			}
+			return S.IsSeeded() && CodexRandomTrace::CVarTrace.GetValueOnGameThread() > 0;
+		}
+
+		void NoteText(ECodexRandomStream Category, const UObject* WorldContext, const FString& Value)
+		{
 			UE_LOG(LogCodexTactics, Display, TEXT("[Rng] f=%llu s=%d ctx=%s v=%s"), static_cast<unsigned long long>(GFrameCounter),
 				static_cast<int32>(Category), WorldContext ? *WorldContext->GetName() : TEXT("-"), *Value);
 		}
-		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, float V) { NoteText(S, C, W, FString::Printf(TEXT("%.6f"), V)); }
-		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, int32 V) { NoteText(S, C, W, FString::FromInt(V)); }
-		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, bool V) { NoteText(S, C, W, V ? TEXT("1") : TEXT("0")); }
-		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, const FVector& V) { NoteText(S, C, W, FString::Printf(TEXT("%.5f,%.5f,%.5f"), V.X, V.Y, V.Z)); }
-		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, const FVector2D& V) { NoteText(S, C, W, FString::Printf(TEXT("%.4f,%.4f"), V.X, V.Y)); }
+		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, float V) { if (TraceOn(S)) { NoteText(C, W, FString::Printf(TEXT("%.6f"), V)); } }
+		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, int32 V) { if (TraceOn(S)) { NoteText(C, W, FString::FromInt(V)); } }
+		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, bool V) { if (TraceOn(S)) { NoteText(C, W, V ? TEXT("1") : TEXT("0")); } }
+		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, const FVector& V) { if (TraceOn(S)) { NoteText(C, W, FString::Printf(TEXT("%.5f,%.5f,%.5f"), V.X, V.Y, V.Z)); } }
+		void Note(const FCodexRandomStreams& S, ECodexRandomStream C, const UObject* W, const FVector2D& V) { if (TraceOn(S)) { NoteText(C, W, FString::Printf(TEXT("%.4f,%.4f"), V.X, V.Y)); } }
 	}
 
 	float FRand(ECodexRandomStream Category, const UObject* WorldContext)

@@ -5,6 +5,9 @@
 // same seed; unseeded (normal game, PIE, every other smoke) every draw is the global FMath one, exactly as before - no gameplay change.
 // Draws come from separate streams per consumer category so a cosmetic pick (an idle variant, a callout line) cannot shift the combat
 // sequence. Game thread only: a draw from another thread (or without a world) always falls back to FMath and never touches a stream.
+// Rule: never draw from an animation proxy's Update / Evaluate or any worker-thread task - those run on worker threads, fall back to FMath
+// and so break the replay silently. Draw on the game thread (NativeUpdateAnimation, Tick) and hand the result to the proxy.
+// Codex.Random.Trace (1 = every seeded draw, 2 = + every operative's state per tick) diffs two runs of one seed to their first fork.
 
 #include "CoreMinimal.h"
 #include "Math/RandomStream.h"
