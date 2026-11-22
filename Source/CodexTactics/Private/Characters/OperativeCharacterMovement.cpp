@@ -514,23 +514,16 @@ TSubclassOf<UNavigationQueryFilter> AOperativeCharacter::ChooseMoveFilter() cons
 	}
 	// Mantling slice 1: the mantle links (UNavArea_Mantle) are open only for the operative the player commands in Solo (bMantlePathAllowed).
 	const TSubclassOf<UNavigationQueryFilter> Chosen = bMantlePathAllowed ? Filter : MantleNavigation::NoMantleVariant(Filter);
-	// Window sills (designer 2026-11-22): Solo / a box selection may climb through a window on the way (faster, loud - no tactical entry);
-	// in FORMATION the men follow their commander through the doors only.
-	// A click on a window sill (SetWindowOrder) opens them for the whole order: the formation follows its commander through the window (the
-	// followers' window costs nothing, so they take it rather than a door round); without one nobody in the formation, the leader included,
-	// paths through a window (designer 2026-11-22: "only the commander climbed, the two walked round - the formation must stay together").
-	if (MoveSquad && !MoveSquad->IsSoloMode())
+	// Window sills - designer rule 2026-11-22, every mode (Solo, box selection, formation): a WHOLE window is a way through only on the
+	// player's window order (the silhouette click, SetWindowOrder) - then for everyone in the order, the followers' window costing nothing so
+	// they follow the commander through it; a BROKEN window is an ordinary vault area (VaultNavigation::SetWindowBroken) any path may take
+	// when it is faster - it makes no noise any more.
+	const USquadSubsystem* WindowSquad = MoveSquad;
+	if (!WindowSquad || !WindowSquad->IsWindowOrder())
 	{
-		if (!MoveSquad->IsWindowOrder())
-		{
-			return MantleNavigation::NoWindowVariant(Chosen, bMantlePathAllowed);
-		}
-		if (!bMantlePathAllowed)
-		{
-			return MantleNavigation::WindowFreeVariant(Chosen);
-		}
+		return MantleNavigation::NoWindowVariant(Chosen, bMantlePathAllowed);
 	}
-	return Chosen;
+	return bMantlePathAllowed ? Chosen : MantleNavigation::WindowFreeVariant(Chosen);
 }
 
 bool AOperativeCharacter::SteerOwnMoveVia(const FVector& Via)

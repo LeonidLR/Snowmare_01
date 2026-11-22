@@ -13,6 +13,55 @@ bool WindowBreakage::IsOverSill(const FBox& SillBox, const FVector& Point, float
 		&& Point.Y <= SillBox.Max.Y + MarginCm && Point.Z >= SillBox.Min.Z - 20.f && Point.Z <= SillBox.Max.Z + HeightCm;
 }
 
+AActor* WindowBreakage::FindWindowSillAt(UWorld& World, const FHitResult& Hit)
+{
+	static const FName SillTag(TEXT("window_sill"));
+	AActor* HitActor = Hit.GetActor();
+	if (!Hit.bBlockingHit)
+	{
+		return nullptr;
+	}
+	if (HitActor && HitActor->ActorHasTag(SillTag))
+	{
+		return HitActor;
+	}
+	static TWeakObjectPtr<UWorld> CachedWorld;
+	static TArray<TPair<TWeakObjectPtr<AActor>, FBox>> Sills;
+	// A floor click beside the window is a plain move: only a face (glass, frame, the wall round it) means the window.
+	if (Hit.ImpactNormal.Z > 0.7f)
+	{
+		return nullptr;
+	}
+	if (CachedWorld.Get() != &World || (!Sills.IsEmpty() && !Sills[0].Key.IsValid()))
+	{
+		CachedWorld = &World;
+		Sills.Reset();
+		for (TActorIterator<AActor> It(&World); It; ++It)
+		{
+			if (It->ActorHasTag(SillTag))
+			{
+				Sills.Emplace(*It, It->GetComponentsBoundingBox(true));
+			}
+		}
+	}
+	AActor* Best = nullptr;
+	double BestDistance = TNumericLimits<double>::Max();
+	for (const TPair<TWeakObjectPtr<AActor>, FBox>& Entry : Sills)
+	{
+		AActor* Sill = Entry.Key.Get();
+		if (Sill && IsOverSill(Entry.Value, Hit.ImpactPoint, 30.f, 260.f))
+		{
+			const double Distance = FVector::DistSquared2D(Entry.Value.GetCenter(), Hit.ImpactPoint);
+			if (Distance < BestDistance)
+			{
+				BestDistance = Distance;
+				Best = Sill;
+			}
+		}
+	}
+	return Best;
+}
+
 int32 WindowBreakage::HideBrokenWindow(AActor& Sill)
 {
 	UWorld* World = Sill.GetWorld();

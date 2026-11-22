@@ -177,6 +177,17 @@ namespace VaultNavigation
 		Window.bIsExcluded = true;
 	}
 
+	bool SetWindowBroken(AActor& Sill)
+	{
+		UNavModifierComponent* Modifier = FindVaultNavModifier(&Sill);
+		if (!Modifier)
+		{
+			return false;
+		}
+		Modifier->SetAreaClass(UNavArea_Vault::StaticClass()); // re-registers the modifier: the navmesh tiles under it rebuild
+		return true;
+	}
+
 	void FreeWindowArea(TArray<FNavigationFilterArea>& Areas)
 	{
 		FNavigationFilterArea& Window = Areas.AddDefaulted_GetRef();

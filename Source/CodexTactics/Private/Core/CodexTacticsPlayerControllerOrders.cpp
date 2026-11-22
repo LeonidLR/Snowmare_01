@@ -45,6 +45,8 @@
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "AI/StealthLureSubsystem.h"
+#include "Interactables/WindowBreakage.h"
 #include "Camera/RoofCutawaySubsystem.h"
 #include "NavigationSystem.h"
 #include "Components/CapsuleComponent.h"
@@ -503,7 +505,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	}
 	FVector WindowFeet;
 	float WindowYaw = 0.f;
-	if (AActor* Sill = Hit.GetActor(); Sill && Sill->ActorHasTag(FName(TEXT("window_sill"))) && !GetActiveTurnBased()
+	if (AActor* Sill = GetActiveTurnBased() ? nullptr : WindowBreakage::FindWindowSillAt(*GetWorld(), Hit); Sill
 		&& FindWindowSillTarget(*Sill, *Leader, WindowFeet, WindowYaw))
 	{
 		UpdateWindowHover(nullptr, nullptr);
@@ -777,6 +779,15 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	// Tutorial command lock (Demo 01 user decision 2026-10-12: no running until warmed up in A1): a locked sprint is
 	// degraded to a walk without any error line; the lock raises "Tutorial.Locked" for the one-time hint.
 	const bool bSprint = bDoubleClick && UTutorialSubsystem::FilterCommand(this, PlayerCommands::Sprint) == PlayerCommands::Sprint;
+	// Designer 2026-11-22 ("run in a fight"): a run order (double click; Solo, a box selection or the formation) while the squad is in a fight
+	// - a wave / firefight on, or enemies hunting the squad - is urgent: every restriction is off, the men may climb through any window on
+	// the way, whole ones too (the noise no longer matters). Out of a fight a run never breaks windows (stealth stays safe).
+	const UStealthLureSubsystem* FightLure = GetWorld()->GetSubsystem<UStealthLureSubsystem>();
+	if (bSprint && (bWave || (FightLure && FightLure->IsSquadDetected())))
+	{
+		Squad->SetWindowOrder(true);
+		UE_LOG(LogCodexTactics, Display, TEXT("Run order in a fight: windows open for this order"));
+	}
 	// Godot double click: sprint, or why not.
 	if (bSprint)
 	{
@@ -909,10 +920,10 @@ bool ACodexTacticsPlayerController::IsWindowHoverShown() const
 
 bool ACodexTacticsPlayerController::UpdateWindowHover(AOperativeCharacter* Operative, const FHitResult* Hit)
 {
-	AActor* Sill = Hit && Hit->bBlockingHit ? Hit->GetActor() : nullptr;
+	AActor* Sill = Hit && Hit->bBlockingHit && Operative ? WindowBreakage::FindWindowSillAt(*GetWorld(), *Hit) : nullptr;
 	FVector Feet;
 	float Yaw = 0.f;
-	const bool bWanted = Operative && Sill && Sill->ActorHasTag(FName(TEXT("window_sill"))) && !IsAttackModifierDown() && !GetActiveTurnBased()
+	const bool bWanted = Operative && Sill && !IsAttackModifierDown() && !GetActiveTurnBased()
 		&& FindWindowSillTarget(*Sill, *Operative, Feet, Yaw);
 	if (!bWanted)
 	{

@@ -185,7 +185,8 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 			UE_LOG(LogCodexTactics, Display, TEXT("[Window] %s breaks the window %s climbing through: noise %.0f m, %d enemies heard it"), *DisplayName.ToString(),
 				*Sill->GetName(), VaultRules::WindowBreakNoiseCm / 100.f, Heard);
 		}
-		WindowBreakage::HideBrokenWindow(*Sill); // designer 2026-11-22: a broken window shows - its glass is hidden (not destroyed)
+		WindowBreakage::HideBrokenWindow(*Sill);
+		VaultNavigation::SetWindowBroken(*Sill); // designer 2026-11-22: a broken window is quiet - any path may take it when faster // designer 2026-11-22: a broken window shows - its glass is hidden (not destroyed)
 		GameplayEvents::Raise(this, FName(TEXT("WindowBroken")), Sill);
 	}
 	return true;
