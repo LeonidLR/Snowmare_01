@@ -1,5 +1,14 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**Window order rules (`claude/bgen-test`, 2026-11-23 morning; designer decision via Lead).** `WindowOrderRules` + `Content/Data/Interactables/windows.json`:
+(1) Solo with the WHOLE squad box-selected, in a fight (wave / firefight / squad detected): every move order opens the windows on the way;
+(2) formation: a follower never paths / auto-vaults through a WHOLE window, even on the leader's window order - he follows once the leader
+broke it (a broken window is an ordinary vault); a run in a fight no longer opens windows for the formation (`formation_run_in_fight_windows` 0);
+(3) Solo out of a fight: only the window click. A Solo run in a fight still opens them (2026-11-22 rule, `solo_run_in_fight_windows`). Wired into
+the order's window flag (PlayerControllerOrders), `ChooseMoveFilter` and `TryVault`. Tests `CodexTactics.Interactables.WindowOrder.*` 4/4; smoke
+`FormationWindowSmoke` (no whole window on a plain click; on the window click the leader breaks it, followers through after it). Worker
+2026-11-23 07:41: 13/13 PASS (windows, doors, formation set, stairs, cutaway).
+
 **Stairwell / window night fixes (`claude/bgen-test`, 2026-11-23 night; designer "stuck on the stairwell too").** (1) Follower goals are snapped
 to the leader's FEET floor (`SnapGoalToFloor`, the capsule-centre height put them on the next flight), ring search only over a stairwell (XY has
 navmesh on another level alone). (2) Stepped kit stairs (tag `stair=*`, height gradient over +-40 cm is a slope) count for `IsRampUnder`
