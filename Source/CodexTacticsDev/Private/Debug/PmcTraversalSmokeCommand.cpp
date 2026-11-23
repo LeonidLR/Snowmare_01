@@ -3,8 +3,8 @@
 // of a generated map (L_Gen_Depot_X4)? The same legs are then walked by the player's own operative (team 0) as the control.
 //
 // Passes (one engine run; the squad mode is switched in code, the level's start mode / -SquadStart= is logged):
-//   PMC solo       - the hostile, the player's squad in Solo   (team 1 mantle permission follows the PLAYER squad's Solo mode:
-//   PMC formation  - the hostile, the player's squad in formation  AOperativeCharacter::OrderMoveTo bMantlePathAllowed)
+//   PMC solo       - the hostile, the player's squad in Solo   (team 1 mantle permission followed the PLAYER squad's Solo mode -
+//   PMC formation  - the hostile, the player's squad in formation  0/79 mantle up; fixed e5459527 2026-11-23: 67/79 = PMC solo)
 //   T0 solo        - the player's operative in Solo
 //   T0 formation   - the player's formation leader (followers holding)
 // A leg counts as crossed only with evidence of the link itself (review 095):

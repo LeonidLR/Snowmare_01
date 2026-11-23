@@ -111,6 +111,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "LevelGen/MissionGoalsSubsystem.h"
 #include "LevelGen/TacticalMapSubsystem.h"
+#include "Interactables/MantleNavigation.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Kismet/GameplayStatics.h"
@@ -3262,6 +3263,11 @@ namespace PmcArena
 		{
 			return;
 		}
+		// Fable review of e5459527: a mantle link refused in the last round stays off - back on, so round n plays as its Rounds=1 replay.
+		if (UMantleSubsystem* Mantle = World->GetSubsystem<UMantleSubsystem>())
+		{
+			Mantle->EnableAllLinks();
+		}
 		++State.Round;
 		// The round's own seed (base + round - 1, the trainer's convention): Rounds=1 Seed=<it> replays this round - its spawns, looks,
 		// weapons AND its attacker (by the seed's parity, not the round index).
@@ -3416,6 +3422,8 @@ namespace PmcArena
 			Squad->SetFollowersHolding(true);
 			if (State.Options.Opponent == EOpponent::Player)
 			{
+				// Known asymmetry (Fable review of e5459527, 2026-11-23): this team 0 squad under a PMC commander keeps the PLAYER's mantle rule
+				// (Solo / formation leader, OperativeMovementRules::IsMantlePathAllowed), unlike team 1/2; the Crossroads / Script batches never use it.
 				Pmc->SetTeamCommanded(PmcTeam::Player, true, &State.WeightsB);
 			}
 			else if (UPlaytestBotSubsystem* Bot = World->GetSubsystem<UPlaytestBotSubsystem>())
