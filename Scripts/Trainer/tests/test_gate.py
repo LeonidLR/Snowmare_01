@@ -111,6 +111,7 @@ class TestTrainingGate(unittest.TestCase):
                          "--repo-root", str(repo), "--config", str(self.config_path),
                          "--check-gate", "--gate-probe", str(probe)],
                         capture_output=True, text=True, encoding="utf-8",
+                        env=dict(os.environ, PYTHONIOENCODING="utf-8"),
                     )
                     self.assertEqual(result.returncode, 1, result.stderr)
                     self.assertIn("TRAINING GATE: BLOCKED", result.stdout)
