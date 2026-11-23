@@ -34,8 +34,8 @@ namespace MantleNavInternal
 		TEXT("behaviour before it (A/B)."));
 
 	static TAutoConsoleVariable<int32> CVarMantleLinks(TEXT("Codex.Mantle.Links"), 1,
-		TEXT("Mantling slice 1: 1 (default) = generated path links over the eligible obstacles (an order path over one mantles by itself, Solo's ")
-		TEXT("commanded operative only); 0 = none (the click on a ledge top still orders the climb)."));
+		TEXT("Mantling slice 1: 1 (default) = generated path links over the eligible obstacles (an order path over one mantles by itself: the ")
+		TEXT("player's Solo order / formation leader, a PMC commander order); 0 = none (the click on a ledge top still orders the climb)."));
 
 	/** The face is looked for at this height over the feet (knee height: over a step, under every class), cm. */
 	constexpr float MantleFaceTraceHeightCm = 45.f;
@@ -785,6 +785,24 @@ void UMantleSubsystem::DisableLink(int32 Index, const TCHAR* Why)
 		UE_LOG(LogCodexTactics, Warning, TEXT("[Mantle] link %d (%s -> %s) switched off: %s"), Index, *Links[Index].Start.ToCompactString(),
 			*Links[Index].End.ToCompactString(), Why);
 	}
+}
+
+int32 UMantleSubsystem::EnableAllLinks()
+{
+	int32 Enabled = 0;
+	for (FMantleLink& Entry : Links)
+	{
+		if (UNavLinkCustomComponent* Component = Entry.Link.Get(); Component && !Component->IsEnabled())
+		{
+			Component->SetEnabled(true);
+			++Enabled;
+		}
+	}
+	if (Enabled > 0)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %d switched-off link(s) back on"), Enabled);
+	}
+	return Enabled;
 }
 
 void UMantleSubsystem::HandleLinkReached(UNavLinkCustomComponent* ThisComp, UObject* PathComp, const FVector& DestPoint)

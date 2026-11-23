@@ -507,7 +507,8 @@ TSubclassOf<UNavigationQueryFilter> AOperativeCharacter::ChooseMoveFilter() cons
 	case TripwireRules::EOperativeMoveFilter::NoCrawlTrapLiteral: Filter = UNavFilter_NoCrawlTrapLiteral::StaticClass(); break;
 	default: break;
 	}
-	// Mantling slice 1: the mantle links (UNavArea_Mantle) are open only for the operative the player commands in Solo (bMantlePathAllowed).
+	// The mantle links (UNavArea_Mantle) are open only while this order may climb (bMantlePathAllowed, OperativeMovementRules::IsMantlePathAllowed:
+	// the player's Solo order / formation leader R17-1; a PMC commander order always).
 	return bMantlePathAllowed ? Filter : MantleNavigation::NoMantleVariant(Filter);
 }
 

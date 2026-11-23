@@ -169,6 +169,11 @@ public:
 	void FindLinksOnPath(const FNavigationPath& Path, TArray<int32>& OutLinks) const;
 	/** A link that failed in play: its area off - no path takes it again. */
 	void DisableLink(int32 Index, const TCHAR* Why);
+	/**
+	 * Every link DisableLink switched off back on; the number re-enabled. The PMC arena calls it at each round's start (Fable review of
+	 * e5459527, 2026-11-23): a link refused in round n stayed off for round n+1, so with Rounds>1 a round differed from its Rounds=1 replay.
+	 */
+	int32 EnableAllLinks();
 
 	/** Exclusive landing: Who holds Landing (no other climber's landing within reserve.radius_cm). False when another man holds it. */
 	bool TryReserve(AActor* Who, const FVector& Landing);
