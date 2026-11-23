@@ -455,6 +455,17 @@ bool FPmcCommanderGeometryTest::RunTest(const FString&)
 	TestEqual(TEXT("Advance stops at the range fraction"), static_cast<float>(FVector::Dist2D(PmcCommanderRules::AdvancePoint(Centre, Threat, 1400.f, W), Threat)), 1400.f * W.AdvanceStopRangeFrac, 1.f);
 	TestEqual(TEXT("Advance from inside the stop range stays put"), PmcCommanderRules::AdvancePoint(FVector(500.f, 0.f, 0.f), Threat, 1400.f, W), FVector(500.f, 0.f, 0.f));
 	TestEqual(TEXT("Fall back straight away"), PmcCommanderRules::FallBackPoint(Centre, Threat, 800.f), FVector(2800.f, 0.f, 0.f));
+	{
+		// R1 (loss autopsy 2026-11-23): a zone defender's fall-back slot - within 6 m and never out of the 6 m zone.
+		using PmcCommanderRules::IsDefenceFallBackSlotAllowed;
+		const FVector Point(0.f, 0.f, 0.f);
+		TestTrue(TEXT("R1: near slot inside the zone"), IsDefenceFallBackSlotAllowed(FVector(200.f, 0.f, 0.f), FVector(500.f, 0.f, 0.f), Point, 600.f));
+		TestFalse(TEXT("R1: slot outside the zone"), IsDefenceFallBackSlotAllowed(FVector(400.f, 0.f, 0.f), FVector(800.f, 0.f, 0.f), Point, 600.f));
+		TestFalse(TEXT("R1: slot over 6 m away"), IsDefenceFallBackSlotAllowed(FVector(-300.f, 0.f, 0.f), FVector(400.f, 0.f, 0.f), Point, 600.f));
+		TestTrue(TEXT("R1: outside the zone, a slot no farther from the point"), IsDefenceFallBackSlotAllowed(FVector(1000.f, 0.f, 0.f), FVector(900.f, 300.f, 0.f), Point, 600.f));
+		TestFalse(TEXT("R1: outside the zone, a slot farther away"), IsDefenceFallBackSlotAllowed(FVector(1000.f, 0.f, 0.f), FVector(1300.f, 0.f, 0.f), Point, 600.f));
+		TestTrue(TEXT("R1: planar - a roof slot over the point counts"), IsDefenceFallBackSlotAllowed(FVector(100.f, 0.f, 300.f), FVector(300.f, 0.f, 300.f), Point, 600.f));
+	}
 	// Cover quality: the wall behind the man (he faces along the normal) shields threats on the -normal side.
 	TestEqual(TEXT("Threat behind the wall: full cover"), PmcCommanderRules::CoverQualityAgainst(FVector::ZeroVector, FVector(1.f, 0.f, 0.f), FVector(-1000.f, 0.f, 0.f)), 1.f, 0.001f);
 	TestEqual(TEXT("Threat in front of the man: no cover"), PmcCommanderRules::CoverQualityAgainst(FVector::ZeroVector, FVector(1.f, 0.f, 0.f), FVector(1000.f, 0.f, 0.f)), 0.f, 0.001f);
@@ -470,6 +481,27 @@ bool FPmcCommanderGeometryTest::RunTest(const FString&)
 	TestEqual(TEXT("A committed walk keeps going under the move margin"), PmcCommanderRules::OrderName(PmcCommanderRules::PickWithMargin(Scored, EPmcOrder::Flank, true, W.MoveSwitchMargin)), TEXT("Flank"));
 	TestTrue(TEXT("Flank / Advance / FallBack / Relocate / TakeCover are walks"), PmcCommanderRules::IsMoveOrder(EPmcOrder::Flank) && PmcCommanderRules::IsMoveOrder(EPmcOrder::TakeCover)
 		&& !PmcCommanderRules::IsMoveOrder(EPmcOrder::Suppress) && !PmcCommanderRules::IsMoveOrder(EPmcOrder::Hold));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcDefenceFallBackCandidatesTest, "CodexTactics.AI.PmcCommander.DefenceFallBackCandidates",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcDefenceFallBackCandidatesTest::RunTest(const FString&)
+{
+	const FVector Feet(400.f, 0.f, 0.f);
+	const FVector HeldSlot(415.f, 0.f, 0.f);
+	const FVector Outside(800.f, 0.f, 0.f);
+	const FVector RunnerUp(500.f, 100.f, 0.f);
+	const TArray<FVector> InScoreOrder { Outside, HeldSlot, RunnerUp };
+	const FVector* Pick = InScoreOrder.FindByPredicate([&](const FVector& Candidate)
+	{
+		return PmcCommanderRules::IsDefenceFallBackSlotAllowed(Feet, Candidate, FVector::ZeroVector, 600.f,
+			PmcCommanderRules::DefenceFallBackRunCm, &HeldSlot);
+	});
+	TestTrue(TEXT("R1 can choose the lower-scoring slot when the leaders are outside and already held"), Pick && *Pick == RunnerUp);
+	TestTrue(TEXT("the held-slot exclusion is applied only when supplied"),
+		PmcCommanderRules::IsDefenceFallBackSlotAllowed(Feet, HeldSlot, FVector::ZeroVector, 600.f));
 	return true;
 }
 

@@ -52,6 +52,8 @@ struct CODEXTACTICS_API FPmcTeamStats
 	/** TACTICAL_MAP P2 (2026-11-17): a taken walk onto a tactical post, or onto the defence post (the Ambush order). Holds and refused walks stay 0. */
 	int32 PostMoves = 0;
 	int32 TacticalFallBacks = 0;
+	/** R1 (FallBackCover=1): FallBack orders that went through the zone defender's cover-only rule (taken or not). */
+	int32 DefenceFallBackCover = 0;
 };
 
 /**
@@ -136,6 +138,12 @@ public:
 	 * LevelToleranceCm = the point's level (fix/pmc-onpoint-3d-detour: on / near it only within this height, FPmcObjectiveView).
 	 */
 	void SetTeamObjective(int32 TeamId, EPmcRole Role, const FVector& Location, float RadiusCm, float LevelToleranceCm = 150.f);
+	/**
+	 * R1 (loss autopsy 2026-11-23, the arena's FallBackCover=1; default off = the old behaviour): a defending team's FallBack in contact
+	 * only takes a cover slot PmcCommanderRules::IsDefenceFallBackSlotAllowed accepts (<= 6 m, never out of the zone), else no walk.
+	 */
+	void SetDefenceFallBackCover(bool bOn) { bDefenceFallBackCover = bOn; }
+	bool IsDefenceFallBackCover() const { return bDefenceFallBackCover; }
 	/**
 	 * G008: where the attackers come from. The defender arc is centred on the yaw from the objective toward this point.
 	 * Unset: yaw 0, and the sectors are still deterministic. Call it before SetTeamObjective, or after (the posts are split again).
@@ -229,6 +237,8 @@ public:
 	FOnFighterOrder OnFighterOrder;
 
 private:
+	/** R1: SetDefenceFallBackCover. */
+	bool bDefenceFallBackCover = false;
 	struct FKnownTarget
 	{
 		TWeakObjectPtr<AActor> Actor;
@@ -421,7 +431,7 @@ private:
 	bool FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
 		FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band = FPmcEngagementBand(), float* OutBandFactor = nullptr,
 		TConstArrayView<FVector> ClaimedPosts = TConstArrayView<FVector>(), TConstArrayView<FString> ClaimedKeys = TConstArrayView<FString>(),
-		const float* PostLevelZ = nullptr) const;
+		const float* PostLevelZ = nullptr, const FPmcObjectiveView* DefenceFallBackObjective = nullptr) const;
 	/** G008: resolve the roof access (once per objective) and assign guard / sector posts. bResolveAccess false keeps the access. */
 	void RefreshDefence(int32 TeamId, FTeam& Team, bool bResolveAccess);
 	void ClearDefencePosts(FTeam& Team);

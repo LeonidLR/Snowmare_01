@@ -629,6 +629,17 @@ namespace PmcCommanderRules
 		return Fighter + Away * DistanceCm;
 	}
 
+	bool IsDefenceFallBackSlotAllowed(const FVector& FighterFeet, const FVector& Slot, const FVector& Objective, float ZoneRadiusCm, float MaxRunCm,
+		const FVector* HeldSlot)
+	{
+		if ((HeldSlot && HeldSlot->Equals(Slot, 50.f)) || FVector::Dist2D(FighterFeet, Slot) > MaxRunCm)
+		{
+			return false;
+		}
+		const float Limit = FMath::Max(ZoneRadiusCm, static_cast<float>(FVector::Dist2D(FighterFeet, Objective)));
+		return FVector::Dist2D(Slot, Objective) <= Limit;
+	}
+
 	float CoverQualityAgainst(const FVector& SlotLocation, const FVector& WallNormal, const FVector& Threat)
 	{
 		const FVector ToThreat = (Threat - SlotLocation).GetSafeNormal2D();

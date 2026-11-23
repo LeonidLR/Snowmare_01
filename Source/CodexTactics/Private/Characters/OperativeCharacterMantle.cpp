@@ -910,7 +910,7 @@ void AOperativeCharacter::HandleMantleLink(int32 LinkIndex)
 		}
 	}
 	// It cannot be taken now (occupied / changed): the link off, the order paths again without it.
-	Mantle->DisableLink(LinkIndex, MantleRules::RefusalName(LastMantleRefusal));
+	Mantle->DisableLink(LinkIndex, MantleRules::RefusalName(LastMantleRefusal), this);
 	const bool bResume = bMantleResume;
 	bMantleResume = false;
 	if (bResume)
