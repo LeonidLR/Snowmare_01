@@ -2,6 +2,19 @@
 
 Project status for planning (2026-10-14): `docs/port/PROJECT_STATUS_2026-10-14.md`.
 
+## ⚙️ WORK PROCESS — 2026-11-23 (designer decision; read first, overrides older sections)
+
+Who: **Lead (Claude)** routes, reviews diffs by hand, merges, builds, pushes. **Codex** = all delegated tasks (reviews, tools, small fixes). **Grok** (from 2026-11-24) = gameplay C++ tasks, trial against Codex. **Gemini paused.** No Claude subagents, no Fable (only a short scoped review with the designer's OK).
+
+1. One task = one branch = one worktree under `C:/Work/Lanes` (never under `Documents/Unreal Projects` - the Epic Launcher lists those). Delete the worktree after the merge (Content junctions first).
+2. Small scope: one feature per branch; report = files changed, tests, smokes, what was NOT checked.
+3. Review BEFORE merge, per branch, small (Codex), never one huge review of a merge.
+4. Merges in batches: 2-3 ready branches -> one build + one test/smoke pass (`Scripts/Tools/merge_gate.ps1` when ready).
+5. Tests: `test.ps1 -Smart` per merge; the full suite once a day (night). Smokes: only the impacted ones (`Scripts/test_map.json`), on the worker only.
+6. Build only when `Source/` or `*.uproject` changed.
+7. Economy: keep chat lines short; stop at 10 % of your limit, commit, report, wait.
+8. Never touch the designer's uncommitted main files (X6), maps, `.uasset`, Config, VFX unless the task says so.
+
 ## Roles (user decision 2026-10-01 — replaces the 2026-09-28 architect / implementer split)
 
 | | Claude | Gemini |
