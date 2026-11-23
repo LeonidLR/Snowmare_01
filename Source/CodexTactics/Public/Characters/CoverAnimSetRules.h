@@ -20,6 +20,25 @@ enum class ECoverFireSet : uint8
 	Over
 };
 
+enum class ECoverOverTopPhase : uint8
+{
+	Idle,
+	SwitchingIn,
+	Firing,
+	SwitchingOut
+};
+
+enum class ECoverOverTopEvent : uint8
+{
+	SwitchInStarted,
+	FireStarted,
+	FireEnded,
+	SwitchOutFinished,
+	Cancelled
+};
+
+class UAnimSequenceBase;
+
 /** One named set: skeleton name -> clip key -> asset path ("default" serves skeletons not listed), plus per-clip timings. */
 struct FCoverAnimSetData
 {
@@ -78,6 +97,16 @@ namespace CoverAnimSetRules
 
 	/** Side peek at a corner / high cover / standing; the over-the-top shot crouched behind a LOW cover away from its corner (a window sill). */
 	CODEXTACTICS_API ECoverFireSet DecideFireSet(bool bCrouching, ECoverHeight Height, bool bAtCorner, bool bSetHasOverClips);
+
+	/** The side switch owns the pose through entry, fire, and return, unless the cover action is cancelled. */
+	CODEXTACTICS_API ECoverOverTopPhase AdvanceOverTopPhase(ECoverOverTopPhase Phase, ECoverOverTopEvent Event);
+
+	/** Core sequence slots are needed before a set can override native cover. */
+	inline bool CanActivateSet(int32 LoadedCoreClips) { return LoadedCoreClips > 0; }
+
+	/** Rebuild each fire slot from its sources so leaving Aim/2 cannot retain an Aim/2 clip. */
+	CODEXTACTICS_API UAnimSequenceBase* ResolveFireClip(ECoverFireSet FireSet, UAnimSequenceBase* Over,
+		UAnimSequenceBase* Side, UAnimSequenceBase* Native);
 
 	/** A walk along the wall this long plays the start / stop clips (Q5): at least MinCm and the clip exists. */
 	CODEXTACTICS_API bool UseShimmyTransitions(float WalkCm, float MinCm, bool bHasClip);

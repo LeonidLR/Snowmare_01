@@ -536,7 +536,14 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 	// Sprint 12: a shot from cover plays the corner fire (or blind fire) clip full body; the loop resumes after it.
 	if (bInCover && bUseNativeCoverClips && !bIsProne && !bIsReloading)
 	{
-		UAnimSequenceBase* Clip = Shooter && Shooter->bIsBlindFiring ? PickCoverClip(CoverBlindFire) : nullptr;
+		const bool bBlindShot = Shooter && Shooter->bIsBlindFiring;
+		if (!bCoverInFirePose && CoverOverTopPhase != ECoverOverTopPhase::Idle)
+		{
+			// A shot can arrive during either switch or while Aim/2 is lowering. Let the layer finish the transition first.
+			bCoverOverTopShotPending |= !bBlindShot;
+			return;
+		}
+		UAnimSequenceBase* Clip = bBlindShot ? PickCoverClip(CoverBlindFire) : nullptr;
 		if (!Clip)
 		{
 			Clip = PickCoverClip(bIsCrouching ? CoverCrouchFire : CoverStandFire);
@@ -555,10 +562,12 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 				}
 				if (!bCoverInFirePose && TryCoverSetOverSideSwitch())
 				{
-					return; // over the top on his right: he moves to his left side first; the next shots come from the stance
+					bCoverOverTopShotPending = true;
+					return; // the layer plays the shot after the switch and fire enter
 				}
 				UAnimSequenceBase* Enter = bCoverInFirePose ? nullptr : PickCoverClip(bIsCrouching ? CoverCrouchFireEnter : CoverStandFireEnter);
 				bCoverInFirePose = true;
+				CoverFirePoseFacing = CoverFacing;
 				if (Enter && PlayCoverOneShot(Enter, 0.1f, 0.05f))
 				{
 					CoverFireEnterMontage = CoverOneShotMontage;
@@ -898,6 +907,7 @@ void UOperativeAnimInstance::HandleGrenadeThrow()
 
 void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerSource)
 {
+	ResetCoverOverTopSwitch();
 	// Godot play_death: a random standing variation, or the crouched / prone death; full body, held at the end.
 	const AOperativeCharacter* Operative = BoundOperative.Get();
 	// fix/corpse-falls-to-ground (game designer PIE 2026-11-08: a fighter killed on a ladder lay in his death pose in mid-air): killed off the
@@ -2015,6 +2025,14 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	const bool bLeft = !bInCover && bWasInCover;
 	bWasInCover = bInCover;
 	bCoverEnteredThisFrame = bEntered;
+	const uint32 MoveOrder = Operative.GetMoveOrderSerial();
+	if (!bInCover || bIsDead || bKnockedDown || !bIsCrouching || bShimmying || CoverFacing != ECoverFacing::Right
+		|| MoveOrder != CoverOverTopMoveOrderSerial || (Operative.IsInStealthMode() && !Operative.IsStealthCoverShotWanted())
+		|| (CoverOverTopPhase == ECoverOverTopPhase::SwitchingIn && !bCoverFireReady && !bCoverOverTopShotPending))
+	{
+		ResetCoverOverTopSwitch();
+	}
+	CoverOverTopMoveOrderSerial = MoveOrder;
 	// The cover set for this wall (indoor / outdoor, JSON), judged before anything else (also under the stealth wall pose, which returns below).
 	if (bEntered && bUseNativeCoverClips)
 	{
@@ -2022,6 +2040,7 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	}
 	else if (bInCover && !bShimmying && FVector::Dist2D(Operative.GetCoverSlot().WallPoint, CoverSetSlotPoint) > CoverSetRechooseCm)
 	{
+		ResetCoverOverTopSwitch();
 		ChooseCoverAnimSet(Operative); // cover to cover without leaving it (another wall, maybe the other side of a door): judged again
 	}
 	if (bLeft || bIsDead)
@@ -2256,13 +2275,18 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	// idle -> fire transition, then the fire-ready idle; the exit transition when the threat is gone for the hold time,
 	// he shimmies off the edge or leaves the cover. Without the clips the look-around corner pose stands in.
 	UAnimSequenceBase* FireIdle = PickCoverClip(bIsCrouching ? CoverCrouchFireIdle : CoverStandFireIdle);
-	const bool bWantFirePose = bCoverFireReady && FireIdle;
+	const bool bWantFirePose = (bCoverFireReady || (bCoverOverTopShotPending && !bIsReloading)) && FireIdle;
 	bool bPeekStanceBlend = false;
 	if (bCoverInFirePose && !bShimmying)
 	{
 		CoverFirePoseFacing = CoverFacing; // the side the fire idle is drawn on (a shimmy may turn the facing before the pose ends)
 	}
-	if (bWantFirePose && !bCoverInFirePose && bCoverPeekStanceEntry && !bShimmying)
+	if (bWantFirePose && !bCoverInFirePose && TryCoverSetOverSideSwitch())
+	{
+		return; // the switch owns the pose before fire enter
+	}
+	if (bWantFirePose && !bCoverInFirePose && bCoverPeekStanceEntry && !bShimmying
+		&& CoverOverTopPhase == ECoverOverTopPhase::Idle)
 	{
 		// The run-and-peek's peek stance: straight from the run into the fire idle (the loop below), no step-out.
 		bCoverInFirePose = true;
@@ -2270,22 +2294,26 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		bCoverPeekStanceEntry = false;
 		bPeekStanceBlend = true;
 	}
-	else if (bWantFirePose && !bCoverInFirePose && TryCoverSetOverSideSwitch())
-	{
-		return; // over the top on his right: the move to his left side first (the set's over clips are left-only), the stance follows it
-	}
 	else if (bWantFirePose && !bCoverInFirePose)
 	{
 		bCoverInFirePose = true;
 		CoverFirePoseFacing = CoverFacing;
+		CoverOverTopPhase = CoverAnimSetRules::AdvanceOverTopPhase(CoverOverTopPhase, ECoverOverTopEvent::FireStarted);
+		UAnimSequenceBase* PendingShot = bCoverOverTopShotPending ? PickCoverClip(CoverCrouchFire) : nullptr;
+		bCoverOverTopShotPending = false;
 		if (UAnimSequenceBase* Enter = PickCoverClip(bIsCrouching ? CoverCrouchFireEnter : CoverStandFireEnter))
 		{
 			// Blend out 0.2 like the loops blend in (the fire_idle that follows takes over without a dip).
 			if (PlayCoverOneShot(Enter, 0.2f, 0.2f))
 			{
 				CoverFireEnterMontage = CoverOneShotMontage;
+				CoverPendingFireClip = PendingShot;
 				return;
 			}
+		}
+		if (PendingShot && PlayCoverOneShot(PendingShot, 0.1f, 0.2f))
+		{
+			return;
 		}
 	}
 	else if (!bWantFirePose && bCoverInFirePose)
