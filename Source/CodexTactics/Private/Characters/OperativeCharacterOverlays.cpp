@@ -4,6 +4,7 @@
 // _setup_vision_cone / _update_vision_cone / _is_any_enemy_spotted).
 
 #include "Characters/OperativeCharacter.h"
+#include "Camera/RoofCutawaySubsystem.h"
 #include "CodexTactics.h"
 
 #include "Camera/PlayerCameraManager.h"
@@ -303,7 +304,10 @@ void AOperativeCharacter::UpdateSilhouette(float DeltaTime)
 	const FVector Centre = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight() - 100.f);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(OperativeSilhouette), false, this);
 	FHitResult Hit;
-	const bool bBlocked = GetWorld()->LineTraceSingleByChannel(Hit, CameraLocation, Centre, ECC_Visibility, Params)
+	// The cut storeys are not drawn: they hide nobody (they still block sight and fire: LineTraceSkippingCut).
+	const URoofCutawaySubsystem* SilhouetteRoofs = GetWorld()->GetSubsystem<URoofCutawaySubsystem>();
+	const bool bBlocked = (SilhouetteRoofs ? SilhouetteRoofs->LineTraceSkippingCut(Hit, CameraLocation, Centre, ECC_Visibility, Params)
+		: GetWorld()->LineTraceSingleByChannel(Hit, CameraLocation, Centre, ECC_Visibility, Params))
 		&& FVector::Dist(CameraLocation, Hit.ImpactPoint) < FVector::Dist(CameraLocation, Centre) - 35.f;
 	SetSilhouetteVisible(bBlocked);
 	if (bBlocked && SilhouetteMID)

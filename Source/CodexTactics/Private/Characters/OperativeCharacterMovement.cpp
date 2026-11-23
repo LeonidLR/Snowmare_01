@@ -72,6 +72,8 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		const USquadSubsystem* MantleSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 		bMantlePathAllowed = OperativeMovementRules::IsMantlePathAllowed(bAutonomousOrder, IsPlayerTeam(), MantleSquad && MantleSquad->IsSoloMode(),
 			USquadSubsystem::IsSquadMantleEnabled(), MantleSquad && MantleSquad->GetFormationLeader() == this);
+		// The click's window permission, latched for THIS order (the squad flag is reset by the next click and read by nobody later).
+		bWindowPathAllowed = !bAutonomousOrder && IsPlayerTeam() && MantleSquad && MantleSquad->IsWindowOrder();
 	}
 	if (IsRaging())
 	{
@@ -315,6 +317,7 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	if (bFormationMove)
 	{
 		bMantlePathAllowed = false; // formation moves keep today's paths (no mantle links)
+		bWindowPathAllowed = false; // ... and no whole windows (rule 2: a follower goes through once it is broken)
 		bMantleOrderPending = false;
 	}
 	// Mantling (OperativeCharacterMantle.cpp): a new order mid-climb is walked to from the landing (like the ladder / the drop).
@@ -526,7 +529,7 @@ TSubclassOf<UNavigationQueryFilter> AOperativeCharacter::ChooseMoveFilter() cons
 	// order - he follows once the leader broke it (then it is an ordinary vault area).
 	const USquadSubsystem* WindowSquad = MoveSquad;
 	const bool bFormationFollower = WindowSquad && !WindowSquad->IsSoloMode() && WindowSquad->GetFormationLeader() != this;
-	if (!WindowSquad || !WindowOrderRules::MayTakeWholeWindow(WindowSquad->IsWindowOrder(), bFormationFollower, WindowOrderRules::Get()))
+	if (!WindowSquad || !WindowOrderRules::MayTakeWholeWindow(bWindowPathAllowed, bFormationFollower, WindowOrderRules::Get()))
 	{
 		return MantleNavigation::NoWindowVariant(Chosen, bMantlePathAllowed);
 	}

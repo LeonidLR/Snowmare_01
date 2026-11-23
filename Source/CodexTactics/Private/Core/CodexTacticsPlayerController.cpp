@@ -432,7 +432,8 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 			UpdateWindowHover(HoverOperative, HoverHit);
 			UpdateDoorHover(HoverOperative, HoverHit);
 			// Designer 2026-11-22: over a stair flight, the silhouette on the hidden storey's landing above.
-			UpdateStairHover(PeekTurnBased || bCornerPeekCursor || bClickPreview ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
+			// The click preview (on by default) no longer switches it off - the stair silhouette never showed in play (designer 2026-11-23).
+			UpdateStairHover(HoverOperative, IsClickPreviewArmed() ? nullptr : HoverHit);
 		}
 		// Bug C 2026-10-26: the squad in the formation wall layout - its guide lines along / round its wall under the cursor.
 		if (!bFreezeCoverHoverForTesting)

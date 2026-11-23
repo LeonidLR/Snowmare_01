@@ -25,6 +25,12 @@ namespace WindowBreakage
 	 */
 	CODEXTACTICS_API AActor* FindWindowSillAt(UWorld& World, const FHitResult& Hit);
 
+	/**
+	 * Fable review 2026-11-23: a click / hover on this actor is never a click on a window / doorway near it - a pawn (an enemy by a window, his
+	 * own man under one), an interactable (a crate) or an enemy-tagged actor keeps its own meaning (target, select, use).
+	 */
+	CODEXTACTICS_API bool IsOwnClickTarget(const AActor* HitActor);
+
 	/** Is Point inside the window's volume over SillBox (XY grown by MarginCm, Z from the sill's bottom up to HeightCm above its top)? */
 	CODEXTACTICS_API bool IsOverSill(const FBox& SillBox, const FVector& Point, float MarginCm = 40.f, float HeightCm = 260.f);
 }

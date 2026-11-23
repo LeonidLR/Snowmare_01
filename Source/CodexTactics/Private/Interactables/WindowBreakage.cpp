@@ -6,11 +6,18 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/Pawn.h"
+#include "Interactables/InteractableActor.h"
 
 bool WindowBreakage::IsOverSill(const FBox& SillBox, const FVector& Point, float MarginCm, float HeightCm)
 {
 	return SillBox.IsValid && Point.X >= SillBox.Min.X - MarginCm && Point.X <= SillBox.Max.X + MarginCm && Point.Y >= SillBox.Min.Y - MarginCm
 		&& Point.Y <= SillBox.Max.Y + MarginCm && Point.Z >= SillBox.Min.Z - 20.f && Point.Z <= SillBox.Max.Z + HeightCm;
+}
+
+bool WindowBreakage::IsOwnClickTarget(const AActor* HitActor)
+{
+	return HitActor && (HitActor->IsA<APawn>() || HitActor->IsA<AInteractableActor>() || HitActor->ActorHasTag(FName(TEXT("Enemy"))));
 }
 
 AActor* WindowBreakage::FindWindowSillAt(UWorld& World, const FHitResult& Hit)
@@ -26,6 +33,10 @@ AActor* WindowBreakage::FindWindowSillAt(UWorld& World, const FHitResult& Hit)
 	if (HitActor && HitActor->ActorHasTag(SillTag))
 	{
 		return HitActor;
+	}
+	if (IsOwnClickTarget(HitActor))
+	{
+		return nullptr;
 	}
 	static TWeakObjectPtr<UWorld> CachedWorld;
 	static TArray<TPair<TWeakObjectPtr<AActor>, FBox>> Sills;

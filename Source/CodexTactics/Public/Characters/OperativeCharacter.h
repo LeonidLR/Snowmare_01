@@ -560,6 +560,10 @@ public:
 	 *  climbs in turns behind him, USquadSubsystem::BeginSquadMantleFromPath; formation follows never). */
 	bool IsMantlePathAllowed() const { return bMantlePathAllowed; }
 
+	/** Fable review 2026-11-23: this man's own order may take WHOLE windows - latched per order from the click's window flag (the window click
+	 *  or WindowOrderRules::MoveOpensWindows), never for an autonomous order, a formation follow or a PMC fighter. */
+	bool IsWindowPathAllowed() const { return bWindowPathAllowed; }
+
 	/** Smokes: climbs started / restored, the last climb's class / clip / gait / stop / refusal / landing error (cm) / cancel. */
 	int32 GetMantleCount() const { return MantleCount; }
 	int32 GetMantleRestoreCount() const { return MantleRestoreCount; }
@@ -2766,6 +2770,8 @@ private:
 	int32 PendingMantleLink = INDEX_NONE;
 	/** The running path's own order may take the mantle links (the player's Solo order / leader R17-1; a PMC commander order always; OperativeMovementRules::IsMantlePathAllowed). */
 	bool bMantlePathAllowed = false;
+	/** IsWindowPathAllowed. */
+	bool bWindowPathAllowed = false;
 	int32 MantleCount = 0;
 	int32 MantleRestoreCount = 0;
 	int32 MantleRotation = 0;

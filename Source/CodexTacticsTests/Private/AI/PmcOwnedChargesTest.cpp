@@ -1,5 +1,6 @@
 #include "Misc/AutomationTest.h"
 #include "AI/PmcEncounterNav.h"
+#include "Interactables/VaultNavigation.h"
 #include "Dom/JsonValue.h"
 #include "Interactables/DeployableRules.h"
 #include "LevelGen/LevelPropsTypes.h"
@@ -93,6 +94,9 @@ bool FPmcOwnedChargesNavTest::RunTest(const FString&)
 			TestTrue(TEXT("a route over it costs a multiple of the plain path"), Override->TravelCostOverride >= 100.f);
 			TestEqual(TEXT("the cost is the rules constant"), Override->TravelCostOverride, PmcEncounterNav::OwnChargeTravelCost);
 			TestFalse(TEXT("not excluded"), Override->bIsExcluded);
+			// Fable review 2026-11-23: no PMC fighter paths through a whole window (noise + a navmesh re-area mid-arena).
+			const FNavigationFilterArea* Window = AreaOverride(*Filter->GetDefaultObject<UNavigationQueryFilter>(), UNavArea_WindowVault::StaticClass());
+			TestTrue(TEXT("the PMC filter excludes the whole-window area"), Window && Window->bIsExcluded);
 		}
 	}
 	TestEqual(TEXT("prone x mantle: four filters"), Classes.Num(), 4);

@@ -28,6 +28,9 @@ namespace
 	TAutoConsoleVariable<int32> CVarRoofCutawayHiddenShadow(TEXT("Codex.RoofCutaway.HiddenShadow"), 0,
 		TEXT("Designer 2026-11-22: 0 = a cut-away roof / storey casts no shadow (and no distance-field shadow / AO): the interior is lit; 1 = it keeps casting its shadow (the old rule). Applied when a piece is cut; its own setting comes back on restore"));
 
+	TAutoConsoleVariable<int32> CVarCutIgnoresVisibility(TEXT("Codex.RoofCutaway.CutIgnoresVisibility"), 0,
+		TEXT("Designer bug 2026-11-23 (the squad saw and shot enemies through the cut storey's floor): 0 = a cut piece keeps blocking the Visibility channel - sight, fire, explosions; only the cursor (RefineCursorHit) and the see-through silhouette (LineTraceSkippingCut) pass it; 1 = the old rule (the piece ignores Visibility while cut)"));
+
 	TAutoConsoleVariable<int32> CVarCursorThroughCutaway(TEXT("Codex.Cursor.ThroughCutaway"), 1,
 		TEXT("Designer bug 2026-11-22 (dressed showcase: clicks land on the invisible upper storey): 1 = every cursor trace passes through what the storey cutaway hides for the selected operative - cut pieces, the storeys above his in his building (the kit map's hidden grey proxies too), the wall tops under them; 0 = the raw cursor hit (A/B)"));
 
@@ -536,6 +539,10 @@ bool URoofCutawaySubsystem::FindStairUpTarget(const FHitResult& Hit, const AOper
 	{
 		return Why(FString::Printf(TEXT("he is in no indexed building (feet %.0f)"), FeetZ));
 	}
+	if (Hit.ImpactPoint.Z < FeetZ - 40.f)
+	{
+		return Why(FString::Printf(TEXT("a flight below his feet (hit %.0f, feet %.0f): a plain move down"), Hit.ImpactPoint.Z, FeetZ));
+	}
 	// A stair of another building is no way up for him; a stair piece the index does not hold (kit / proxy) is judged by its place.
 	if (const TPair<int32, int32>* Of = StoreyOfPiece.Find(TObjectKey<UPrimitiveComponent>(Piece)); Of && Of->Key != BuildingIndex)
 	{
@@ -679,6 +686,30 @@ bool URoofCutawaySubsystem::RefineCursorHit(FHitResult& Hit, ECollisionChannel C
 	UE_LOG(LogCodexTactics, Verbose, TEXT("[Cursor] through the cutaway (selected on storey %d):%s -> %s at %s"), SelectedStorey, *Skipped,
 		*GetNameSafe(Hit.GetActor()), *Hit.ImpactPoint.ToCompactString());
 	return Hit.bBlockingHit;
+}
+
+bool URoofCutawaySubsystem::LineTraceSkippingCut(FHitResult& OutHit, const FVector& Start, const FVector& End, ECollisionChannel Channel,
+	FCollisionQueryParams Params) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+	for (int32 Step = 0; Step < 12; ++Step)
+	{
+		if (!World->LineTraceSingleByChannel(OutHit, Start, End, Channel, Params))
+		{
+			return false;
+		}
+		UPrimitiveComponent* Piece = OutHit.GetComponent();
+		if (!Piece || !IsCutAway(Piece))
+		{
+			return true;
+		}
+		Params.AddIgnoredComponent(Piece);
+	}
+	return OutHit.bBlockingHit;
 }
 
 bool URoofCutawaySubsystem::TraceCursorRay(const FVector& Start, const FVector& End, ECollisionChannel Channel, const AOperativeCharacter* Selected,
@@ -992,7 +1023,11 @@ void URoofCutawaySubsystem::CutPiece(UPrimitiveComponent& Piece, double Now)
 	// Not drawn (main + depth pass); its shadow per Codex.RoofCutaway.HiddenShadow; clicks and the silhouette trace pass through.
 	Piece.SetRenderInMainPass(false);
 	Piece.SetRenderInDepthPass(false);
-	Piece.SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
+	Cut.bVisibilityChanged = CVarCutIgnoresVisibility.GetValueOnGameThread() != 0;
+	if (Cut.bVisibilityChanged)
+	{
+		Piece.SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
+	}
 	// Only on the state change (cut / restore), never per update.
 	const bool bHiddenShadow = CVarRoofCutawayHiddenShadow.GetValueOnGameThread() != 0;
 	if (RoofCutawayRules::CastsShadowWhileCut(Cut.bCastShadow, bHiddenShadow) != Cut.bCastShadow)
@@ -1016,7 +1051,10 @@ void URoofCutawaySubsystem::RestorePiece(FCutPiece& Cut)
 	}
 	Piece->SetRenderInMainPass(Cut.bRenderInMainPass);
 	Piece->SetRenderInDepthPass(Cut.bRenderInDepthPass);
-	Piece->SetCollisionResponseToChannel(ECC_Visibility, Cut.VisibilityResponse);
+	if (Cut.bVisibilityChanged)
+	{
+		Piece->SetCollisionResponseToChannel(ECC_Visibility, Cut.VisibilityResponse);
+	}
 	if (Piece->CastShadow != Cut.bCastShadow)
 	{
 		Piece->SetCastShadow(Cut.bCastShadow);

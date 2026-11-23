@@ -102,10 +102,11 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 	// A broken window is an ordinary quiet vault.
 	if (const AActor* Window = Front.GetActor(); Window && Window->ActorHasTag(FName(TEXT("window_sill"))) && !Window->ActorHasTag(FName(TEXT("window_broken"))))
 	{
+		// Per-order permission (Fable review 2026-11-23): a PMC fighter never (it would lure-noise and re-area the navmesh mid-arena), a player's
+		// man only on his own order's latched window permission - not the squad flag at vault time.
 		const USquadSubsystem* WindowSquad = World->GetSubsystem<USquadSubsystem>();
 		const bool bFormationFollower = WindowSquad && !WindowSquad->IsSoloMode() && WindowSquad->GetFormationLeader() != this;
-		if (WindowSquad && WindowSquad->GetMembers().Contains(this)
-			&& !WindowOrderRules::MayTakeWholeWindow(WindowSquad->IsWindowOrder(), bFormationFollower, WindowOrderRules::Get()))
+		if (!IsPlayerTeam() || !WindowOrderRules::MayTakeWholeWindow(bWindowPathAllowed, bFormationFollower, WindowOrderRules::Get()))
 		{
 			return false;
 		}
