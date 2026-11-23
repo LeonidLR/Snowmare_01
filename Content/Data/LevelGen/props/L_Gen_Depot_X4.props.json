@@ -71,14 +71,6 @@
 					"locked": true
 				},
 				{
-					"id": "crates_00000001_6",
-					"variant": "crate_s",
-					"pos": [5450, -1300],
-					"walk_layer": "ground",
-					"yaw": 90,
-					"locked": false
-				},
-				{
 					"id": "crates_00000001_7",
 					"variant": "crate_s",
 					"pos": [5900, 7000],

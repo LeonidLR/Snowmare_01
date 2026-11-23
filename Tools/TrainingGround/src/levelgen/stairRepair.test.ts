@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { validateBuilding, validateBuildings } from './buildingTraversal.ts';
@@ -14,7 +15,21 @@ import { EXACT_GAP_HALF_W_CM, STAIR_REPAIR_CODES, STAIR_REPAIR_CODES_FULL, exact
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const X4 = 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1_x4.json';
-const loadX4 = (): GenLayout => JSON.parse(fs.readFileSync(path.join(ROOT, X4), 'utf8').replace(/^﻿/, '')) as GenLayout;
+// The X4 as accepted on 2026-11-16 (before the repair was applied to the committed file, 2026-11-23): read from git history - the
+// committed file is the repaired one now (checked below). 99412d31 still holds the unrepaired file (620 KB: no copy as a fixture).
+const LEGACY_X4_REV = '99412d31';
+const loadX4 = (): GenLayout => JSON.parse(execFileSync('git', ['show', `${LEGACY_X4_REV}:${X4}`], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 << 20 })
+  .replace(/^﻿/, '')) as GenLayout;
+const loadCommittedX4 = (): GenLayout => JSON.parse(fs.readFileSync(path.join(ROOT, X4), 'utf8').replace(/^﻿/, '')) as GenLayout;
+
+test('X4 as committed (repaired 2026-11-23): no navmesh-breaking stair code', () => {
+  const l = loadCommittedX4();
+  for (const b of validateBuildings(l).buildings) {
+    const left = b.issues.filter((i) => STAIR_REPAIR_CODES.has(i.code));
+    assert.deepEqual(left.map((i) => i.message), [], `${b.id}: no stair repair code`);
+  }
+  assert.deepEqual(repairLegacyStairs(l).changes, [], 'nothing left to repair');
+});
 const bld = (l: GenLayout, id: string): GenBuilding => l.buildings.find((b) => b.id === id)!;
 const codesOf = (l: GenLayout, id: string): string[] => validateBuilding(l, bld(l, id)).issues.map((i) => i.code);
 const errorSet = (l: GenLayout): Set<string> => new Set(validateBuildings(l).buildings.flatMap((b) => b.issues.filter((i) => i.severity === 'error').map((i) => `${b.id}:${i.code}:${i.ref ?? ''}`)));
