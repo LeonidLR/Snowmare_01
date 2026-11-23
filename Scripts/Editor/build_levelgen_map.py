@@ -85,6 +85,7 @@ MARGIN = 1000.0        # cm of ground plane round the layout bounds
 PARAPET_H = 100.0
 STAIR_W = 150.0
 STAIRWELL_HOLE = 350.0   # cm: the slab opening above a stairwell ramp's last 3.5 m (head room 0.7 x 350 - 20 = 2.25 m at its far edge)
+STAIRWELL_GAP_TOL = 2.0  # cm: a floors_detail stairwell gap this close to its flight's exact footprint is cut as it is (stairwell_gap_rect)
 LANDING_TUCK = 5.0       # cm: the external landing starts this far before the ramp's top end (a 3.5 cm step, under the agent's 35 cm)
 CUBE = "/Engine/BasicShapes/Cube.Cube"
 CYLINDER = "/Engine/BasicShapes/Cylinder.Cylinder"
@@ -187,6 +188,67 @@ def stairwell_hole_rect(pos, top, length=None):
     xs = [ax - uy * hw, ax + uy * hw, top[0] - uy * hw, top[0] + uy * hw]
     ys = [ay + ux * hw, ay - ux * hw, top[1] + ux * hw, top[1] - ux * hw]
     return (min(xs), min(ys), max(xs), max(ys))
+
+
+def exact_stairwell_gap_rect(s):
+    """The exact slab gap over a straight stairwell flight (x0, y0, x1, y1): foot -> top along it, STAIR_W / 2 + 5 cm either side of
+    its line - Training Ground generate.ts flightRect / stairRepair.ts exactStairGapPoly (the generator's rule since 2026-11-18)."""
+    (px, py), (tx, ty) = s["pos"], s["top"]
+    hw = STAIR_W / 2.0 + 5.0
+    if abs(tx - px) >= abs(ty - py):
+        return (min(px, tx), py - hw, max(px, tx), py + hw)
+    return (px - hw, min(py, ty), px + hw, max(py, ty))
+
+
+def _gap_over_flight(rect, s):
+    """Is the gap rect over flight s: within a flight width of its line and overlapping its run (buildingTraversal.ts checkFlight)?"""
+    (px, py), (tx, ty) = s["pos"], s["top"]
+    L = math.hypot(tx - px, ty - py)
+    if L < 1.0:
+        return False
+    ux, uy = (tx - px) / L, (ty - py) / L
+    corners = [(rect[0], rect[1]), (rect[2], rect[1]), (rect[2], rect[3]), (rect[0], rect[3])]
+    across = [abs((x - px) * -uy + (y - py) * ux) for x, y in corners]
+    along = [(x - px) * ux + (y - py) * uy for x, y in corners]
+    return min(across) <= STAIR_W and min(along) < L and max(along) > 0.0
+
+
+def stairwell_gap_rect(bid, gap_id, rect, flights):
+    """A floors_detail stairwell gap as the builder cuts it: over a straight flight arriving on that storey it is the flight's exact
+    footprint. Layouts accepted before 2026-11-18 (L_Gen_Depot_X4) carry an 80 cm gap reaching 40 cm past the flight's top and behind
+    its foot: next to the opening the ramp's top met the slab in two 35 cm strips only, the navmesh erosion (agent radius 35 cm)
+    closed both and the flight lost its arrival floor (PmcTraversalSmoke 2026-11-23: B_x1_8 / B_x1_16 / B_x2_25 *_block_stair_0,
+    partial paths). A current gap already is the exact footprint, one within STAIRWELL_GAP_TOL of it is kept as it is (unchanged output)."""
+    for s in flights:
+        if _gap_over_flight(rect, s):
+            exact = exact_stairwell_gap_rect(s)
+            if any(abs(a - b) > STAIRWELL_GAP_TOL for a, b in zip(rect, exact)):
+                report("legacy stairwell gap %s of %s: (%.0f, %.0f)..(%.0f, %.0f) -> the exact footprint of %s (%.0f, %.0f)..(%.0f, %.0f)"
+                       % (gap_id, bid, rect[0], rect[1], rect[2], rect[3], s["id"], exact[0], exact[1], exact[2], exact[3]))
+                return exact
+            return rect
+    return rect
+
+
+def stairs_in_other_buildings(layout):
+    """REVIEW lines for straight stairwell flights whose run crosses another (unrotated) building's footprint: that building's walls and
+    slabs cut the ramp, the flight has no navmesh (X4 B_hall_n_stair_0 inside B_office_w). The fix is in the layout: Training Ground
+    scripts/repair-legacy-stairs.ts slides the flight out (the builder never moves a flight - the smokes and the tactical map read it)."""
+    out = []
+    for b in layout.get("buildings", []):
+        for s in b.get("stairs", []) or []:
+            if s.get("kind") != "stairwell" or is_switchback(s):
+                continue
+            x0, y0, x1, y1 = exact_stairwell_gap_rect(s)
+            for o in layout["buildings"]:
+                if o["id"] == b["id"] or o.get("rotation"):
+                    continue
+                (ox0, oy0), (ox1, oy1) = o["footprint"]
+                if min(x1, ox1) - max(x0, ox0) > 1.0 and min(y1, oy1) - max(y0, oy0) > 1.0:
+                    out.append("REVIEW: stair %s of %s runs inside %s's footprint (its walls / slabs cut the ramp: no navmesh); "
+                               "repair the layout: node Tools/TrainingGround/scripts/repair-legacy-stairs.ts <layout.json>" % (s["id"], b["id"], o["id"]))
+                    break
+    return out
 
 
 def slabs_with_holes(label, folder, x0, y0, x1, y1, top_z, holes, tags=None):
@@ -1115,12 +1177,16 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
                 # head room over the flight's last STAIRWELL_HOLE, only as wide as the flight (BUILDING_GENERATOR.md 2026-11-18:
                 # a square hole cut the neighbouring lane of the switchback core, where the next flight starts)
                 holes_by_floor.setdefault(int(s["to"]), []).append(stairwell_hole_rect(s["pos"], s["top"]))
+        straight = [] if bid in switchback_buildings else [s for s in b.get("stairs", []) if s.get("kind") == "stairwell"]
         for fd in b.get("floors_detail", []):
             fl = int(fd["floor"])
             for g in fd.get("gaps", []):
                 px = [p[0] for p in g["poly"]]
                 py = [p[1] for p in g["poly"]]
-                holes_by_floor.setdefault(fl, []).append((min(px), min(py), max(px), max(py)))
+                rect = (min(px), min(py), max(px), max(py))
+                if g.get("kind") == "stairwell":
+                    rect = stairwell_gap_rect(bid, g.get("id", "?"), rect, [s for s in straight if int(s["to"]) == fl])
+                holes_by_floor.setdefault(fl, []).append(rect)
         for h in b.get("hatches", []):
             hx, hy = h["pos"]
             sx, sy = h.get("size", [100.0, 100.0])
@@ -1359,6 +1425,8 @@ def plan(layout):
     gaps = levelgen_ladders.exit_gaps(layout, list(frames.values()))
     for wid, cuts in sorted(gaps.items()):
         report("ladder exit opening in %s: %s" % (wid, ", ".join("%s %.0f..%.0f cm" % (lid, t0, t1) for t0, t1, lid in cuts)))
+    for line in stairs_in_other_buildings(layout):
+        report(line)
     extended = _has_combat_building_features(layout)
     walls_and_buildings = _walls_and_buildings_extended if extended else _walls_and_buildings_legacy
     specs.extend(_walls_and_buildings_rotated(layout, gz, chimneys, frames, gaps, walls_and_buildings))

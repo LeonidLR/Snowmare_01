@@ -1,5 +1,14 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**X4 legacy stair flights (`claude/x4-block-stairs`, 2026-11-23; Gemini diagnosis 100 class (b)).** The accepted X4 layout (2026-11-16) predates
+the 11-18 / 11-19 stair rules: (1) its floor-1 stairwell gaps are 80 cm wide and reach 40 cm past the flight's top - the ramp meets the arrival
+slab in two 35 cm strips, the navmesh erosion (radius 35) closes them (B_x1_8 / B_x1_16 / B_x2_25 `*_block_stair_0` partial paths; also B_ruin
+STAIR_in_8); (2) B_hall_n_stair_0 starts inside B_office_w (the footprints overlap 5 x 4 m; the office's wall at y -2850 crosses the ramp).
+Builder: `stairwell_gap_rect` cuts a stairwell gap over a straight flight as the flight's exact footprint (current layouts unchanged; X2 / X4 / X6 /
+lab alley rebuilds change only those floor slabs) + a `REVIEW:` line for a flight inside another building. Training Ground: `stairRepair.ts`
+`repairLegacyStairs` (exact gaps + slide the flights out of a neighbour; `--full` also the 200 cm approach boxes), CLI
+`scripts/repair-legacy-stairs.ts`. X4 data NOT repaired yet (moves B_hall_n_stair_0 +480 cm: tactical re-export + map rebuild needed).
+
 **Window order rules (`claude/bgen-test`, 2026-11-23 morning; designer decision via Lead).** `WindowOrderRules` + `Content/Data/Interactables/windows.json`:
 (1) Solo with the WHOLE squad box-selected, in a fight (wave / firefight / squad detected): every move order opens the windows on the way;
 (2) formation: a follower never paths / auto-vaults through a WHOLE window, even on the leader's window order - he follows once the leader
