@@ -431,7 +431,7 @@ private:
 	bool FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
 		FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band = FPmcEngagementBand(), float* OutBandFactor = nullptr,
 		TConstArrayView<FVector> ClaimedPosts = TConstArrayView<FVector>(), TConstArrayView<FString> ClaimedKeys = TConstArrayView<FString>(),
-		const float* PostLevelZ = nullptr) const;
+		const float* PostLevelZ = nullptr, const FPmcObjectiveView* DefenceFallBackObjective = nullptr) const;
 	/** G008: resolve the roof access (once per objective) and assign guard / sector posts. bResolveAccess false keeps the access. */
 	void RefreshDefence(int32 TeamId, FTeam& Team, bool bResolveAccess);
 	void ClearDefencePosts(FTeam& Team);

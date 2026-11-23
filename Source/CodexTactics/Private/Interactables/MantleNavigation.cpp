@@ -773,7 +773,7 @@ void UMantleSubsystem::FindLinksOnPath(const FNavigationPath& Path, TArray<int32
 	}
 }
 
-void UMantleSubsystem::DisableLink(int32 Index, const TCHAR* Why)
+void UMantleSubsystem::DisableLink(int32 Index, const TCHAR* Why, AOperativeCharacter* Fighter)
 {
 	if (!Links.IsValidIndex(Index))
 	{
@@ -781,28 +781,60 @@ void UMantleSubsystem::DisableLink(int32 Index, const TCHAR* Why)
 	}
 	if (UNavLinkCustomComponent* Component = Links[Index].Link.Get(); Component && Component->IsEnabled())
 	{
+		if (Fighter && ArenaLinkFighters.Contains(Fighter) && ArenaEnabledLinks.Contains(Links[Index].Link))
+		{
+			ArenaDisabledLinks.Add(Links[Index].Link);
+		}
 		Component->SetEnabled(false);
 		UE_LOG(LogCodexTactics, Warning, TEXT("[Mantle] link %d (%s -> %s) switched off: %s"), Index, *Links[Index].Start.ToCompactString(),
 			*Links[Index].End.ToCompactString(), Why);
 	}
 }
 
-int32 UMantleSubsystem::EnableAllLinks()
+void UMantleSubsystem::BeginArenaLinkTracking()
 {
-	int32 Enabled = 0;
-	for (FMantleLink& Entry : Links)
+	EndArenaLinkTracking();
+	for (const FMantleLink& Entry : Links)
 	{
-		if (UNavLinkCustomComponent* Component = Entry.Link.Get(); Component && !Component->IsEnabled())
+		if (const UNavLinkCustomComponent* Component = Entry.Link.Get(); Component && Component->IsEnabled())
 		{
-			Component->SetEnabled(true);
-			++Enabled;
+			ArenaEnabledLinks.Add(Entry.Link);
 		}
 	}
-	if (Enabled > 0)
+}
+
+void UMantleSubsystem::TrackArenaFighter(AOperativeCharacter* Fighter)
+{
+	if (Fighter)
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %d switched-off link(s) back on"), Enabled);
+		ArenaLinkFighters.Add(Fighter);
 	}
-	return Enabled;
+}
+
+int32 UMantleSubsystem::RestoreArenaLinks()
+{
+	int32 Restored = 0;
+	for (const FMantleLink& Entry : Links)
+	{
+		if (UNavLinkCustomComponent* Component = Entry.Link.Get(); Component && ArenaDisabledLinks.Contains(Entry.Link) && !Component->IsEnabled())
+		{
+			Component->SetEnabled(true);
+			++Restored;
+		}
+	}
+	ArenaDisabledLinks.Reset();
+	ArenaLinkFighters.Reset();
+	if (Restored > 0)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %d arena-disabled link(s) restored"), Restored);
+	}
+	return Restored;
+}
+
+void UMantleSubsystem::EndArenaLinkTracking()
+{
+	RestoreArenaLinks();
+	ArenaEnabledLinks.Reset();
 }
 
 void UMantleSubsystem::HandleLinkReached(UNavLinkCustomComponent* ThisComp, UObject* PathComp, const FVector& DestPoint)

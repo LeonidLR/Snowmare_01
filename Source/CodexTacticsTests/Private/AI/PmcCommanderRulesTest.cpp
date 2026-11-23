@@ -484,6 +484,27 @@ bool FPmcCommanderGeometryTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcDefenceFallBackCandidatesTest, "CodexTactics.AI.PmcCommander.DefenceFallBackCandidates",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcDefenceFallBackCandidatesTest::RunTest(const FString&)
+{
+	const FVector Feet(400.f, 0.f, 0.f);
+	const FVector HeldSlot(415.f, 0.f, 0.f);
+	const FVector Outside(800.f, 0.f, 0.f);
+	const FVector RunnerUp(500.f, 100.f, 0.f);
+	const TArray<FVector> InScoreOrder { Outside, HeldSlot, RunnerUp };
+	const FVector* Pick = InScoreOrder.FindByPredicate([&](const FVector& Candidate)
+	{
+		return PmcCommanderRules::IsDefenceFallBackSlotAllowed(Feet, Candidate, FVector::ZeroVector, 600.f,
+			PmcCommanderRules::DefenceFallBackRunCm, &HeldSlot);
+	});
+	TestTrue(TEXT("R1 can choose the lower-scoring slot when the leaders are outside and already held"), Pick && *Pick == RunnerUp);
+	TestTrue(TEXT("the held-slot exclusion is applied only when supplied"),
+		PmcCommanderRules::IsDefenceFallBackSlotAllowed(Feet, HeldSlot, FVector::ZeroVector, 600.f));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcCommanderWeightsJsonTest, "CodexTactics.AI.PmcCommander.WeightsJson",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 

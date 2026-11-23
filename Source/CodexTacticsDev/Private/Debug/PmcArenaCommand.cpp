@@ -220,7 +220,7 @@ namespace PmcArena
 		 * FallBackCover=1|0 (R1, loss autopsy 2026-11-23; default 1 since the paired A/B 2026-11-23 - 166 vs 146 wins, 1 vs 36 captures
 		 * on seeds 1060-1359, Lead: the arena / baseline default, the bar = det/r1-cover): the defending PMC team falls back in contact
 		 * only into a near cover slot that keeps it in the zone (UPmcSquadSubsystem::SetDefenceFallBackCover); FallBackCover=0 = the old
-		 * fall-back (the before measurement). Written to the round as "fallback_cover". The game turns it on with its mission objectives.
+		 * fall-back (the before measurement). Written to the round as "fallback_cover"; the arena is the only caller enabling it.
 		 */
 		bool bFallBackCover = true;
 		/**
@@ -3070,6 +3070,10 @@ namespace PmcArena
 				Pmc->DestroyTeam(TeamA);
 				Pmc->DestroyTeam(TeamB);
 			}
+			if (UMantleSubsystem* Mantle = World->GetSubsystem<UMantleSubsystem>(); Mantle && State.Round > 0)
+			{
+				Mantle->EndArenaLinkTracking();
+			}
 			if (UProjectileSubsystem* Projectiles = World->GetSubsystem<UProjectileSubsystem>(); Projectiles && State.Track.ProjectileHandle.IsValid())
 			{
 				Projectiles->OnProjectileFinished.Remove(State.Track.ProjectileHandle);
@@ -3263,10 +3267,14 @@ namespace PmcArena
 		{
 			return;
 		}
-		// Fable review of e5459527: a mantle link refused in the last round stays off - back on, so round n plays as its Rounds=1 replay.
-		if (UMantleSubsystem* Mantle = World->GetSubsystem<UMantleSubsystem>())
+		UMantleSubsystem* Mantle = World->GetSubsystem<UMantleSubsystem>();
+		if (Mantle && State.Round == 0)
 		{
-			Mantle->EnableAllLinks();
+			Mantle->BeginArenaLinkTracking();
+		}
+		else if (Mantle)
+		{
+			Mantle->RestoreArenaLinks(); // a refusal by an arena fighter must not carry into the next seed's replay
 		}
 		++State.Round;
 		// The round's own seed (base + round - 1, the trainer's convention): Rounds=1 Seed=<it> replays this round - its spawns, looks,
@@ -3433,6 +3441,16 @@ namespace PmcArena
 			else
 			{
 				UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] no playtest bot in this build: the player's squad fights on its own fire alone"));
+			}
+		}
+		if (Mantle)
+		{
+			for (const FSide& Side : State.Sides)
+			{
+				for (const TWeakObjectPtr<AOperativeCharacter>& Fighter : Side.Members)
+				{
+					Mantle->TrackArenaFighter(Fighter.Get());
+				}
 			}
 		}
 		// fix/arena-no-outer-strip: the round's placement against the play area (every fighter and the objective must be inside it).

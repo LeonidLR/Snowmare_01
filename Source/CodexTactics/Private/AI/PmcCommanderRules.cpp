@@ -629,9 +629,10 @@ namespace PmcCommanderRules
 		return Fighter + Away * DistanceCm;
 	}
 
-	bool IsDefenceFallBackSlotAllowed(const FVector& FighterFeet, const FVector& Slot, const FVector& Objective, float ZoneRadiusCm, float MaxRunCm)
+	bool IsDefenceFallBackSlotAllowed(const FVector& FighterFeet, const FVector& Slot, const FVector& Objective, float ZoneRadiusCm, float MaxRunCm,
+		const FVector* HeldSlot)
 	{
-		if (FVector::Dist2D(FighterFeet, Slot) > MaxRunCm)
+		if ((HeldSlot && HeldSlot->Equals(Slot, 50.f)) || FVector::Dist2D(FighterFeet, Slot) > MaxRunCm)
 		{
 			return false;
 		}
