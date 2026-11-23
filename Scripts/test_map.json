@@ -215,6 +215,12 @@
   "nonSmokeDebugCommands": ["PmcArena", "LevelGenIslandsProbe", "GiveWeapon", "MortarList", "MortarMan", "MortarFire", "MortarCease", "MortarCrewPmc", "ShotgunD1Shots", "ShotgunLoopShots", "RpgShots", "RecoilProbe", "CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots", "StoryShowcaseFixShots"],
   "rules": [
     {
+      "name": "indoor-cover-animation",
+      "globs": ["Source/**/Characters/CoverAnimSetRules*", "Source/**/Characters/OperativeAnimInstanceCoverSet*", "Source/**/Debug/CoverIndoorSmoke*", "Content/Data/Animation/cover_anim_sets.json"],
+      "tests": ["CodexTactics.Animation.CoverAnimSet"],
+      "smokes": ["CoverIndoorSmoke"]
+    },
+    {
       "name": "first-aid-2026-11-16",
       "_comment": "The game designer 2026-11-16: first aid by wound tier (Survival/FirstAidRules, UFirstAidSubsystem, Content/Data/Survival/first_aid.json, the clips Scripts/Editor/setup_first_aid_animation.py); the medkit / bag inventory paths.",
       "globs": ["Source/**/Survival/FirstAid*", "Source/**/Characters/OperativeAnimInstanceFirstAid*", "Source/**/Debug/FirstAidSmoke*", "Content/Data/Survival/first_aid.json", "Scripts/Editor/setup_first_aid_animation.py", "Source/**/UI/InventoryDrawerWidget*", "Source/**/Core/CodexTacticsPlayerControllerItems*"],
