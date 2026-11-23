@@ -3,6 +3,7 @@ import copy
 import io
 import json
 import pathlib
+import tempfile
 import threading
 import unittest
 from unittest.mock import patch
@@ -33,6 +34,17 @@ class RouterTests(unittest.TestCase):
         with (ROOT / "Scripts" / "Tools" / "model_routes.json").open(encoding="utf-8") as f:
             cls.routes = json.load(f)
 
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        local_root = pathlib.Path(temp.name)
+        flag = local_root / router.AGENT_FLAG
+        flag.parent.mkdir(parents=True)
+        flag.touch()
+        root = patch.object(router, "ROOT", local_root)
+        root.start()
+        self.addCleanup(root.stop)
+
     def classify(self, response, text=TASK):
         with patch.object(jev_client, "ask", return_value=response) as ask:
             result = router.classify(text, self.config, timeout=0.05)
@@ -47,12 +59,17 @@ class RouterTests(unittest.TestCase):
         for level, expected_id in CODEX_IDS.items():
             with self.subTest(level=level):
                 result = self.classify(answers(level))
-                self.assertTrue(result["route"])
                 self.assertEqual(result["level"], level)
                 self.assertEqual(codex["models"][codex["levels"][result["level"]]], expected_id)
-                # The shared classifier retains the Claude-facing config; Codex maps the level separately.
-                self.assertEqual(result["model"], self.config["levels"][level]["model_name"])
-                self.assertEqual(result["agent"], self.config["levels"][level]["agent"])
+                if level == "4":
+                    self.assertFalse(result["route"])
+                    self.assertIsNone(result["model"])
+                    self.assertIsNone(result["agent"])
+                    self.assertIn("Lead", result["reason"])
+                else:
+                    self.assertTrue(result["route"])
+                    self.assertEqual(result["model"], self.config["levels"][level]["model_name"])
+                    self.assertEqual(result["agent"], self.config["levels"][level]["agent"])
 
     def test_claude_config_remains_claude(self):
         self.assertEqual(self.config["provider"], "claude-code-subagents")

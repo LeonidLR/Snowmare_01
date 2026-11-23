@@ -11,6 +11,8 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "MantleNavigation.generated.h"
 
+class AOperativeCharacter;
+
 class UAnimSequenceBase;
 struct FNavigationPath;
 
@@ -291,7 +293,14 @@ public:
 	/** The mantle links a path runs through, in path order (its corridor's link polys and its custom-link points). */
 	void FindLinksOnPath(const FNavigationPath& Path, TArray<int32>& OutLinks) const;
 	/** A link that failed in play: its area off - no path takes it again. */
-	void DisableLink(int32 Index, const TCHAR* Why);
+	void DisableLink(int32 Index, const TCHAR* Why, AOperativeCharacter* Fighter = nullptr);
+	/** Snapshot the enabled links before the arena's first round. */
+	void BeginArenaLinkTracking();
+	/** Register the fighters whose failures may affect the next round. */
+	void TrackArenaFighter(AOperativeCharacter* Fighter);
+	/** Restore only links enabled in the snapshot and switched off by tracked fighters. Returns the number restored. */
+	int32 RestoreArenaLinks();
+	void EndArenaLinkTracking();
 
 	/** Exclusive landing: Who holds Landing (no other climber's landing within reserve.radius_cm). False when another man holds it. */
 	bool TryReserve(AActor* Who, const FVector& Landing);
@@ -316,7 +325,11 @@ private:
 	bool IsReadyToGenerate() const;
 	void HandleLinkReached(UNavLinkCustomComponent* ThisComp, UObject* PathComp, const FVector& DestPoint);
 
+	friend class FMantleArenaLinkRestoreTest;
 	TArray<FMantleLink> Links;
+	TSet<TWeakObjectPtr<UNavLinkCustomComponent>> ArenaEnabledLinks;
+	TSet<TWeakObjectPtr<UNavLinkCustomComponent>> ArenaDisabledLinks;
+	TSet<TWeakObjectPtr<AOperativeCharacter>> ArenaLinkFighters;
 	UPROPERTY(Transient)
 	TObjectPtr<AMantleLinkActor> LinkActor;
 	struct FReservation

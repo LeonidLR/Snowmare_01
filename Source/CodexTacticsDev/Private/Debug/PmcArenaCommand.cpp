@@ -111,6 +111,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "LevelGen/MissionGoalsSubsystem.h"
 #include "LevelGen/TacticalMapSubsystem.h"
+#include "Interactables/MantleNavigation.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Kismet/GameplayStatics.h"
@@ -219,7 +220,7 @@ namespace PmcArena
 		 * FallBackCover=1|0 (R1, loss autopsy 2026-11-23; default 1 since the paired A/B 2026-11-23 - 166 vs 146 wins, 1 vs 36 captures
 		 * on seeds 1060-1359, Lead: the arena / baseline default, the bar = det/r1-cover): the defending PMC team falls back in contact
 		 * only into a near cover slot that keeps it in the zone (UPmcSquadSubsystem::SetDefenceFallBackCover); FallBackCover=0 = the old
-		 * fall-back (the before measurement). Written to the round as "fallback_cover". The game turns it on with its mission objectives.
+		 * fall-back (the before measurement). Written to the round as "fallback_cover"; the arena is the only caller enabling it.
 		 */
 		bool bFallBackCover = true;
 		/**
@@ -3069,6 +3070,10 @@ namespace PmcArena
 				Pmc->DestroyTeam(TeamA);
 				Pmc->DestroyTeam(TeamB);
 			}
+			if (UMantleSubsystem* Mantle = World->GetSubsystem<UMantleSubsystem>(); Mantle && State.Round > 0)
+			{
+				Mantle->EndArenaLinkTracking();
+			}
 			if (UProjectileSubsystem* Projectiles = World->GetSubsystem<UProjectileSubsystem>(); Projectiles && State.Track.ProjectileHandle.IsValid())
 			{
 				Projectiles->OnProjectileFinished.Remove(State.Track.ProjectileHandle);
@@ -3262,6 +3267,15 @@ namespace PmcArena
 		{
 			return;
 		}
+		UMantleSubsystem* Mantle = World->GetSubsystem<UMantleSubsystem>();
+		if (Mantle && State.Round == 0)
+		{
+			Mantle->BeginArenaLinkTracking();
+		}
+		else if (Mantle)
+		{
+			Mantle->RestoreArenaLinks(); // a refusal by an arena fighter must not carry into the next seed's replay
+		}
 		++State.Round;
 		// The round's own seed (base + round - 1, the trainer's convention): Rounds=1 Seed=<it> replays this round - its spawns, looks,
 		// weapons AND its attacker (by the seed's parity, not the round index).
@@ -3421,6 +3435,8 @@ namespace PmcArena
 			Squad->SetFollowersHolding(true);
 			if (State.Options.Opponent == EOpponent::Player)
 			{
+				// Known asymmetry (Fable review of e5459527, 2026-11-23): this team 0 squad under a PMC commander keeps the PLAYER's mantle rule
+				// (Solo / formation leader, OperativeMovementRules::IsMantlePathAllowed), unlike team 1/2; the Crossroads / Script batches never use it.
 				Pmc->SetTeamCommanded(PmcTeam::Player, true, &State.WeightsB);
 			}
 			else if (UPlaytestBotSubsystem* Bot = World->GetSubsystem<UPlaytestBotSubsystem>())
@@ -3430,6 +3446,16 @@ namespace PmcArena
 			else
 			{
 				UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] no playtest bot in this build: the player's squad fights on its own fire alone"));
+			}
+		}
+		if (Mantle)
+		{
+			for (const FSide& Side : State.Sides)
+			{
+				for (const TWeakObjectPtr<AOperativeCharacter>& Fighter : Side.Members)
+				{
+					Mantle->TrackArenaFighter(Fighter.Get());
+				}
 			}
 		}
 		// fix/arena-no-outer-strip: the round's placement against the play area (every fighter and the objective must be inside it).

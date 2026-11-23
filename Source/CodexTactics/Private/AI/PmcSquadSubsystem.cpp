@@ -2111,13 +2111,10 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		{
 			// R1 (loss autopsy 2026-11-23, FallBackCover=1): a zone defender falls back only into a near cover slot that keeps him in
 			// the zone (PmcCommanderRules::IsDefenceFallBackSlotAllowed); none = no walk - the order fails, he fights from where he is.
-			const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
 			FCoverSlot NearCover;
 			float NearQuality = 0.f;
 			if (FindCoverNear(Fighter, View.Threat.Location, PmcCommanderRules::DefenceFallBackRunCm, nullptr, Team.Weights, NearCover, NearQuality, View.Band, nullptr,
-					TConstArrayView<FVector>(), TConstArrayView<FString>(), bPostLevelOnly ? &PostLevelZ : nullptr)
-				&& PmcCommanderRules::IsDefenceFallBackSlotAllowed(Feet, NearCover.WorldLocation, Team.Objective->Location, Team.Objective->RadiusCm)
-				&& !(Fighter.bInCover && Fighter.GetCoverSlot().WorldLocation.Equals(NearCover.WorldLocation, 50.f)))
+					TConstArrayView<FVector>(), TConstArrayView<FString>(), bPostLevelOnly ? &PostLevelZ : nullptr, &Team.Objective.GetValue()))
 			{
 				Context.Cover = NearCover;
 				Context.bSprint = true;
@@ -2514,7 +2511,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 
 bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
 	FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band, float* OutBandFactor, TConstArrayView<FVector> ClaimedPosts,
-	TConstArrayView<FString> ClaimedKeys, const float* PostLevelZ) const
+	TConstArrayView<FString> ClaimedKeys, const float* PostLevelZ, const FPmcObjectiveView* DefenceFallBackObjective) const
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -2539,7 +2536,8 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 	// High ground (the Depot arena, 2026-11-03): every slot's score grows with its height level (3 m steps, SightRules::HeightLevel)
 	// over the ground under the fighter (his eye minus his eye height above that ground, the shared sight's measurement).
 	const bool bHighGround = Weights.HighGround > 0.f && Weights.HighGroundMaxLevels > 0;
-	const FVector Feet = Fighter.GetActorLocation() - FVector(0.f, 0.f, Fighter.GetSimpleCollisionHalfHeight());
+	const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
+	const FVector* HeldSlot = Fighter.bInCover ? &Fighter.GetCoverSlot().WorldLocation : nullptr;
 	const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
 	const float GroundZ = Sight ? static_cast<float>(UTacticalSightSubsystem::EyePoint(Fighter).Z) - Sight->GetEyeAboveGroundCm(Fighter) : static_cast<float>(Feet.Z);
 	const float EyeCm = SightRules::EyeHeight(EOperativeStance::Standing);
@@ -2603,6 +2601,12 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		}
 		// G008 lead review 2 (B): a posted defender's cover stays on his post's level.
 		if (PostLevelZ && !PmcDefenceRules::IsGoalOnPostLevel(true, static_cast<float>(Slot.WorldLocation.Z), *PostLevelZ, Weights.LevelToleranceCm))
+		{
+			return;
+		}
+		// R1 filters each ray before scoring or spending the elevated-candidate path budget.
+		if (DefenceFallBackObjective && !PmcCommanderRules::IsDefenceFallBackSlotAllowed(Feet, Slot.WorldLocation,
+			DefenceFallBackObjective->Location, DefenceFallBackObjective->RadiusCm, RadiusCm, HeldSlot))
 		{
 			return;
 		}

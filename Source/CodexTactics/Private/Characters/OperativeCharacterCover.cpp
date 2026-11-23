@@ -852,6 +852,11 @@ float AOperativeCharacter::GetCoverFacingYaw() const
 	return CoverFacingRules::FacingYaw(CoverSlot, CoverFacing);
 }
 
+float AOperativeCharacter::GetShimmyRemainingCm() const
+{
+	return bShimmying && bHasPendingCover ? static_cast<float>(FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation)) : 0.f;
+}
+
 bool AOperativeCharacter::IsShimmyForward() const
 {
 	return CoverFacingRules::IsShimmyForward(CoverFacing, ShimmyDirection, bHasCoverThreat);

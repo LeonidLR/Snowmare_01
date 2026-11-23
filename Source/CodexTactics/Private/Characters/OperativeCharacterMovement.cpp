@@ -519,7 +519,8 @@ TSubclassOf<UNavigationQueryFilter> AOperativeCharacter::ChooseMoveFilter() cons
 	case TripwireRules::EOperativeMoveFilter::NoCrawlTrapLiteral: Filter = UNavFilter_NoCrawlTrapLiteral::StaticClass(); break;
 	default: break;
 	}
-	// Mantling slice 1: the mantle links (UNavArea_Mantle) are open only for the operative the player commands in Solo (bMantlePathAllowed).
+	// The mantle links (UNavArea_Mantle) are open only while this order may climb (bMantlePathAllowed, OperativeMovementRules::IsMantlePathAllowed:
+	// the player's Solo order / formation leader R17-1; a PMC commander order always).
 	const TSubclassOf<UNavigationQueryFilter> Chosen = bMantlePathAllowed ? Filter : MantleNavigation::NoMantleVariant(Filter);
 	// Window sills - designer rule 2026-11-22, every mode (Solo, box selection, formation): a WHOLE window is a way through only on the
 	// player's window order (the silhouette click, SetWindowOrder) - then for everyone in the order, the followers' window costing nothing so

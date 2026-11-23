@@ -3,6 +3,8 @@
 // headroom, run-up -> standing / running clip, male / female clips, round-robin, missing-clip fallback, warp limits, path link spacing).
 
 #include "Characters/MantleRules.h"
+#include "Characters/OperativeCharacter.h"
+#include "Interactables/MantleNavigation.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
 
@@ -32,6 +34,47 @@ namespace MantleRulesTestUtil
 	{
 		return Config.Clips.IsValidIndex(Decision.ClipIndex) ? FPaths::GetBaseFilename(Config.Clips[Decision.ClipIndex].Path) : FString();
 	}
+}
+
+MANTLE_RULES_TEST(FMantleArenaLinkRestoreTest, "ArenaLinkRestore")
+bool FMantleArenaLinkRestoreTest::RunTest(const FString&)
+{
+	UMantleSubsystem* Mantle = NewObject<UMantleSubsystem>();
+	AOperativeCharacter* ArenaFighter = GetMutableDefault<AOperativeCharacter>();
+	const auto AddLink = [Mantle](bool bEnabled)
+	{
+		UNavLinkCustomComponent* Link = NewObject<UNavLinkCustomComponent>();
+		Link->SetEnabled(bEnabled);
+		Mantle->Links.AddDefaulted_GetRef().Link = Link;
+		return Link;
+	};
+	UNavLinkCustomComponent* InitiallyDisabled = AddLink(false);
+	UNavLinkCustomComponent* DisabledByArena = AddLink(true);
+	UNavLinkCustomComponent* DisabledOutside = AddLink(true);
+	UNavLinkCustomComponent* Untouched = AddLink(true);
+
+	Mantle->BeginArenaLinkTracking();
+	Mantle->TrackArenaFighter(ArenaFighter);
+	UNavLinkCustomComponent* AddedAfterSnapshot = AddLink(true);
+	Mantle->DisableLink(0, TEXT("test pre-disabled"), ArenaFighter);
+	Mantle->DisableLink(1, TEXT("test arena refusal"), ArenaFighter);
+	Mantle->DisableLink(2, TEXT("test non-arena refusal"));
+	Mantle->DisableLink(4, TEXT("test link added during arena"), ArenaFighter);
+	TestEqual(TEXT("restore exactly the snapshot link disabled by the arena"), Mantle->RestoreArenaLinks(), 1);
+	TestFalse(TEXT("a link disabled before the arena stays off"), InitiallyDisabled->IsEnabled());
+	TestTrue(TEXT("the arena's refused link is enabled again"), DisabledByArena->IsEnabled());
+	TestFalse(TEXT("a disable from outside the arena stays off"), DisabledOutside->IsEnabled());
+	TestTrue(TEXT("an untouched link stays on"), Untouched->IsEnabled());
+	TestFalse(TEXT("a new link outside the snapshot stays off"), AddedAfterSnapshot->IsEnabled());
+	TestEqual(TEXT("restoration consumes the round's disables"), Mantle->RestoreArenaLinks(), 0);
+	Mantle->TrackArenaFighter(ArenaFighter);
+	Mantle->DisableLink(1, TEXT("test next round refusal"), ArenaFighter);
+	Mantle->EndArenaLinkTracking();
+	TestTrue(TEXT("arena finish restores its last round"), DisabledByArena->IsEnabled());
+	Mantle->TrackArenaFighter(ArenaFighter);
+	Mantle->DisableLink(1, TEXT("test no arena snapshot"), ArenaFighter);
+	TestEqual(TEXT("arena finish clears the snapshot"), Mantle->RestoreArenaLinks(), 0);
+	return true;
 }
 
 MANTLE_RULES_TEST(FMantleRulesHeightClassesTest, "HeightClasses")

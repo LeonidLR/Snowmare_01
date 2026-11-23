@@ -4,6 +4,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimInstanceProxy.h"
 #include "Characters/BlizzardWalkRules.h"
+#include "Characters/CoverAnimSetRules.h"
 #include "Characters/InjuredLocomotionRules.h"
 #include "Characters/InteractionAnimRules.h"
 #include "Characters/OperativeMovementRules.h"
@@ -97,6 +98,40 @@ struct CODEXTACTICS_API FWarmIdleClipSet
 	TObjectPtr<UAnimSequenceBase> End;
 
 	bool IsValid() const { return LoopA != nullptr; }
+};
+
+/** Two assets of one cover state, indexed by CoverFacingRules::ClipIndex (cover animation sets, CoverAnimSetRules). */
+USTRUCT()
+struct CODEXTACTICS_API FCoverSetAssets
+{
+	GENERATED_BODY()
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UObject>> Assets;
+};
+
+/**
+ * A loaded cover animation set (designer 2026-11-22, Content/Data/Animation/cover_anim_sets.json, docs/design/INDOOR_COVER_ANIMATIONS.md):
+ * the native cover arrays it replaces (by property name) and the clips of states the native set has none for (by clip key base).
+ */
+USTRUCT()
+struct CODEXTACTICS_API FCoverAnimSetLoaded
+{
+	GENERATED_BODY()
+
+	/** Native cover array name (CoverStandIdle, ...) -> its replacement; an empty replacement clears the native slot. */
+	UPROPERTY(Transient)
+	TMap<FName, FCoverSetAssets> Slots;
+
+	/** Clip key base (stand_reload, crouch_over_ao, ...) -> the pair. */
+	UPROPERTY(Transient)
+	TMap<FName, FCoverSetAssets> Extras;
+
+	/** Grenade release time per "<stance>_<side>", s. */
+	TMap<FString, float> GrenadeReleaseSeconds;
+
+	/** The walk loops' ground pace at rate 1 per stance ("stand" / "crouch"), cm/s. */
+	TMap<FString, float> ShimmyClipSpeed;
 };
 
 /**
@@ -1248,6 +1283,40 @@ public:
 	/** Names of the cover clips played (loops, one-shots) in order, newest last, capped (smokes). */
 	const TArray<FString>& GetCoverClipLog() const { return CoverClipLog; }
 
+	// --- Cover animation sets (designer 2026-11-22, CoverAnimSetRules, OperativeAnimInstanceCoverSet.cpp): which cover clip set plays is
+	// data (Content/Data/Animation/cover_anim_sets.json: per context - indoor / outdoor / stealth - and per operative). Decided at each
+	// cover entry (indoor = URoofCutawaySubsystem::GetOperativeStorey puts him in a building); "m4" / none = the native arrays below. ---
+
+	/** Off: the native cover clips everywhere (console Codex.Cover.AnimSets overrides: -1 = this + the JSON, 0 = off, 1 = on). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation Sets")
+	bool bUseCoverAnimSets = true;
+
+	/**
+	 * Tick once the graph's Aim Offset Player reads ActiveAimOffset (the designer's ABP step, same pin as the sniper AOs): a set's own aim
+	 * offsets (AO_CoverIndoor_*) then drive the cover fire stance. Off: the rifle aim offset stays on it (bAimOffsetInCover).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation Sets")
+	bool bCoverSetAimOffsetWired = false;
+
+	/** The cover set playing now ("" = the native clips). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover Animation Sets")
+	FString GetActiveCoverAnimSet() const { return ActiveCoverAnimSet; }
+
+	/** The context the last cover entry was judged in ("indoor" / "outdoor" / "stealth"; smokes). */
+	const FString& GetCoverAnimContext() const { return CoverAnimContextName; }
+
+	/** The active set has its own clip for Key base (stand_reload, crouch_over_fire_idle, ...) on Facing's side. */
+	bool HasCoverSetClip(const TCHAR* KeyBase, ECoverFacing Facing) const;
+
+	/** The cover fire stance uses the over-the-top set now (Aim/2: crouched at a low cover away from its corner - a window sill). */
+	bool IsCoverOverTopFireSet() const { return bCoverOverTopFireSet; }
+
+	/** A set's own reload / grenade throw / side switch / walk transition one-shot is playing (smokes). */
+	const FString& GetCoverSetOneShotKind() const { return CoverSetOneShotKind; }
+
+	/** Re-reads cover_anim_sets.json (console Codex.Cover.ReloadAnimSets; tests). */
+	static void ReloadCoverAnimSetConfig();
+
 	/** The cover layer is in the fire-ready pose (idle -> fire played / fire_idle looping) - smokes. */
 	bool IsCoverInFirePose() const { return bCoverInFirePose; }
 	/**
@@ -2295,6 +2364,71 @@ private:
 	TWeakObjectPtr<AOperativeCharacter> BoundOperative;
 	FDelegateHandle FiredHandle;
 	FDelegateHandle GrenadeHandle;
+
+	// --- Cover animation sets (OperativeAnimInstanceCoverSet.cpp) ---
+	/** The native cover arrays as resolved at start (restored when the native set is chosen again). */
+	UPROPERTY(Transient)
+	TMap<FName, FCoverSetAssets> NativeCoverArrays;
+	/** Sets loaded for this body, by set name. */
+	UPROPERTY(Transient)
+	TMap<FString, FCoverAnimSetLoaded> LoadedCoverSets;
+	FString ActiveCoverAnimSet;
+	FString CoverAnimContextName;
+	bool bCoverNativeArraysCaptured = false;
+	/** The cover wall point the set was chosen at; a cover-to-cover move farther than CoverSetRechooseCm (not a shimmy) chooses again. */
+	FVector CoverSetSlotPoint = FVector::ZeroVector;
+	static constexpr float CoverSetRechooseCm = 150.f;
+	bool bCoverOverTopFireSet = false;
+	/** The facing the layer last drew (a change while idle in cover plays the set's side switch). */
+	ECoverFacing CoverSetLastFacing = ECoverFacing::Right;
+	bool bCoverSetWasShimmying = false;
+	float CoverSetLastShimmyDirection = 0.f;
+	bool bCoverSetShimmyStartPending = false;
+	bool bCoverSetShimmyReversePending = false;
+	bool bCoverSetFacingChangePending = false;
+	ECoverFacing CoverSetReverseFromFacing = ECoverFacing::Right;
+	/** Per frame in cover, before the layer's early returns: the facing / shimmy changes the set states consume. */
+	void TrackCoverSetChanges(const AOperativeCharacter& Operative);
+	/** A walk start / stop / turn one-shot of the set is playing (a shimmy does not cut it). */
+	bool IsCoverSetWalkOneShotPlaying() const;
+	/** The shimmy loop's pace at rate 1: the set's own (JSON shimmy_clip_speed) or CoverShimmyClipSpeed, cm/s. */
+	float GetCoverSetShimmyClipSpeed() const;
+	/** In cover with a set that has its own reload clip for the stance: the upper-body reload stays off (the set's plays). */
+	bool WantsCoverSetReload() const;
+	/** The current walk along the wall plays the start / stop clips (long enough, Q5). */
+	bool bCoverSetLongWalk = false;
+	bool bCoverSetStopPlayed = false;
+	/** "reload" / "grenade" / "side_switch" / "walk_start" / "walk_stop" / "walk_turn" while that one-shot plays, else empty. */
+	FString CoverSetOneShotKind;
+	TWeakObjectPtr<UAnimMontage> CoverSetOneShotMontage;
+	bool bCoverSetReloadPlaying = false;
+	ECoverOverTopPhase CoverOverTopPhase = ECoverOverTopPhase::Idle;
+	uint32 CoverOverTopMoveOrderSerial = 0;
+	bool bCoverOverTopShotPending = false;
+	/** Facing right, switch left before Aim/2. True while the switch owns the pose. */
+	bool TryCoverSetOverSideSwitch();
+	void ResetCoverOverTopSwitch();
+	/** The native cover arrays by property name (the set slots). */
+	TArray<TObjectPtr<UAnimSequenceBase>>* FindCoverArray(FName Slot);
+	/** Gathers every set clip of the JSON into the preload catalog (OutPaths) or loads this body's sets (nullptr). */
+	void ResolveCoverAnimSets(TArray<FSoftObjectPath>* OutPaths);
+	/** Picks the set for this cover entry and swaps the arrays (UpdateCoverLayer, the entry frame). */
+	void ChooseCoverAnimSet(const AOperativeCharacter& Operative);
+	void ApplyCoverAnimSet(const FString& Set);
+	/** The active set's pair for a key base (nullptr: none / not loaded). */
+	const FCoverSetAssets* FindCoverSetExtra(const TCHAR* KeyBase) const;
+	UAnimSequenceBase* PickCoverSetClip(const TCHAR* KeyBase, ECoverFacing Facing) const;
+	/** Per frame in cover with a set: the side / over-the-top fire set, the side switch, the walk start / stop / turn (true: a one-shot started). */
+	bool UpdateCoverSetStates(const AOperativeCharacter& Operative);
+	/** The set's own cover reload (UpdateCoverLayer's reload block; true = it owns the reload now). */
+	bool UpdateCoverSetReload(const AOperativeCharacter& Operative);
+	/** The set's grenade throw from cover (HandleGrenadeThrow; true = played). */
+	bool PlayCoverSetGrenadeThrow(AOperativeCharacter& Operative);
+	/** The set's aim offset for the cover fire stance (after the sniper layer). */
+	void UpdateCoverSetAimOffset();
+	bool PlayCoverSetOneShot(UAnimSequenceBase* Clip, const TCHAR* Kind, float BlendIn, float BlendOut, float PlayRate = 1.f);
+	/** The set's one-shot (CoverSetOneShotKind) is still playing; clears the kind when it is not. */
+	bool IsCoverSetOneShotPlaying();
 	bool bDeathPlayed = false;
 	/** Killed off the ground (fix/corpse-falls-to-ground): the death clip waits until the body has landed (AOperativeCharacter::IsCorpseFalling). */
 	bool bDeathDeferred = false;

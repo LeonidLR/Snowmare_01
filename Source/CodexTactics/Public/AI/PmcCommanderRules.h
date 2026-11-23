@@ -695,7 +695,7 @@ namespace PmcCommanderRules
 	 * he never leaves the zone, and one already outside does not go farther. No such slot = no fall-back walk (he fights where he is).
 	 */
 	CODEXTACTICS_API bool IsDefenceFallBackSlotAllowed(const FVector& FighterFeet, const FVector& Slot, const FVector& Objective, float ZoneRadiusCm,
-		float MaxRunCm = DefenceFallBackRunCm);
+		float MaxRunCm = DefenceFallBackRunCm, const FVector* HeldSlot = nullptr);
 
 	/**
 	 * How well a cover slot shields from Threat: the slot's wall is BEHIND the man facing along WallNormal, so it covers threats on
