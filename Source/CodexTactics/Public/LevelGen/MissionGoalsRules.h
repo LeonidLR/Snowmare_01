@@ -42,6 +42,8 @@ struct CODEXTACTICS_API FMissionGoal
 	FString Zone;
 	/** Room goals: the room's floor polygon (world XY, >= 3 corners); then the goal counts anywhere inside it instead of the radius. */
 	TArray<FVector2D> Area;
+	/** "grant_keys": door keys the squad gets when the goal is reached (a quest item; openable doors R2, UDoorSubsystem::AddKey). */
+	TArray<FString> GrantKeys;
 };
 
 /** The parsed file. */

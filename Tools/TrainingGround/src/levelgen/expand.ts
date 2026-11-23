@@ -28,7 +28,7 @@ import { obstacleHeight } from './obstacleHeights.ts';
 import type { Profile } from './profile.ts';
 import { toUE } from './profile.ts';
 import type { CoverKind, GenCover, GenLayout, GenWall, LockDistrict, SpawnPoint } from './schema.ts';
-import { CUT_BUILDING_MARGIN_CM, EXPANSION_STATE_VERSION, REGEN_STATE_VERSION, rect, toFormationLayout } from './schema.ts';
+import { CUT_BUILDING_MARGIN_CM, EXPANSION_STATE_VERSION, LEVELGEN_SCHEMA_V2, REGEN_STATE_VERSION, rect, toFormationLayout } from './schema.ts';
 
 const E = V2.expansion;
 
@@ -262,7 +262,8 @@ function buildExpansion(old: GenLayout, o: ExpandOptions, size: [number, number]
     }
   }
   const newLots: Lot[] = cells.map((c, i) => ({ id: `LOT_${tag}_${i + 1}`, rect: rectToUE(c, frame), template: '' }));
-  const ctx = { seed, frame, streets_m: [...streetRectsM(old).map((r) => M(rectToUE(r, frameOf(old)))), ...streets.map((s) => s.r)], verticality: old.params.verticality, density: old.params.density, maxRotationDeg: old.params.max_rotation_deg ?? ROTATION.max_deg_default };
+  const ctx = { seed, frame, streets_m: [...streetRectsM(old).map((r) => M(rectToUE(r, frameOf(old)))), ...streets.map((s) => s.r)], verticality: old.params.verticality, density: old.params.density, maxRotationDeg: old.params.max_rotation_deg ?? ROTATION.max_deg_default,
+    ...(old.params.building_plans ? { building_plans: true } : {}) };
   const content = { walls: [] as GenWall[], buildings: [] as GenLayout['buildings'], ladders: [] as GenLayout['ladders'], covers: [] as GenCover[], zones: [] as GenLayout['zones'], ambush_points: [] as GenLayout['ambush_points'], mantle_edges: [] as NonNullable<GenLayout['mantle_edges']> };
   for (const lot of newLots) {
     const t = pickTemplates(lot, '', seed, frame)[0];
@@ -341,6 +342,7 @@ function buildExpansion(old: GenLayout, o: ExpandOptions, size: [number, number]
   const state = old.regen ? { ...old.regen } : { version: REGEN_STATE_VERSION, locks: [], rerolls: [] };
   const layout: GenLayout = {
     ...old,
+    ...(old.params.building_plans ? { schema: LEVELGEN_SCHEMA_V2 } : {}), // planned buildings need the /2 defaults (S2.2)
     name: expandedName(old.name, o.factor),
     bounds: { min: [-(H / 2) * 100, -(W / 2) * 100], max: [(H / 2) * 100, (W / 2) * 100] },
     walls: [...oldWalls, ...walls, ...content.walls],

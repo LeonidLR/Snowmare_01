@@ -65,6 +65,9 @@ the audit, the movement bot and the map builder read a generated layout unchange
   tall ones block sight.
 - `routes[]`: the lab route + `mandatory` (exactly one), `layers[]` (the layer of every point), `links[]` (`{ at, via }`:
   the leg ending at point `at` goes through the ladder / stair / hole (`hole_roof_<i>`, `hole_floor_<i>`) / crossing `via`),
+  or OVER a MANTLE edge (`via` = a `mantle_edges[]` id, both points on one layer, the leg crosses the edge, height 50..150 cm; the
+  walls-only check lets the leg through, the evaluation adds `building_route_costs.json` `actions.vault.t` per mantle as `time_s`;
+  the bot route marks the end waypoint `"mantle": <id>` + `"mantle_at"`; T-02 gap 4, lab V3_mantle),
   `set_pieces[]`, `intent` + `intent_note` (`'kill_zone'`: a deliberately exposed passage the designer wants - V3 along the cut
   floor, 2026-11-02; never on the mandatory route). A leg that ends at an open hole stops on its RIM (`HOLE_RIM_M` = the hole's
   half side 1.2 m + 0.8 m, on the side it comes from); the drop leg lands 1 m past the hole's centre on the level below.

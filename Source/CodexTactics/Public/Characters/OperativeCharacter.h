@@ -2542,6 +2542,14 @@ public:
 	 * > movement direction. Not prone, sprinting, carrying or on the turn-based grid.
 	 */
 	void SetFormationLookYaw(const TOptional<float>& Yaw) { FormationLookYaw = Yaw; }
+
+	/**
+	 * Doors R2 (designer bug 2026-11-22 "the first kick hits the door, the second the air"): while he works a door (every kick attempt, the
+	 * lock shot, the key, the push, to the end of its clip) UDoorSubsystem holds his facing at Yaw - no other facing system (the facing
+	 * return, the threat turn, a formation sector, an idle facing) turns him meanwhile. Unset = released.
+	 */
+	void SetDoorFacingLock(const TOptional<float>& Yaw) { DoorFacingYaw = Yaw; }
+	bool HasDoorFacingLock() const { return DoorFacingYaw.IsSet(); }
 	TOptional<float> GetFormationLookYaw() const { return FormationLookYaw; }
 
 	/** True while the formation sector drives his facing (last UpdateCombatFacing). */
@@ -2923,6 +2931,8 @@ private:
 	bool bHasIdleFacing = false;
 	/** Formation look sectors (SetFormationLookYaw / SetFormationPaceMultiplier / SetFormationWallPose). */
 	TOptional<float> FormationLookYaw;
+	/** SetDoorFacingLock: the yaw the door work holds (unset = none). */
+	TOptional<float> DoorFacingYaw;
 	bool bFacingFormationSector = false;
 	float FormationPaceMultiplier = 1.f;
 	bool bFormationWallPose = false;

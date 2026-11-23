@@ -32,7 +32,7 @@ import { buildTemplate, isAnchorLot, lotAt, lotsOf, pickTemplates, rectCentre, r
 import type { TemplateId } from './blockTemplates.ts';
 import { FULL, subdivideBlock, unionRect } from './fullReroll.ts';
 import type { BlockRecord, GenBuilding, GenCover, GenLadder, GenLayout, GenRoute, GenWall, LockDistrict, MantleEdge, PatrolRoute, RegenState, SpawnPoint } from './schema.ts';
-import { REGEN_STATE_VERSION } from './schema.ts';
+import { LEVELGEN_SCHEMA_V2, REGEN_STATE_VERSION } from './schema.ts';
 
 // ---- shapes -----------------------------------------------------------------------------------------------------------------
 
@@ -823,7 +823,7 @@ function mergeAttempt(old: GenLayout, oldGroups: RegenGroup[], sel: ZoneSelectio
   const freshRoutes = new Map(fresh.routes.map((r) => [r.id, r]));
   const inRoute = (p: Vec2) => plan.selected(p);
   const routes = old.routes.map((r) => spliceRoute(r, freshRoutes.get(r.id), inRoute, rename)).filter((r) => r.mandatory || r.points.length >= 2);
-  const layout: GenLayout = { ...old, ...(next as GroupMembers), routes };
+  const layout: GenLayout = { ...old, ...(next as GroupMembers), routes, ...(old.params.building_plans ? { schema: LEVELGEN_SCHEMA_V2 } : {}) }; // planned buildings need the /2 defaults (S2.2)
   if (!old.mantle_edges && !next.mantle_edges!.length) delete layout.mantle_edges;
   const skeletonMatch = JSON.stringify(fresh.cut ?? null) === JSON.stringify(old.cut ?? null)
     && JSON.stringify(fresh.zones.filter(isInfrastructureZone)) === JSON.stringify(old.zones.filter(isInfrastructureZone));

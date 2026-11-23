@@ -34,3 +34,6 @@ ArtPipeline/**
 
 # content snapshots of the import guard (large, local only)
 ArtPipeline/**/content_*_import.json
+
+__pycache__/
+*.pyc

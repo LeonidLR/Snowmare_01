@@ -277,7 +277,7 @@ void ACodexTacticsPlayerController::SyncFormationGhosts()
 bool ACodexTacticsPlayerController::FormationPlacementGround(FVector& OutGround, float PlaneZ) const
 {
 	FHitResult Hit;
-	if (GetHitResultUnderCursor(ECC_Visibility, false, Hit) && Hit.bBlockingHit && FMath::Abs(Hit.ImpactNormal.Z) > 0.7f && !Cast<APawn>(Hit.GetActor()))
+	if (GetCursorHit(Hit) && Hit.bBlockingHit && FMath::Abs(Hit.ImpactNormal.Z) > 0.7f && !Cast<APawn>(Hit.GetActor()))
 	{
 		OutGround = Hit.ImpactPoint;
 		return true;

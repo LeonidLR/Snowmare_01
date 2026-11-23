@@ -1,0 +1,29 @@
+{
+  "schema": "codex.building_route_costs/1",
+  "comment": "The building route model's cost table (docs/design/levelgen/gdd/building-route-model.md F1, opening-states.md F1; ADR-0001 one cost table, ADR-0002 cost_hash). Read by Tools/TrainingGround/src/levelgen/buildingGraph.ts (ROUTE_COSTS, field docs on RouteCostTable) and later by the C++ runtime. Every stored route carries cost_hash = FNV-1a (8 hex) of this file's canonical JSON (sorted keys, no whitespace; buildingRoutes.ts routeCostHash): any edit here, the comment included, marks stored key routes stale and they are recomputed on load. Units: m/s, s, cm, m; all values *proposal*.",
+  "v_ref": 3.0,
+  "t_rung": 0.9,
+  "n_squad": 1,
+  "t_follow": 0.5,
+  "approach_cm": 150,
+  "street_fallback_cm": 1000,
+  "actions": {
+    "walk": { "t": 0, "n": 0, "x": 0 },
+    "open": { "t": 1, "n": 0, "x": 0 },
+    "kick": { "t": 3, "n": 15, "x": 0 },
+    "shotgun": { "t": 1, "n": 30, "x": 0 },
+    "vault": { "t": 1.2, "n": 0, "x": 0 },
+    "shatter": { "t": 1.7, "n": 10, "x": 0 },
+    "climb": { "t": 0, "n": 0, "x": 0 },
+    "explosive": { "t": 5, "n": 25, "x": 1 },
+    "drop": { "t": 0, "n": 0, "x": 0 }
+  },
+  "locked_breach": ["kick"],
+  "profiles": {
+    "balanced": { "a_n": 0.5, "a_x": 60, "a_e": 1 },
+    "quiet": { "a_n": 3, "a_x": 120, "a_e": 1 },
+    "fast": { "a_n": 0.1, "a_x": 20, "a_e": 0.2 }
+  },
+  "exposure": { "above_ground": 1.0, "ground": 0.5 },
+  "detour_bands": { "open": [1.0, 1.3], "storied": [1.5, 4.0], "warn": 4.0 }
+}

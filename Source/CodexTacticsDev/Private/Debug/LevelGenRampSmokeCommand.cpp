@@ -26,6 +26,7 @@
 #include "Survival/ColdSurvivalComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "CollisionQueryParams.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Containers/Ticker.h"
@@ -67,6 +68,11 @@ namespace LevelGenRampSmoke
 		int32 LevelTo = 0;
 		FBox2D Roof = FBox2D(ForceInit);         // the building's footprint
 		TArray<FVector2D> Holes;                  // roof holes on the top level (half 120 / stairwell openings)
+		// A half-landing switchback (kit block cores, docs/design/levelgen/BGEN_KIT_PLANS_2026-11-21.md): flight a Foot -> Turn (half rise),
+		// the mid landing, flight b Mid -> Top. Dir = up flight a, Inward = along flight b onto the floor landing.
+		bool bSwitchback = false;
+		FVector2D Turn = FVector2D::ZeroVector;
+		FVector2D Mid = FVector2D::ZeroVector;
 	};
 
 	struct FLeg
@@ -292,9 +298,10 @@ namespace LevelGenRampSmoke
 			FNavLocation Out;
 			// Recast can end the sloping polygon below the straight line to the slab.
 			// Widen the vertical probe locally without allowing a different storey.
-			const double ExpectedZ = FMath::Lerp(static_cast<double>(Z0), static_cast<double>(Z1), T);
+			const double ZEnd = Stair.bSwitchback ? (static_cast<double>(Z0) + Z1) * 0.5 : static_cast<double>(Z1);
+			const double ExpectedZ = FMath::Lerp(static_cast<double>(Z0), ZEnd, T);
 			const double LowZ = FMath::Max(ExpectedZ - 110.0, Z0 - 25.0);
-			const double HighZ = FMath::Min(ExpectedZ + 80.0, Z1 + 40.0);
+			const double HighZ = FMath::Min(ExpectedZ + 80.0, ZEnd + 40.0);
 			const bool bOn = Nav->ProjectPointToNavigation(FVector(P.X, P.Y, (LowZ + HighZ) * 0.5), Out,
 				FVector(30.0, 30.0, (HighZ - LowZ) * 0.5))
 				&& Out.Location.Z >= LowZ && Out.Location.Z <= HighZ;
@@ -315,6 +322,26 @@ namespace LevelGenRampSmoke
 				TopOnNav = Landing.Location;
 				bTopOnNav = true;
 				break;
+			}
+		}
+		if (Stair.bSwitchback)
+		{
+			// the second flight from the mid landing (half a storey up) onto the next floor landing
+			const double ZMid = (static_cast<double>(Z0) + Z1) * 0.5;
+			const double LengthB = FVector2D::Distance(Stair.Mid, Stair.Top);
+			Samples += TEXT(" |");
+			for (double D = 0.0; D <= LengthB + 1.0; D += 100.0)
+			{
+				const double T = FMath::Clamp(D / FMath::Max(LengthB, 1.0), 0.0, 1.0);
+				const FVector2D P = Stair.Mid + (Stair.Top - Stair.Mid).GetSafeNormal() * D;
+				const double ExpectedZ = FMath::Lerp(ZMid, static_cast<double>(Z1), T);
+				const double LowZ = FMath::Max(ExpectedZ - 110.0, ZMid - 25.0);
+				const double HighZ = FMath::Min(ExpectedZ + 80.0, Z1 + 40.0);
+				FNavLocation Out;
+				const bool bOn = Nav->ProjectPointToNavigation(FVector(P.X, P.Y, (LowZ + HighZ) * 0.5), Out, FVector(30.0, 30.0, (HighZ - LowZ) * 0.5))
+					&& Out.Location.Z >= LowZ && Out.Location.Z <= HighZ;
+				Samples += bOn ? FString::Printf(TEXT(" %.0f"), Out.Location.Z) : FString(TEXT(" ---"));
+				bConnected &= bOn;
 			}
 		}
 		const FString Note = bTopOnNav ? PathNote(World, OnNav(World, From), TopOnNav, nullptr) : TEXT("no top-level navmesh");
@@ -363,9 +390,18 @@ namespace LevelGenRampSmoke
 				Stair.Kind = S->GetStringField(TEXT("kind"));
 				Stair.Foot = ReadPoint(S, TEXT("pos"));
 				Stair.Top = ReadPoint(S, TEXT("top"));
-				const FVector2D Mid = S->HasField(TEXT("mid")) ? ReadPoint(S, TEXT("mid")) : Stair.Top;
+				FVector2D Mid = S->HasField(TEXT("mid")) ? ReadPoint(S, TEXT("mid")) : Stair.Top;
 				Stair.Dir = (Mid - Stair.Foot).GetSafeNormal();
 				Stair.Inward = Stair.Kind == TEXT("external") ? (Stair.Top - Mid).GetSafeNormal() : Stair.Dir;
+				if (Stair.Kind == TEXT("stairwell") && S->HasField(TEXT("turn")) && S->HasField(TEXT("mid")))
+				{
+					Stair.bSwitchback = true;
+					Stair.Turn = ReadPoint(S, TEXT("turn"));
+					Stair.Mid = Mid;
+					Stair.Dir = (Stair.Turn - Stair.Foot).GetSafeNormal();
+					Stair.Inward = (Stair.Top - Stair.Mid).GetSafeNormal();
+					Mid = Stair.Turn; // LogRampNav's first segment = flight a
+				}
 				Stair.LevelFrom = static_cast<int32>(S->GetNumberField(TEXT("from")));
 				Stair.LevelTo = static_cast<int32>(S->GetNumberField(TEXT("to")));
 				Stair.Roof = Roof;
@@ -381,7 +417,15 @@ namespace LevelGenRampSmoke
 					{
 						const FVector2D OPos = ReadPoint(O, TEXT("pos"));
 						const FVector2D OTop = ReadPoint(O, TEXT("top"));
-						Stair.Holes.Add(OTop - (OTop - OPos).GetSafeNormal() * 175.0);
+						if (O->HasField(TEXT("turn")) && O->HasField(TEXT("mid")))
+						{
+							// a switchback's opening: the whole core beyond its floor landing (both flights + the mid landing)
+							Stair.Holes.Add((OPos + OTop + ReadPoint(O, TEXT("turn")) + ReadPoint(O, TEXT("mid"))) * 0.25);
+						}
+						else
+						{
+							Stair.Holes.Add(OTop - (OTop - OPos).GetSafeNormal() * 175.0);
+						}
 					}
 				}
 				FVector TopOnNav = FVector::ZeroVector;
@@ -417,13 +461,43 @@ namespace LevelGenRampSmoke
 					Leg.Kind = Kind;
 					Leg.Stair = Index;
 					// The group's click lands right past the stair's top (the player clicks where the stair arrives); the others further in.
-					Leg.Goal = Stair.LevelFrom > 0 ? TopOnNav : RoofGoal(State, State.Stairs[Index], Kind == ELegKind::Group ? 250.f : 600.f);
+					// a switchback below the roof arrives on a floor landing between closed flat doors: the goal is that landing, never a roof-style goal
+					Leg.Goal = Stair.LevelFrom > 0 || (Stair.bSwitchback && Stair.LevelTo < Floors) ? TopOnNav
+						: RoofGoal(State, State.Stairs[Index], Kind == ELegKind::Group ? 250.f : 600.f);
 					Leg.Limit = 60.f + Rise / 10.f;
 					State.Legs.Add(Leg);
 				}
 			}
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: LevelGenRampSmoke on %s: %d stairs, %d legs"), *State.MapName, State.Stairs.Num(), State.Legs.Num());
+		return true;
+	}
+
+	/**
+	 * A spot a man may be stood on for the leg: on the navmesh within 30 cm of the asked point, on the starting level, and in the flight's room -
+	 * nothing static between the stair's mouth (40 cm off its foot) and the spot. 2026-11-20: a planned building's stair core (S2.2b / S2.3) has
+	 * its partition 95 cm beside the flight, so the stairwell's "Side * 120 / 260" spots stood behind that wall (B_o12w_stair_1: one man projected
+	 * 35 cm into the core's portal doorway, the man sent up in the corridor behind him) - not the squad bunched in the mouth this smoke checks.
+	 */
+	bool IsMouthSpot(UWorld* World, const FStair& Stair, const FVector2D& Spot, float StartZ, FVector& OutAt)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		FNavLocation OnNav;
+		if (!Nav || !Nav->ProjectPointToNavigation(FVector(Spot.X, Spot.Y, StartZ + 50.f), OnNav, FVector(120.f, 120.f, 150.f))
+			|| FVector2D::Distance(FVector2D(OnNav.Location), Spot) > 30.0 || FMath::Abs(OnNav.Location.Z - StartZ) > 25.f)
+		{
+			return false;
+		}
+		const FVector2D Mouth = Stair.Foot - Stair.Dir * 40.0;
+		FCollisionObjectQueryParams Statics;
+		Statics.AddObjectTypesToQuery(ECC_WorldStatic);
+		FHitResult Hit;
+		if (World->LineTraceSingleByObjectType(Hit, FVector(Mouth, StartZ + 60.f), FVector(FVector2D(OnNav.Location), StartZ + 60.f), Statics,
+			FCollisionQueryParams(SCENE_QUERY_STAT(RampSmokeMouthSpot), false)))
+		{
+			return false;
+		}
+		OutAt = OnNav.Location;
 		return true;
 	}
 
@@ -453,10 +527,46 @@ namespace LevelGenRampSmoke
 		{
 			Side = -Side;
 		}
-		const TArray<FVector2D> Spots = bStairwell
+		// A switchback's mouth is its floor landing (200 cm deep, both lanes wide): every spot on it, the back man in its middle.
+		const FVector2D Across = (Stair.Top - Stair.Foot).GetSafeNormal();
+		const TArray<FVector2D> Spots = Stair.bSwitchback
+			? TArray<FVector2D>{ Stair.Foot - Stair.Dir * 60.0, Stair.Foot - Stair.Dir * 60.0 + Across * 170.0, Stair.Foot - Stair.Dir * 130.0 + Across * 85.0,
+				Stair.Foot - Stair.Dir * 150.0 + Across * 170.0 }
+			: bStairwell
 			? TArray<FVector2D>{ Stair.Foot - Stair.Dir * 50.0 + Side * 40.0, Stair.Foot + Side * 120.0, Stair.Foot - Stair.Dir * 40.0 + Side * 260.0, Stair.Foot + Side * 260.0 + Stair.Dir * 100.0 }
 			: TArray<FVector2D>{ Stair.Foot - Stair.Dir * 120.0 + Side * 60.0, Stair.Foot - Stair.Dir * 120.0 - Side * 60.0, Stair.Foot - Stair.Dir * 260.0,
 				Stair.Foot - Stair.Dir * 260.0 + Side * 130.0 };
+		// A spot behind a wall (IsMouthSpot) gives way to the next free one in the mouth: behind the foot along the flight's axis (the open floor a
+		// stairwell in a stair core has there), the back man the farthest. The spots of the maps before the cores stay as they were.
+		const TArray<FVector2D> BackSpots = Stair.bSwitchback
+			? TArray<FVector2D>{ Stair.Foot - Stair.Dir * 150.0, Stair.Foot - Stair.Dir * 120.0 + Across * 170.0, Stair.Foot - Stair.Dir * 100.0 + Across * 85.0 }
+			: TArray<FVector2D>{ Stair.Foot - Stair.Dir * 260.0, Stair.Foot - Stair.Dir * 260.0 + Side * 60.0, Stair.Foot - Stair.Dir * 260.0 - Side * 60.0,
+			Stair.Foot - Stair.Dir * 200.0 };
+		const TArray<FVector2D> NearSpots = Stair.bSwitchback
+			? TArray<FVector2D>{ Stair.Foot - Stair.Dir * 60.0, Stair.Foot - Stair.Dir * 60.0 + Across * 170.0, Stair.Foot - Stair.Dir * 150.0 + Across * 170.0,
+				Stair.Foot - Stair.Dir * 100.0 + Across * 85.0, Stair.Foot - Stair.Dir * 150.0 }
+			: TArray<FVector2D>{ Stair.Foot - Stair.Dir * 120.0 + Side * 60.0, Stair.Foot - Stair.Dir * 120.0 - Side * 60.0, Stair.Foot - Stair.Dir * 60.0,
+			Stair.Foot - Stair.Dir * 180.0 };
+		TArray<FVector2D> Chosen;
+		const auto Pick = [&](const FVector2D& First, const TArray<FVector2D>& Others, FVector& OutAt, FVector2D& OutAsked)
+		{
+			TArray<FVector2D> Tries{ First };
+			Tries.Append(Others);
+			for (const FVector2D& Try : Tries)
+			{
+				const bool bFree = !Chosen.ContainsByPredicate([&Try](const FVector2D& Taken) { return FVector2D::Distance(Taken, Try) < 80.0; });
+				if (bFree && IsMouthSpot(World, Stair, Try, StartZ, OutAt))
+				{
+					Chosen.Add(Try);
+					OutAsked = Try;
+					return true;
+				}
+			}
+			OutAsked = First; // none fits: the old spot, as before
+			OutAt = OnNav(World, FVector(First.X, First.Y, StartZ + 50.f));
+			Chosen.Add(First);
+			return false;
+		};
 		// The current leader in the mouth, the last member at the back (the one the player selects).
 		AOperativeCharacter* Back = Members.Last() != Squad.GetLeader() ? Members.Last() : Members[0];
 		Members.Remove(Back);
@@ -464,10 +574,13 @@ namespace LevelGenRampSmoke
 		for (int32 Index = 0; Index < Members.Num(); ++Index)
 		{
 			AOperativeCharacter* Member = Members[Index];
-			const FVector2D Spot = Index == 0 ? Spots[2] : Index == 1 ? Spots[0] : Index == 2 ? Spots[1] : Spots[3];
-			const FVector At = OnNav(World, FVector(Spot.X, Spot.Y, StartZ + 50.f));
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s placed at %s (asked %s)%s"), *Member->DisplayName.ToString(), *At.ToCompactString(), *Spot.ToString(),
-				Index == 0 ? TEXT(" - at the back, the one sent up") : TEXT(""));
+			const FVector2D First = Index == 0 ? Spots[2] : Index == 1 ? Spots[0] : Index == 2 ? Spots[1] : Spots[3];
+			FVector At;
+			FVector2D Spot;
+			const bool bFits = Pick(First, Index == 0 ? BackSpots : NearSpots, At, Spot);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s placed at %s (asked %s)%s%s"), *Member->DisplayName.ToString(), *At.ToCompactString(), *Spot.ToString(),
+				Index == 0 ? TEXT(" - at the back, the one sent up") : TEXT(""), !bFits ? TEXT(" - no spot in the mouth fits, the old one")
+				: Spot != First ? *FString::Printf(TEXT(" - instead of %s (behind a wall / off the navmesh)"), *First.ToString()) : TEXT(""));
 			Member->TeleportTo(At + FVector(0.f, 0.f, Member->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 5.f), FVector(Stair.Dir, 0.0).Rotation(), false, true);
 			if (AAIController* AI = Cast<AAIController>(Member->GetController()))
 			{

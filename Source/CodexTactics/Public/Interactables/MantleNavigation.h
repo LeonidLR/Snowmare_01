@@ -81,6 +81,129 @@ public:
 	UNavFilter_NoCrawlTrapLiteralNoMantle();
 };
 
+/**
+ * Formation moves with the window sills closed too (designer 2026-11-22: in formation the men follow their commander through the doors and
+ * never jump through a window; Solo / a box selection may - faster, loud). MantleNavigation::NoWindowVariant.
+ */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_OperativeNoMantleNoWindow : public UNavFilter_OperativeNoMantle
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_OperativeNoMantleNoWindow();
+};
+
+/** UNavFilter_NoCrawlNoMantle with the window sills closed (formation). */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_NoCrawlNoMantleNoWindow : public UNavFilter_NoCrawlNoMantle
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_NoCrawlNoMantleNoWindow();
+};
+
+/** UNavFilter_TrapLiteralNoMantle with the window sills closed (formation). */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_TrapLiteralNoMantleNoWindow : public UNavFilter_TrapLiteralNoMantle
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_TrapLiteralNoMantleNoWindow();
+};
+
+/** UNavFilter_NoCrawlTrapLiteralNoMantle with the window sills closed (formation). */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_NoCrawlTrapLiteralNoMantleNoWindow : public UNavFilter_NoCrawlTrapLiteralNoMantle
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_NoCrawlTrapLiteralNoMantleNoWindow();
+};
+
+/** the plain operative filter with the window sills closed - the formation LEADER (his mantle stays open; designer 2026-11-22: the formation keeps together). */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_OperativeNoWindow : public UNavigationQueryFilter
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_OperativeNoWindow();
+};
+
+/** UNavFilter_NoCrawl with the window sills closed - the formation LEADER (his mantle stays open; designer 2026-11-22: the formation keeps together). */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_NoCrawlNoWindow : public UNavFilter_NoCrawl
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_NoCrawlNoWindow();
+};
+
+/** UNavFilter_TrapLiteral with the window sills closed - the formation LEADER (his mantle stays open; designer 2026-11-22: the formation keeps together). */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_TrapLiteralNoWindow : public UNavFilter_TrapLiteral
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_TrapLiteralNoWindow();
+};
+
+/** UNavFilter_NoCrawlTrapLiteral with the window sills closed - the formation LEADER (his mantle stays open; designer 2026-11-22: the formation keeps together). */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_NoCrawlTrapLiteralNoWindow : public UNavFilter_NoCrawlTrapLiteral
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_NoCrawlTrapLiteralNoWindow();
+};
+
+/** UNavFilter_OperativeNoMantle with the window sills free to enter - a formation FOLLOWER on a window order goes through the window behind his commander. */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_OperativeNoMantleWindowFree : public UNavFilter_OperativeNoMantle
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_OperativeNoMantleWindowFree();
+};
+
+/** UNavFilter_NoCrawlNoMantle with the window sills free to enter - a formation FOLLOWER on a window order goes through the window behind his commander. */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_NoCrawlNoMantleWindowFree : public UNavFilter_NoCrawlNoMantle
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_NoCrawlNoMantleWindowFree();
+};
+
+/** UNavFilter_TrapLiteralNoMantle with the window sills free to enter - a formation FOLLOWER on a window order goes through the window behind his commander. */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_TrapLiteralNoMantleWindowFree : public UNavFilter_TrapLiteralNoMantle
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_TrapLiteralNoMantleWindowFree();
+};
+
+/** UNavFilter_NoCrawlTrapLiteralNoMantle with the window sills free to enter - a formation FOLLOWER on a window order goes through the window behind his commander. */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_NoCrawlTrapLiteralNoMantleWindowFree : public UNavFilter_NoCrawlTrapLiteralNoMantle
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_NoCrawlTrapLiteralNoMantleWindowFree();
+};
+
 /** One measured mantle site (MantleNavigation::ProbeSite): the probe for the rules plus the geometry the climb needs. */
 struct FMantleSite
 {
@@ -220,6 +343,13 @@ namespace MantleNavigation
 	CODEXTACTICS_API void CloseMantleArea(TArray<struct FNavigationFilterArea>& Areas, bool bAlsoDown);
 
 	/** The operative filter with the mantle closed for a filter class ChooseMoveFilter would use (null = the default filter). */
+	/**
+	 * Formation without a window order (designer 2026-11-22: the formation keeps together - nobody, the leader included, paths through a
+	 * window): Filter (a base filter when bMantleOpen, else a NoMantle one; or null) with the window sills closed as well.
+	 */
+	CODEXTACTICS_API TSubclassOf<UNavigationQueryFilter> NoWindowVariant(TSubclassOf<UNavigationQueryFilter> Filter, bool bMantleOpen);
+	/** Formation on a window order: a follower's NoMantle filter (or null) with the window sills free to enter - he follows through the window. */
+	CODEXTACTICS_API TSubclassOf<UNavigationQueryFilter> WindowFreeVariant(TSubclassOf<UNavigationQueryFilter> Filter);
 	CODEXTACTICS_API TSubclassOf<UNavigationQueryFilter> NoMantleVariant(TSubclassOf<UNavigationQueryFilter> Filter);
 
 	/** A hit on geometry that blocks a walking capsule (no pawns; overlap-only volumes left out - docs/port/TRAPS.md). */

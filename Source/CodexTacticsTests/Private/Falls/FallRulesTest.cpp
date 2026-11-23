@@ -144,7 +144,8 @@ bool FFallRulesEnemyFiltersTest::RunTest(const FString&)
 		UNavFilter_EnemyDropJumperLadder::StaticClass() })
 	{
 		TestFalse(FString::Printf(TEXT("%s opens the drops"), *Open->GetName()), Excludes(Open, UNavArea_Drop::StaticClass()) || Excludes(Open, UNavArea_DropHurt::StaticClass()));
-		TestTrue(FString::Printf(TEXT("%s keeps the vault areas closed"), *Open->GetName()), Excludes(Open, UNavArea_Vault::StaticClass()));
+		TestTrue(FString::Printf(TEXT("%s keeps the vault areas closed"), *Open->GetName()), Excludes(Open, UNavArea_Vault::StaticClass())
+			&& Excludes(Open, UNavArea_WindowVault::StaticClass()));
 	}
 	TestTrue(TEXT("the ladder variants keep the ladder links open"), !Excludes(UNavFilter_EnemyDropFreeLadder::StaticClass(), UNavArea_Ladder::StaticClass())
 		&& Excludes(UNavFilter_EnemyDropFree::StaticClass(), UNavArea_Ladder::StaticClass()));

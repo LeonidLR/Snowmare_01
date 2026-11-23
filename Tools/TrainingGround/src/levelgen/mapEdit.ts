@@ -94,10 +94,15 @@ export function translateBuilding(b: GenBuilding, d: Vec2): GenBuilding {
   if (b.partitions) nb.partitions = b.partitions.map((pt) => ({ ...pt, start: tp(pt.start, d), end: tp(pt.end, d), ...(pt.openings ? { openings: pt.openings.map(opening) } : {}) }));
   if (b.parapets) nb.parapets = b.parapets.map((pp) => ({ ...pp, start: tp(pp.start, d), end: tp(pp.end, d) }));
   if (b.hatches) nb.hatches = b.hatches.map(opening);
-  if (b.rooms) nb.rooms = b.rooms.map((rm) => { const r = rect([rm.bounds.min, rm.bounds.max]); return { ...rm, bounds: { min: r[0], max: r[1] } }; });
+  // S2.3 planned rooms carry a walkable `anchor` (world point) - it moves with the room (bgen x T-022 merge 2026-11-20)
+  const room = <T extends { bounds: { min: Vec2; max: Vec2 }; anchor?: Vec2 }>(rm: T): T => {
+    const r = rect([rm.bounds.min, rm.bounds.max]);
+    return { ...rm, bounds: { min: r[0], max: r[1] }, ...(rm.anchor ? { anchor: tp(rm.anchor, d) } : {}) };
+  };
+  if (b.rooms) nb.rooms = b.rooms.map(room);
   if (b.floors_detail) nb.floors_detail = b.floors_detail.map((fd) => ({ ...fd,
     ...(fd.gaps ? { gaps: fd.gaps.map((g) => ({ ...g, poly: g.poly.map((p) => tp(p, d)) })) } : {}),
-    ...(fd.rooms ? { rooms: fd.rooms.map((rm) => { const r = rect([rm.bounds.min, rm.bounds.max]); return { ...rm, bounds: { min: r[0], max: r[1] } }; }) } : {}) }));
+    ...(fd.rooms ? { rooms: fd.rooms.map(room) } : {}) }));
   if (b.mantle_edges) nb.mantle_edges = b.mantle_edges.map((m) => moveMantle(m, d));
   return nb;
 }

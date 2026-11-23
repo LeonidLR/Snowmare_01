@@ -119,6 +119,22 @@ bool UOperativeAnimInstance::PlaySniperHitReaction(EOperativeStance InStance)
 void UOperativeAnimInstance::UpdateSniperLayer(const AOperativeCharacter& Operative)
 {
 	bSniperWeapon = Operative.IsSniperWeaponEquipped();
+	// A root-motion clip the layer did not start (a door open / kick / push) owns the body: no loop / bolt over it - those would cut it at
+	// once (same slot group) and its root motion with it. The layer stands aside untouched and poses again after the clip.
+	if (const FAnimMontageInstance* RootMotionClip = bSniperWeapon ? GetRootMotionMontageInstance() : nullptr)
+	{
+		const UAnimMontage* Clip = RootMotionClip->Montage;
+		const bool bOwn = Clip && (Clip == SniperLoopMontage.Get() || Clip == SniperOneShotMontage.Get() || Clip == StanceTransitionMontage.Get());
+		if (Clip && SniperRules::YieldsToMontage(bOwn, Clip->HasRootMotion()))
+		{
+			bSniperPose = false;
+			ActiveAimOffset = RifleAimOffset.Get();
+			SniperLoopMontage.Reset();
+			SniperLoopClip.Reset();
+			bSniperWasPosed = false;
+			return;
+		}
+	}
 	const bool bStill = Speed < SniperStillSpeed;
 	const bool bEligible = bSniperWeapon && bUseSniperClips && !bInCover && !bIsDead && !bKnockedDown && !bIsVaulting && !bIsClimbing && !bIsSprinting
 		&& !Operative.bCarrying && bStill && !IsThrowingGrenade() && !bWarmIdleActive

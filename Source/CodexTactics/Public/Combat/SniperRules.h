@@ -67,6 +67,13 @@ namespace SniperRules
 	/** A bolt is worked after a shot while rounds remain in the magazine (an empty one is reloaded instead). */
 	CODEXTACTICS_API bool ShouldCycleBolt(int32 RoundsLeftAfterShot);
 
+	/**
+	 * The sniper layer yields the body to a montage it did not start that moves him (root motion: a door clip - open / kick / push,
+	 * 2026-11-22). Its idle loop / bolt / aim-start one-shots share the FullBody slot's group: played over such a clip they cut it at
+	 * once and the clip's root motion with it (the PMC sniper pushed a door open standing still, 0 cm).
+	 */
+	CODEXTACTICS_API bool YieldsToMontage(bool bMontageIsOwn, bool bMontageHasRootMotion);
+
 	/** Play rate that fits a clip into Seconds (a reload stretched to the weapon's reload time); 1 without a length. */
 	CODEXTACTICS_API float PlayRateToFit(float ClipSeconds, float Seconds);
 }

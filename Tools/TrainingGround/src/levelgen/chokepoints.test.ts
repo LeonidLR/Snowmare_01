@@ -18,7 +18,7 @@ import { generateLayout } from './generate.ts';
 import { groundNav, placeObjectives } from './objectives.ts';
 import type { Profile } from './profile.ts';
 import type { GenBuilding, GenCover, GenLadder, GenLayout, GenWall, WallOpening } from './schema.ts';
-import { DEFAULT_PARAMS, LEVELGEN_SCHEMA, validateGenLayout } from './schema.ts';
+import { ANALYSIS_VERSION, DEFAULT_PARAMS, LEVELGEN_SCHEMA, validateGenLayout } from './schema.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const readJson = <T>(rel: string): T => JSON.parse(fs.readFileSync(path.join(ROOT, rel), 'utf8')) as T;
@@ -243,6 +243,41 @@ test('threat 1 - DROP AMBUSH: a low walkable roof beside an alley; not a 9 m roo
   assert.deepEqual([...new Set(thick.dropAmbushSpots.map((x) => `${x.surface}:${x.kind}:${x.access}`))], ['wall:CW:wall_top:wall']);
 });
 
+test('threat 3 - firing-gap rim (version 2): the spots stand 60 cm inside the roof edge and count only what lies OUTWARD of their own edge', () => {
+  assert.equal(ANALYSIS_VERSION, 2, 'the rim / outward_only change bumped the analysis version');
+  assert.equal(CHOKE.threats.overwatch.rim_stand_inset_m, 0.6);
+  assert.equal(CHOKE.threats.overwatch.outward_only, true);
+  assert.equal((CHOKE.threats.overwatch as unknown as Record<string, unknown>).edge_inset_m, undefined, 'the old key is gone with the code that read it');
+  const ladder: GenLadder = { id: 'LAD_1', pos: [0, -3015], yaw: 180, rungs: 16, from: 'ground', to: 'roof:B_o', level_from: 0, level_to: 2, plinth_cm: 17.6, foot: [0, -3115], top: [0, -2900] };
+  // the roof y -3000 .. -2200 (south rim -3000, north rim -2200); the ONLY street lies 30 m beyond the SOUTH rim
+  const scene = (cfg: ChokeConfig, rot?: number) => {
+    const b = box('B_o', -2000, -3000, 2000, -2200, { height: 600, roof: true });
+    if (rot) b.b.rotation = rot;
+    return analyzeLayout(mk({ buildings: [b.b], walls: b.walls, ladders: [ladder], zones: [street('Z_S', -4500, -5800, 4500, -5000)], route: [[-4000, -5400], [4000, -5400]], half: 8000 }), { config: cfg });
+  };
+  const many = (o: Partial<ChokeConfig['threats']['overwatch']>): ChokeConfig => ({ ...ALL, threats: { ...ALL.threats, overwatch: { ...ALL.threats.overwatch, spots_per_roof: 40, ...o } } });
+  const on = scene(many({}));
+  assert.equal(on.overwatchRoofs.length, 1);
+  const spots = on.overwatchRoofs[0].spots;
+  assert.ok(spots.length >= 2);
+  // every kept spot is on the south ring (60 cm inside the footprint edge -3000), clear of the roof corners; none on the far (north) rim
+  const sideEdge = (s: { pos: Vec2 }) => Math.abs(Math.abs(s.pos[0]) - 1940) <= 1; // a west / east rim spot looks outward over its own side
+  for (const s of spots) assert.ok(s.pos[1] <= -3000 + 60 + 1 || sideEdge(s), `spot ${s.pos} is on the street-side rim (or a side edge)`);
+  assert.ok(spots.some((s) => within(s.pos[1], -2940, 1)), 'the rim ring is 60 cm in (was 1 m)');
+  for (const s of spots) { // the distance along its edge to the nearest roof corner (footprint x -2000..2000, y -3000..-2200)
+    const along = sideEdge(s) ? Math.min(s.pos[1] + 3000, -2200 - s.pos[1]) : Math.min(s.pos[0] + 2000, 2000 - s.pos[0]);
+    assert.ok(along >= CHOKE.threats.overwatch.rim_corner_clear_m * 100 - 1, `spot ${s.pos} keeps the corner clear (a gap fits behind it)`);
+  }
+  for (const s of spots.filter((x) => !sideEdge(x))) assert.ok(s.facing_yaw < -30 && s.facing_yaw > -150, `faces the street (-Y): ${s.facing_yaw}`);
+  // the old behaviour (outward_only off): the north-rim spots "cover" the street across their own slab
+  const off = scene(many({ outward_only: false })).overwatchRoofs[0].spots;
+  assert.ok(off.some((s) => s.pos[1] >= -2200 - 60 - 1 && !sideEdge(s)), 'without outward_only a north-rim spot sees the south street through its own roof');
+  assert.ok(off.length > spots.length);
+  // a rotated building (the ring and the outward normals turn with it): still only spots facing the street
+  const rot = scene(many({}), 90);
+  for (const s of rot.overwatchRoofs[0]?.spots ?? []) assert.ok(Number.isFinite(s.pos[0]) && Number.isFinite(s.pos[1]));
+});
+
 test('threat 2 - WINDOW FIRE: a window of an enterable building facing a street within rifle range; not facing away, not beyond range, not through a wall', () => {
   const win = (yaw: number): WallOpening[] => [{ id: 'WIN_1', kind: 'window', pos: [0, -2000], floor: 0, yaw }];
   const scene = (o: { yaw?: number; enterable?: boolean; walls?: GenWall[]; covers?: GenCover[]; y?: number }) => {
@@ -355,7 +390,7 @@ test('chokepoints on the Depot: deterministic, valid in the layout JSON, sorted,
   const a = analyzeLayout(base), b = analyzeLayout(JSON.parse(JSON.stringify(base)) as GenLayout);
   assert.deepEqual(a, b, 'the same layout (also after a JSON round trip) = the same analysis');
   assert.equal(JSON.stringify(a), JSON.stringify(analyzeLayout(base)));
-  assert.equal(a.version, 1); assert.equal(a.geometry_hash, geometryHash(base));
+  assert.equal(a.version, ANALYSIS_VERSION); assert.equal(a.geometry_hash, geometryHash(base));
   assert.ok(a.chokepoints.length >= 5 && a.chokepoints.length <= CHOKE.places.max_items, `${a.chokepoints.length} places`);
   assert.deepEqual(a.chokepoints.map((c) => c.id), a.chokepoints.map((_, i) => `CP_${String(i + 1).padStart(2, '0')}`));
   for (let i = 1; i < a.chokepoints.length; i++) assert.ok(a.chokepoints[i - 1].score >= a.chokepoints[i].score, 'sorted by score');
@@ -390,5 +425,6 @@ test('chokepoints on the Depot: deterministic, valid in the layout JSON, sorted,
   const t0 = Date.now(), ax = analyzeLayout(x4);
   assert.ok(ax.chokepoints.length >= 10 && ax.chokepoints.length <= CHOKE.places.max_items && ax.windowsCovering.length >= 10 && ax.hidingSpots.length <= CHOKE.threats.hiding.max_spots);
   assert.ok(Date.now() - t0 < 20000, 'the x4 analysis stays interactive');
-  assert.equal(x4.analysis, undefined);
+  // main's accepted x4 has no analysis block; the firing-gaps branch carries the refreshed one (add-firing-gaps.ts): it must be the current computed one
+  if (x4.analysis) { assert.equal(x4.analysis.version, ANALYSIS_VERSION); assert.equal(x4.analysis.geometry_hash, geometryHash(x4)); assert.deepEqual(x4.analysis, ax, 'the stored analysis is what the analysis computes now'); }
 });

@@ -180,6 +180,18 @@ bool MissionGoalsRules::Parse(const FString& Json, FMissionGoalsFile& Out, TArra
 				Goal.Area.Reset();
 			}
 		}
+		const TArray<TSharedPtr<FJsonValue>>* Keys = nullptr;
+		if (Item->TryGetArrayField(TEXT("grant_keys"), Keys) && Keys)
+		{
+			for (const TSharedPtr<FJsonValue>& Key : *Keys)
+			{
+				FString Text;
+				if (Key.IsValid() && Key->TryGetString(Text) && !Text.IsEmpty())
+				{
+					Goal.GrantKeys.AddUnique(Text);
+				}
+			}
+		}
 		Ids.Add(Goal.Id);
 		Out.Goals.Add(MoveTemp(Goal));
 	}

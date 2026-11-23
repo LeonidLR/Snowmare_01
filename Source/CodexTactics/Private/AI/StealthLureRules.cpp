@@ -195,3 +195,14 @@ FText StealthLureRules::GetFeedLine(EStealthLureKind Kind)
 }
 
 #undef LOCTEXT_NAMESPACE
+
+float StealthLureRules::NoisePulseRadius(float Elapsed, float Seconds, int32 Pulses, float RadiusCm)
+{
+	if (Elapsed < 0.f || Seconds <= 0.f || Elapsed >= Seconds)
+	{
+		return -1.f;
+	}
+	const float Period = Seconds / static_cast<float>(FMath::Max(1, Pulses));
+	const float Alpha = FMath::Fmod(Elapsed, Period) / Period;
+	return FMath::Max(0.f, RadiusCm) * (1.f - FMath::Square(1.f - Alpha));
+}

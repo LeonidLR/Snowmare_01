@@ -49,6 +49,47 @@ namespace SquadSubsystemRampFileLocal
 			|| (Owner && Owner->GetClass()->GetName().Contains(TEXT("Landscape")));
 	}
 
+	/** A kit / layout stair flight piece (tag stair=* on the component or its actor). */
+	bool IsStairPiece(const UPrimitiveComponent* Component)
+	{
+		const auto IsStairTag = [](const FName& Tag) { return Tag.ToString().StartsWith(TEXT("stair="), ESearchCase::CaseSensitive); };
+		const AActor* Owner = Component ? Component->GetOwner() : nullptr;
+		return Component && (Component->ComponentTags.ContainsByPredicate(IsStairTag) || (Owner && Owner->Tags.ContainsByPredicate(IsStairTag)));
+	}
+
+	/**
+	 * A STEPPED stair flight (designer 2026-11-22, "stuck on the stairwell": the dressed kit stairs are steps - every step top's normal is up, so
+	 * the slope test never saw a ramp and the single file never held on them): the floor height gradient over +-StairProbeCm round Feet as
+	 * a ramp normal; unset on a landing / flat floor or when a probe misses.
+	 */
+	TOptional<FVector> SteppedStairNormal(const UWorld& World, const FVector& Feet)
+	{
+		constexpr float StairProbeCm = 40.f;
+		FCollisionObjectQueryParams Objects;
+		Objects.AddObjectTypesToQuery(ECC_WorldStatic);
+		const FCollisionQueryParams Params(SCENE_QUERY_STAT(SquadSteppedStair), false);
+		float Heights[4];
+		const FVector2D Offsets[4] = { { StairProbeCm, 0.f }, { -StairProbeCm, 0.f }, { 0.f, StairProbeCm }, { 0.f, -StairProbeCm } };
+		for (int32 Index = 0; Index < 4; ++Index)
+		{
+			FHitResult Hit;
+			const FVector At(Feet.X + Offsets[Index].X, Feet.Y + Offsets[Index].Y, Feet.Z);
+			if (!World.LineTraceSingleByObjectType(Hit, At + FVector(0.f, 0.f, 80.f), At - FVector(0.f, 0.f, 80.f), Objects, Params))
+			{
+				return {};
+			}
+			Heights[Index] = static_cast<float>(Hit.ImpactPoint.Z);
+		}
+		const float GradX = (Heights[0] - Heights[1]) / (2.f * StairProbeCm);
+		const float GradY = (Heights[2] - Heights[3]) / (2.f * StairProbeCm);
+		const FVector Normal = FVector(-GradX, -GradY, 1.f).GetSafeNormal();
+		if (!RampFileRules::IsRampSurface(Normal, false, Config().MinSlopeDeg))
+		{
+			return {};
+		}
+		return Normal;
+	}
+
 	float RampFeetZ(const AOperativeCharacter& Operative)
 	{
 		return static_cast<float>(Operative.GetActorLocation().Z) - Operative.GetSimpleCollisionHalfHeight();
@@ -85,6 +126,8 @@ bool USquadSubsystem::IsOperativeOnRamp(const AOperativeCharacter& Operative, FV
 	const FHitResult& Floor = Move->CurrentFloor.HitResult;
 	if (!RampFileRules::IsRampSurface(Floor.ImpactNormal, IsTerrain(Floor.GetComponent()), Config().MinSlopeDeg))
 	{
+		// Stepped kit stairs are NOT a file ramp: every flight of a stairwell is one component (one file, one uphill axis for a switchback -
+		// men on the two flights waited for each other, FormationStairSmoke S10 2026-11-23). They count only for IsRampUnder (no slot on them).
 		return false;
 	}
 	if (OutUphill)
@@ -117,7 +160,8 @@ bool USquadSubsystem::IsRampUnder(const FVector2D& Point, float FromZ) const
 	{
 		return false;
 	}
-	return RampFileRules::IsRampSurface(Hit.ImpactNormal, IsTerrain(Hit.GetComponent()), Config().MinSlopeDeg);
+	return RampFileRules::IsRampSurface(Hit.ImpactNormal, IsTerrain(Hit.GetComponent()), Config().MinSlopeDeg)
+		|| (IsStairPiece(Hit.GetComponent()) && SteppedStairNormal(*World, Hit.ImpactPoint).IsSet());
 }
 
 FVector USquadSubsystem::KeepSlotOffRamp(const AOperativeCharacter& LeaderRef, const FVector& Slot) const

@@ -14,6 +14,7 @@
 class AActor;
 class AEnemyCharacter;
 class AOperativeCharacter;
+struct FHitResult;
 
 /**
  * The playtest bot exists in development builds only (audit 2026-10-11 #3, "bot gate"): in Test / Shipping the subsystem
@@ -50,6 +51,8 @@ class AOperativeCharacter;
  * fights from there and walks on when the fight is over or after "fight_cover"."hold_sec" (no wall: it halts for "fight_hold_sec") -, and
  * stops by TIME: -BotDuration=<game s, 600> -> RESULT COMPLETE. The run report (FCombatLabRunCollector + FBotRouteTracker,
  * schema codex.combatlab_run/1) goes to -CombatLabReport=<file.json> (a live snapshot to <file>.live.json every 5 s).
+ * A route leg over a MANTLE edge ("mantle" / "mantle_at" on its waypoint) is a click on the obstacle's top - the squad climbs in turns - and a
+ * wait for the climb before the ground move on (GetRouteMantles); SetRouteOverride runs another route (a level JSON "bot_route_variants" entry).
  */
 UCLASS()
 class CODEXTACTICS_API UPlaytestBotSubsystem : public UTickableWorldSubsystem
@@ -116,6 +119,15 @@ public:
 	const FCombatLabRunCollector& GetCombatLabCollector() const { return LabCollector; }
 	/** The route's drops through roof / floor holes so far (generated maps; the one under way included). */
 	TArray<FBotRouteDrop> GetRouteDrops() const;
+	/** The route's mantles over obstacles so far (a waypoint with "mantle"; the one under way included): clicked / climbed / members up. */
+	TArray<FBotRouteMantle> GetRouteMantles() const;
+	/**
+	 * A route other than the level JSON's "bot_route" for the NEXT route run (the smokes: a non-mandatory "bot_route_variants" entry, e.g. the
+	 * lab bridge's mantle route). Call it before StartRouteRun: the run's setup (TrySetupRouteMode) takes it and forgets it, so the one after
+	 * walks the level's own route again (ONE-SHOT - a run that never set up, e.g. no leader yet, has no stale override left behind either,
+	 * because the setup clears it whatever it decides).
+	 */
+	void SetRouteOverride(const FBotRouteConfig& Route);
 	/**
 	 * Starts the ROUTE mode from the console / a smoke (Codex.Bot.Route; generated maps 2026-11-02): the level's "bot_route" whether the
 	 * level has an endless pressure or not, for DurationSeconds of game time (<= 0: the -BotDuration / 600 s default), bQuitAtEnd exits the
@@ -198,6 +210,8 @@ private:
 	bool TryTakeFightCover();
 	/** A click (a Visibility trace) handed to the controller; false when nothing was hit or no controller. */
 	bool RouteClick(const FVector& Start, const FVector& End, const TCHAR* What);
+	/** The click's own trace without the click (Visibility, else WorldStatic; the squad's bodies ignored): what RouteClick would hit. */
+	bool TraceRouteHit(const FVector& Start, const FVector& End, FHitResult& OutHit) const;
 	FBotRouteInput RouteInput() const;
 	FCombatLabSample SampleCombatLab() const;
 	void WriteCombatLabLive() const;
@@ -206,6 +220,20 @@ private:
 	void TrackRouteDrop();
 	/** A drop leg that got stuck: the bot puts the living squad down at the drop's waypoint itself (marked bScripted in the record). */
 	bool ScriptedRouteDrop();
+	/**
+	 * The mantle bookkeeping (a waypoint with "mantle"): opens a record as the route reaches the leg, closes it when the route moves on
+	 * (bReached / bClimbed / Seconds). Also called by the leg's first order so the record exists before the click.
+	 */
+	void TrackRouteMantle();
+	/**
+	 * The leg to a "mantle" waypoint with a "mantle_at": instead of the ground click the bot clicks the obstacle's TOP just past the edge
+	 * crossing (the player's climb click: the formation climbs in turns, one man climbs alone) and waits for the climb (bRouteMantleWait).
+	 * True when the climb click was accepted (or refused after a click - the ground move is deferred then); false = no top click was
+	 * tried / possible: the caller does the ground click as before. One climb click per leg: retries and a refusal walk the leg.
+	 */
+	bool TryRouteMantleClick(const FBotRouteWaypoint& Waypoint);
+	/** While waiting for the climb: ends the wait when the squad climb is over (or the leader's own), or on the action timeout. */
+	void TickRouteMantleWait();
 
 	/** Godot spatial_telemetry_recorder: frames / events of the fight for the editor's replay player. */
 	FSpatialTelemetryRecorder Spatial;
@@ -327,4 +355,21 @@ private:
 	int32 RouteDropActive = INDEX_NONE;
 	int32 RouteDropReachedBase = 0;
 	float RouteDropStart = 0.f;
+	TArray<FBotRouteMantle> RouteMantles;
+	/** The mantle under way (an index into RouteMantles), INDEX_NONE when the current leg crosses no mantle edge. */
+	int32 RouteMantleActive = INDEX_NONE;
+	int32 RouteMantleReachedBase = 0;
+	int32 RouteMantleCountBase = 0;
+	float RouteMantleStart = 0.f;
+	/** The bot clicked the obstacle's top and waits for the climb (the stuck clock is paused meanwhile, RouteInput). */
+	bool bRouteMantleWait = false;
+	float RouteMantleWaitStart = 0.f;
+	/** The accepted climb is the squad's turn-taking climb (else the leader's own). */
+	bool bRouteMantleSquad = false;
+	/** The most members up on the obstacle / in the squad's climb seen during the wait. */
+	int32 RouteMantleMembersUp = 0;
+	int32 RouteMantleMembers = 0;
+	/** SetRouteOverride's route for the next route run (one-shot). */
+	FBotRouteConfig RouteOverride;
+	bool bHasRouteOverride = false;
 };

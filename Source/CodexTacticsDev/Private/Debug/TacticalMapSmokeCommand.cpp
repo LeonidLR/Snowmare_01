@@ -6,6 +6,8 @@
 // tactical_runtime.json; DangerAt is high inside the top place and low on an open street; the queries answer on the real map; the
 // ladder-only roof picker is deterministic per seed and picks PART of them; a missing file = an empty map; the debug draw runs.
 // [map=<L_Gen_...>] for another generated map.
+// T-02 (smart-enemies roadmap): load-only aliases TacticalMapLabCrossroadsSmoke / TacticalMapLabAlleySmoke / TacticalMapLabBridgeSmoke for the
+// lab maps L_Lab_* (file loaded, counts = JSON, every spot grounded - an empty list is fine -, missing-file reload, draw / dump; no queries).
 
 #include "CoreMinimal.h"
 
@@ -45,6 +47,7 @@ namespace TacticalMapSmoke
 		float Time = 0.f;
 		float StageTime = 0.f;
 		int32 Failures = 0;
+		bool bLoadOnly = false; // T-02: the lab-map aliases skip the queries and allow empty spot lists
 		FString MapName;
 		SmokeUtils::FPreloadGate PreloadGate;
 	};
@@ -103,7 +106,7 @@ namespace TacticalMapSmoke
 
 	/** Checks one category of spots; logs the first misses. */
 	void CheckGrounded(FState& State, UWorld* World, UNavigationSystemV1* Nav, const FTacticalRuntimeConfig& Config, const TCHAR* What,
-		const TArray<TPair<FString, FVector>>& Spots)
+		const TArray<TPair<FString, FVector>>& Spots, bool bAllowEmpty = false)
 	{
 		int32 Misses = 0;
 		for (const TPair<FString, FVector>& Spot : Spots)
@@ -116,7 +119,7 @@ namespace TacticalMapSmoke
 				}
 			}
 		}
-		Check(State, Spots.Num() > 0 && Misses == 0, FString::Printf(TEXT("%s: %d of %d on the navmesh or a walkable surface"), What, Spots.Num() - Misses, Spots.Num()));
+		Check(State, (bAllowEmpty || Spots.Num() > 0) && Misses == 0, FString::Printf(TEXT("%s: %d of %d on the navmesh or a walkable surface"), What, Spots.Num() - Misses, Spots.Num()));
 	}
 
 	/** The least dangerous outdoor navmesh point on the ground at least OpenClearanceCm from every place (the "open street"). */
@@ -200,10 +203,13 @@ namespace TacticalMapSmoke
 			const int32 InJson = Found ? *Found : -1;
 			Check(State, InJson == Count.Value && InJson >= 0, FString::Printf(TEXT("%s: %d loaded = %d in the JSON"), Count.Key, Count.Value, InJson));
 		}
-		Check(State, !File.Chokepoints.IsEmpty() && !File.HidingSpots.IsEmpty() && !File.OverwatchRoofs.IsEmpty(), TEXT("the map has places, hiding spots and roofs"));
-		if (File.Chokepoints.IsEmpty())
+		if (!State.bLoadOnly)
 		{
-			return; // the checks below read the top place
+			Check(State, !File.Chokepoints.IsEmpty() && !File.HidingSpots.IsEmpty() && !File.OverwatchRoofs.IsEmpty(), TEXT("the map has places, hiding spots and roofs"));
+			if (File.Chokepoints.IsEmpty())
+			{
+				return; // the checks below read the top place
+			}
 		}
 
 		// every spot projects onto the navmesh or a walkable surface
@@ -221,15 +227,19 @@ namespace TacticalMapSmoke
 			LadderRoofs.Emplace(Roof.Building, Roof.Center);
 			for (int32 I = 0; I < Roof.LadderTops.Num(); ++I) { LadderRoofs.Emplace(FString::Printf(TEXT("%s top %d"), *Roof.Building, I), Roof.LadderTops[I]); }
 		}
-		CheckGrounded(State, World, Nav, Config, TEXT("places"), Places);
-		CheckGrounded(State, World, Nav, Config, TEXT("drop landing points"), DropLand);
-		CheckGrounded(State, World, Nav, Config, TEXT("drop edges (roof / wall top)"), DropEdge);
-		CheckGrounded(State, World, Nav, Config, TEXT("window stand points"), Windows);
-		CheckGrounded(State, World, Nav, Config, TEXT("overwatch roof spots"), Roofs);
-		CheckGrounded(State, World, Nav, Config, TEXT("hiding spots"), Hiding);
-		CheckGrounded(State, World, Nav, Config, TEXT("threatened route points"), Threats);
-		CheckGrounded(State, World, Nav, Config, TEXT("ladder-only roofs (centre + ladder tops)"), LadderRoofs);
+		CheckGrounded(State, World, Nav, Config, TEXT("places"), Places, State.bLoadOnly);
+		CheckGrounded(State, World, Nav, Config, TEXT("drop landing points"), DropLand, State.bLoadOnly);
+		CheckGrounded(State, World, Nav, Config, TEXT("drop edges (roof / wall top)"), DropEdge, State.bLoadOnly);
+		CheckGrounded(State, World, Nav, Config, TEXT("window stand points"), Windows, State.bLoadOnly);
+		CheckGrounded(State, World, Nav, Config, TEXT("overwatch roof spots"), Roofs, State.bLoadOnly);
+		CheckGrounded(State, World, Nav, Config, TEXT("hiding spots"), Hiding, State.bLoadOnly);
+		CheckGrounded(State, World, Nav, Config, TEXT("threatened route points"), Threats, State.bLoadOnly);
+		CheckGrounded(State, World, Nav, Config, TEXT("ladder-only roofs (centre + ladder tops)"), LadderRoofs, State.bLoadOnly);
 
+		if (State.bLoadOnly)
+		{
+			return; // T-02: the queries below need places, hiding spots and roofs
+		}
 		// DangerAt: high inside the top place, low on an open street
 		const FTacticalChokepoint& Top = File.Chokepoints[0];
 		const FTacticalDanger InTop = Tactical->DangerAt(Top.Location, ETacticalSide::Squad);
@@ -348,13 +358,14 @@ namespace TacticalMapSmoke
 		}
 	}
 
-	void Run(const TArray<FString>& Args, UWorld* World)
+	void Start(const TArray<FString>& Args, UWorld* World, bool bLoadOnly)
 	{
 		if (!World)
 		{
 			return;
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
+		State->bLoadOnly = bLoadOnly;
 		State->MapName = UWorld::RemovePIEPrefix(World->GetMapName());
 		for (const FString& Arg : Args)
 		{
@@ -371,7 +382,7 @@ namespace TacticalMapSmoke
 				Variable->Set(0, ECVF_SetByConsole);
 			}
 		}
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: TacticalMapSmoke on %s"), *State->MapName);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: TacticalMapSmoke on %s%s"), *State->MapName, bLoadOnly ? TEXT(" (load-only)") : TEXT(""));
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
 		{
@@ -384,12 +395,33 @@ namespace TacticalMapSmoke
 		}), 0.f);
 	}
 
+	void Run(const TArray<FString>& Args, UWorld* World)
+	{
+		Start(Args, World, false);
+	}
+
+	void RunLoadOnly(const TArray<FString>& Args, UWorld* World)
+	{
+		Start(Args, World, true);
+	}
+
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.TacticalMapSmoke"),
 		TEXT("Dev check (TACTICAL_MAP P1, designer 2026-11-17): the generated map's tactical file - loaded at BeginPlay, counts = JSON, every spot on the ")
 		TEXT("navmesh / a walkable surface, danger high in the top place and low on an open street, the queries, the seeded ladder-roof picker, ")
 		TEXT("a missing file = an empty map, the debug draw. [map=<L_Gen_...>]. PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
+
+	// T-02 (smart-enemies roadmap): load-only aliases for the lab maps L_Lab_*
+	static FAutoConsoleCommandWithWorldAndArgs LabCrossroadsCommand(TEXT("CodexTactics.TacticalMapLabCrossroadsSmoke"),
+		TEXT("Dev check (T-02, DS-00A): L_Lab_Crossroads tactical file, load-only - see CodexTactics.TacticalMapSmoke. PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunLoadOnly));
+	static FAutoConsoleCommandWithWorldAndArgs LabAlleyCommand(TEXT("CodexTactics.TacticalMapLabAlleySmoke"),
+		TEXT("Dev check (T-02, DS-00B): L_Lab_Alley tactical file, load-only - see CodexTactics.TacticalMapSmoke. PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunLoadOnly));
+	static FAutoConsoleCommandWithWorldAndArgs LabBridgeCommand(TEXT("CodexTactics.TacticalMapLabBridgeSmoke"),
+		TEXT("Dev check (T-02, DS-00C): L_Lab_Bridge tactical file, load-only - see CodexTactics.TacticalMapSmoke. PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunLoadOnly));
 }
 
 #endif // !UE_BUILD_SHIPPING

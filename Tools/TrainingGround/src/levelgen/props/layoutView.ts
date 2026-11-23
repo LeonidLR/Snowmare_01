@@ -542,8 +542,9 @@ export class PropsLayoutView {
     if (!root || typeof root !== 'object') {
       throw new Error('layout: root must be an object');
     }
-    if (root.schema !== 'codex.levelgen_layout/1') {
-      throw new Error(`layout: schema '${String(root.schema)}' is not codex.levelgen_layout/1`);
+    // '/2' (ADR-0002) only adds optional building fields; the props view reads the /1 geometry of both
+    if (root.schema !== 'codex.levelgen_layout/1' && root.schema !== 'codex.levelgen_layout/2') {
+      throw new Error(`layout: schema '${String(root.schema)}' is not codex.levelgen_layout/1 or /2`);
     }
 
     view.name = String(root.name ?? '');

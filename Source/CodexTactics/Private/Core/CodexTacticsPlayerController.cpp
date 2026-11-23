@@ -20,8 +20,10 @@
 #include "UI/DialogueRules.h"
 #include "Tactics/CoverGhostActor.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Camera/RoofCutawaySubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Interactables/DoorSubsystem.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/LootCrateActor.h"
 #include "Interactables/RelocationSubsystem.h"
@@ -412,6 +414,13 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		{
 			UpdateMantleHover(PeekTurnBased || bCornerPeekCursor ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
 		}
+		// Designer 2026-11-22: over a ground-floor window sill, the silhouette where a click sends him (past the window).
+		if (!bFreezeMantleHoverForTesting)
+		{
+			UpdateWindowHover(PeekTurnBased || bCornerPeekCursor || bClickPreview ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
+			// Designer 2026-11-22: over a stair flight, the silhouette on the hidden storey's landing above.
+			UpdateStairHover(PeekTurnBased || bCornerPeekCursor || bClickPreview ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
+		}
 		// Bug C 2026-10-26: the squad in the formation wall layout - its guide lines along / round its wall under the cursor.
 		if (!bFreezeCoverHoverForTesting)
 		{
@@ -436,7 +445,10 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		}
 		// 2026-10-26: a fallen operative's remains (his body) under the cursor show the hand too - a click searches him.
 		const ALootCrateActor* HoveredRemains = bCursorHit ? Cast<ALootCrateActor>(TrapHit.GetActor()) : nullptr;
-		const bool bTrap = bCursorHit && (HoveredExit || Cast<ATripwireActor>(TrapHit.GetActor()) || (HoveredRemains && HoveredRemains->IsRemains())
+		// Openable doors (switch on): a door leaf / its doorway under the cursor shows the hand - a click works the door (never a cover hug).
+		const UDoorSubsystem* HoverDoors = GetWorld()->GetSubsystem<UDoorSubsystem>();
+		const bool bDoorHover = bCursorHit && HoverDoors && HoverDoors->IsActive() && HoverDoors->FindClickedDoor(TrapHit) != nullptr;
+		const bool bTrap = bCursorHit && (bDoorHover || HoveredExit || Cast<ATripwireActor>(TrapHit.GetActor()) || (HoveredRemains && HoveredRemains->IsRemains())
 			|| (!Cast<APawn>(TrapHit.GetActor()) && !Cast<AInteractableActor>(TrapHit.GetActor())
 				&& ATripwireActor::FindClickableWireNear(GetWorld(), TrapHit.ImpactPoint)));
 		if (bTrap != bTrapHoverCursor)
@@ -453,7 +465,7 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	if (UTurnBasedCombatSubsystem* HoverTurnBased = GetActiveTurnBased())
 	{
 		FHitResult Hit;
-		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+		if (GetCursorHit(Hit))
 		{
 			HoverTurnBased->SetHoveredPoint(Hit.ImpactPoint, Hit.GetActor());
 		}
@@ -462,7 +474,7 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	if (UTurnBasedCombatSubsystem* GhostTurnBased = GetActiveTurnBased(); GhostTurnBased && GhostTurnBased->IsRelocating())
 	{
 		FHitResult Hit;
-		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+		if (GetCursorHit(Hit))
 		{
 			GhostTurnBased->SetRelocationHover(Hit.ImpactPoint);
 		}
@@ -472,7 +484,7 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	if (USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>(); Transfer && Transfer->IsTransferring())
 	{
 		FHitResult Hit;
-		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+		if (GetCursorHit(Hit))
 		{
 			Transfer->UpdatePreview(Hit.ImpactPoint, Hit.GetActor());
 		}
@@ -506,7 +518,20 @@ bool ACodexTacticsPlayerController::CursorHitForHover(FHitResult& OutHit) const
 		OutHit = SimulatedCursorHitForTesting;
 		return OutHit.bBlockingHit;
 	}
-	return GetHitResultUnderCursor(ECC_Visibility, false, OutHit);
+	return GetCursorHit(OutHit);
+}
+
+bool ACodexTacticsPlayerController::GetCursorHit(FHitResult& OutHit) const
+{
+	if (!GetHitResultUnderCursor(ECC_Visibility, false, OutHit))
+	{
+		return false;
+	}
+	const URoofCutawaySubsystem* Roofs = GetWorld() ? GetWorld()->GetSubsystem<URoofCutawaySubsystem>() : nullptr;
+	const USquadSubsystem* Squad = GetSquad();
+	const UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased();
+	const AOperativeCharacter* Selected = TurnBased ? TurnBased->GetActiveUnit() : (Squad ? Squad->GetLeader() : nullptr);
+	return Roofs ? Roofs->RefineCursorHit(OutHit, ECC_Visibility, Selected) : true;
 }
 
 bool ACodexTacticsPlayerController::IsAttackModifierDown() const

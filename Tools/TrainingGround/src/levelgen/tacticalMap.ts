@@ -8,6 +8,8 @@
 //     windows covering the lines (window point + the stand point inside, look yaw), overwatch roofs (access incl. ladder-only, spots +
 //     look yaw), hiding spots (reveal distances, stealth-only, facing yaw), and every ladder-only roof (the P2 placement picks PART of
 //     them with the ladder-only factor, seeded - C++ TacticalMapRules::PickLadderOnlyRoofs);
+//   - firing gaps (firingGaps.ts, BUILDING_GENERATOR.md section 8): `firing_gaps[]` + a `gap` id on the overwatch spots standing behind one; written
+//     only for a layout that has gaps (files without them stay byte-identical);
 //   - geometry_hash: the layout geometry the analysis describes (chokepoints.ts geometryHash).
 // The layout's own analysis is used when it is current (the hash matches); else it is computed here exactly as «Принять» does
 // (analyzeLayout with the config's default conditions). Written next to the objectives file by «Принять» / «Собрать в Unreal»
@@ -21,6 +23,7 @@ import type { Conditions, LayoutAnalysis } from './chokepoints.ts';
 import { analyzeLayout, CHOKE, geometryHash, samplePolyline, threatNumbers } from './chokepoints.ts';
 import { coverPoly } from './layers.ts';
 import { layerZ, LEVEL_HEIGHT_CM } from './missionGoals.ts';
+import { gapForSpot } from './firingGaps.ts';
 import { footprintPoly, inFootprint } from './rotation.ts';
 import type { GenBuilding, GenCover, GenLayout } from './schema.ts';
 import { NEVER_CLIMBABLE } from './schema.ts';
@@ -85,6 +88,16 @@ export interface TacticalWindow {
 export interface TacticalOverwatchSpot {
   pos: Vec3; facing_yaw: number; covered_m: number; longest_los_m: number;
   building: string; floor: number;
+  /** The firing gap (`firing_gaps[].id`) the shooter stands behind; only on a layout with gaps (firingGaps.ts gapForSpot). */
+  gap?: string;
+}
+/**
+ * A firing gap in a roof parapet (firingGaps.ts): a span cut out of the parapet and refilled with a sill `sill_cm` high. `pos` = the gap
+ * centre and `stand` = the shooter's point behind it, both on the roof floor (world); `outward` = unit XY out over the parapet.
+ */
+export interface TacticalFiringGap {
+  id: string; building: string; layer: string; parapet: string;
+  pos: Vec3; stand: Vec3; outward: Vec2; yaw: number; width_cm: number; sill_cm: number;
 }
 export interface TacticalOverwatchRoof {
   building: string; layer: string; level: number; floor: number; z: number; height_cm: number; range_m: number;
@@ -118,6 +131,15 @@ export interface TacticalGoalSite {
   goal_id: string; cover_id: string; pos: Vec3; dist_m: number; facing_yaw: number; sector_arc_deg: number;
   cover_kind: string; cover_height_cm: number;
 }
+/**
+ * A designer-marked killing ground (T-02 gap 1): a zone or a route with intent 'kill_zone' (schema.ts RouteIntent) - the authored
+ * place squad plays (T-08) and DangerAt pick, never a defect. Zone: its outline; route: its points on their layers.
+ */
+export interface TacticalKillZone {
+  id: string; source: 'zone' | 'route'; intent: string; note?: string; set_piece?: string;
+  /** The centre (world, on the first layer) and, for a zone, its outline (world XY); for a route, its points (world, per layer). */
+  center: Vec3; poly?: Vec2[]; line?: Vec3[];
+}
 export interface TacticalMapFile {
   schema: typeof TACTICAL_MAP_SCHEMA | typeof TACTICAL_MAP_SCHEMA_V1;
   map: string;
@@ -139,6 +161,10 @@ export interface TacticalMapFile {
   walkable_roofs?: TacticalWalkableRoof[];
   open_crossings?: TacticalOpenCrossing[];
   goal_sites?: TacticalGoalSite[];
+  /** Only when the layout marks one (absent otherwise: older files stay byte-identical). */
+  kill_zones?: TacticalKillZone[];
+  /** Only when the layout has firing gaps (absent otherwise: files without gaps stay byte-identical). */
+  firing_gaps?: TacticalFiringGap[];
 }
 
 const r0 = (v: number): number => { const x = Math.round(v); return Object.is(x, -0) ? 0 : x; };
@@ -504,8 +530,17 @@ export function tacticalMapFor(l: GenLayout, mapName: string, layoutName = l.nam
     const access_points = b ? roofAccessDetails(l, b) : [];
     return { building: r.building, layer, level: r.level, floor: r.level, z, height_cm: r.height_cm, range_m: r.range_m,
       access: [...r.access], access_kind: kind, access_points, ladder_only: kind === 'ladder',
-      spots: r.spots.map((s) => ({ pos: at(s.pos, z), facing_yaw: s.facing_yaw, covered_m: s.covered_m, longest_los_m: s.longest_los_m, building: r.building, floor: r.level })),
+      spots: r.spots.map((s): TacticalOverwatchSpot => {
+        const gap = gapForSpot(l.firing_gaps ?? [], r.building, s.pos);
+        return { pos: at(s.pos, z), facing_yaw: s.facing_yaw, covered_m: s.covered_m, longest_los_m: s.longest_los_m, building: r.building, floor: r.level, ...(gap ? { gap: gap.id } : {}) };
+      }),
       places: [...r.places] };
+  });
+
+  // firing gaps in the roof parapets (firingGaps.ts), on the roof layer of their building; absent when the layout has none
+  const firing_gaps = (l.firing_gaps ?? []).map((g): TacticalFiringGap => {
+    const layer = `roof:${g.building}`, z = layerZ(l, layer);
+    return { id: g.id, building: g.building, layer, parapet: g.parapet, pos: at(g.center, z), stand: at(g.stand, z), outward: [g.outward[0], g.outward[1]], yaw: g.facing_yaw, width_cm: g.width_cm, sill_cm: g.sill_cm };
   });
 
   const hiding_spots = a.hidingSpots.map((h): TacticalHidingSpot => {
@@ -547,6 +582,20 @@ export function tacticalMapFor(l: GenLayout, mapName: string, layoutName = l.nam
     })
     .sort((x, y) => (x.building < y.building ? -1 : x.building > y.building ? 1 : 0));
 
+  // designer-marked killing grounds (zones / routes with an intent), in id order
+  const kill_zones: TacticalKillZone[] = !l.export_intents ? [] : [
+    ...l.zones.filter((z) => z.intent).map((z): TacticalKillZone => {
+      const cx = z.poly.reduce((s, p) => s + p[0], 0) / z.poly.length, cy = z.poly.reduce((s, p) => s + p[1], 0) / z.poly.length;
+      return { id: z.id, source: 'zone', intent: z.intent!, ...(z.set_piece ? { set_piece: z.set_piece } : {}), center: at([cx, cy], groundZ),
+        poly: z.poly.map((p) => [r0(p[0]), r0(p[1])] as Vec2) };
+    }),
+    ...l.routes.filter((r) => r.intent).map((r): TacticalKillZone => {
+      const layers = r.layers ?? r.points.map(() => 'ground');
+      const line = r.points.map((p, i) => at(p, layerZ(l, layers[i] ?? 'ground')));
+      const mid = line[Math.floor(line.length / 2)];
+      return { id: r.id, source: 'route', intent: r.intent!, ...(r.intent_note ? { note: r.intent_note } : {}), center: mid, line };
+    }),
+  ].sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
   const open_crossings = findOpenCrossings(l, groundZ);
   const goal_sites = findGoalSites(l, groundZ);
 
@@ -555,12 +604,14 @@ export function tacticalMapFor(l: GenLayout, mapName: string, layoutName = l.nam
     analysis_source: own ? 'layout' : 'computed', conditions: { weather: a.conditions.weather, time_of_day: a.conditions.time_of_day }, ground_z: r1(gz),
     thresholds: { ...a.thresholds, ladder_only_factor: factor },
     chokepoints, drop_spots, windows, overwatch_roofs, hiding_spots, ladder_only_roofs, walkable_roofs, open_crossings, goal_sites,
+    ...(kill_zones.length ? { kill_zones } : {}),
+    ...(firing_gaps.length ? { firing_gaps } : {}),
   };
 }
 
 /** Stable text (compact items, one per line - the X6 file stays small and diffs cleanly; LF + final newline). */
 export function formatTacticalMap(f: TacticalMapFile): string {
-  const lists = ['chokepoints', 'drop_spots', 'windows', 'overwatch_roofs', 'hiding_spots', 'ladder_only_roofs', 'walkable_roofs', 'open_crossings', 'goal_sites'] as const;
+  const lists = ['chokepoints', 'drop_spots', 'windows', 'overwatch_roofs', 'hiding_spots', 'ladder_only_roofs', 'walkable_roofs', 'open_crossings', 'goal_sites', ...(f.kill_zones ? ['kill_zones'] as const : []), ...(f.firing_gaps ? ['firing_gaps'] as const : [])] as const;
   const head: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(f)) if (!(lists as readonly string[]).includes(k)) head[k] = v;
   const headText = JSON.stringify(head, null, 2);

@@ -102,6 +102,13 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	bFacingCombatTarget = false;
 	bFacingFormationSector = false;
 	UpdateStealthLookLock(DeltaTime);
+	if (DoorFacingYaw.IsSet() && !bInCover)
+	{
+		// Doors R2: the door work holds his facing (square to the leaf) - nothing else turns him until it is released.
+		SetActorRotation(FRotator(0.f, *DoorFacingYaw, 0.f));
+		BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, 0.f, DeltaTime, 6.f);
+		return;
+	}
 	if (bInCover)
 	{
 		// User design rule 2026-10-06: the back stays against the wall (actor yaw = wall normal); the threat side only picks the _L/_R clip

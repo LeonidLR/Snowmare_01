@@ -1,0 +1,110 @@
+{
+  "schema": "codex.kit_series/1",
+  "_comment": "Facade SERIES table for Scripts/Editor/kit_dress.py (docs/design/levelgen/KIT_DRESS.md): series -> the Soviet building kit's modules per element. The pack (Content/SovietHouses) is untracked: this file only names its meshes / materials. A building uses its record's `series` when this table has it, else archetype_default[archetype]; no series -> the building stays grey box. Module frames (Saved/KitDump/kit_buildings.json + the vertex probe 2026-11-21): facade modules x 0..module_cm along the wall, y -30..0 with the OUTER face at y = 0 (local +Y outward), z 0..storey_cm; holes are [x0, x1] / [z0, z1] in that frame. Every height of a storey_cm module is stretched to our 300 cm storey.",
+  "kit_root": "/Game/SovietHouses/Meshes/",
+  "materials_root": "/Game/SovietHouses/Materials",
+  "plane_mesh": "/Engine/BasicShapes/Plane.Plane",
+  "stretch_max": 0.10,
+  "archetype_default": {
+    "block": "panel_1-464",
+    "office": "brick_1-447"
+  },
+  "series": {
+    "panel_1-464": {
+      "label": "Large-panel 5-storey block (the kit's Facade series, its L_SH_Building_20)",
+      "storey_cm": 280,
+      "module_cm": 300,
+      "depth_cm": 30,
+      "solid": "Facade/SM_SH_Wall_Facade_solid_28",
+      "windows": [
+        {"id": "win", "wall": "Facade/SM_SH_Wall_Facade_win_28", "glass": "Openings/SM_SH_Win_PVC_win_28", "hole": [75, 225], "hole_z": [85, 225]},
+        {"id": "wide", "wall": "Facade/SM_SH_Wall_Facade_wide_28", "glass": "Openings/SM_SH_Win_PVC_wide_28", "hole": [41, 259], "hole_z": [85, 225]}
+      ],
+      "balcony_door": {"wall": "Facade/SM_SH_Wall_Facade_balc_28", "glass": "Openings/SM_SH_Win_PVC_balc_28", "door_hole": [35, 110], "window_hole": [130, 260],
+                       "leaf": {"mesh": "Openings/SM_SH_Door_Int", "width_cm": 80, "height_cm": 205, "height_target_cm": 215, "mat": "MI_SH_Door", "inset_cm": 24},
+                       "balcony": "Balconies/SM_SH_Balc_Panel", "balcony_x": [11, 289], "balcony_depth_cm": 102},
+      "entrance": {"wall": "Facade/SM_SH_StairEnt_Facade_23", "height_cm": 230, "door": "Openings/SM_SH_Ent_Door_Steel", "hole": [85, 215],
+                   "leaf": {"mesh": "Openings/SM_SH_Door_Int", "width_cm": 80, "height_cm": 205, "mat": "MI_SH_SteelDoor", "inset_cm": 9.5},
+                   "porch": "Props/SM_SH_Ent_Porch", "porch_z_cm": 10, "canopy": "Props/SM_SH_Ent_Canopy", "canopy_z_cm": 222},
+      "stair_column": {"wall": "Facade/SM_SH_StairWall_Facade_28_w", "glass": "Openings/SM_SH_StairGlass_PVC", "height_cm": 280,
+                       "strip": "Facade/SM_SH_StairWall_Facade_14_x", "strip_height_cm": 140},
+      "plinth": {"mesh": "Facade/SM_SH_Plinth_Con_9", "height_cm": 90, "visible_cm": 45},
+      "parapet": {"mesh": "Facade/SM_SH_Parapet_Facade_10", "height_cm": 104},
+      "cornice": null,
+      "drain": {"mesh": "Props/SM_SH_Drain_70", "height_cm": 698},
+      "radiator": {"mesh": "Props/SM_SH_Radiator", "local": [44, 4, 0]},
+      "interior_walls": [
+        {"mesh": "Interior/SM_SH_IntWall_apt_30", "thickness_cm": 20, "height_cm": 300},
+        {"mesh": "Interior/SM_SH_IntWall_part_30", "thickness_cm": 10, "height_cm": 300}
+      ],
+      "stair_wall": {"mesh": "Interior/SM_SH_IntWall_stair_26", "thickness_cm": 20, "height_cm": 260},
+      "doors": {
+        "unit_entry": [{"mesh": "Openings/SM_SH_Door_Apt", "width_cm": 102, "height_cm": 214, "local": [45, 1, 0], "framed": true},
+                       {"mesh": "Openings/SM_SH_Door_Int", "width_cm": 80, "height_cm": 205, "local": [0, 0, 0]}],
+        "room": [{"mesh": "Openings/SM_SH_Door_Int", "width_cm": 80, "height_cm": 205, "local": [0, 0, 0]}],
+        "single_max_cm": 130
+      },
+      "stairs": {
+        "switchback": {"mesh": "Interior/SM_SH_Stair_mid_28_9", "rise_cm": 280, "lane_x": [75, 225], "floor_edge_y": -356, "turn_y": -160,
+                       "landing_end_y": -30, "floor_landing_y": -590},
+        "flights": [
+          {"mesh": "Interior/SM_SH_Steps_10", "rise_cm": 130, "run_cm": 210, "width_cm": 160, "centre_x": 150, "foot_y": 330, "foot_z": -130},
+          {"mesh": "Interior/SM_SH_Steps_9", "rise_cm": 120, "run_cm": 210, "width_cm": 160, "centre_x": 150, "foot_y": 330, "foot_z": -120}
+        ]
+      },
+      "floors": {"room": "MI_SH_Parquet", "lobby": "MI_SH_Tile", "corridor": "MI_SH_Tile", "stairwell": "MI_SH_Tile", "service": "MI_SH_Tile", "default": "MI_SH_Lino"},
+      "ceiling": "MI_SH_Plaster",
+      "roof": {"material": "MI_SH_Bitumen",
+               "props": [{"mesh": "Roof/SM_SH_Roof_Vent", "at": [0.3, 0.12]}, {"mesh": "Roof/SM_SH_Roof_Vent", "at": [0.3, 0.5]},
+                         {"mesh": "Roof/SM_SH_Roof_Vent", "at": [0.3, 0.88]}, {"mesh": "Roof/SM_SH_Roof_Antenna", "at": [0.25, 0.65]}]},
+      "slot_balconies": 2
+    },
+    "brick_1-447": {
+      "label": "Red-brick 5-storey (the kit's BrickR modules, its L_SH_Building_03 / 04 / 10 family); used for the offices until they get their own",
+      "storey_cm": 280,
+      "module_cm": 300,
+      "depth_cm": 30,
+      "solid": "Facade/SM_SH_Wall_BrickR_solid_28",
+      "windows": [
+        {"id": "win", "wall": "Facade/SM_SH_Wall_BrickR_win_28", "glass": "Openings/SM_SH_Win_Wood_win_28", "hole": [75, 225], "hole_z": [85, 225]}
+      ],
+      "balcony_door": {"wall": "Facade/SM_SH_Wall_BrickR_balc_28", "glass": "Openings/SM_SH_Win_Wood_balc_28", "door_hole": [35, 110], "window_hole": [130, 260],
+                       "leaf": {"mesh": "Openings/SM_SH_Door_Int", "width_cm": 80, "height_cm": 205, "height_target_cm": 215, "mat": "MI_SH_Door", "inset_cm": 24},
+                       "balcony": "Balconies/SM_SH_Balc_Brick", "balcony_x": [10, 290], "balcony_depth_cm": 103},
+      "entrance": {"wall": "Facade/SM_SH_StairEnt_BrickR_23", "height_cm": 230, "door": "Openings/SM_SH_Ent_Door_Wood", "hole": [85, 215],
+                   "leaf": {"mesh": "Openings/SM_SH_Door_Int", "width_cm": 80, "height_cm": 205, "mat": "MI_SH_Door", "inset_cm": 9.5},
+                   "porch": "Props/SM_SH_Ent_Porch", "porch_z_cm": 10, "canopy": "Props/SM_SH_Ent_Canopy", "canopy_z_cm": 222},
+      "stair_column": {"wall": "Facade/SM_SH_StairWall_BrickR_28_w", "glass": "Openings/SM_SH_StairGlass_Wood", "height_cm": 280,
+                       "strip": "Facade/SM_SH_StairWall_BrickR_14_x", "strip_height_cm": 140},
+      "plinth": {"mesh": "Facade/SM_SH_Plinth_BrickR_9", "height_cm": 90, "visible_cm": 45},
+      "parapet": {"mesh": "Facade/SM_SH_Parapet_BrickR_5", "height_cm": 54},
+      "cornice": {"mesh": "Facade/SM_SH_Cornice_BrickR_brick", "z_cm": -16},
+      "drain": {"mesh": "Props/SM_SH_Drain_70", "height_cm": 698},
+      "radiator": {"mesh": "Props/SM_SH_Radiator", "local": [44, 4, 0]},
+      "interior_walls": [
+        {"mesh": "Interior/SM_SH_IntWall_apt_30", "thickness_cm": 20, "height_cm": 300},
+        {"mesh": "Interior/SM_SH_IntWall_part_30", "thickness_cm": 10, "height_cm": 300}
+      ],
+      "stair_wall": {"mesh": "Interior/SM_SH_IntWall_stair_26", "thickness_cm": 20, "height_cm": 260},
+      "doors": {
+        "unit_entry": [{"mesh": "Openings/SM_SH_Door_Apt", "width_cm": 102, "height_cm": 214, "local": [45, 1, 0], "framed": true},
+                       {"mesh": "Openings/SM_SH_Door_Int", "width_cm": 80, "height_cm": 205, "local": [0, 0, 0]}],
+        "room": [{"mesh": "Openings/SM_SH_Door_Int", "width_cm": 80, "height_cm": 205, "local": [0, 0, 0]}],
+        "single_max_cm": 130
+      },
+      "stairs": {
+        "switchback": {"mesh": "Interior/SM_SH_Stair_mid_28_9", "rise_cm": 280, "lane_x": [75, 225], "floor_edge_y": -356, "turn_y": -160,
+                       "landing_end_y": -30, "floor_landing_y": -590},
+        "flights": [
+          {"mesh": "Interior/SM_SH_Steps_10", "rise_cm": 130, "run_cm": 210, "width_cm": 160, "centre_x": 150, "foot_y": 330, "foot_z": -130},
+          {"mesh": "Interior/SM_SH_Steps_9", "rise_cm": 120, "run_cm": 210, "width_cm": 160, "centre_x": 150, "foot_y": 330, "foot_z": -120}
+        ]
+      },
+      "floors": {"room": "MI_SH_Lino", "lobby": "MI_SH_Tile", "corridor": "MI_SH_Tile", "stairwell": "MI_SH_Tile", "service": "MI_SH_Tile", "default": "MI_SH_Lino"},
+      "ceiling": "MI_SH_Plaster",
+      "roof": {"material": "MI_SH_Bitumen",
+               "props": [{"mesh": "Roof/SM_SH_Roof_Vent", "at": [0.3, 0.3]}, {"mesh": "Roof/SM_SH_Roof_Dish", "at": [0.7, 0.7]}]},
+      "slot_balconies": 0
+    }
+  }
+}

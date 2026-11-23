@@ -11,6 +11,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import type { Vec2 } from '../movement/geometry.ts';
 import { pointInPoly } from '../movement/geometry.ts';
+import { geometryHash } from './chokepoints.ts';
 import { generateLayout } from './generate.ts';
 import { expandLayout } from './expand.ts';
 import type { AddTemplate, LayerAssignment, LayersConfig } from './layers.ts';
@@ -37,11 +38,11 @@ const ZONE_NW: Vec2[] = [[500, -9000], [6200, -9000], [6200, 0], [500, 0]];
 const tpl = (layer: string, label: string): AddTemplate => layerById(layer)!.add!.find((t) => t.label === label)!;
 const FREE_WALL_KINDS = ['wall', 'fence', 'curb'];
 
-test('layers config: valid; the ten layers of the designer + the fire line + the chokepoints, in his order', () => {
+test('layers config: valid; the ten layers of the designer + the fire line + the chokepoints + the room plans (S2.7), in his order', () => {
   assert.deepEqual(validateLayersConfig(LAYERS), []);
   const main = LAYERS.layers.filter((l) => l.group === 'main').map((l) => l.name);
   assert.deepEqual(main, ['Дороги', 'Здания / структуры', 'Мосты', 'Преграды крупные', 'Преграды средние', 'Преграды мелкие', 'Мины', 'Лут', 'Особые предметы', 'Цели']);
-  assert.deepEqual(LAYERS.layers.filter((l) => l.group === 'analysis').map((l) => l.id), ['fire_lines', 'chokepoints']);
+  assert.deepEqual(LAYERS.layers.filter((l) => l.group === 'analysis').map((l) => l.id), ['fire_lines', 'chokepoints', 'plans']);
   assert.deepEqual(LAYERS.layers.filter((l) => l.group === 'threats').map((l) => l.id), ['threat_drop', 'threat_windows', 'threat_overwatch', 'threat_hiding']);
   // a broken config is reported, not swallowed
   const bad = JSON.parse(JSON.stringify(LAYERS)) as LayersConfig;
@@ -63,7 +64,9 @@ test('layers assignment: every entity of every shipped map is in exactly one lay
   maps.push(['depot x2 + goals', placeObjectives({ layout: ex.layout, seed: 1 }).layout]);
   assert.ok(maps.length >= 9);
   for (const [name, l] of maps) {
-    assert.equal(l.analysis, undefined, `${name}: an old file has no analysis block`);
+    // an old file has no analysis block; the refreshed accepted x4 of the firing-gaps branch carries a current one (add-firing-gaps.ts)
+    if (name === 'gen_ref_01_02_depot_1_x4.json' && l.analysis) assert.equal(l.analysis.geometry_hash, geometryHash(l), `${name}: its analysis is current`);
+    else assert.equal(l.analysis, undefined, `${name}: an old file has no analysis block`);
     const entities = layoutEntities(l);
     assert.equal(new Set(entities.map((e) => e.key)).size, entities.length, `${name}: entity keys are unique`);
     for (const e of entities) assert.equal(matchingLayers(e).length, 1, `${name}: ${e.key} matches ${matchingLayers(e).join(' + ') || 'nothing'}`);
@@ -78,7 +81,9 @@ test('layers assignment: every entity of every shipped map is in exactly one lay
     assert.equal(entities.length, n, `${name}: every entity of the file is enumerated`);
     // what the designer's layers hold
     assert.ok(a.byLayer.roads.every((e) => e.type === 'zone' && (e.id.startsWith('Z_ST_') || e.set_piece === 'street')), `${name}: roads = street zones only`);
-    assert.ok(a.byLayer.roads.length >= 1, `${name}: has roads`);
+    // gen_bgen_plans_check = the S2.3 engine fixture, gen_story_showcase = the story showcase (houses on open ground, a mandatory route but no
+    // street zones): no streets by design
+    if (!name.startsWith('gen_bgen_plans_check') && !name.startsWith('gen_story_showcase')) assert.ok(a.byLayer.roads.length >= 1, `${name}: has roads`);
     assert.equal(a.byLayer.buildings.filter((e) => e.type === 'building').length, l.buildings.length);
     assert.equal(a.byLayer.bridges.length, l.cut?.crossings.length ?? 0);
     assert.equal(a.byLayer.objectives.length, l.objectives ? 1 + l.objectives.goals.length : 0);
@@ -167,7 +172,7 @@ test('layers visibility: hidden layers give exactly their keys; solo; counts wit
   const counts = layerCounts(a, { fire_line: 7, chokepoint: 3, hiding: 5 });
   assert.deepEqual([counts.fire_lines, counts.chokepoints, counts.threat_hiding, counts.threat_drop], [7, 3, 5, 0]);
   assert.equal(counts.obstacles_small, a.byLayer.obstacles_small.length);
-  assert.deepEqual(analysisLayerCounts({ window: 2 }), { fire_lines: 0, chokepoints: 0, threat_drop: 0, threat_windows: 2, threat_overwatch: 0, threat_hiding: 0 });
+  assert.deepEqual(analysisLayerCounts({ window: 2, plan: 4 }), { fire_lines: 0, chokepoints: 0, plans: 4, threat_drop: 0, threat_windows: 2, threat_overwatch: 0, threat_hiding: 0 });
   const tints = layerTints(a);
   assert.equal(tints.get(a.byLayer.obstacles_large[0].key), layerById('obstacles_large')!.color);
   assert.equal(tints.size, a.byLayer.obstacles_large.length + a.byLayer.obstacles_medium.length + a.byLayer.obstacles_small.length);

@@ -4,7 +4,9 @@
 // _process_leader_movement).
 
 #include "Characters/OperativeCharacter.h"
+#include "Interactables/WindowOrderRules.h"
 #include "Core/CodexGameplayRandom.h"
+#include "Interactables/VaultNavigation.h"
 #include "AI/PmcEncounterNav.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 
@@ -38,6 +40,7 @@
 #include "TimerManager.h"
 #include "Tutorial/TutorialRules.h"
 #include "Tutorial/TutorialSubsystem.h"
+#include "Interactables/DoorSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
@@ -470,6 +473,12 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 		}
 	}
 	bHasMoveOrder = Result == EPathFollowingRequestResult::RequestSuccessful;
+	// Doors R2 (designer 2026-11-22): a hostile fighter whose path stops at a LOCKED door breaches it (kick / shot / key / grenade by his
+	// archetype in doors.json) instead of standing there. No-op while the doors switch is off.
+	if (bHasMoveOrder && !IsPlayerTeam())
+	{
+		UDoorSubsystem::NotifyMoveRequested(this);
+	}
 	if (CVarOperativeMoveTrace.GetValueOnGameThread() != 0)
 	{
 		const UPathFollowingComponent* TracedFollowing = AIController->GetPathFollowingComponent();
@@ -508,7 +517,20 @@ TSubclassOf<UNavigationQueryFilter> AOperativeCharacter::ChooseMoveFilter() cons
 	default: break;
 	}
 	// Mantling slice 1: the mantle links (UNavArea_Mantle) are open only for the operative the player commands in Solo (bMantlePathAllowed).
-	return bMantlePathAllowed ? Filter : MantleNavigation::NoMantleVariant(Filter);
+	const TSubclassOf<UNavigationQueryFilter> Chosen = bMantlePathAllowed ? Filter : MantleNavigation::NoMantleVariant(Filter);
+	// Window sills - designer rule 2026-11-22, every mode (Solo, box selection, formation): a WHOLE window is a way through only on the
+	// player's window order (the silhouette click, SetWindowOrder) - then for everyone in the order, the followers' window costing nothing so
+	// they follow the commander through it; a BROKEN window is an ordinary vault area (VaultNavigation::SetWindowBroken) any path may take
+	// when it is faster - it makes no noise any more.
+	// Rule 2 (designer 2026-11-23, WindowOrderRules): a formation follower never paths through a WHOLE window, even on the leader's window
+	// order - he follows once the leader broke it (then it is an ordinary vault area).
+	const USquadSubsystem* WindowSquad = MoveSquad;
+	const bool bFormationFollower = WindowSquad && !WindowSquad->IsSoloMode() && WindowSquad->GetFormationLeader() != this;
+	if (!WindowSquad || !WindowOrderRules::MayTakeWholeWindow(WindowSquad->IsWindowOrder(), bFormationFollower, WindowOrderRules::Get()))
+	{
+		return MantleNavigation::NoWindowVariant(Chosen, bMantlePathAllowed);
+	}
+	return bMantlePathAllowed ? Chosen : MantleNavigation::WindowFreeVariant(Chosen);
 }
 
 bool AOperativeCharacter::SteerOwnMoveVia(const FVector& Via)

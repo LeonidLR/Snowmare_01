@@ -127,6 +127,37 @@
    "building": "B_warehouse"
   },
   {
+   "id": "B_warehouse_lanewall_f0",
+   "a": [
+    2075,
+    -2135
+   ],
+   "b": [
+    2075,
+    -1706
+   ],
+   "height": 300,
+   "thickness": 10,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_lanewall_f1",
+   "a": [
+    2075,
+    -2135
+   ],
+   "b": [
+    2075,
+    -1706
+   ],
+   "height": 300,
+   "thickness": 10,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
    "id": "B_warehouse_part_f0_0_0",
    "a": [
     2250,
@@ -626,6 +657,21 @@
    ],
    "b": [
     -2150,
+    -703
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_yard_shed"
+  },
+  {
+   "id": "B_yard_shed_S_1",
+   "a": [
+    -2150,
+    -523
+   ],
+   "b": [
+    -2150,
     450
    ],
    "height": 300,
@@ -666,12 +712,12 @@
   {
    "id": "B_yard_shed_part_f0_0_0",
    "a": [
-    -1150,
-    -594
+    -1650,
+    -1350
    ],
    "b": [
-    -1340,
-    -594
+    -1650,
+    -936
    ],
    "height": 300,
    "thickness": 20,
@@ -681,72 +727,12 @@
   {
    "id": "B_yard_shed_part_f0_0_1",
    "a": [
-    -1520,
-    -594
-   ],
-   "b": [
-    -2150,
-    -594
-   ],
-   "height": 300,
-   "thickness": 20,
-   "kind": "interior",
-   "building": "B_yard_shed"
-  },
-  {
-   "id": "B_yard_shed_part_f0_1_0",
-   "a": [
     -1650,
-    -1350
+    -756
    ],
    "b": [
     -1650,
-    -1062
-   ],
-   "height": 300,
-   "thickness": 20,
-   "kind": "interior",
-   "building": "B_yard_shed"
-  },
-  {
-   "id": "B_yard_shed_part_f0_1_1",
-   "a": [
-    -1650,
-    -882
-   ],
-   "b": [
-    -1650,
-    -594
-   ],
-   "height": 300,
-   "thickness": 20,
-   "kind": "interior",
-   "building": "B_yard_shed"
-  },
-  {
-   "id": "B_yard_shed_part_f0_2_0",
-   "a": [
-    -1150,
-    -72
-   ],
-   "b": [
-    -1560,
-    -72
-   ],
-   "height": 300,
-   "thickness": 20,
-   "kind": "interior",
-   "building": "B_yard_shed"
-  },
-  {
-   "id": "B_yard_shed_part_f0_2_1",
-   "a": [
-    -1740,
-    -72
-   ],
-   "b": [
-    -2150,
-    -72
+    450
    ],
    "height": 300,
    "thickness": 20,
@@ -1029,34 +1015,6 @@
      "yaw": 90
     },
     {
-     "id": "B_warehouse_win_east_f0_2",
-     "kind": "window",
-     "pos": [
-      1450,
-      650
-     ],
-     "floor": 0,
-     "wall": "B_warehouse_E",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 90
-    },
-    {
-     "id": "B_warehouse_win_east_f1_2",
-     "kind": "window",
-     "pos": [
-      1450,
-      650
-     ],
-     "floor": 1,
-     "wall": "B_warehouse_E",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 90
-    },
-    {
      "id": "B_warehouse_win_east_f0_3",
      "kind": "window",
      "pos": [
@@ -1083,34 +1041,6 @@
      "sill_height": 95,
      "top_height": 210,
      "yaw": 90
-    },
-    {
-     "id": "B_warehouse_win_north_f0_1",
-     "kind": "window",
-     "pos": [
-      2250,
-      -1814
-     ],
-     "floor": 0,
-     "wall": "B_warehouse_N",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 0
-    },
-    {
-     "id": "B_warehouse_win_north_f1_1",
-     "kind": "window",
-     "pos": [
-      2250,
-      -1814
-     ],
-     "floor": 1,
-     "wall": "B_warehouse_N",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 0
     },
     {
      "id": "B_warehouse_win_north_f0_2",
@@ -1426,20 +1356,20 @@
        "id": "B_warehouse_gap_stair_f1",
        "poly": [
         [
-         2140,
-         -2270
+         2235,
+         -2135
         ],
         [
-         2140,
-         -1761
+         2235,
+         -1706
         ],
         [
-         2060,
-         -1761
+         2075,
+         -1706
         ],
         [
-         2060,
-         -2270
+         2075,
+         -2135
         ]
        ],
        "kind": "stairwell"
@@ -1463,6 +1393,10 @@
        "door_ids": [
         "B_warehouse_partdoor_f1_0",
         "B_warehouse_partdoor_f1_1"
+       ],
+       "anchor": [
+        1850,
+        -1600
        ]
       },
       {
@@ -1481,6 +1415,10 @@
        "kind": "room",
        "door_ids": [
         "B_warehouse_partdoor_f1_1"
+       ],
+       "anchor": [
+        1050,
+        -1600
        ]
       },
       {
@@ -1500,6 +1438,10 @@
        "door_ids": [
         "B_warehouse_partdoor_f1_0",
         "B_warehouse_partdoor_f1_2"
+       ],
+       "anchor": [
+        1850,
+        -100
        ]
       },
       {
@@ -1518,6 +1460,10 @@
        "kind": "room",
        "door_ids": [
         "B_warehouse_partdoor_f1_2"
+       ],
+       "anchor": [
+        1050,
+        -100
        ]
       }
      ]
@@ -1610,6 +1556,10 @@
      "door_ids": [
       "B_warehouse_partdoor_f0_0",
       "B_warehouse_partdoor_f0_1"
+     ],
+     "anchor": [
+      1850,
+      -1600
      ]
     },
     {
@@ -1629,6 +1579,10 @@
      "door_ids": [
       "B_warehouse_door_west_2",
       "B_warehouse_partdoor_f0_1"
+     ],
+     "anchor": [
+      1050,
+      -1600
      ]
     },
     {
@@ -1648,6 +1602,10 @@
      "door_ids": [
       "B_warehouse_partdoor_f0_0",
       "B_warehouse_partdoor_f0_2"
+     ],
+     "anchor": [
+      1850,
+      -100
      ]
     },
     {
@@ -1667,6 +1625,10 @@
      "door_ids": [
       "B_warehouse_door_south_1",
       "B_warehouse_partdoor_f0_2"
+     ],
+     "anchor": [
+      1050,
+      -100
      ]
     },
     {
@@ -1686,6 +1648,10 @@
      "door_ids": [
       "B_warehouse_partdoor_f1_0",
       "B_warehouse_partdoor_f1_1"
+     ],
+     "anchor": [
+      1850,
+      -1600
      ]
     },
     {
@@ -1704,6 +1670,10 @@
      "kind": "room",
      "door_ids": [
       "B_warehouse_partdoor_f1_1"
+     ],
+     "anchor": [
+      1050,
+      -1600
      ]
     },
     {
@@ -1723,6 +1693,10 @@
      "door_ids": [
       "B_warehouse_partdoor_f1_0",
       "B_warehouse_partdoor_f1_2"
+     ],
+     "anchor": [
+      1850,
+      -100
      ]
     },
     {
@@ -1741,6 +1715,10 @@
      "kind": "room",
      "door_ids": [
       "B_warehouse_partdoor_f1_2"
+     ],
+     "anchor": [
+      1050,
+      -100
      ]
     }
    ],
@@ -2019,48 +1997,6 @@
      "wall": "B_warehouse_E"
     },
     {
-     "id": "me_B_warehouse_win_east_f0_2",
-     "start": [
-      1510,
-      650
-     ],
-     "end": [
-      1390,
-      650
-     ],
-     "floor": 0,
-     "base_z": 0,
-     "height_cm": 95,
-     "normal": [
-      0,
-      1
-     ],
-     "kind": "window",
-     "building": "B_warehouse",
-     "wall": "B_warehouse_E"
-    },
-    {
-     "id": "me_B_warehouse_win_east_f1_2",
-     "start": [
-      1510,
-      650
-     ],
-     "end": [
-      1390,
-      650
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      0,
-      1
-     ],
-     "kind": "window",
-     "building": "B_warehouse",
-     "wall": "B_warehouse_E"
-    },
-    {
      "id": "me_B_warehouse_win_east_f0_3",
      "start": [
       1185,
@@ -2101,48 +2037,6 @@
      "kind": "window",
      "building": "B_warehouse",
      "wall": "B_warehouse_E"
-    },
-    {
-     "id": "me_B_warehouse_win_north_f0_1",
-     "start": [
-      2250,
-      -1874
-     ],
-     "end": [
-      2250,
-      -1754
-     ],
-     "floor": 0,
-     "base_z": 0,
-     "height_cm": 95,
-     "normal": [
-      1,
-      0
-     ],
-     "kind": "window",
-     "building": "B_warehouse",
-     "wall": "B_warehouse_N"
-    },
-    {
-     "id": "me_B_warehouse_win_north_f1_1",
-     "start": [
-      2250,
-      -1874
-     ],
-     "end": [
-      2250,
-      -1754
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      1,
-      0
-     ],
-     "kind": "window",
-     "building": "B_warehouse",
-     "wall": "B_warehouse_N"
     },
     {
      "id": "me_B_warehouse_win_north_f0_2",
@@ -2439,29 +2333,29 @@
     {
      "id": "B_warehouse_stair_0",
      "pos": [
-      2100,
-      -2230
+      2155,
+      -2135
      ],
      "from": 0,
      "to": 1,
      "kind": "stairwell",
      "top": [
-      2100,
-      -1801
+      2155,
+      -1706
      ]
     },
     {
      "id": "B_warehouse_stair_1",
      "pos": [
-      1900,
-      -2230
+      1995,
+      -1706
      ],
      "from": 1,
      "to": 2,
      "kind": "stairwell",
      "top": [
-      1900,
-      -1801
+      1995,
+      -2135
      ]
     }
    ],
@@ -2537,7 +2431,7 @@
      "kind": "window",
      "pos": [
       550,
-      1625
+      1575
      ],
      "floor": 0,
      "wall": "B_catwalk_S",
@@ -2552,20 +2446,6 @@
      "pos": [
       550,
       1625
-     ],
-     "floor": 1,
-     "wall": "B_catwalk_S",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 180
-    },
-    {
-     "id": "B_catwalk_win_south_f1_2",
-     "kind": "window",
-     "pos": [
-      550,
-      1950
      ],
      "floor": 1,
      "wall": "B_catwalk_S",
@@ -2607,20 +2487,6 @@
      "kind": "window",
      "pos": [
       1600,
-      1150
-     ],
-     "floor": 1,
-     "wall": "B_catwalk_W",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 270
-    },
-    {
-     "id": "B_catwalk_win_west_f1_2",
-     "kind": "window",
-     "pos": [
-      1300,
       1150
      ],
      "floor": 1,
@@ -2891,6 +2757,10 @@
        "door_ids": [
         "B_catwalk_partdoor_f1_0",
         "B_catwalk_partdoor_f1_1"
+       ],
+       "anchor": [
+        1675,
+        1550
        ]
       },
       {
@@ -2909,6 +2779,10 @@
        "kind": "room",
        "door_ids": [
         "B_catwalk_partdoor_f1_1"
+       ],
+       "anchor": [
+        925,
+        1650
        ]
       },
       {
@@ -2928,6 +2802,10 @@
        "door_ids": [
         "B_catwalk_partdoor_f1_0",
         "B_catwalk_partdoor_f1_2"
+       ],
+       "anchor": [
+        1850,
+        2350
        ]
       },
       {
@@ -2946,6 +2824,10 @@
        "kind": "room",
        "door_ids": [
         "B_catwalk_partdoor_f1_2"
+       ],
+       "anchor": [
+        925,
+        2350
        ]
       }
      ]
@@ -3025,6 +2907,10 @@
       "B_catwalk_door_west_2",
       "B_catwalk_partdoor_f0_0",
       "B_catwalk_partdoor_f0_1"
+     ],
+     "anchor": [
+      1615,
+      1430
      ]
     },
     {
@@ -3043,6 +2929,10 @@
      "kind": "room",
      "door_ids": [
       "B_catwalk_partdoor_f0_1"
+     ],
+     "anchor": [
+      865,
+      1430
      ]
     },
     {
@@ -3062,6 +2952,10 @@
      "door_ids": [
       "B_catwalk_partdoor_f0_0",
       "B_catwalk_partdoor_f0_2"
+     ],
+     "anchor": [
+      1615,
+      2230
      ]
     },
     {
@@ -3081,6 +2975,10 @@
      "door_ids": [
       "B_catwalk_door_south_1",
       "B_catwalk_partdoor_f0_2"
+     ],
+     "anchor": [
+      865,
+      2230
      ]
     },
     {
@@ -3100,6 +2998,10 @@
      "door_ids": [
       "B_catwalk_partdoor_f1_0",
       "B_catwalk_partdoor_f1_1"
+     ],
+     "anchor": [
+      1675,
+      1550
      ]
     },
     {
@@ -3118,6 +3020,10 @@
      "kind": "room",
      "door_ids": [
       "B_catwalk_partdoor_f1_1"
+     ],
+     "anchor": [
+      925,
+      1650
      ]
     },
     {
@@ -3137,6 +3043,10 @@
      "door_ids": [
       "B_catwalk_partdoor_f1_0",
       "B_catwalk_partdoor_f1_2"
+     ],
+     "anchor": [
+      1850,
+      2350
      ]
     },
     {
@@ -3155,6 +3065,10 @@
      "kind": "room",
      "door_ids": [
       "B_catwalk_partdoor_f1_2"
+     ],
+     "anchor": [
+      925,
+      2350
      ]
     }
    ],
@@ -3163,11 +3077,11 @@
      "id": "me_B_catwalk_win_south_f0_1",
      "start": [
       550,
-      1565
+      1515
      ],
      "end": [
       550,
-      1685
+      1635
      ],
      "floor": 0,
      "base_z": 0,
@@ -3189,27 +3103,6 @@
      "end": [
       550,
       1685
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      -1,
-      0
-     ],
-     "kind": "window",
-     "building": "B_catwalk",
-     "wall": "B_catwalk_S"
-    },
-    {
-     "id": "me_B_catwalk_win_south_f1_2",
-     "start": [
-      550,
-      1890
-     ],
-     "end": [
-      550,
-      2010
      ],
      "floor": 1,
      "base_z": 300,
@@ -3272,27 +3165,6 @@
      ],
      "end": [
       1540,
-      1150
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      0,
-      -1
-     ],
-     "kind": "window",
-     "building": "B_catwalk",
-     "wall": "B_catwalk_W"
-    },
-    {
-     "id": "me_B_catwalk_win_west_f1_2",
-     "start": [
-      1360,
-      1150
-     ],
-     "end": [
-      1240,
       1150
      ],
      "floor": 1,
@@ -3490,6 +3362,14 @@
      ],
      "floor": 0,
      "wall": "B_yard_shed_N"
+    },
+    {
+     "pos": [
+      -2150,
+      -613
+     ],
+     "floor": 0,
+     "wall": "B_yard_shed_S"
     }
    ],
    "openings": [
@@ -3506,6 +3386,20 @@
      "sill_height": 0,
      "top_height": 210,
      "yaw": 0
+    },
+    {
+     "id": "B_yard_shed_door_south_2",
+     "kind": "door",
+     "pos": [
+      -2150,
+      -613
+     ],
+     "floor": 0,
+     "wall": "B_yard_shed_S",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 180
     },
     {
      "id": "B_yard_shed_win_north_f0_1",
@@ -3534,32 +3428,18 @@
      "sill_height": 95,
      "top_height": 210,
      "yaw": 0
-    },
-    {
-     "id": "B_yard_shed_win_east_f0_1",
-     "kind": "window",
-     "pos": [
-      -1650,
-      450
-     ],
-     "floor": 0,
-     "wall": "B_yard_shed_E",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 90
     }
    ],
    "partitions": [
     {
      "id": "B_yard_shed_part_f0_0",
      "start": [
-      -1150,
-      -594
+      -1650,
+      -1350
      ],
      "end": [
-      -2150,
-      -594
+      -1650,
+      450
      ],
      "floor": 0,
      "thickness": 20,
@@ -3568,62 +3448,8 @@
        "id": "B_yard_shed_partdoor_f0_0",
        "kind": "door",
        "pos": [
-        -1430,
-        -594
-       ],
-       "floor": 0,
-       "width": 120,
-       "sill_height": 0,
-       "top_height": 210
-      }
-     ]
-    },
-    {
-     "id": "B_yard_shed_part_f0_1",
-     "start": [
-      -1650,
-      -1350
-     ],
-     "end": [
-      -1650,
-      -594
-     ],
-     "floor": 0,
-     "thickness": 20,
-     "openings": [
-      {
-       "id": "B_yard_shed_partdoor_f0_1",
-       "kind": "door",
-       "pos": [
         -1650,
-        -972
-       ],
-       "floor": 0,
-       "width": 120,
-       "sill_height": 0,
-       "top_height": 210
-      }
-     ]
-    },
-    {
-     "id": "B_yard_shed_part_f0_2",
-     "start": [
-      -1150,
-      -72
-     ],
-     "end": [
-      -2150,
-      -72
-     ],
-     "floor": 0,
-     "thickness": 20,
-     "openings": [
-      {
-       "id": "B_yard_shed_partdoor_f0_2",
-       "kind": "door",
-       "pos": [
-        -1650,
-        -72
+        -846
        ],
        "floor": 0,
        "width": 120,
@@ -3647,13 +3473,17 @@
       ],
       "max": [
        -1150,
-       -594
+       450
       ]
      },
      "kind": "room",
      "door_ids": [
-      "B_yard_shed_partdoor_f0_0",
-      "B_yard_shed_partdoor_f0_1"
+      "B_yard_shed_door_north_1",
+      "B_yard_shed_partdoor_f0_0"
+     ],
+     "anchor": [
+      -1400,
+      -450
      ]
     },
     {
@@ -3666,50 +3496,17 @@
       ],
       "max": [
        -1650,
-       -594
-      ]
-     },
-     "kind": "room",
-     "door_ids": [
-      "B_yard_shed_partdoor_f0_1"
-     ]
-    },
-    {
-     "id": "B_yard_shed_r_f0_2",
-     "floor": 0,
-     "bounds": {
-      "min": [
-       -2150,
-       -594
-      ],
-      "max": [
-       -1150,
-       -72
-      ]
-     },
-     "kind": "room",
-     "door_ids": [
-      "B_yard_shed_door_north_1",
-      "B_yard_shed_partdoor_f0_0",
-      "B_yard_shed_partdoor_f0_2"
-     ]
-    },
-    {
-     "id": "B_yard_shed_r_f0_3",
-     "floor": 0,
-     "bounds": {
-      "min": [
-       -2150,
-       -72
-      ],
-      "max": [
-       -1150,
        450
       ]
      },
      "kind": "room",
      "door_ids": [
-      "B_yard_shed_partdoor_f0_2"
+      "B_yard_shed_door_south_2",
+      "B_yard_shed_partdoor_f0_0"
+     ],
+     "anchor": [
+      -1900,
+      -450
      ]
     }
    ],
@@ -3755,27 +3552,6 @@
      "kind": "window",
      "building": "B_yard_shed",
      "wall": "B_yard_shed_N"
-    },
-    {
-     "id": "me_B_yard_shed_win_east_f0_1",
-     "start": [
-      -1590,
-      450
-     ],
-     "end": [
-      -1710,
-      450
-     ],
-     "floor": 0,
-     "base_z": 0,
-     "height_cm": 95,
-     "normal": [
-      0,
-      1
-     ],
-     "kind": "window",
-     "building": "B_yard_shed",
-     "wall": "B_yard_shed_E"
     }
    ],
    "stairs": [],
@@ -3999,12 +3775,12 @@
      -203
     ],
     [
-     2100,
-     -2230
+     2155,
+     -2135
     ],
     [
-     2100,
-     -1801
+     2155,
+     -1706
     ],
     [
      720,
@@ -4647,48 +4423,6 @@
    "wall": "B_warehouse_E"
   },
   {
-   "id": "me_B_warehouse_win_east_f0_2",
-   "start": [
-    1510,
-    650
-   ],
-   "end": [
-    1390,
-    650
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 95,
-   "normal": [
-    0,
-    1
-   ],
-   "kind": "window",
-   "building": "B_warehouse",
-   "wall": "B_warehouse_E"
-  },
-  {
-   "id": "me_B_warehouse_win_east_f1_2",
-   "start": [
-    1510,
-    650
-   ],
-   "end": [
-    1390,
-    650
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    0,
-    1
-   ],
-   "kind": "window",
-   "building": "B_warehouse",
-   "wall": "B_warehouse_E"
-  },
-  {
    "id": "me_B_warehouse_win_east_f0_3",
    "start": [
     1185,
@@ -4729,48 +4463,6 @@
    "kind": "window",
    "building": "B_warehouse",
    "wall": "B_warehouse_E"
-  },
-  {
-   "id": "me_B_warehouse_win_north_f0_1",
-   "start": [
-    2250,
-    -1874
-   ],
-   "end": [
-    2250,
-    -1754
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 95,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "window",
-   "building": "B_warehouse",
-   "wall": "B_warehouse_N"
-  },
-  {
-   "id": "me_B_warehouse_win_north_f1_1",
-   "start": [
-    2250,
-    -1874
-   ],
-   "end": [
-    2250,
-    -1754
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "window",
-   "building": "B_warehouse",
-   "wall": "B_warehouse_N"
   },
   {
    "id": "me_B_warehouse_win_north_f0_2",
@@ -5066,11 +4758,11 @@
    "id": "me_B_catwalk_win_south_f0_1",
    "start": [
     550,
-    1565
+    1515
    ],
    "end": [
     550,
-    1685
+    1635
    ],
    "floor": 0,
    "base_z": 0,
@@ -5092,27 +4784,6 @@
    "end": [
     550,
     1685
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "window",
-   "building": "B_catwalk",
-   "wall": "B_catwalk_S"
-  },
-  {
-   "id": "me_B_catwalk_win_south_f1_2",
-   "start": [
-    550,
-    1890
-   ],
-   "end": [
-    550,
-    2010
    ],
    "floor": 1,
    "base_z": 300,
@@ -5175,27 +4846,6 @@
    ],
    "end": [
     1540,
-    1150
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    0,
-    -1
-   ],
-   "kind": "window",
-   "building": "B_catwalk",
-   "wall": "B_catwalk_W"
-  },
-  {
-   "id": "me_B_catwalk_win_west_f1_2",
-   "start": [
-    1360,
-    1150
-   ],
-   "end": [
-    1240,
     1150
    ],
    "floor": 1,
@@ -5372,27 +5022,6 @@
    "kind": "window",
    "building": "B_yard_shed",
    "wall": "B_yard_shed_N"
-  },
-  {
-   "id": "me_B_yard_shed_win_east_f0_1",
-   "start": [
-    -1590,
-    450
-   ],
-   "end": [
-    -1710,
-    450
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 95,
-   "normal": [
-    0,
-    1
-   ],
-   "kind": "window",
-   "building": "B_yard_shed",
-   "wall": "B_yard_shed_E"
   }
  ],
  "pressure": {

@@ -3262,6 +3262,11 @@ namespace PmcArena
 			Random->Seed(static_cast<uint32>(Seed));
 			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] rng seeded seed=%d round=%d"), Seed, State.Round);
 		}
+		// Doors R2: the door rolls (kick / injury / lock shot) follow the round seed - the same round replays the same breaches.
+		if (IConsoleVariable* DoorSeed = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Doors.Seed")))
+		{
+			DoorSeed->Set(FMath::Max(0, Seed), ECVF_SetByConsole);
+		}
 		State.AreaRejects = 0;
 		for (FSide& Side : State.Sides)
 		{

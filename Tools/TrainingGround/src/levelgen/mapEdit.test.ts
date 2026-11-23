@@ -101,7 +101,9 @@ test('building move: the ladder of a building moves with it, a ladder joining tw
   assert.deepEqual(r.layout.objectives!.goals[0].pos, [inside[0] + D[0], inside[1] + D[1]]);
   assert.deepEqual(byId(r.layout.ladders, 'LAD_bridge'), byId(l.ladders, 'LAD_bridge'), 'a ladder between two buildings stays');
   assert.match(r.message, /LAD_bridge/);
-  assert.ok(r.carried && r.carried['лестниц'] === 1 && r.carried['стен'] === 6, JSON.stringify(r.carried));
+  // the hall's own walls (6 on main's fixture, more with the bgen parapet / firing-gap walls): every one is carried
+  const hallWalls = l.walls.filter((w) => w.building === 'B_hall_n').length;
+  assert.ok(r.carried && r.carried['лестниц'] === 1 && r.carried['стен'] === hallWalls && hallWalls >= 6, JSON.stringify(r.carried));
   // refused: no such building, zero delta, out of the map
   assert.equal(moveBuilding(base, 'B_nope', D).ok, false);
   assert.equal(moveBuilding(base, 'B_hall_n', [0, 0]).ok, false);

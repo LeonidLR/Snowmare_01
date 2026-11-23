@@ -1,4 +1,5 @@
 #include "AI/StealthLureSubsystem.h"
+#include "AI/NoiseRingActor.h"
 
 #include "AI/LureStoneActor.h"
 #include "AI/WorldAIPauseSubsystem.h"
@@ -345,6 +346,21 @@ void UStealthLureSubsystem::UpdatePreview(const FVector& Location, EStealthLureK
 		RingActor->ShowRing(Location, StealthLureRules::GetRadius(GetParams(), Kind));
 		RingActor->SetActorHiddenInGame(false);
 		bRingShown = true;
+	}
+}
+
+void UStealthLureSubsystem::ShowNoiseRing(const FVector& Location, float RadiusCm, float Seconds, int32 Pulses)
+{
+	UWorld* World = GetWorld();
+	if (!World || RadiusCm <= 0.f)
+	{
+		return;
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	if (ANoiseRingActor* Ring = World->SpawnActor<ANoiseRingActor>(Location, FRotator::ZeroRotator, Params))
+	{
+		Ring->Start(Location, RadiusCm, Seconds, Pulses);
 	}
 }
 

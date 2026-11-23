@@ -1,15 +1,17 @@
 // Training Ground / level generator v2 - ROTATED BUILDINGS (designer 2026-11-16, item 4: «Макс. угол поворота зданий»).
 // Convention (schema GenBuilding.rotation): a building with `rotation` (degrees, UE yaw sense: +X towards +Y) stands rotated by that
-// angle about the centre of its `footprint`. `footprint` and `rooms[].bounds` / `floors_detail[].rooms[].bounds` stay the UNROTATED
-// rectangles centred on the same point (so rect.centre(footprint) is the world centre); EVERY other point of the building (doors,
-// openings + their yaw, partitions, parapets, hatches, stairs, roof / floor holes, floor gaps) and its walls, ladders, covers,
-// mantle edges are stored in WORLD coordinates. A file without `rotation` loads as 0 (axis-aligned), byte for byte as before.
+// angle about the centre of its `footprint`. `footprint`, `rooms[].bounds` / `floors_detail[].rooms[].bounds` and the schema /2
+// balconies, fire escapes, snow ramps and breach panels stay in the UNROTATED building frame (so rect.centre(footprint) is the world
+// centre); every other point of the building (doors, openings + their yaw, partitions, parapets, hatches, stairs, roof / floor holes,
+// floor gaps, mantle edges) and its walls, ladders, covers are stored in WORLD coordinates - the one list is
+// building_coord_fields.json (buildingCoordFields.ts). A file without `rotation` loads as 0 (axis-aligned), byte for byte as before.
 // The generator rotates a whole block TEMPLATE rigidly (rotateContent) about the template's centre, after shrinking it to fit its
 // lot (fitScale); consumers that need the footprint as a shape use footprintPoly / inFootprint / footprintBBox. Constants:
 // levelgen_v2.json rotation. Pure TS.
 import cfg from '../../../../Content/Data/LevelGen/levelgen_v2.json' with { type: 'json' };
 import type { Vec2 } from '../movement/geometry.ts';
 import type { GenBuilding, GenLayout } from './schema.ts';
+import { mapBuildingCoords, unsupportedCoord } from './buildingCoordFields.ts';
 
 export const ROTATION = cfg.rotation;
 
@@ -90,34 +92,25 @@ export function drawAngle(random: () => number, maxDeg: number, scale = 1): numb
 export type RotatableContent = Pick<GenLayout, 'walls' | 'buildings' | 'ladders' | 'covers' | 'zones' | 'ambush_points'> & { mantle_edges: NonNullable<GenLayout['mantle_edges']> };
 
 /**
- * The content rotated rigidly by `deg` about `pivot` (UE cm): every point moves, yaws turn, and each building's unrotated rectangles
- * (footprint, room bounds) are moved with its centre while its `rotation` grows by `deg` (see the convention above). A copy; 0 = the
- * same objects.
+ * The content rotated rigidly by `deg` about `pivot` (UE cm): every point moves, yaws turn, and each building's fields follow
+ * BUILDING_COORD_FIELDS (building_coord_fields.json): world points / yaws / directions turn about `pivot`, building-frame fields
+ * (footprint, room bounds, balconies, fire escapes, snow ramps, breach panels) move with the footprint centre, and `rotation` grows by
+ * `deg` (see the convention above). A copy; 0 = the same objects.
  */
 export function rotateContent<T extends RotatableContent>(content: T, pivot: Vec2, deg: number): T {
   if (!deg) return content;
   const P = (p: readonly number[]): Vec2 => { const q = rotPoint(p, pivot, deg); return [round2(q[0]), round2(q[1])]; };
   const Y = (y: number) => round2(normDeg(y + deg));
-  const moveRect = (r: readonly (readonly number[])[], d: Vec2): [Vec2, Vec2] => [[round2(r[0][0] + d[0]), round2(r[0][1] + d[1])], [round2(r[1][0] + d[0]), round2(r[1][1] + d[1])]];
   const buildings = content.buildings.map((b) => {
     const c0 = rectCentre(b.footprint), c1 = P(c0), d: Vec2 = [c1[0] - c0[0], c1[1] - c0[1]];
-    const nb: GenBuilding = {
-      ...b,
-      footprint: moveRect(b.footprint, d),
-      rotation: round2(normDeg(rotationOf(b) + deg)),
-      doors: b.doors.map((x) => ({ ...x, pos: P(x.pos) })),
-      stairs: b.stairs.map((s) => ({ ...s, pos: P(s.pos), top: P(s.top), ...(s.mid ? { mid: P(s.mid) } : {}) })),
-      roof_holes: b.roof_holes.map(P),
-      floor_holes: b.floor_holes.map((h) => ({ ...h, pos: P(h.pos) })),
-    };
-    if (b.openings) nb.openings = b.openings.map((o) => ({ ...o, pos: P(o.pos), ...(typeof o.yaw === 'number' ? { yaw: Y(o.yaw) } : {}) }));
-    if (b.partitions) nb.partitions = b.partitions.map((pt) => ({ ...pt, start: P(pt.start), end: P(pt.end), ...(pt.openings ? { openings: pt.openings.map((o) => ({ ...o, pos: P(o.pos), ...(typeof o.yaw === 'number' ? { yaw: Y(o.yaw) } : {}) })) } : {}) }));
-    if (b.parapets) nb.parapets = b.parapets.map((pp) => ({ ...pp, start: P(pp.start), end: P(pp.end) }));
-    if (b.hatches) nb.hatches = b.hatches.map((h) => ({ ...h, pos: P(h.pos) }));
-    if (b.rooms) nb.rooms = b.rooms.map((rm) => { const r = moveRect([rm.bounds.min, rm.bounds.max], d); return { ...rm, bounds: { min: r[0], max: r[1] } }; });
-    if (b.floors_detail) nb.floors_detail = b.floors_detail.map((fd) => ({ ...fd, ...(fd.gaps ? { gaps: fd.gaps.map((g) => ({ ...g, poly: g.poly.map(P) })) } : {}),
-      ...(fd.rooms ? { rooms: fd.rooms.map((rm) => { const r = moveRect([rm.bounds.min, rm.bounds.max], d); return { ...rm, bounds: { min: r[0], max: r[1] } }; }) } : {}) }));
-    if (b.mantle_edges) nb.mantle_edges = b.mantle_edges.map((m) => ({ ...m, start: P(m.start), end: P(m.end), normal: rotVec(m.normal, deg) }));
+    const T = (p: readonly number[]): Vec2 => [round2(p[0] + d[0]), round2(p[1] + d[1])];
+    const nb = mapBuildingCoords(b, {
+      point: (p, frame) => (frame === 'world' ? P(p) : T(p)),
+      rect: (r, frame, path) => (frame === 'building' ? [T(r[0]), T(r[1])] : unsupportedCoord(path, 'rect', frame)),
+      direction: (v, frame, path) => (frame === 'world' ? rotVec(v, deg) : unsupportedCoord(path, 'direction', frame)),
+      yaw: (y, frame, path) => (frame === 'world' ? Y(y) : unsupportedCoord(path, 'yaw', frame)),
+    });
+    nb.rotation = round2(normDeg(rotationOf(b) + deg));
     return nb;
   });
   return {

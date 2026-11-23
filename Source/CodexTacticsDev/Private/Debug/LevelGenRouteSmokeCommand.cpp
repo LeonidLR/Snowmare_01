@@ -16,6 +16,13 @@
 // (Codex.Pressure.Enabled 0: a walk check, not a fight); the smoke only reads its tracker: PASS = every waypoint of the route reached once
 // with none skipped; each hole drop is reported (fell through the drop nav link / scripted by the bot). No bot route (or walk=carrot):
 // the carrot walk below, as before (its hole drops teleported).
+// MANTLE LEGS and ROUTE VARIANTS (2026-11-19): a route=<id> other than the mandatory one is walked by the bot's route mode too when the level
+// JSON has a "bot_route_variants"[<id>] block (the builder writes one per non-mandatory route with a mantle link, levelgen_bot_route.py):
+// it is parsed (BotRouteRules::Parse) and handed to UPlaytestBotSubsystem::SetRouteOverride before the run. No such variant (or
+// walk=carrot): the carrot walk as before. A waypoint with "mantle" / "mantle_at" is a click on the obstacle's top (the squad climbs in
+// turns, MANTLING.md 6.4); every mantle record is logged ("mantle over <edge> to #n (label): clicked, climbed, up m/n, s, why") and PASS also
+// needs each one climbed (the leader's mantle count rose) and reached. CodexTactics.LabBridgeMantleRouteSmoke = this with
+// {"map=L_Lab_Bridge", "route=V3_mantle"} (no arguments for smoke_parallel; Scripts/test_map.json smokeOptions).
 // Godot reference: none (UE-only).
 
 #include "CoreMinimal.h"
@@ -85,6 +92,8 @@ namespace LevelGenRouteSmoke
 		bool bLegClimbed = false;
 		FVector LastOrder = FVector::ZeroVector;
 		EStage Stage = EStage::Walk;
+		/** The bot route walked is a level JSON "bot_route_variants" entry (a route with a mantle leg). */
+		bool bVariant = false;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -96,7 +105,7 @@ namespace LevelGenRouteSmoke
 	bool Finish(FState& State, bool bComplete)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: LevelGenRouteSmoke %s route %s (%s): %d / %d %s, %.0f s, %d hole drops %s"), *State.LayoutName, *State.RouteId,
-			State.Stage == EStage::BotRoute ? TEXT("bot route mode") : TEXT("carrot walk"), State.Leg, State.Stage == EStage::BotRoute ? State.Legs.Num() + 1 : State.Legs.Num(),
+			State.Stage == EStage::BotRoute ? (State.bVariant ? TEXT("bot route mode, route variant") : TEXT("bot route mode")) : TEXT("carrot walk"), State.Leg, State.Stage == EStage::BotRoute ? State.Legs.Num() + 1 : State.Legs.Num(),
 			State.Stage == EStage::BotRoute ? TEXT("waypoints") : TEXT("legs"), State.Total, State.Teleports,
 			State.Stage == EStage::BotRoute ? TEXT("scripted") : TEXT("teleported"));
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
@@ -188,6 +197,33 @@ namespace LevelGenRouteSmoke
 		return Best;
 	}
 
+	/** The level JSON's "bot_route_variants"[RouteId] block parsed; false when the file / the key / the variant is absent (the carrot walk then). */
+	bool LoadRouteVariant(const UWorld* World, const FString& MapArg, const FString& RouteId, FBotRouteConfig& Out)
+	{
+		const FString MapName = MapArg.IsEmpty() ? LoadedMapName(World) : MapArg;
+		const FString LevelFile = FPaths::ProjectContentDir() / TEXT("Data/LevelJson") / MapName + TEXT(".json");
+		FString Text;
+		TSharedPtr<FJsonObject> Level;
+		if (!FFileHelper::LoadFileToString(Text, *LevelFile) || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Level) || !Level.IsValid())
+		{
+			return false;
+		}
+		const TSharedPtr<FJsonObject>* Variants = nullptr;
+		const TSharedPtr<FJsonObject>* Block = nullptr;
+		if (!Level->TryGetObjectField(TEXT("bot_route_variants"), Variants) || !Variants || !Variants->IsValid()
+			|| !(*Variants)->TryGetObjectField(RouteId, Block) || !Block || !Block->IsValid())
+		{
+			return false;
+		}
+		FString Error;
+		if (!BotRouteRules::Parse(**Block, Out, &Error))
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("Smoke: %s \"bot_route_variants\".%s does not parse (%s) - the carrot walk"), *LevelFile, *RouteId, *Error);
+			return false;
+		}
+		return true;
+	}
+
 	bool LoadLegs(const UWorld* World, FState& State, const FString& LayoutArg, const FString& RouteArg, const FString& MapArg, FString& Error)
 	{
 		const FString File = FindLayoutFile(World, LayoutArg, MapArg);
@@ -266,6 +302,21 @@ namespace LevelGenRouteSmoke
 		return 0.f; // the generated maps are built at ground_z 0 (build_levelgen_map.py)
 	}
 
+	/**
+	 * The smoke checks the route, not the cold (designer 2026-11-19): no frostbite collapse on the cold generated maps. Both walks call it
+	 * every step (2026-11-20: the bot route walk had no call - on L_Gen_BgenTest_X6 the squad went PRONE at ~110 s and crawled, 8 / 25).
+	 */
+	void KeepColdOff(USquadSubsystem* Squad)
+	{
+		for (AOperativeCharacter* Each : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+		{
+			if (Each && Each->ColdSurvival && Each->ColdSurvival->IsComponentTickEnabled())
+			{
+				Each->ColdSurvival->SetComponentTickEnabled(false);
+			}
+		}
+	}
+
 	bool Step(UWorld* World, FState& State, float Dt)
 	{
 		if (State.Stage == EStage::Done)
@@ -274,14 +325,7 @@ namespace LevelGenRouteSmoke
 		}
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-		// The smoke checks the route, not the cold (designer 2026-11-19): no frostbite collapse on the cold generated maps.
-		for (AOperativeCharacter* Each : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
-		{
-			if (Each && Each->ColdSurvival && Each->ColdSurvival->IsComponentTickEnabled())
-			{
-				Each->ColdSurvival->SetComponentTickEnabled(false);
-			}
-		}
+		KeepColdOff(Squad);
 		if (!Leader)
 		{
 			Check(State, false, TEXT("a squad leader exists"));
@@ -384,6 +428,7 @@ namespace LevelGenRouteSmoke
 			return false;
 		}
 		State.Total += Dt;
+		KeepColdOff(World->GetSubsystem<USquadSubsystem>());
 #if CODEX_WITH_PLAYTEST_BOT
 		const UPlaytestBotSubsystem* Bot = World->GetSubsystem<UPlaytestBotSubsystem>();
 		if (!Bot || !Bot->IsRouteMode())
@@ -409,6 +454,20 @@ namespace LevelGenRouteSmoke
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: stuck at %.0f s on #%d (%s) at (%.0f, %.0f): %s, last order '%s'%s"), Stuck.Time, Stuck.Waypoint, *Stuck.Label,
 				Stuck.Position.X, Stuck.Position.Y, *Stuck.Reason, *Stuck.LastOrder, Stuck.bSkipped ? TEXT(" -> SKIPPED") : TEXT(""));
 		}
+		bool bMantlesOk = true;
+		const TArray<FBotRouteMantle> Mantles = Bot->GetRouteMantles();
+		for (const FBotRouteMantle& Mantle : Mantles)
+		{
+			const bool bOk = Mantle.bClimbed && Mantle.bReached;
+			bMantlesOk &= bOk;
+			Check(State, bOk, FString::Printf(TEXT("mantle over %s to #%d (%s): clicked %d, climbed %d, up %d / %d, %s in %.1f s%s%s"), *Mantle.Via, Mantle.Waypoint, *Mantle.Label,
+				Mantle.bClicked ? 1 : 0, Mantle.bClimbed ? 1 : 0, Mantle.MembersUp, Mantle.Members, Mantle.bReached ? TEXT("reached") : TEXT("NOT reached"), Mantle.Seconds,
+				Mantle.Why.IsEmpty() ? TEXT("") : TEXT(", why "), *Mantle.Why));
+		}
+		if (State.bVariant)
+		{
+			Check(State, !Mantles.IsEmpty(), FString::Printf(TEXT("the route variant has a mantle leg the bot met (%d records)"), Mantles.Num()));
+		}
 		for (const FBotRouteDrop& Drop : Bot->GetRouteDrops())
 		{
 			const bool bTeleport = Drop.bScripted;
@@ -419,20 +478,20 @@ namespace LevelGenRouteSmoke
 		}
 		Check(State, bAll && !bSkipped, FString::Printf(TEXT("the bot walked the route %s: %d / %d waypoints reached, %d skipped, %d stuck events, %.0f m in %.0f s"),
 			*Tracker.GetConfig().Name, Tracker.GetTotalReached(), Num, Tracker.GetTotalSkipped(), Tracker.GetStucks().Num(), Tracker.GetDistanceCm() / 100.f, State.Total));
-		return Finish(State, bAll && !bSkipped);
+		return Finish(State, bAll && !bSkipped && bMantlesOk);
 #else
 		Check(State, false, TEXT("the playtest bot exists in this build"));
 		return Finish(State, false);
 #endif
 	}
 
-	/** The level JSON has a bot route and the bot exists: the walk goes to the route mode. */
-	bool CanUseBotRoute(UWorld* World)
+	/** The level JSON has a bot route (or the walk is a route variant, which brings its own) and the bot exists: the walk goes to the route mode. */
+	bool CanUseBotRoute(UWorld* World, bool bVariant)
 	{
 #if CODEX_WITH_PLAYTEST_BOT
 		const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
 		const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
-		return Level && Level->Config.BotRoute.IsValid() && World->GetSubsystem<UPlaytestBotSubsystem>() != nullptr;
+		return Level && (bVariant || Level->Config.BotRoute.IsValid()) && World->GetSubsystem<UPlaytestBotSubsystem>() != nullptr;
 #else
 		return false;
 #endif
@@ -456,7 +515,10 @@ namespace LevelGenRouteSmoke
 			return;
 		}
 		TWeakObjectPtr<UWorld> WeakWorld(World);
-		if (!bCarrot && RouteArg.IsEmpty() && CanUseBotRoute(World))
+		// A route other than the mandatory one is walked by the bot only when the level JSON has its variant block.
+		FBotRouteConfig Variant;
+		const bool bVariant = !bCarrot && !RouteArg.IsEmpty() && LoadRouteVariant(World, MapArg, RouteArg, Variant);
+		if (!bCarrot && (RouteArg.IsEmpty() || bVariant) && CanUseBotRoute(World, bVariant))
 		{
 #if CODEX_WITH_PLAYTEST_BOT
 			// A walk check: no pressure enemies on the way (the bot batches fight them).
@@ -472,7 +534,13 @@ namespace LevelGenRouteSmoke
 					Variable->Set(0, ECVF_SetByConsole);
 				}
 			}
-			World->GetSubsystem<UPlaytestBotSubsystem>()->StartRouteRun(BotRouteLimitSeconds + 60.f, false, 1);
+			UPlaytestBotSubsystem* Bot = World->GetSubsystem<UPlaytestBotSubsystem>();
+			if (bVariant)
+			{
+				Bot->SetRouteOverride(Variant); // one-shot: the run set up on the next tick walks the variant, the one after the level's own route
+				State->bVariant = true;
+			}
+			Bot->StartRouteRun(BotRouteLimitSeconds + 60.f, false, 1);
 			State->Stage = EStage::BotRoute;
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: LevelGenRouteSmoke layout %s route %s on %s: the walk handed to the bot's route mode (Codex.Bot.Route; the pressure off)"),
 				*State->LayoutName, *State->RouteId, *LoadedMapName(World));
@@ -527,6 +595,18 @@ namespace LevelGenRouteSmoke
 			}
 		}), NavWarmupSeconds, false);
 	}
+
+	/** The lab bridge's mantle route V3_mantle (the bot clicks the W_obstacle's top, the squad climbs): no arguments, for smoke_parallel. */
+	void RunLabBridgeMantle(const TArray<FString>& Args, UWorld* World)
+	{
+		Run(TArray<FString>({ TEXT("map=L_Lab_Bridge"), TEXT("route=V3_mantle") }), World);
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs LabBridgeMantleCommand(
+		TEXT("CodexTactics.LabBridgeMantleRouteSmoke"),
+		TEXT("Dev check (2026-11-19, T-02 gap 4): on L_Lab_Bridge the bot's route mode walks the route variant V3_mantle (level JSON bot_route_variants): ")
+		TEXT("the leg over the W_obstacle is the climb click on its top, the squad climbs in turns. PASS needs every waypoint reached and the mantle climbed; then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunLabBridgeMantle));
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.LevelGenRouteSmoke"),

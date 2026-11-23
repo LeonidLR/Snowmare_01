@@ -42,7 +42,9 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         # B_house + B_garage: ground windows get vaultable window_sill, floor 1 windows get mantle_sill
         self.assertGreater(len(window_sills), 0)
         self.assertGreater(len(mantle_sills), 0)
-        self.assertEqual(len(lintels), 25 + 4 + 8)  # 25 house + 4 garage + 8 partition doors
+        # house 2 doors + 17 windows, garage 2 doors + 2 windows, 6 partition doors (2026-11-19 S2 window clearances: the arena
+        # regenerated without the windows onto the stair core / within a partition end's jamb - was 2 + 23, 2 + 3, 6 = 36)
+        self.assertEqual(len(lintels), (2 + 17) + (2 + 2) + 6)
         # Window sills: measured low_vault target 95 cm (MANTLING.md 11, 58a7e34e) + CodexMantleEdge tag
         for s in window_sills:
             self.assertAlmostEqual(s["scale"][2] * 100.0, 95.0, places=1)
@@ -163,37 +165,23 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
     # ---- rotated buildings (designer 2026-11-16 item 4) -------------------------------------------------------------------------
 
     @staticmethod
-    def _rotate_building(layout, bid, deg):
+    def _rotate_building(layout, bid, deg, ndigits=None):
         """The layout with building `bid` turned by deg about its footprint centre the way Training Ground stores it (rotation.ts):
-        "rotation" set, footprint / room bounds unchanged, every other point of it, its walls and its ladders turned."""
+        "rotation" set, its building-frame fields (building_coord_fields.json) unchanged, every world point of it, its walls and its
+        ladders turned. ndigits=2: every turned point rounded to 0.01 cm like the Training Ground's saved files."""
         out = json.loads(json.dumps(layout))
         b = next(x for x in out["buildings"] if x["id"] == bid)
         (x0, y0), (x1, y1) = b["footprint"]
         c = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
-        P = lambda q: builder._rot_xy(q, c, deg)  # noqa: E731
+        P = lambda q: [round(v, ndigits) if ndigits is not None else v for v in builder._rot_xy(q, c, deg)]  # noqa: E731
         b["rotation"] = deg
-        for d in b.get("doors", []):
-            d["pos"] = P(d["pos"])
-        for st in b.get("stairs", []):
-            for k in ("pos", "mid", "top"):
-                if st.get(k):
-                    st[k] = P(st[k])
-        b["roof_holes"] = [P(h) for h in b.get("roof_holes", [])]
-        for h in b.get("floor_holes", []):
-            h["pos"] = P(h["pos"])
-        for op in b.get("openings", []) + [o for pt in b.get("partitions", []) for o in pt.get("openings", [])]:
-            op["pos"] = P(op["pos"])
-            if isinstance(op.get("yaw"), (int, float)):
-                op["yaw"] = op["yaw"] + deg
-        for pt in b.get("partitions", []):
-            pt["start"], pt["end"] = P(pt["start"]), P(pt["end"])
-        for pp in b.get("parapets", []):
-            pp["start"], pp["end"] = P(pp["start"]), P(pp["end"])
-        for h in b.get("hatches", []):
-            h["pos"] = P(h["pos"])
-        for fd in b.get("floors_detail", []):
-            for g in fd.get("gaps", []):
-                g["poly"] = [P(q) for q in g["poly"]]
+        # building fields per building_coord_fields.json: world ones turn, building-frame ones stay
+        builder.map_building_coords(b, {
+            "point": lambda q, frame, path: P(q) if frame == "world" else q,
+            "rect": lambda r, frame, path: r,
+            "direction": lambda v, frame, path: builder._rot_xy(v, (0.0, 0.0), deg),
+            "yaw": lambda y, frame, path: y + deg,
+        })
         for w in out["walls"]:
             if w.get("building") == bid:
                 w["a"], w["b"] = P(w["a"]), P(w["b"])
@@ -202,9 +190,12 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
                 ld["pos"], ld["foot"], ld["top"], ld["yaw"] = P(ld["pos"]), P(ld["foot"]), P(ld["top"]), ld["yaw"] + deg
         return out, c
 
-    def _assert_rotated_plan(self, layout, bid, deg):
+    def _assert_rotated_plan(self, layout, bid, deg, ndigits=None):
+        """The rotated building plans the same actors as its unrotated twin, turned. ndigits: the twin's points rounded (0.01 cm noise
+        after turning back -> locations / scales compared to 0.05 cm instead of 1e-3)."""
         flat = builder.plan(layout)
-        turned, c = self._rotate_building(layout, bid, deg)
+        turned, c = self._rotate_building(layout, bid, deg, ndigits)
+        tol = 0.05 if ndigits is not None else 0.0005
         rot = builder.plan(turned)
         wall_ids = tuple(w["id"] for w in layout["walls"] if w.get("building") == bid)  # legacy: its walls go to Walls/L<n>
         mine = lambda s: s.get("folder", "") == "Buildings/%s" % bid or s.get("folder", "").startswith("Buildings/%s/" % bid) or "building=%s" % bid in s.get("tags", []) or s["label"].startswith(wall_ids)  # noqa: E731
@@ -216,10 +207,15 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
             r = rot_b[label]
             want = builder._rot_xy(s["location"], c, deg)
             for k in range(3):
-                self.assertAlmostEqual(r["location"][k], want[k], places=3, msg="%s location" % label)
+                self.assertAlmostEqual(r["location"][k], want[k], delta=tol, msg="%s location" % label)
             dyaw = (r["yaw"] - s["yaw"] - deg + 180.0) % 360.0 - 180.0
-            self.assertAlmostEqual(dyaw, 0.0, places=3, msg="%s: actor yaw = layout rotation" % label)
-            self.assertEqual(r["scale"] if "scale" in r else None, s["scale"] if "scale" in s else None, label)
+            self.assertAlmostEqual(dyaw, 0.0, delta=tol, msg="%s: actor yaw = layout rotation" % label)
+            if ndigits is None:
+                self.assertEqual(r["scale"] if "scale" in r else None, s["scale"] if "scale" in s else None, label)
+            else:
+                self.assertEqual("scale" in r, "scale" in s, label)
+                for k in range(len(s.get("scale", []))):
+                    self.assertAlmostEqual(r["scale"][k], s["scale"][k], delta=tol / 100.0, msg="%s scale" % label)
         # everything else stays where it was (its ladders and the drop links through its holes move with it: world points)
         other = lambda s: not mine(s) and s["kind"] not in ("ladder", "nav_link") and not s["label"].endswith("_plinth")  # noqa: E731
         others_flat = sorted(json.dumps(s, sort_keys=True) for s in flat if other(s))
@@ -241,6 +237,306 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         flat_ld = next(s for s in builder.plan(train) if s["kind"] == "ladder" and s["label"] == "LAD_B_house")
         rot_ld = next(s for s in rot if s["kind"] == "ladder" and s["label"] == "LAD_B_house")
         self.assertAlmostEqual((rot_ld["yaw"] - flat_ld["yaw"] - 30.0 + 180.0) % 360.0 - 180.0, 0.0, places=2)
+
+    def test_rotated_building_keeps_lintels_with_tg_rounding(self):
+        """S2 R3: a building turned with the Training Ground's 0.01 cm rounding keeps every door lintel, window sill / lintel and
+        opening-state actor of its unrotated twin (lost 8 -> 0 before: the exact-equality axis test in _collinear_gaps /
+        _merged_building_edges dropped every rounded wall), at the turned positions."""
+        train = self._load("L_Gen_Train_1")
+        kinds = ("door_lintel", "opening_lintel", "window_sill", "mantle_sill")
+        flat = builder.plan(train)
+        mine = lambda s: "building=B_house" in s.get("tags", [])  # noqa: E731
+        flat_counts = {k: sum(1 for s in flat if mine(s) and k in s["tags"]) for k in kinds}
+        self.assertGreater(flat_counts["door_lintel"], 0)
+        self.assertGreater(flat_counts["window_sill"], 0)
+        for deg in (90.0, 30.0, 17.3):
+            turned, _ = self._rotate_building(train, "B_house", deg, ndigits=2)
+            rot = builder.plan(turned)
+            self.assertEqual({k: sum(1 for s in rot if mine(s) and k in s["tags"]) for k in kinds}, flat_counts, "deg %.1f" % deg)
+            self._assert_rotated_plan(train, "B_house", deg, ndigits=2)
+
+    # ---- S2 R3: interior walls from partitions[] ----------------------------------------------------------------------------------
+
+    @staticmethod
+    def _interior(specs, bid):
+        return [s for s in specs if "interior" in s.get("tags", []) and "building=%s" % bid in s.get("tags", [])]
+
+    def test_partition_driven_interior_walls(self):
+        """A layout that opts in ("interior_walls": "partitions") builds each partition cut round its openings: the walls[] interior
+        cubes are gone, every partition door has a lintel as wide as the opening, the rest of the map is unchanged. Without the
+        opt-in the legacy path stays (Train_1 lintel count and the depot sha above)."""
+        train = self._load("L_Gen_Train_1")
+        house = next(b for b in train["buildings"] if b["id"] == "B_house")
+        self.assertFalse(builder.partition_driven(train, house))
+        legacy = builder.plan(train)
+        opted = builder.plan(dict(train, interior_walls="partitions"))
+        part_doors = [op for b in train["buildings"] for pt in b.get("partitions", []) for op in pt.get("openings", []) if op.get("kind") == "door"]
+        self.assertGreater(len(part_doors), 0)
+        wall_ids = {w["id"] for w in train["walls"] if w.get("kind") == "interior"}
+        self.assertFalse([s["label"] for s in opted if s["label"] in wall_ids or "_ilintel_" in s["label"] or "_idoor_" in s["label"]])
+        interiors = [s for s in opted if "interior" in s.get("tags", [])]
+        lintels = [s for s in interiors if "door_lintel" in s["tags"]]
+        self.assertEqual(len(lintels), len(part_doors))
+        self.assertEqual(sorted(round(s["scale"][0] * 100.0, 3) for s in lintels), sorted(float(op.get("width", 120.0)) for op in part_doors))
+        self.assertEqual(sum("opening_lintel" in s.get("tags", []) for s in opted), sum("opening_lintel" in s.get("tags", []) for s in legacy))
+        rest = lambda specs: sorted(json.dumps(s, sort_keys=True) for s in specs if "interior" not in s.get("tags", []))  # noqa: E731
+        self.assertEqual(rest(opted), rest(legacy))
+
+    def test_partition_driven_sealed_door_rotated_with_tg_rounding(self):
+        """The failure R3 closes: a sealed interior door of a building turned with the 0.01 cm rounding keeps its wall fill and
+        lintel (one record per wall, no gap matching), at the turned position; a "plan" marker alone opts the building in."""
+        train = self._load("L_Gen_Train_1")
+        house = next(b for b in train["buildings"] if b["id"] == "B_house")
+        house["plan"] = {"v": 1, "kind": "bands", "seed": 1, "core_wall": "B_house_N", "street_wall": "B_house_S"}
+        door = next(op for pt in house["partitions"] for op in pt.get("openings", []) if op.get("kind") == "door")
+        door["state"] = "sealed"
+        flat = builder.plan(train)
+        self.assertEqual(sum("door_state=sealed" in s["tags"] for s in self._interior(flat, "B_house")), 1)
+        counts = lambda specs: (len(self._interior(specs, "B_house")), sum("door_lintel" in s["tags"] for s in self._interior(specs, "B_house")),  # noqa: E731
+                                sum("door_state=sealed" in s["tags"] for s in self._interior(specs, "B_house")))
+        for deg in (17.3, 90.0):
+            turned, _ = self._rotate_building(train, "B_house", deg, ndigits=2)
+            self.assertEqual(counts(builder.plan(turned)), counts(flat), "deg %.1f" % deg)
+            self._assert_rotated_plan(train, "B_house", deg, ndigits=2)
+
+    # ---- S2 R4: one table of building coordinate fields (building_coord_fields.json) ----------------------------------------------
+
+    FULL_BUILDING = os.path.join(PROJECT_DIR, "Content", "Data", "LevelGen", "TestFixtures", "building_all_coord_fields.json")
+
+    @staticmethod
+    def _values_at(node, path):
+        """The values at a table path ("partitions[].openings[].pos") in document order (absent ones skipped)."""
+        cur = [node]
+        for head in path.split("."):
+            many = head.endswith("[]")
+            key = head[:-2] if many else head
+            nxt = []
+            for n in cur:
+                v = n.get(key) if isinstance(n, dict) else None
+                if v is not None:
+                    nxt.extend(v if many else [v])
+            cur = nxt
+        return cur
+
+    @staticmethod
+    def _points_of(kind, v):
+        return {"point": lambda: [v], "point_list": lambda: v, "rect": lambda: v, "bounds": lambda: [v["min"], v["max"]]}.get(kind, lambda: [])()
+
+    def test_coord_table_covers_every_pair_of_the_full_building(self):
+        """Every number pair (Vec2 / Vec2[]) on the full building (one entry per field; the same data as the TS fixture
+        buildingCoordFields.fixture.ts) is a building_coord_fields.json row or a declared size, and every row resolves to one value."""
+        with open(self.FULL_BUILDING, encoding="utf-8") as f:
+            full = json.load(f)
+        rows = builder.BUILDING_COORD_FIELDS
+        covered = {r["path"] for r in rows} | {r["path"] for r in builder.BUILDING_COORD_TABLE["not_coordinates"]}
+        pair = lambda v: isinstance(v, list) and len(v) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in v)  # noqa: E731
+        missing = []
+
+        def walk(v, path):
+            if path in covered:
+                return
+            if pair(v) or (isinstance(v, list) and v and all(pair(x) for x in v)):
+                missing.append(path)
+            elif isinstance(v, list):
+                for el in v:
+                    walk(el, path + "[]")
+            elif isinstance(v, dict):
+                for k, x in v.items():
+                    walk(x, "%s.%s" % (path, k) if path else k)
+
+        walk(full, "")
+        self.assertEqual(missing, [], "coordinate-looking fields missing from building_coord_fields.json")
+        for r in rows:
+            self.assertEqual(len(self._values_at(full, r["path"])), 1, r["path"])
+
+    def test_building_local_follows_coord_table(self):
+        """_building_local turns every world-frame table field of the full building back about its footprint centre (points, yaws,
+        directions) and keeps every building-frame field (footprint, room bounds, balconies, fire escapes, snow ramps, breach panels -
+        before R4 the snow ramp foot and the fire-escape points were turned too, so a rotated building's ramp stood off its window)."""
+        with open(self.FULL_BUILDING, encoding="utf-8") as f:
+            full = json.load(f)
+        deg = float(full["rotation"])
+        self.assertNotEqual(deg, 0.0)
+        local, c, d = builder._building_local({"walls": [], "ladders": [], "buildings": [full]}, full)
+        lb = local["buildings"][0]
+        self.assertEqual(d, deg)
+        self.assertNotIn("rotation", lb)
+        self.assertEqual(full["rotation"], deg, "the input building is not modified")
+        for r in builder.BUILDING_COORD_FIELDS:
+            v0, v1 = self._values_at(full, r["path"])[0], self._values_at(lb, r["path"])[0]
+            if r["frame"] == "building":
+                self.assertEqual(v1, v0, "%s: building frame - kept" % r["path"])
+            elif r["kind"] == "yaw":
+                self.assertAlmostEqual(v1, v0 - deg, msg=r["path"])
+            elif r["kind"] == "direction":
+                want = builder._rot_xy(v0, (0.0, 0.0), -deg)
+                self.assertAlmostEqual(v1[0], want[0], msg=r["path"])
+                self.assertAlmostEqual(v1[1], want[1], msg=r["path"])
+            else:
+                p0, p1 = self._points_of(r["kind"], v0), self._points_of(r["kind"], v1)
+                self.assertEqual(len(p1), len(p0), r["path"])
+                for a, b in zip(p0, p1):
+                    want = builder._rot_xy(a, c, -deg)
+                    self.assertAlmostEqual(b[0], want[0], places=3, msg=r["path"])
+                    self.assertAlmostEqual(b[1], want[1], places=3, msg=r["path"])
+                    self.assertGreater(abs(b[0] - a[0]) + abs(b[1] - a[1]), 1.0, "%s: turned back" % r["path"])
+
+    def test_axis_tolerance_groups_rounded_segments(self):
+        """_collinear_gaps / _merged_building_edges take a wall within 0.05 cm of an axis as axis-aligned and group pieces whose
+        fixed coordinate differs by rounding noise; exact layouts group as before."""
+        segs = [{"id": "W_n_0", "a": [0.0, 100.004], "b": [400.0, 99.998], "thickness": 30.0},
+                {"id": "W_n_1", "a": [520.0, 100.003], "b": [900.0, 99.996], "thickness": 30.0}]
+        gaps = builder._collinear_gaps(segs, "B", 0)
+        self.assertEqual(len(gaps), 1)
+        self.assertAlmostEqual(gaps[0]["g0"], 400.0)
+        self.assertAlmostEqual(gaps[0]["g1"], 520.0)
+        merged = builder._merged_building_edges([dict(w, height=300.0) for w in segs])
+        self.assertEqual(len(merged), 1)
+        self.assertAlmostEqual(merged[0]["a"][0], 0.0)
+        self.assertAlmostEqual(merged[0]["b"][0], 900.0)
+        # a real diagonal stays free
+        self.assertEqual(builder._collinear_gaps([{"id": "D_0", "a": [0.0, 0.0], "b": [100.0, 1.0], "thickness": 30.0}], "B", 0), [])
+
+    # ---- T-02 builder gaps ---------------------------------------------------------------------------------------------------------
+
+    def test_mantle_edge_wall_gets_mantle_tag(self):
+        """T-02 gap 2: a free wall carrying a layout mantle edge (the bridge obstacle W_obstacle, kind 'wall') is tagged CodexMantleEdge
+        (MantleRules refuses a plain 'wall'); a full-height wall without an edge is not."""
+        specs = builder.plan(self._load("gen_lab_bridge"))
+        tagged = {s["label"] for s in specs if s.get("folder", "").startswith("Walls") and "CodexMantleEdge" in s.get("tags", [])}
+        self.assertIn("W_obstacle", tagged)
+        self.assertFalse([l for l in tagged if l.startswith("W_") and l != "W_obstacle"], tagged)
+        edges = [{"start": [0.0, 30.0], "end": [100.0, 30.0], "kind": "obstacle"}]
+        wall = {"a": [0.0, 0.0], "b": [100.0, 0.0], "thickness": 20.0}
+        self.assertEqual(builder._wall_mantle_tags(wall, edges), [], "30 cm off a 20 cm wall (reach 25): out")
+        self.assertEqual(builder._wall_mantle_tags(dict(wall, thickness=30.0), edges), ["CodexMantleEdge"])
+        self.assertEqual(builder._wall_mantle_tags(wall, [{"start": [50.0, -50.0], "end": [50.0, 50.0], "kind": "obstacle"}]), [], "crossing, not along")
+
+    def test_ambush_point_layer_lifts_it_to_the_roof(self):
+        """T-02 gap 3: an ambush point with layer 'roof:<bid>' stands on that roof (z_of(floors) + 50) and carries a layer= tag; ground
+        points stay at gz + 50 without one."""
+        alley = self._load("gen_lab_alley")
+        specs = {s["label"]: s for s in builder.plan(alley) if "CodexAmbushPoint" in s.get("tags", [])}
+        gz = float(alley.get("ground_z", 0.0))
+        self.assertAlmostEqual(specs["AMB_roof"]["location"][2], gz + builder.z_of(2) + 50.0)
+        self.assertIn("layer=roof:B_tall", specs["AMB_roof"]["tags"])
+        self.assertAlmostEqual(specs["AMB_corner"]["location"][2], gz + 50.0)
+        self.assertEqual(specs["AMB_corner"]["tags"], [builder.AMBUSH_TAG])
+
+
+class SwitchbackStairTest(unittest.TestCase):
+    """Kit block cores (docs/design/levelgen/BGEN_KIT_PLANS_2026-11-21.md): a half-landing switchback stair = two ramps of half the storey
+    rise each + a mid landing slab at the half level; no straight-flight hole (the generator's floors_detail gap opens the slab)."""
+
+    STAIR = {"id": "B_k_stair_0", "kind": "stairwell", "from": 0, "to": 1, "pos": [90.0, 215.0], "turn": [90.0, 430.0], "mid": [260.0, 430.0],
+             "top": [260.0, 215.0], "mid_rect": [[10.0, 430.0], [340.0, 590.0]]}
+
+    def test_roof_opens_over_the_last_switchback(self):
+        """A walkable roof over the core: the roof slab is cut over both flights + the mid landing (the stair to the roof had no head room)."""
+        top = dict(self.STAIR, id="B_k_stair_1", **{"from": 1, "to": 2})
+        b = {"id": "B_k", "footprint": [[0.0, 0.0], [1400.0, 2000.0]], "floors": 2, "height": 600, "enterable": True, "roof_walkable": True,
+             "openings": [], "partitions": [], "plan": {"v": 1, "kind": "bands"}, "stairs": [dict(self.STAIR), top],
+             "floors_detail": [{"floor": 1, "height_z": 300, "gaps": [{"id": "g", "kind": "stairwell", "poly": [[10, 215], [340, 215], [340, 590], [10, 590]]}]}]}
+        self.assertEqual(builder.switchback_hole_rect(top), (10.0, 215.0, 340.0, 590.0))
+        specs = builder._walls_and_buildings_extended({"walls": [], "buildings": [b], "ladders": [], "mantle_edges": []}, 0.0, set(), {}, {})
+        roof = [s for s in specs if "roof_slab" in s.get("tags", [])]
+        area = sum(s["scale"][0] * s["scale"][1] * 1e4 for s in roof)
+        self.assertAlmostEqual(area, 1400.0 * 2000.0 - 330.0 * 375.0, delta=1.0)
+
+    def test_switchback_lane_walls_are_built(self):
+        """The lane wall between the two flights of a kit core is a layout wall (no partition) of a partition-driven building: built, while the
+        planned building's other interior walls come from partitions[] (engine check 2026-11-21: without it two sections' ground flights had
+        no navmesh - one 10 cm gap rasterised both flights into one column)."""
+        b = {"id": "B_k", "footprint": [[0.0, 0.0], [1400.0, 2000.0]], "floors": 2, "height": 600, "enterable": True, "roof_walkable": False,
+             "openings": [], "partitions": [], "plan": {"v": 1, "kind": "bands"}, "stairs": [dict(self.STAIR)], "floors_detail": []}
+        walls = [{"id": "B_k_lanewall_f0", "a": [175.0, 215.0], "b": [175.0, 430.0], "height": 300, "thickness": 10, "kind": "interior", "building": "B_k"},
+                 {"id": "B_k_part_f0_0_x", "a": [0.0, 600.0], "b": [350.0, 600.0], "height": 300, "thickness": 20, "kind": "interior", "building": "B_k"}]
+        specs = builder._walls_and_buildings_extended({"walls": walls, "buildings": [b], "ladders": [], "mantle_edges": []}, 0.0, set(), {}, {})
+        labels = [s["label"] for s in specs]
+        self.assertIn("B_k_lanewall_f0", labels)
+        self.assertNotIn("B_k_part_f0_0_x", labels)
+        # 2026-11-21 night: it blocks sight only - not the navmesh (the thin wall broke whole core columns in some tile alignments), not pawns
+        lane = next(s for s in specs if s["label"] == "B_k_lanewall_f0")
+        self.assertIs(lane.get("affects_navigation"), False)
+        self.assertEqual(lane.get("collision"), {"pawn": "ignore"})
+        self.assertIn("lane_wall", lane["tags"])
+
+    def test_two_ramps_and_a_mid_landing(self):
+        specs = builder._stair_specs("B_k", dict(self.STAIR), 0.0, "Buildings/B_k")
+        self.assertEqual([s["label"] for s in specs], ["B_k_B_k_stair_0", "B_k_B_k_stair_0_b", "B_k_B_k_stair_0_midlanding"])
+        a, b, mid = specs
+        # each ramp rises half a storey (150 cm) over the 215 cm run: 34.9 deg, walkable (<= 44)
+        for ramp in (a, b):
+            self.assertAlmostEqual(abs(ramp["pitch"]), 34.9, places=1)
+            self.assertLessEqual(abs(ramp["pitch"]), 44.0)
+        self.assertGreater(a["pitch"], 0.0)  # pos -> turn rises
+        self.assertAlmostEqual(a["location"][2], 75.0 - builder.SLAB / 2.0)
+        self.assertAlmostEqual(b["location"][2], 225.0 - builder.SLAB / 2.0)
+        self.assertAlmostEqual(mid["location"][2], 150.0 - builder.SLAB / 2.0)  # the slab top at the half level
+        self.assertAlmostEqual(mid["scale"][0] * 100.0, 330.0)
+        self.assertAlmostEqual(mid["scale"][1] * 100.0, 160.0)
+        self.assertIn("mid_landing", mid["tags"])
+        self.assertTrue(all("switchback" in s["tags"] for s in specs))
+
+    def test_upper_storey_heights(self):
+        st = dict(self.STAIR, id="B_k_stair_1", **{"from": 1, "to": 2})
+        a, b, mid = builder._stair_specs("B_k", st, 10.0, "Buildings/B_k")
+        self.assertAlmostEqual(mid["location"][2], 10.0 + 450.0 - builder.SLAB / 2.0)
+        self.assertAlmostEqual(b["location"][2], 10.0 + 525.0 - builder.SLAB / 2.0)
+
+    def test_blocked_switchback_blocks_both_flights(self):
+        specs = builder._stair_specs("B_k", dict(self.STAIR, blocked="rubble"), 0.0, "Buildings/B_k")
+        self.assertEqual(sum(1 for s in specs if "flight_block" in s.get("tags", [])), 2)
+        self.assertEqual(sum(1 for s in specs if s.get("kind") == "nav_modifier"), 2)
+
+    def test_no_straight_hole_for_a_switchback(self):
+        """A planned building with one switchback stair: the floor-1 slab is cut by the floors_detail gap only (one hole), never by
+        stairwell_hole_rect across the two lanes."""
+        b = {"id": "B_k", "footprint": [[0.0, 0.0], [1400.0, 2000.0]], "floors": 2, "height": 600, "enterable": True, "roof_walkable": False,
+             "openings": [], "partitions": [], "plan": {"v": 1, "kind": "bands"}, "stairs": [dict(self.STAIR)],
+             "floors_detail": [{"floor": 1, "height_z": 300, "gaps": [{"id": "g", "kind": "stairwell", "poly": [[10, 215], [340, 215], [340, 590], [10, 590]]}]}]}
+        layout = {"walls": [], "buildings": [b], "ladders": [], "mantle_edges": []}
+        specs = builder._walls_and_buildings_extended(layout, 0.0, set(), {}, {})
+        floor1 = [s for s in specs if "floor_slab" in s.get("tags", []) and "floor=1" in s.get("tags", [])]
+        area = sum(s["scale"][0] * s["scale"][1] * 1e4 for s in floor1)
+        self.assertAlmostEqual(area, 1400.0 * 2000.0 - 330.0 * 375.0, delta=1.0)
+
+
+class StructureVaultTagsTest(unittest.TestCase):
+    """Lead addendum 2026-11-21 (data only): the builder carries the layout's structure / material of walls, partitions and openings and the window
+    vault data as actor tags; a record without them adds no tag (the /1 bit-identical rebuilds)."""
+
+    def test_tags_from_the_records(self):
+        self.assertEqual(builder.structure_tags({"structure": "load_bearing", "material": "concrete_panel"}), ["structure=load_bearing", "material=concrete_panel"])
+        self.assertEqual(builder.structure_tags({}), [])
+        self.assertEqual(builder.vault_tags({"kind": "window", "vaultable": True, "vault_onto": "ground"}), ["vaultable=1", "vault_onto=ground"])
+        self.assertEqual(builder.vault_tags({"kind": "window", "vaultable": False}), ["vaultable=0"])
+        self.assertEqual(builder.vault_tags({"kind": "window"}), [])
+
+    def test_walls_partitions_and_window_sills_carry_them(self):
+        cls = {"structure": "load_bearing", "material": "concrete_panel"}
+        win = dict({"id": "B_v_w0", "kind": "window", "pos": [500.0, 0.0], "floor": 0, "width": 150.0, "sill_height": 95.0, "top_height": 245.0,
+                    "vaultable": True, "vault_onto": "ground"}, **cls)
+        door = {"id": "B_v_d0", "kind": "door", "pos": [400.0, 500.0], "floor": 0, "width": 150.0, "sill_height": 0.0, "top_height": 240.0,
+                "structure": "partition", "material": "plaster"}
+        b = {"id": "B_v", "footprint": [[0.0, 0.0], [1000.0, 1000.0]], "floors": 1, "height": 300, "enterable": True, "roof_walkable": False,
+             "openings": [win], "plan": {"v": 1, "kind": "bands"},
+             "partitions": [{"id": "B_v_p0", "start": [0.0, 500.0], "end": [1000.0, 500.0], "floor": 0, "thickness": 20, "openings": [door],
+                             "structure": "partition", "material": "plaster"}]}
+        walls = [dict({"id": "B_v_N", "a": [0.0, 0.0], "b": [1000.0, 0.0], "height": 300, "thickness": 30, "kind": "building", "building": "B_v"}, **cls),
+                 {"id": "F_1", "a": [2000.0, 0.0], "b": [2500.0, 0.0], "height": 140, "thickness": 10, "kind": "fence", "structure": "annex", "material": "sheet_metal"}]
+        layout = {"schema": "codex.levelgen_layout/2", "walls": walls, "buildings": [b], "ladders": [], "mantle_edges": []}
+        specs = builder._walls_and_buildings_extended(layout, 0.0, set(), {}, {})
+        outer = [s for s in specs if s["label"].startswith("B_v_N") and s["tags"][0] == "building"]  # the wall pieces (not the window glass state actor)
+        self.assertTrue(outer and all("structure=load_bearing" in s["tags"] and "material=concrete_panel" in s["tags"] for s in outer))
+        sill = next(s for s in specs if "window_sill" in s["tags"])
+        self.assertIn("vaultable=1", sill["tags"])
+        self.assertIn("vault_onto=ground", sill["tags"])
+        self.assertIn("structure=load_bearing", sill["tags"])
+        part = [s for s in specs if s["label"].startswith("B_v_p0")]
+        self.assertTrue(part and all("structure=partition" in s["tags"] and "material=plaster" in s["tags"] for s in part))
+        fence = next(s for s in specs if s["label"] == "F_1")
+        self.assertIn("structure=annex", fence["tags"])
 
 
 if __name__ == "__main__":

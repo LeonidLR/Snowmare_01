@@ -39,6 +39,7 @@
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "Interactables/DoorSubsystem.h"
 #include "Ladders/LadderClimbComponent.h"
 #include "LevelGen/TacticalMapSubsystem.h"
 #include "Materials/MaterialInterface.h"
@@ -119,7 +120,9 @@ namespace PmcSquadLocal
 	 */
 	inline bool IsTraversingLink(const AOperativeCharacter& Operative)
 	{
-		return (Operative.LadderClimb && Operative.LadderClimb->IsBusy()) || (Operative.LedgeFall && Operative.LedgeFall->IsBusy());
+		// Doors R2: breaching a locked door on his walk (walking up to it, kicking / shooting / unlocking it) is his walk going on too.
+		return (Operative.LadderClimb && Operative.LadderClimb->IsBusy()) || (Operative.LedgeFall && Operative.LedgeFall->IsBusy())
+			|| UDoorSubsystem::IsPawnBreaching(&Operative);
 	}
 
 	/** His feet: the capsule centre minus its half height (the level tests compare feet with navmesh points; fix/pmc-onpoint-3d-detour). */

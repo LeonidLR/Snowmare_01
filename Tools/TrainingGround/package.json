@@ -15,6 +15,8 @@
     "redteam": "node src/movement/cli/redteam.ts",
     "lab:gen": "node src/movement/cli/genLab.ts",
     "levelgen": "node src/levelgen/cli/levelgen.ts",
+    "levelgen:anchors": "node scripts/add-room-anchors.ts",
+    "levelgen:firing-gaps": "node scripts/add-firing-gaps.ts",
     "levelgen:critic": "node src/levelgen/cli/critic.ts",
     "combatsim": "node src/combatSim/cli/combatsim.ts",
     "combatsim:calibrate": "node src/combatSim/cli/calibrate.ts",

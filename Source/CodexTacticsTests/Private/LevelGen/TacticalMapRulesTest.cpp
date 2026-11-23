@@ -494,7 +494,8 @@ TACTICAL_MAP_TEST(FTacticalMapCommittedFilesTest, "CommittedFiles")
 bool FTacticalMapCommittedFilesTest::RunTest(const FString&)
 {
 	// the exported files of the three generated maps (Tools/TrainingGround scripts/export-tactical-map.ts); x4 counts as in
-	// LEVELGEN_LAYERS_REPORT.md 7 (46 places, 7 drop spots, 163 windows, 22 roofs, 150 hiding spots) + 7 ladder-only roofs
+	// LEVELGEN_LAYERS_REPORT.md 7 (7 drop spots, 163 windows, 22 roofs, 150 hiding spots) + 7 ladder-only roofs; analysis v2 (rim spots, outward
+	// only, FIRING_GAPS_HANDOVER.md) made it 44 places (46 before: two 'sniper' places that looked across a roof slab are gone)
 	for (const TCHAR* Map : { TEXT("L_Gen_Test_X2"), TEXT("L_Gen_Depot_X4"), TEXT("L_Gen_Depot_1_X6") })
 	{
 		FString Json;
@@ -510,7 +511,7 @@ bool FTacticalMapCommittedFilesTest::RunTest(const FString&)
 		TestTrue(FString::Printf(TEXT("%s has places"), Map), File.Chokepoints.Num() > 0 && File.HidingSpots.Num() > 0);
 		if (FString(Map) == TEXT("L_Gen_Depot_X4"))
 		{
-			TestEqual(TEXT("x4 places"), File.Chokepoints.Num(), 46);
+			TestEqual(TEXT("x4 places"), File.Chokepoints.Num(), 44);
 			TestEqual(TEXT("x4 drop spots"), File.DropSpots.Num(), 7);
 			TestEqual(TEXT("x4 windows"), File.Windows.Num(), 163);
 			TestEqual(TEXT("x4 roofs"), File.OverwatchRoofs.Num(), 22);

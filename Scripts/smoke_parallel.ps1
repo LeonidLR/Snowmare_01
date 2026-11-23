@@ -44,15 +44,20 @@ param(
     # When repeating: drop -FixedSeed so FMath is seeded from the cycle counter (UE has no integer seed argument) - the runs
     # differ but are NOT reproducible. For reproducible seeds use -SmokeArgs "Seed={n}" on smokes that parse Seed=.
     # Without -RepeatSeeds: repeats keep -FixedSeed (measuring machine load / timing noise only).
-    [switch]$RepeatSeeds
+    [switch]$RepeatSeeds,
+    # -Map wins over the smoke's own test_map.json "map" option, and a "-LevelJson=<x>.json" in its "extra" follows the map (<map leaf>.json):
+    # one walk / route smoke on another generated map (2026-11-22, the entry-queue A/B on L_Gen_StoryShowcase + L_Gen_BgenPlans).
+    [switch]$ForceMap
 )
+# An explicit -TimeoutSeconds longer than a smoke's own "timeout" option extends it (a walk smoke with budget=1500 under a 600 s option).
+$TimeoutGiven = $PSBoundParameters.ContainsKey('TimeoutSeconds')
 
 $ErrorActionPreference = "Stop"
 if (-not $Remote) { $Remote = $(if ($env:CODEX_SMOKE_REMOTE) { $env:CODEX_SMOKE_REMOTE } else { "auto" }) }
 if ($Remote -ne "off" -and @($Commands | Where-Object { $_ }).Count) {
     & (Join-Path $PSScriptRoot "Tools\smoke_remote.ps1") -Mode $Remote -Commands $Commands -Jobs $Jobs -Map $Map -TimeoutSeconds $TimeoutSeconds `
         -Serial:$Serial -NoRetry:$NoRetry -RealTime:$RealTime -ResultJson $ResultJson -PreCmds $PreCmds -ExtraArgs $ExtraArgs `
-        -Repeat $Repeat -RepeatSeeds:$RepeatSeeds -SmokeArgs $SmokeArgs
+        -Repeat $Repeat -RepeatSeeds:$RepeatSeeds -SmokeArgs $SmokeArgs -ForceMap:$ForceMap
     if ($LASTEXITCODE -ne 99) { exit $LASTEXITCODE }
 }
 $EngineRoot = "C:\Program Files\Epic Games\UE_5.8"
@@ -128,13 +133,15 @@ function Start-SmokeProcess($Task) {
     $RepeatIndex = $Task.Repeat
     $log = Join-Path $LogDir "Smoke-$Name$Suffix.log"
     Remove-Item $log -ErrorAction SilentlyContinue # a stale log must never pass for this run's result
-    $extra = (Get-Option $Name "extra" "") + " " + (Get-ClockArgs $Name $RepeatIndex) + " " + $ExtraArgs
+    $optExtra = Get-Option $Name "extra" ""
+    if ($ForceMap) { $optExtra = $optExtra -replace '-LevelJson=\S+', ("-LevelJson=" + ($Map -split '/')[-1] + ".json") }
+    $extra = $optExtra + " " + (Get-ClockArgs $Name $RepeatIndex) + " " + $ExtraArgs
     # 2026-11-09: levels start in Solo; smokes written for the formation start get -SquadStart=formation (smokeDefaults.squadStart),
     # a smoke's own "squadStart": "level" runs the level's real start mode.
     $startDefault = $(if ($TestMap.PSObject.Properties["smokeDefaults"] -and $TestMap.smokeDefaults.PSObject.Properties["squadStart"]) { $TestMap.smokeDefaults.squadStart } else { "level" })
     $squadStart = Get-Option $Name "squadStart" $startDefault
     if ($squadStart -and $squadStart -ne "level") { $extra += " -SquadStart=$squadStart" }
-    $map = Get-Option $Name "map" $Map
+    $map = $(if ($ForceMap) { $Map } else { Get-Option $Name "map" $Map })
     # A "rendered" smoke (test_map smokeOptions, e.g. SnowTracksSmoke reads a render target back) needs a real RHI: offscreen instead of -nullrhi.
     $rhi = $(if (Get-Option $Name "rendered" $false) { "-RenderOffscreen -ResX=1280 -ResY=720" } else { "-nullrhi" })
     # Start-Process takes one argument string: quote the paths (the project path has a space).
@@ -152,7 +159,7 @@ function Start-SmokeProcess($Task) {
         Proc = $proc
         Log = $log
         Started = Get-Date
-        Timeout = [int](Get-Option $Name "timeout" $TimeoutSeconds)
+        Timeout = $(if ($TimeoutGiven) { [Math]::Max([int](Get-Option $Name "timeout" $TimeoutSeconds), $TimeoutSeconds) } else { [int](Get-Option $Name "timeout" $TimeoutSeconds) })
     }
 }
 

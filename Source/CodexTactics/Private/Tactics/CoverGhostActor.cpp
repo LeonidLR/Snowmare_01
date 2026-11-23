@@ -30,6 +30,11 @@ ACoverGhostActor::ACoverGhostActor()
 	Placeholder->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Placeholder->SetCastShadow(false);
 	Placeholder->SetVisibility(false);
+	// The hologram is drawn through walls (depth test off), but the renderer's occlusion culling still dropped a ghost whose bounds lay wholly
+	// behind a wall - the window silhouette inside the room past the window was never drawn (designer 2026-11-22, WindowStairHoverSmoke
+	// shots). Grown bounds keep a part of them in view, so the ghost is not culled.
+	Body->SetBoundsScale(4.f);
+	Placeholder->SetBoundsScale(4.f);
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cylinder(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	if (Cylinder.Succeeded())
 	{
@@ -180,10 +185,13 @@ void ACoverGhostActor::ShowMantleFor(const AOperativeCharacter& InOperative, con
 	if (ClimbClip && Body->GetAnimInstance())
 	{
 		// Frozen on that frame; the pose evaluated now (a ghost nobody renders yet - or a headless smoke - would keep the reference pose).
+		// Held on the frame by a zero play rate, not Stop(): a stopped single-node body left the window silhouette undrawn (designer
+		// 2026-11-22, WindowStairHoverSmoke shots); the pose is still evaluated now for the anchor below.
 		Body->SetPosition(ClipSeconds, false);
-		Body->Stop();
+		Body->SetPlayRate(0.f);
 		Body->TickAnimation(0.f, false);
 		Body->RefreshBoneTransforms();
+		Body->MarkRenderStateDirty();
 		// The contact hand exactly on the lip: the posed hand measured (the clip's root lock decides how the frame sits on the mesh origin).
 		if (!AnchorBone.IsNone() && Body->GetBoneIndex(AnchorBone) != INDEX_NONE)
 		{
@@ -227,6 +235,7 @@ void ACoverGhostActor::ApplyGhostBody(const AOperativeCharacter& InOperative, US
 			}
 			Body->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 			Body->SetAnimation(Clip);
+			Body->SetPlayRate(1.f); // a held climb frame (ShowMantleFor) set it to 0
 			Body->Play(true);
 		}
 	}

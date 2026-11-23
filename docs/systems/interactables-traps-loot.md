@@ -9,6 +9,179 @@
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
+## Openable doors R1 (2026-11-22, behind a switch, OFF by default)
+
+Designer 2026-11-21: generated buildings need doors that can be opened. Roadmap (docs/port/ROADMAP_THREE_TRACKS_2026-11-21.md): doors change
+sight / cover / paths, so R1 sits behind `Codex.Doors.Openable` (-1 = `Content/Data/Interactables/doors.json` `"enabled"`, shipped 0; 0 off,
+1 on; read every tick - switching at runtime adopts / releases). Turning it on in main waits for the enemy-AI session's A/B.
+- **Off = exactly as before R1**: the builder's `door_leaf` actors (`door_state=closed|locked`, no pawn collision, block Visibility, no nav
+  effect - ADR-0003 "before R1") stay decorative; nothing is spawned.
+- **On**: `UDoorSubsystem` (tickable world subsystem) adopts every `door_leaf` tagged `closed` / `locked` (barricaded / sealed stay the
+  builder's blocking pieces): an `ADoorActor` per opening at the leaf's transform (width / height / thickness from the leaf's mesh bounds,
+  tags `building=` / `opening=` / `floor=`), the proxy hidden with its collision off (restored on release). One leaf up to
+  `single_leaf_max_cm` 130, a pair above (the showcase's 150 cm entrances); the grey leaf copies the proxy's mesh + materials; on a kit-dressed
+  map (proxy hidden, tag `KitDressProxy`) the kit leaf instances of the building's `Kit_<id>` ISMs (`kit_part=door_leaf_* / flat_door /
+  entrance_door`, within the doorway) are lifted onto the hinges (instance scaled to 0, a movable copy swings; put back on release).
+- **States** (`DoorRules`, pure): Closed / Locked block sight (Visibility), bullets (object queries: WorldStatic) and bodies; Open blocks
+  nothing (collision off the moment the swing starts). Open <-> Closed by order; AutoOpen opens Closed only; Kick opens Locked / Closed (the
+  lock is broken: closed again = Closed). Barricaded / Sealed refuse everything.
+- **Navmesh** (`NavBox`, a dynamic-obstacle box across the doorway, `nav_box_depth_cm` 60): Closed = `UNavArea_DoorClosed` (entering cost
+  `nav_entering_cost_cm` 350 = t_open, read at start-up), Locked = `NavArea_Null` (paths go round - story 3), Open = no modifier.
+- **Auto-open**: a pawn (operative, follower, enemy; capsule collision on) within `zone_depth_cm` 130 of the leaf plane at the door's level
+  whose navmesh path crosses the doorway within `path_look_ahead_cm` 300 (or who walks into the leaf) opens a Closed door after
+  `auto_open_delay_s` 0.3; the leaf swings away from him over `open_s`.
+- **Interaction** (designer door spec 2026-11-22; the existing click pattern, `DoorRules::ChooseClickAction`): a click on a leaf - or on
+  the floor within `click_snap_cm` of an open leaf - in exploration / real time (`ACodexTacticsPlayerController::HandleWorldHit`;
+  `IsClickPreviewBypass` / `LowerBuildingHit` keep it from the breach / cover ghosts) sends the leader to `approach_cm` on his side
+  (`UDoorSubsystem::RequestInteraction`), acting within `interact_reach_cm`. Two kinds of door: UNLOCKED (`closed`) and LOCKED.
+  - Single click: an unlocked door opens **by hand** (`hand_open_s` 0.5, montage hook `hand_open_montage`, then the swing); an open door
+    shuts (refused while somebody stands in the doorway, never a blown-off leaf); a locked door opens with the squad's **key**
+    (`unlock_s` 1.2, `unlock_montage`, then by hand; key = a building id, an opening id, a `door_key=` tag or `*`; `start_keys`, console
+    `Codex.Doors.GiveKey <id>`; TODO: keys as loot items) - without a key a line says how else.
+  - Double click (`UDoorSubsystem::NoteClick`, the controller's `DoubleClickSeconds`): the **KICK** - he runs up; each attempt `kick_s`
+    1.2 (montage hook `kick_montage`, its hit moment), the lure noise `kick_noise_m` 15 m (`UStealthLureSubsystem::EmitNoise`); it gives
+    with `kick_chance_closed` 1.0 / `kick_chance_locked` 0.4 (x `kick_heavy_factor` 0.6 on a heavy door: tag `door_heavy` or
+    >= `heavy_min_width_cm` 140 - the entrances), up to `kick_max_attempts` 4, then "The door holds."; each attempt hurts him with
+    `kick_injury_base` 0 + `kick_injury_wounded` 0.35 (health < `kick_wounded_below` 0.5) + `kick_injury_heavy` 0.15:
+    `kick_injury_damage` 10 through `UHealthComponent::ApplyDirectHealthLoss` (`DoorRules::ResolveKick`).
+  - Ctrl + click on a locked door: he **shoots the lock** - from within `lock_shot_range_cm` 800 with a clear line (else he walks to
+    `lock_shot_stand_cm` 250), a real quick-fire burst at `ADoorActor::GetLockPoint` (`OrderQuickFire`: his weapon's ammo, noise), and
+    `lock_shot_resolve_s` later the lock breaks with `lock_shot_chance[WeaponId]` (shotgun 0.9, sniper 0.6, m16 0.45, pistol 0.3,
+    default 0.35) or "The lock holds.".
+  - **Explosions** (`Explosions::OnDetonated`: grenade, RPG-7, mine, barrel): a door within the blast radius and `blast_reach_cm` 300
+    breaks - leaf gone, doorway open for good (story 3 locked doors are breachable this way).
+  Any other click drops the door order.
+- **Cold** (T-021): every open / shut calls `UColdShelterSubsystem::SetOpeningOpen(building, opening)` (fallback `SetOpeningOpenAt`).
+- Events `DoorOpened` / `DoorClosed` / `DoorKicked` / `DoorKickHeld` / `DoorUnlocked` / `DoorLockShot` / `DoorBlown` (`GameplayEvents::Raise`,
+  subject the door); BP hook `ReceiveStateChanged`.
+- Not in R1: the kick / hand / key clips (hooks + timings in data), keys as loot items (stub), enemies kicking / shooting doors, PMC
+  filters that price locked doors, cover slots at doors, a broken-leaf mesh / debris (the leaf is hidden), save / load of door states,
+  closing a leafless (`open`) doorway.
+- Tests `CodexTactics.Doors.*`; smoke `DoorsSmoke` (L_Gen_StoryShowcase, sets the switch on).
+
+### Openable doors R2 (2026-11-22, designer decisions 2026-11-22; still behind `Codex.Doors.Openable`, off by default)
+
+Switch off = nothing of R2 runs (no doors, no breach, no clips); keys in loot are plain items (empty by default).
+- **Clips** (`DoorRules::ChooseHandSide` / `ChooseKickLeg` / `ChooseOpenClip` / `FindClipPath` / `GetContactSeconds`; the designer's pack
+  `/Game/Free_Interaction_Animation/Animations/Door`): open by hand = `anim_OpenDoor_L/R`; kick = `anim_OpenDoor_Kick_L/R`, the legs
+  ALTERNATE between attempts (the first on the lock's side); push = `anim_OpenDoor_Push_L/R` for a door that WAS locked and is opened after
+  the key or a shot lock (`ADoorActor::IsLockForced`). L / R = the side of him the handle is on as he faces the leaf (one leaf: its free
+  edge, a pair: the middle; `montage_swap_lr` flips it). He turns to the lock (`FaceAimAt`), the montage plays (`PlayAnimMontage`, or an
+  anim sequence as a dynamic montage on `FullBody`) and the leaf moves at the clip's contact time (`montage_contact_s` open / kick / push,
+  measured by the setup script; without a clip `hand_open_s` / `kick_s` / `push_s`); a held kick waits for the rest of its clip before the
+  next attempt. `doors.json` `montages`: skeleton name -> clip key -> path; `default` serves the operatives whose skeleton is not listed,
+  `SK_PmcOperator_Skeleton` the PMC body; monsters only their own listed skeleton (none: no clip). Assets (`Scripts/Editor/
+  setup_door_animation.py`, run with every editor closed): `/Game/Animations/Door/UE4/` = IK-retargeted copies (UE5 pack skeleton ->
+  `RTG_UE5Manny_UE4Manny`, Blend to Source off in memory, root motion off) + `AM_Door_{Open,Kick,Push}_{L,R}` (slot FullBody);
+  `/Game/Animations/Door/Pmc/` = the six clips IK-retargeted onto `SKM_PmcOperator` (2026-11-22, designer "door animations for the
+  PMC": a transient UE5 -> UE5 retargeter, the M4 pack's `RTG_UE4Manny_UE5Manny` op stack with `IK_Mannequin` on both sides, as the PMC
+  launcher set; root motion baked as for the operatives) + `AM_Door_*` montages (the first R2 set played the pack clips by bone name and
+  lost their root motion; a re-run of the script replaces such copies). `/Game/Animations` is untracked: these assets derive from the untracked pack and are not committed; a missing asset logs a
+  warning and the timings hold.
+- **Push after a shot lock** (`lock_shot_push` 1): the burst breaks the lock (`ADoorActor::BreakLock`: Locked -> Closed, event
+  `DoorLockShot`), he walks up and pushes it open; 0 = R1 (it bursts open). After the key: unlock_s, then the push.
+- **Enemies breach LOCKED doors** (`doors.json` `breach`; designer: enemies do all the operatives' door actions): a path that stops short
+  (partial) within `detect_cm` 260 of a locked doorway with its goal behind it (`DoorRules::IsPathStoppedByDoor`, `UDoorSubsystem::
+  FindBlockingDoor`) starts a breach. Actions per archetype in ESCALATION order (`breach.archetypes`, `DoorRules::GetArchetypeKey` /
+  `NextBreachAction`): `pmc` key, shoot, kick, blast; `marksman` key, kick; `brute` kick; horde (`frostbitten`, `cutter`, `base`) and dogs
+  (`frost_hound`) none (they still auto-open UNLOCKED doors, as R1). A hostile operative (PMC fighter: the operative body) works the door
+  like an operative - walks up, the clips, his own key (`GiveKeyToPawn`), the lock burst (`OrderQuickFire`, up to `lock_shots` 2), the
+  kicks (noise, injury), a grenade from `blast_stand_cm` 650 (`UGrenadeSubsystem::ThrowAt`; the blast breaks the door), then walks on to
+  his goal (asked again 0.6 s later, after the doorway's nav box changed). Hook: `AOperativeCharacter::RequestMove` ->
+  `UDoorSubsystem::NotifyMoveRequested` for team != 0 (+ a 0.25 s poll); the PMC commander counts the breach as his walk going on
+  (`PmcSquadLocal::IsTraversingLink` -> `UDoorSubsystem::IsPawnBreaching`: no re-decision, no stall detour meanwhile). A monster bashes in
+  place once it stands at its path's end by the door (`FBash`, no clips; a key it carries opens it). Ran out of actions = it leaves that
+  door alone `give_up_s` 30.
+- **Deterministic rolls** (arena determinism): every kick / injury / lock roll is `DoorRules::DeterministicRoll(seed, RollSalt(door,
+  pawn name, attempt, what))` - seed = console `Codex.Doors.Seed` (>= 0), else `-DoorSeed=`, else `doors.json` `roll_seed`; no
+  `FMath::FRand` in the door code (the smokes' forced rolls stay).
+- **Keys are items**: `ELootItem::DoorKey` + `FLootContents::KeyIds` (a building id, an opening id, a `door_key=` tag, `*`). (a) a loot
+  container holding `KeyIds` (set per placed crate in the editor; the props generator does not place keys yet); (b) a searched body: an
+  enemy who carries keys (`UDoorSubsystem::GiveKeyToPawn`) leaves them as searchable remains when he dies (`TickKeyCarriers`: an
+  `ALootCrateActor` bound to his body, as a fallen operative's); (c) a mission goal's `grant_keys` (objectives json,
+  `MissionGoalsRules`). Taken = the squad's key ring (`UDoorSubsystem::AddKey`, kept for the level also across the switch); console
+  `Codex.Doors.GiveKey` stays for testing. Not saved yet (door states / keys in saves: open).
+- **Kit entrance leaf** (`Scripts/Editor/kit_dress_lib.py` `door_leaf_in_hole`, `kit_series.json` `entrance.leaf` / `balcony_door.leaf`):
+  a shut (closed / locked) entrance no longer gets the combined frame + leaf module `SM_SH_Ent_Door_*`; the bay's hole is the static frame
+  and a separate leaf fills it (`SM_SH_Door_Int` scaled to the 130 x 205 hole, `MI_SH_SteelDoor` / `MI_SH_Door`, part `entrance_leaf`); a
+  shut balcony / fire-escape door gets a leaf in its door hole (part `balcony_door_leaf`). `UDoorSubsystem::LiftKitLeaves` lifts both onto
+  the hinges (showcase plan: 12 entrance + 2 escape leaves = the 14 R1 doors without a kit leaf).
+- **R2b fixes (designer bugs 2026-11-22 on the kit showcase)**: (a) OPEN doors are doors: the builder places no leaf for an open door, but
+  kit_dress places open leaves (`kit_part=door_leaf_open`); at the adoption they become open `ADoorActor`s (`AdoptKitOpenLeaves`,
+  `DoorRules::PairKitOpenLeaves`: pairs / singles, the doorway on the leaf's -Y side; tag `door_from_kit_open_leaf`) - click = shut, click
+  again = open (showcase kit: 262 open doorways; grey maps: leafless open doorways, nothing to click). (b) The click: the cursor ray through
+  an open leaf (`ADoorActor::IsRayOnOpenLeaf`, `DoorRules::RayHitsLeaf`; open leaves have no collision) or the floor in / at a shut doorway
+  (`IsInShutDoorwaySnap`, 45 cm) is the door and beats the cover hug / cover ghost; the hand cursor over a door. (c) Shutting: he steps out
+  of the doorway first (stands 140 cm out, acts once 90 cm out); only a pawn's CAPSULE occupies a doorway. (d) Kick facing ("the first kick
+  at the door, the second into the air"): `AOperativeCharacter::SetDoorFacingLock` - while he works a door (every attempt, the lock shot,
+  the key, the push, to the end of its clip) `UDoorSubsystem::TickFacingLocks` holds his yaw square to the leaf; `UpdateCombatFacing` lets
+  nothing else turn him (facing return, threat turn, formation sector, idle facing). (e) ROOT MOTION (designer option a): the clips' root
+  travel moves the capsule (`setup_door_animation.py` bakes the pelvis's smoothed travel into the open clips' root; the kick / push clips
+  had it on the root already; montage blends 0.1 / 0.1 s - a blend scales root motion). He starts each clip at its start pose
+  (`montage_approach_cm` open 95 / kick 95 / push 240, square to the leaf, `montage_approach_slack_cm` 25; after the key he steps back to the
+  push pose; the push waits for the lock burst to end); `montage_root_cm` 81 / 115 / 214; every clip's capsule move is measured and logged
+  (`Doors: <pawn> <clip> moved X cm forward ... from the leaf plane A -> B cm`, `GetClipMoves`). The PMC body moves the same way when its set is
+  retargeted onto its skeleton (`UDoorSubsystem::UsesRootMotionClips` -> `DoorRules::ClipMovesPawn`: the default set always; an own set
+  only when the clip asset is on the pawn's skeleton with root motion - else it plays in place without a start pose, as before);
+  `DoorsSmoke` RM-P checks the PMC fighter's breach clips (open / push about the root travel, a kick stops at the leaf, no snap back
+  along his facing - he walks on after the breach). The sniper anim layer stands aside while a root-motion montage it did not start
+  plays (`SniperRules::YieldsToMontage`): its loop / bolt one-shots share the FullBody slot's group and had cut the PMC sniper's push at once.
+- Tests `CodexTactics.Doors.Clips.*` / `Breach.*` / `Rolls.Deterministic` / `Keys.LootItem` / `Keys.MissionGoalGrant`; `test_kit_dress.py`
+  `test_entrance_and_escape_doors_get_separate_leaves`; smoke `DoorsSmoke` stages B / F / K / S (clips), P (a PMC fighter breaches S03 with
+  both doors locked, twice with the same seed: the same trace), KD (key from his body), KC (key from a container).
+
+### Door strength and the handle try (2026-11-22, the designer's test of the kit showcase, items 1 / 2 / 4)
+
+- **One strength for every way in** (item 2: "a lock that held a pistol shot and then broke from two kicks is wrong"). Every door has a
+  class `EDoorStrength` wood / steel / reinforced (`ADoorActor::GetStrength`), picked at the adoption by `DoorRules::ResolveStrength`: its
+  tag `door_strength=<name>`, else the layout opening's own `strength`, else `strength_story_locked` (reinforced) for a door a building
+  story locks (the story's `door_state(<id>,locked)` brick), else `strength_by_role[<layout role>]` (entry steel, unit_entry `wood/steel` -
+  a deterministic mix by the opening id, `strength_mix_second_share` 0.5; room / enfilade / balcony wood), else `strength_default` wood. The
+  roles come from the map's `levelgen_layout` (`DoorRules::ParseLayoutDoors`, read once at the adoption; no map rebuild). ONE rule for all
+  attacks (`DoorRules::BreakChance`): power P vs the class's `resist` R -> (P - R) / (1 - R), clamped. A kick's power `kick_power` 0.55 is
+  capped at the weakest weapon's `lock_power` (pistol 0.6 / m16 0.7 / sniper 0.8 / shotgun 0.95 / default 0.6): a kick is never likelier
+  than the weakest gun on the same door; an unlocked shut door adds `kick_latch_bonus` 0.3; `kickable` 0 = no kick ever (reinforced).
+  Shipped: wood kick 0.55 (unlocked 0.85), pistol 0.6, shotgun 0.95; steel kick 0.10 (0.70), pistol 0.20, m16 0.40, shotgun 0.90;
+  reinforced no kick, pistol / m16 / sniper 0, shotgun 0.75 (+ key, blast). A double click on a door no kick can open says so
+  ("Too strong to kick in ...") instead of four useless kicks; enemies never kick / bash such a door (breach ability). Steel / reinforced
+  doors are heavy (the injury term). The R1 keys `kick_chance_closed / _locked`, `kick_heavy_factor`, `lock_shot_chance` are gone.
+  Tests `CodexTactics.Doors.Strength.OneRuleForEveryWayIn` (kick <= weakest shot per class, also with a typed-in kick 0.99; wood >= steel >=
+  reinforced per attack; shotgun >= pistol; reinforced kick 0; the designer's class wording; the flat-door mix is stable),
+  `Strength.LayoutRolesAndStoryLocks`; `Kick.ChanceAndInjury` / `LockShot.ChanceByWeapon` on the new rule. `DoorsSmoke` A2 (roles read,
+  the S01 entrance steel, the shipped rule makes the story-locked S03 entrance reinforced; the smoke itself runs story locks as steel so
+  F / S can kick / shoot them).
+- **The handle try** (item 1: "he says it is locked from afar"). A single click on a LOCKED door without the key that the squad does not
+  know is locked = `EDoorAction::TryOpen` (`DoorRules::ChooseClickAction(..., bKnownLocked)`): he walks up to the open clip's start pose,
+  the open clip starts, `locked_try_s` 0.45 after its contact it is stopped (no root-motion walk into the leaf), a floating LOCKED over him
+  and his line "🔒 Locked. ..." (the hint per strength); the door is then known-locked for the squad (`UDoorSubsystem::IsKnownLocked`; a
+  kick that held marks it too). A later single click on it says how from afar, as before. HUD text stays English (user decision
+  2026-10-08, `docs/port/glossary_ui_en.md`): the designer's «Заперто» is "Locked". `DoorsSmoke` T (S09 gable: the first click walks him up
+  267 cm, the try at the door, `open_*` clip, the door still locked and known; the second click no walk).
+- **A click into a room behind a locked door** (item 4): the plain move click (`HandleWorldHit`) asks
+  `UDoorSubsystem::RedirectMoveToLockedDoor` first - when his navmesh path to the goal stops short and a locked door at the goal's level
+  has the goal behind it (within `breach.goal_door_cm`), he is sent to try that door (the try above, forced even when known) instead of
+  walking to the nearest reachable spot outside.
+
+### The open leaf's side (2026-11-22, the designer's test of the kit showcase, item 3)
+
+"In the entrance tambour the opened leaf swung across and blocked the neighbouring door": R1 swung a leaf away from whoever opened it, so
+an entrance opened from the street fell into the tambour over the inner door. Now (`doors.json` `swing_fixed` 1) every door opens to ONE
+side chosen at the adoption, `UDoorSubsystem::ChooseSwings` -> pure `DoorRules::ChooseSwing`: obstacles in the door frame
+(`GatherSwingObstacles`) - the collision boxes of walls / fixed pieces round the doorway (20-180 cm over the threshold: no slab, no lintel;
+2 cm in, so the jamb is no obstacle; hidden kit proxies included), every other doorway's approach zone (the layout's door openings,
+leafless open ones too: width + 10 cm each side, `swing_zone_depth_cm` 100 each side) and the stair mouths (flight bottom / top, the flight
+width square; `DoorRules::ParseLayoutPlaces`). Each side's free angle = how far the leaves swing (3 deg steps, `FreeSwingDeg`) before a
+leaf segment meets one. An entrance (layout role `entry`) opens OUTWARD (the side off its building's footprint) when that side swings fully;
+else the freer side; a tie -> +Y. The open angle = that side's free angle, never below `swing_min_deg` 30 (where neither side is free the
+angle is limited). `ADoorActor::SetFixedSwing` (all opens: hand, auto-open, kick, shot lock); `swing_fixed` 0 = R1. Log `Doors: swing sides
+chosen ...`. Grey showcase: 56 doors, 12 entrances all outward, 12 doors had one side blocked (R1 would have swung into it from the other
+side), 0 limited; dressed showcase: 318 doors (262 kit-open), 12 / 12 outward, 94 with a side blocked, 4 limited. Tests
+`CodexTactics.Doors.Swing.SideClearOfDoorways` (the tambour, a blocked outward side, both blocked -> a limited angle clear of the obstacle,
+the minimum angle, the jamb); `DoorsSmoke` A3 (every door's open leaves sampled in world space against every other doorway's approach zone
+and stair mouth: 0 / 111 leaves grey, 0 / 635 dressed; every entrance outward 12 / 12). Pictures: `CodexTactics.StoryShowcaseFixShots`
+-> `Saved/StoryShowcase/fixes/*_entrance_swing*.png`. Open: the hand-open clip is a push; an outward door opened from the street is a
+pull (the clip still plays as a push - a pull clip from the pack would fit; designer call).
+
 ## Spotted trap -> the squad holds in Solo (old §5)
 
 - **Spotted trap -> the squad holds in Solo (rev 5h, game designer play-test 2026-10-15, every level):** a hidden level mine (`AProximityMineActor::HandleSpotted`) or PMC tripwire (`ATripwireActor::RevealBy`) spotted with a spotter calls `AInteractableActor::NotifyTrapSpotted` -> `USquadSubsystem::HoldForSpottedTrap(Spotter, TrapName)`: every member `StopOperative` (the Godot rule) and, by pure `Interactables/TrapSpotRules::DecideSquadResponse(bFormationActive, bAutonomy, LivingMembers)` (`HoldAndSolo` only exploring with the formation, AUTO off, 2+ alive; else `HoldOnly`), a box-selected group drops to the leader (`SetSelectedGroup`), `EnterSoloModeInternal(bForTrap)` (followers crouch except one in cover; no "[SOLO MODE: ON]" line) and the feed line "{Mine|Tripwire} spotted - squad holding. Move them one by one (B regroups)." (speaker SQUAD). `bTrapSolo` (`IsTrapSolo`): no 25 m leash in `Tick` until `ExitSoloMode`; saved as `is_trap_solo` (`RestoreTrapSolo` after the Solo state). Events: `TrapSpotted` (Subject = the spotter) for both kinds, besides `MineSpotted` / `TripwireSpotted`. AUTO keeps the old stop (its paths avoid known traps). Tests `CodexTactics.Interactables.TrapSpot.SquadResponse`; smoke `TrapSoloSmoke`.

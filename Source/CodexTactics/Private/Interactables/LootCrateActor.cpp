@@ -22,6 +22,8 @@
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
+#include "Interactables/DoorSubsystem.h"
+
 #define LOCTEXT_NAMESPACE "LootCrateActor"
 
 namespace
@@ -52,6 +54,7 @@ namespace
 		case ELootItem::Grenade: return FText::Format(LOCTEXT("TookGrenade", "+{0} 🧨 Frag grenade"), Count);
 		case ELootItem::MedicalBag: return FText::Format(LOCTEXT("TookMedicalBag", "+{0} 🩹 Medical bag"), Count);
 		case ELootItem::Diesel: return FText::Format(LOCTEXT("TookDiesel", "+{0} ⛽ Diesel jerrycan"), Count);
+		case ELootItem::DoorKey: return FText::Format(LOCTEXT("TookKey", "🔑 Key: {0}"), FText::FromString(Id));
 		default: return FText::Format(LOCTEXT("TookClothing", "🧥 Gear: {0}"), FText::FromString(Id));
 		}
 	}
@@ -448,8 +451,10 @@ FText ALootCrateActor::TakeItem(ELootItem Item, AOperativeCharacter* Collector)
 		return FText::GetEmpty();
 	}
 	SyncContentsIntoStash();
+	const TArray<FString> KeyIds = Item == ELootItem::DoorKey ? Contents.KeyIds : TArray<FString>();
 	const FString Id = Item == ELootItem::BonusWeapon ? Contents.BonusWeaponId
-		: (Item == ELootItem::BonusClothing ? Contents.BonusClothingId : FString());
+		: Item == ELootItem::BonusClothing ? Contents.BonusClothingId
+		: Item == ELootItem::DoorKey ? FString::Join(KeyIds, TEXT(", ")) : FString();
 	ETransferItem Storable = ETransferItem::Medkit;
 	// Sprint 15: a heat-pack stack / flare pouch takes only what fits (the rest stays in the crate).
 	const bool bLimited = Item == ELootItem::HeatPack || Item == ELootItem::Flare || Item == ELootItem::MedicalBag || Item == ELootItem::Diesel;
@@ -481,6 +486,13 @@ FText ALootCrateActor::TakeItem(ELootItem Item, AOperativeCharacter* Collector)
 		}
 		break;
 	case ELootItem::BonusClothing: Collector->BonusItems.Add(Id); break;
+	case ELootItem::DoorKey:
+		// Openable doors R2: the squad's key ring (any operative's key opens for all of them).
+		for (const FString& KeyId : KeyIds)
+		{
+			UDoorSubsystem::GrantSquadKey(GetWorld(), KeyId);
+		}
+		break;
 	case ELootItem::HeatPack:
 	case ELootItem::Firewood:
 	case ELootItem::Flare:

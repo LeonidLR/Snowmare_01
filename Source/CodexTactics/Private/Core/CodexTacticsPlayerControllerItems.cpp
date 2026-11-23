@@ -41,7 +41,7 @@ bool ACodexTacticsPlayerController::GetGrenadeAimPoint(FVector& OutPoint) const
 	}
 	// Godot: the cursor ray hit, else the floor plane at the thrower.
 	FHitResult Hit;
-	if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+	if (GetCursorHit(Hit))
 	{
 		OutPoint = Hit.ImpactPoint;
 		return true;

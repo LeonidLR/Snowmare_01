@@ -38,6 +38,7 @@ namespace
 		case ELootItem::Grenade: return { TEXT("🧨"), LOCTEXT("Grenade", "Frag grenade"), false };
 		case ELootItem::MedicalBag: return { TEXT("🩹"), LOCTEXT("MedicalBag", "Medical bag"), false };
 		case ELootItem::Diesel: return { TEXT("⛽"), LOCTEXT("Diesel", "Diesel jerrycan (10 L)"), false };
+		case ELootItem::DoorKey: return { TEXT("🔑"), LOCTEXT("DoorKey", "Key ({0})"), false };
 		default: return { TEXT("🧥"), LOCTEXT("BonusClothing", "Gear ({0})"), false };
 		}
 	}
@@ -46,7 +47,7 @@ namespace
 		ELootItem::Medkit, ELootItem::CannedFood, ELootItem::Bread, ELootItem::Chocolate, ELootItem::Matches,
 		ELootItem::RifleAmmo, ELootItem::PistolAmmo, ELootItem::ShotgunAmmo, ELootItem::FlameFuel, ELootItem::CryoAmmo,
 		ELootItem::PlasmaAmmo, ELootItem::Turret, ELootItem::Barricade, ELootItem::Mine, ELootItem::Grenade, ELootItem::BonusWeapon,
-		ELootItem::BonusClothing, ELootItem::HeatPack, ELootItem::Firewood, ELootItem::Flare, ELootItem::MedicalBag, ELootItem::Diesel };
+		ELootItem::BonusClothing, ELootItem::HeatPack, ELootItem::Firewood, ELootItem::Flare, ELootItem::MedicalBag, ELootItem::Diesel, ELootItem::DoorKey };
 }
 
 FText FLootEntry::GetLabel() const
@@ -103,6 +104,7 @@ int32 FLootContents::GetCount(ELootItem Item) const
 	case ELootItem::Grenade: return Grenades;
 	case ELootItem::MedicalBag: return MedicalBags;
 	case ELootItem::Diesel: return DieselCans;
+	case ELootItem::DoorKey: return KeyIds.Num();
 	default: return BonusClothingId.IsEmpty() ? 0 : 1;
 	}
 }
@@ -124,7 +126,8 @@ TArray<FLootEntry> FLootContents::GetItems() const
 		Entry.Count = Count;
 		Entry.Unit = Info.bUnits ? LOCTEXT("UnitUnits", "units") : FText::GetEmpty();
 		Entry.Name = Item == ELootItem::BonusWeapon ? FText::Format(Info.Name, FText::FromString(BonusWeaponId))
-			: (Item == ELootItem::BonusClothing ? FText::Format(Info.Name, FText::FromString(BonusClothingId)) : Info.Name);
+			: Item == ELootItem::BonusClothing ? FText::Format(Info.Name, FText::FromString(BonusClothingId))
+			: Item == ELootItem::DoorKey ? FText::Format(Info.Name, FText::FromString(FString::Join(KeyIds, TEXT(", ")))) : Info.Name;
 	}
 	return Items;
 }
@@ -166,7 +169,7 @@ void FLootContents::AddCount(ELootItem Item, int32 Count)
 	case ELootItem::Grenade: Grenades += Count; break;
 	case ELootItem::MedicalBag: MedicalBags += Count; break;
 	case ELootItem::Diesel: DieselCans += Count; break;
-	default: break;
+	default: break; // keys / bonus ids: no counts (ids)
 	}
 }
 
@@ -196,6 +199,7 @@ int32 FLootContents::Take(ELootItem Item)
 	case ELootItem::Grenade: Grenades = 0; break;
 	case ELootItem::MedicalBag: MedicalBags = 0; break;
 	case ELootItem::Diesel: DieselCans = 0; break;
+	case ELootItem::DoorKey: KeyIds.Reset(); break;
 	default: BonusClothingId.Reset(); break;
 	}
 	return Count;

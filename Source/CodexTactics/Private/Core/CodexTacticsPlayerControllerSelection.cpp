@@ -86,6 +86,12 @@ AOperativeCharacter* ACodexTacticsPlayerController::FindClickedMember(const FHit
 			{
 				continue; // inside a vehicle: picked with 1-4, never by a click near the hull
 			}
+			// Only on his own storey: the floor / landing right above or below him is a move there, not "Operative selected".
+			const float HalfHeight = Member->GetSimpleCollisionHalfHeight();
+			if (!ClickPickRules::IsOnPickStorey(static_cast<float>(Hit.ImpactPoint.Z), static_cast<float>(Member->GetActorLocation().Z) - HalfHeight, 2.f * HalfHeight))
+			{
+				continue;
+			}
 			const float Dist = FVector::Dist2D(Member->GetActorLocation(), Hit.ImpactPoint);
 			if (Dist <= ClosestDist)
 			{
@@ -111,7 +117,7 @@ void ACodexTacticsPlayerController::OnClick()
 	if (IsFormationPlacementActive())
 	{
 		FHitResult PlacementHit;
-		if (GetHitResultUnderCursor(ECC_Visibility, false, PlacementHit) && PlacementHit.bBlockingHit)
+		if (GetCursorHit(PlacementHit) && PlacementHit.bBlockingHit)
 		{
 			HandleFormationPlacementPress(PlacementHit);
 		}
@@ -133,7 +139,7 @@ void ACodexTacticsPlayerController::OnClick()
 	if (USquadTransferSubsystem* Transfer = GetWorld()->GetSubsystem<USquadTransferSubsystem>(); Transfer && Transfer->IsTransferring() && !bOrdersLocked)
 	{
 		FHitResult Hit;
-		if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+		if (GetCursorHit(Hit))
 		{
 			Transfer->HandleClick(Hit.ImpactPoint, Hit.GetActor());
 		}
@@ -229,7 +235,7 @@ void ACodexTacticsPlayerController::OnClickReleased()
 		return;
 	}
 	FHitResult Hit;
-	if (GetSquad() && GetSquad()->GetLeader() && GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+	if (GetSquad() && GetSquad()->GetLeader() && GetCursorHit(Hit))
 	{
 		HandlePlayerClick(Hit); // R17-3: the building click (first click = ghost, second = do it), else HandleWorldHit
 	}

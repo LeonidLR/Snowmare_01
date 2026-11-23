@@ -13,14 +13,28 @@ import { footprintBBox, footprintPoly } from './rotation.ts';
 import type { LayoutAnalysis } from './chokepoints.ts';
 import type { PmcPlan } from './pmcPosts.ts';
 import type { Vec2 } from '../movement/geometry.ts';
-import { pointInPoly } from '../movement/geometry.ts';
+import { pointInPoly, segmentsIntersect } from '../movement/geometry.ts';
 import type { Layout, LayoutRoute, LayoutWall, LayoutZone, ZoneKind } from '../movement/layout.ts';
+import type { OpeningRole } from './buildings/planDoors.ts';
 import { LAYOUT_SCHEMA, validateLayout, ZONE_KINDS } from '../movement/layout.ts';
 
 /** levelgen_v2.json objectives: the goal-count limits validateObjectives checks (manual_count_min..count_max). */
 const OBJ_CFG = v2cfg.objectives;
 
 export const LEVELGEN_SCHEMA = 'codex.levelgen_layout/1';
+/**
+ * Layout schema /2 (ADR-0002, BUILDINGS_TECH_SPEC.md section 2): the building generator's fields (opening states, balconies,
+ * fire escapes, stories, routes). The defaults change meaning - a missing door / window `state` is open / broken in /1 and the
+ * opening-states default table in /2 (openingStates.ts) - so readers branch on the schema string. /1 files load unchanged.
+ */
+export const LEVELGEN_SCHEMA_V2 = 'codex.levelgen_layout/2';
+/** Every layout schema string the readers accept. */
+export const LEVELGEN_SCHEMAS = [LEVELGEN_SCHEMA, LEVELGEN_SCHEMA_V2] as const;
+export type LevelgenSchema = (typeof LEVELGEN_SCHEMAS)[number];
+/** True for 'codex.levelgen_layout/1' and '/2'. */
+export function isLevelgenSchema(s: unknown): s is LevelgenSchema {
+  return (LEVELGEN_SCHEMAS as readonly unknown[]).includes(s);
+}
 /**
  * HEIGHT LEVELS (game designer decision 2026-11-01): every map is split into discrete levels 3 m apart - level -1 = -3 m (the rail
  * cut / canal, pits, trenches, basements), 0 = the ground, +1 = +3 m (first floors, low roofs, platforms, raised rims), +2 = +6 m
@@ -100,7 +114,83 @@ export interface WallOpening {
   top_height?: number;
   /** Facing normal or sight yaw, degrees. */
   yaw?: number;
+  /**
+   * Schema /2: the opening's state (opening-states.md 1 / 2). Absent = the default of the layout's schema - read it through
+   * openingStates.ts effectiveOpeningState, never directly.
+   */
+  state?: DoorState | WindowState;
+  /** Schema /2, planned buildings (S2_ROOMS_PLAN.md 4.1): the two room ids the opening joins, or [roomId, 'street'] for an exterior opening. */
+  links?: [string, string];
+  /** Schema /2, planned buildings: what the opening is for (the default state table reads it: 'portal' = open). */
+  role?: OpeningRole;
+  /** Schema /2, planned buildings: the kit module name ('wall_door_200', 'portal_200', 'wall_window_200'). */
+  module?: string;
+  /** Schema /2: a window marked as the place of a balcony / fire-escape door (blocks, S2.3: one per flat and storey from 1; story 4 turns it into a door). */
+  slot?: 'balcony' | 'escape';
+  /** Schema /2 (structureClasses.ts, structure_classes.json): the host wall's structural class and material (future destruction; nothing reads it yet). */
+  structure?: 'load_bearing' | 'partition' | 'annex' | 'facade';
+  material?: 'concrete_panel' | 'brick' | 'plaster' | 'wood' | 'sheet_metal';
+  /** Schema /2 windows (structureClasses.ts annotateWindowVault): can a body vault / climb through it (sill height class, width, a landing outside). */
+  vaultable?: boolean;
+  /** Schema /2 windows: the sill height and the opening width the vault rule read, cm. */
+  sill_cm?: number;
+  width_cm?: number;
+  /** Schema /2 windows: what a body climbing out lands on. */
+  vault_onto?: 'ground' | 'balcony' | 'roof' | 'none';
 }
+export type { OpeningRole };
+
+/** Door / gate / shutter states (opening-states.md 1). */
+export const DOOR_STATES = ['open', 'closed', 'locked', 'barricaded', 'sealed'] as const;
+export type DoorState = (typeof DOOR_STATES)[number];
+/** Window / loophole states (opening-states.md 2); loopholes are always 'fixed'. */
+export const WINDOW_STATES = ['broken', 'glazed', 'barred', 'boarded', 'fixed'] as const;
+export type WindowState = (typeof WINDOW_STATES)[number];
+/** The facade side of a building (fire escapes). */
+export type Side = 'north' | 'south' | 'east' | 'west';
+
+/** Schema /2: a balcony on an upper storey (building local frame, cm); depth >= 150 at fire-escape stops. */
+export interface Balcony { id: string; floor: number; rect: [Vec2, Vec2]; door_id: string; rail_cm: number }
+/** Schema /2: an external fire escape (stair or ladder) with its stops (building local frame, cm). */
+export interface FireEscape {
+  id: string;
+  kind: 'stair' | 'ladder';
+  side: Side;
+  /** Foot position on the facade. */
+  at: Vec2;
+  /** Approach cell of the ground stop. */
+  ground: Vec2;
+  stops: { floor: number; balcony_id: string }[];
+  to_roof: boolean;
+  down_only?: boolean;
+  /** kind 'ladder': its entries in layout.ladders. */
+  ladder_ids?: string[];
+}
+/** Schema /2: a snow drift up to an opening (story 10); slope <= 35 deg. */
+export interface SnowRamp { id: string; from: Vec2; to_opening: string; width_cm: number }
+/** Schema /2: a breachable wall panel; `wide_with` = the adjacent panel id of a wide breach. */
+export interface BreachPanel {
+  id: string;
+  wall: string;
+  floor: number;
+  at: Vec2;
+  width_cm: 200;
+  wide_with?: string;
+  hole: [number, number];
+  links: [string, string];
+  score: number;
+}
+/** Schema /2: a link between two buildings. */
+export interface BuildingLink { id: string; kind: 'shared_wall_hole' | 'plank' | 'roof_bridge'; a: string; b: string; at: Vec2[] }
+/** Schema /2: one applied building story (building-stories GDD). */
+export interface StoryInstance { id: string; bricks: string[]; seed: number; author: 'survivors' | 'pmc' | 'cold' | 'decay'; outcome?: 'held' | 'fell' }
+/** Schema /2: a stored route through a building; recomputed on load when its cost_hash differs from the layout's. */
+export interface Route { legs: { from: string; to: string; mode: string }[]; cost: number; detour: number; cost_hash: string }
+/** Schema /2: building role (building-stories GDD). */
+export type BuildingRole = 'objective' | 'garrison' | 'overwatch' | 'transit' | 'background';
+/** Schema /2: district theme. */
+export type DistrictTheme = 'pmc' | 'survivors' | 'cold' | 'decay' | 'mixed';
+export interface District { id: string; lots: string[]; theme: DistrictTheme }
 
 export interface GenPartition {
   id: string;
@@ -113,6 +203,9 @@ export interface GenPartition {
   thickness?: number;
   /** Door or window openings along this partition wall. */
   openings?: WallOpening[];
+  /** Schema /2 (structureClasses.ts): structural class and material of the wall. */
+  structure?: 'load_bearing' | 'partition' | 'annex' | 'facade';
+  material?: 'concrete_panel' | 'brick' | 'plaster' | 'wood' | 'sheet_metal';
 }
 
 export interface FloorGap {
@@ -152,6 +245,24 @@ export interface RoofParapet {
   thickness_cm?: number;
 }
 
+/**
+ * A FIRING GAP in a roof parapet (FIRING_GAPS_HANDOVER.md, firingGaps.ts planFiringGaps): a span cut out of the parapet and refilled with a
+ * low sill a kneeling muzzle clears. World coordinates (cm). `stand` = the shooter's point behind the gap, `outward` = unit vector
+ * over the parapet away from the roof, `facing_yaw` = yawOf(outward).
+ */
+export interface FiringGap {
+  id: string;
+  building: string;
+  /** The wall_id of the parapet the gap is cut from. */
+  parapet: string;
+  center: Vec2;
+  width_cm: number;
+  sill_cm: number;
+  outward: Vec2;
+  stand: Vec2;
+  facing_yaw: number;
+}
+
 export const MANTLE_KINDS = ['window', 'fence', 'parapet', 'obstacle', 'crate', 'partition', 'ledge'] as const;
 export type MantleKind = (typeof MANTLE_KINDS)[number];
 
@@ -159,6 +270,28 @@ export const MIN_MANTLE_HEIGHT_CM = 50;
 export const MAX_MANTLE_HEIGHT_CM = 150;
 export function isMantleable(height_cm: number): boolean {
   return height_cm >= MIN_MANTLE_HEIGHT_CM && height_cm <= MAX_MANTLE_HEIGHT_CM;
+}
+
+/** A mantle edge by id: the layout's own list first, then every building's (null-safe on partial data). */
+export function findMantleEdge(l: Partial<Pick<GenLayout, 'mantle_edges' | 'buildings'>>, id: string): MantleEdge | undefined {
+  return (l.mantle_edges ?? []).find((m) => m.id === id) ?? (l.buildings ?? []).flatMap((b) => b.mantle_edges ?? []).find((m) => m.id === id);
+}
+
+/**
+ * Why the leg a -> b (on layers la -> lb) cannot be a crossing of mantle edge `edge` (null: it can): both ends on ONE layer, the
+ * edge's height in the mantle band (50..150 cm), and the segment a-b crossing the edge's span (segmentsIntersect).
+ */
+export function mantleLegIssue(a: Vec2, b: Vec2, la: string, lb: string, edge: MantleEdge): string | null {
+  if (la !== lb) return `mantle edge ${edge.id}: a mantle leg stays on one layer (${la} -> ${lb})`;
+  if (!isMantleable(edge.height_cm)) return `mantle edge ${edge.id}: height ${edge.height_cm} cm is outside the mantle band ${MIN_MANTLE_HEIGHT_CM}..${MAX_MANTLE_HEIGHT_CM} cm`;
+  if (!segmentsIntersect(a, b, edge.start, edge.end)) return `the leg does not cross mantle edge ${edge.id}`;
+  return null;
+}
+
+/** True when `via` names something a route link can take: a ladder, a building stair, a cut crossing, a hole (hole_*) or a mantle edge. */
+export function isKnownLinkId(l: Partial<Pick<GenLayout, 'ladders' | 'buildings' | 'cut' | 'mantle_edges'>>, via: string): boolean {
+  return via.startsWith('hole') || !!findMantleEdge(l, via) || (l.ladders ?? []).some((x) => x.id === via)
+    || (l.buildings ?? []).some((b) => (b.stairs ?? []).some((x) => x.id === via)) || !!l.cut?.crossings?.some((c) => c.id === via);
 }
 
 export interface MantleEdge {
@@ -181,8 +314,24 @@ export interface GenRoom {
   id: string;
   floor: number;
   bounds: { min: Vec2; max: Vec2 };
-  kind?: 'room' | 'corridor' | 'stairwell' | 'hall' | 'balcony';
+  kind?: 'room' | 'corridor' | 'stairwell' | 'hall' | 'balcony' | 'lobby' | 'service';
+  /** Kit-planned blocks: what the room is for (kitPlan.ts RoomUse): hall, corridor, bath, kitchen, living, tambour, landing (the stair core). */
+  use?: 'hall' | 'corridor' | 'bath' | 'kitchen' | 'living' | 'tambour' | 'landing' | 'service';
+  /** Kit gable service bay (ground storey of the end flat, template gable_door.service_room): what the room is called (дворницкая, щитовая, ЖЭК, кладовая ...). */
+  label?: string;
+  /** Ids of every opening whose `links` name the room (planned buildings: windows too; seam ids between two corridor cells). */
   door_ids?: string[];
+  /** Planned buildings: the unit the room belongs to ('suite' = an end suite; a block's flat id, GenBuilding.units). */
+  unit?: string;
+  /** Planned buildings: the zone ('common' = a block's stair core, landing and ground lobbies; 'service' = a kit gable's ground service bay; wings later). */
+  zone?: string;
+  /** Planned buildings: the exterior wall ids (`<building>_N|S|W|E`) the room touches. */
+  walls?: string[];
+  /**
+   * A walkable representative point of the room on its own floor, in the BUILDING frame (the frame of `bounds`: unrotated, absolute cm);
+   * absent = no walkable point found. The bounds centre can lie on a floor gap or a flight (roomAnchors.ts); the engine smoke probes this.
+   */
+  anchor?: Vec2;
 }
 
 /** The set-piece vocabulary of the grammar (docs/design/levelgen/LEVEL_GENERATOR.md section 3). */
@@ -196,6 +345,29 @@ export const SET_PIECES = ['alley', 't_junction', 'facade', 'one_entry_compound'
 export const NEVER_CLIMBABLE: readonly SetPiece[] = ['chimney'];
 export type SetPiece = (typeof SET_PIECES)[number];
 
+/**
+ * The building archetypes of docs/design/levelgen/gdd/building-archetypes.md section 1 (S2_ROOMS_PLAN.md section 7 item 2).
+ * Informational until S2: stories, rooms and doors do not key off it yet (they still key off `set_piece`).
+ */
+export const ARCHETYPES = ['hall', 'warehouse', 'office', 'block', 'hospital', 'shop_flats', 'shed', 'ruin', 'gallery', 'facade'] as const;
+export type Archetype = (typeof ARCHETYPES)[number];
+/**
+ * Lot template (levelgen_v2.json `templates.catalog`, blockTemplates.ts) / classic-grammar piece (generate.ts) -> the archetype
+ * of the building it places. Templates without a building (junkyard_field, fenced_lot, boiler_yard) and the chimney (an
+ * obstacle, not an archetype) have no entry.
+ */
+export const TEMPLATE_ARCHETYPE: Readonly<Record<string, Archetype>> = {
+  industrial_hall: 'hall',
+  warehouse: 'warehouse',
+  small_office: 'office',
+  two_storey: 'block',
+  one_entry_compound: 'shed',
+  tank_farm: 'shed',
+  ladder_overwatch: 'gallery',
+  facade: 'facade',
+  ruined_two_level: 'ruin',
+};
+
 export const COVER_KINDS = ['jersey', 'sandbag', 'crate', 'wreck', 'barrel', 'silo', 'boiler'] as const;
 export type CoverKind = (typeof COVER_KINDS)[number];
 
@@ -205,6 +377,9 @@ export interface GenWall extends LayoutWall {
   kind?: WallKind;
   /** The building this wall belongs to (perimeter / interior / parapet). */
   building?: string;
+  /** Schema /2 (structureClasses.ts, structure_classes.json): structural class and material of the segment (future destruction; nothing reads it yet). */
+  structure?: 'load_bearing' | 'partition' | 'annex' | 'facade';
+  material?: 'concrete_panel' | 'brick' | 'plaster' | 'wood' | 'sheet_metal';
 }
 
 export interface Door { pos: Vec2; floor: number; /** The wall id the door is cut into. */ wall?: string }
@@ -213,9 +388,47 @@ export interface Door { pos: Vec2; floor: number; /** The wall id the door is cu
  * face outside the building to `mid` (the ramp's top end) and crosses onto the roof by a flat landing mid -> top. The builder cuts
  * the slab on `to` open above the ramp's last 3 m (the stairwell opening).
  */
-export interface Stair { id: string; pos: Vec2; from: number; to: number; kind: 'stairwell' | 'external'; /** The top landing point (on `to`). */ top: Vec2; mid?: Vec2 }
+export interface Stair {
+  id: string; pos: Vec2; from: number; to: number; kind: 'stairwell' | 'external'; /** The top landing point (on `to`). */ top: Vec2;
+  /**
+   * External stair: the ramp's end before its landing. A HALF-LANDING SWITCHBACK stairwell (kit block, kitPlan.ts; `turn` set): the foot of the
+   * second flight on the mid landing - flight a runs pos -> turn (from -> half level), flight b mid -> top (half level -> to).
+   */
+  mid?: Vec2;
+  /** Switchback stairwell only: the top of the first flight (on the mid landing, half a storey above `from`). */
+  turn?: Vec2;
+  /** Switchback stairwell only: the mid landing slab, [min, max] in the BUILDING frame (like `footprint`, building_coord_fields.json: a world rect cannot turn), its top half a storey above `from`. */
+  mid_rect?: [Vec2, Vec2];
+  /** Switchback stairwell only: the width of each flight, cm (the kit template's flight_w_cm; absent = STAIR_FLIGHT_W 150). */
+  width?: number;
+  /** Schema /2: the flight is impassable (stories 4, 13); the validator removes its edge (S1 later). */
+  blocked?: 'rubble' | 'burnt' | 'barricade';
+  /** Schema /2: one-way, top -> foot only. */
+  down_only?: boolean;
+}
 /** The stair's horizontal run per metre of rise (35 deg; the characters walk up to 44 deg). */
 export const STAIR_RUN_PER_RISE = 1.43;
+
+/** One walkable flight of a stair: from `a` (on level `z0`, storeys, may be a half level) to `b` (level `z1`). */
+export interface StairFlight { a: Vec2; b: Vec2; z0: number; z1: number }
+/**
+ * The flights of a stair: one (pos -> top) for a straight flight or an external stair's ramp (pos -> mid), two for a half-landing switchback
+ * (pos -> turn, mid -> top). Every consumer that needs the ramp bodies (validators, anchors, the builder's mirror) goes through this.
+ */
+export function stairFlights(st: Stair): StairFlight[] {
+  if (st.kind === 'stairwell' && st.turn && st.mid) {
+    const h = (st.from + st.to) / 2;
+    return [{ a: st.pos, b: st.turn, z0: st.from, z1: h }, { a: st.mid, b: st.top, z0: h, z1: st.to }];
+  }
+  return [{ a: st.pos, b: st.kind === 'external' && st.mid ? st.mid : st.top, z0: st.from, z1: st.to }];
+}
+/** Is this a half-landing switchback stairwell (two flights + a mid landing)? */
+export const isSwitchback = (st: Stair): boolean => st.kind === 'stairwell' && !!st.turn && !!st.mid;
+/**
+ * The free approach box (cm) in front of every stair-core flight's foot and after its top (BUILDING_GENERATOR.md 4.2: 200; the squad
+ * bunches here). One source for the generator (generate.ts STAIR_APPROACH, metres) and the validator (TRAVERSAL.approachDepth).
+ */
+export const STAIR_APPROACH_CM = 200;
 
 export interface GenBuilding {
   id: string;
@@ -255,6 +468,55 @@ export interface GenBuilding {
   /** Holes in an upper floor's slab (down one floor): { pos, floor }. */
   floor_holes: { pos: Vec2; floor: number }[];
   set_piece: SetPiece;
+  // --- schema /2 (BUILDINGS_TECH_SPEC.md section 2), all optional ---
+  /** The archetype (building-archetypes.md section 1), from the lot template (TEMPLATE_ARCHETYPE); none on a chimney. */
+  archetype?: Archetype;
+  role?: BuildingRole;
+  balconies?: Balcony[];
+  fire_escapes?: FireEscape[];
+  snow_ramps?: SnowRamp[];
+  breach_panels?: BreachPanel[];
+  /** 0-2 applied stories (F2 second story). */
+  stories?: StoryInstance[];
+  key_route?: Route;
+  breach_route?: Route;
+  /** Opening id of the fastest entry. */
+  fast_entry?: string;
+  /** Opening id of the quietest entry. */
+  quiet_entry?: string;
+  /**
+   * Schema /2, planned buildings (S2_ROOMS_PLAN.md 4.1; the `building_plans` toggle): how the interior was made. 'bands' = the band
+   * plan (buildings/bandPlan.ts) with doors / windows from planDoors / planWindows; 'bsp' = the plan fell back (`fallback` = why) and the
+   * legacy partitioning ran. `core_wall` / `street_wall` are wall ids (`<id>_N|S|W|E`), never Side labels of another frame.
+   */
+  plan?: { v: 1; kind: 'bands' | 'bsp' | 'single'; seed: number; core_wall: string; street_wall: string; variant?: string; fallback?: string; /** Blocks: the number of sections (one stair core and entrance each). */ sections?: number;
+    /** Kit blocks: 'kit' (kitPlan.ts); notes = why a section has fewer flats / rooms than the kit, or why the kit pattern fell back to the S2.3 planner. */
+    pattern?: 'kit'; notes?: string[];
+    /** Planned blocks: the plan template (building_plans.json recipes.block.templates, e.g. block_khrushchevka / block_sections). */
+    template?: string };
+  /** Residential blocks: the building series of its plan template (e.g. '1-464', the khrushchevka); absent = no series (a generic plan). */
+  series?: string;
+  /** Residential blocks: the era / house type of its plan template (khrushchev_1960s, generic; later stalin, barracks, dormitory ...). */
+  era?: string;
+  /** Schema /2, planned blocks (S2_ROOMS_PLAN.md 4.1): the flats of every storey (ids only: rooms, doors, columns). */
+  units?: BuildingUnit[];
+}
+
+/** A flat of a planned block on one storey: its rooms, its entry doors, the column it shares with the flats above / below, the dead-end tag (story 17). */
+export interface BuildingUnit {
+  id: string;
+  kind: 'flat';
+  floor: number;
+  /** Room ids. */
+  rooms: string[];
+  /** Opening ids of the doors joining the flat to a room outside it. */
+  entries: string[];
+  /** The stack of the same flat on every storey (balcony slots, a fire escape). */
+  column: string;
+  /** A single entry: nothing else leads in. */
+  dead_end?: boolean;
+  /** Dead ends: cm walked from the nearest stair pad to the deepest room. */
+  run_cm?: number;
 }
 
 export interface GenCut {
@@ -295,7 +557,12 @@ export interface GenRoute extends LayoutRoute {
   mandatory?: boolean;
   /** The floor / level each point stands on (same length as points; default all 0). 'cut' = the trench floor; 'roof:<b>' / 'floor:<b>:<n>'. */
   layers?: string[];
-  /** Links taken between consecutive points on different layers: { at: index of the point AFTER the link, via: ladder / stair / hole id }. */
+  /**
+   * Links taken between consecutive points: { at: index of the point AFTER the link, via: ladder / stair / hole / cut crossing id }.
+   * A MANTLE link ({ at, via: '<mantle edge id>' }, T-02 gap 4) joins two points on the SAME layer: the leg points[at - 1] -> points[at]
+   * crosses that edge (an obstacle the squad climbs over instead of walking round it, mantleLegIssue); the walls-only nav check lets the
+   * leg through and the evaluation adds the vault time (building_route_costs.json actions.vault.t) per mantle.
+   */
   links?: { at: number; via: string }[];
   /** Which set-pieces the route passes, in order (for the report). */
   set_pieces?: SetPiece[];
@@ -312,7 +579,20 @@ export interface SpawnPoint { id: string; pos: Vec2; kind: 'edge' | 'patrol' | '
 export interface PatrolRoute { id: string; points: Vec2[] }
 
 export interface GenLayout {
+  /** LEVELGEN_SCHEMA ('/1') or LEVELGEN_SCHEMA_V2 ('/2'); kept `string` so JSON-loaded layouts type-check unchanged. */
   schema: string;
+  /** Schema /2: sha1 of building_route_costs.json; stored routes with another hash are recomputed. */
+  cost_hash?: string;
+  /**
+   * Export the designer-marked killing grounds (zones / routes with an `intent`) to the runtime files: the tactical file's
+   * `kill_zones` and tagged zone actors (T-02 gap 1). Opt-in so the accepted maps (Depot X2 / X4 / X6) stay byte-identical until
+   * they are re-exported on purpose; the lab maps set it.
+   */
+  export_intents?: boolean;
+  /** Schema /2: districts of lots with a theme. */
+  districts?: District[];
+  /** Schema /2: links between buildings. */
+  building_links?: BuildingLink[];
   name: string;
   comment?: string;
   /** The reference profile id and the generation inputs (reproducible). */
@@ -331,7 +611,8 @@ export interface GenLayout {
   zones: (LayoutZone & { set_piece?: SetPiece; /** 'kill_zone': the zone is a deliberate killing ground (the cut). */ intent?: RouteIntent })[];
   routes: GenRoute[];
   spawn_points: SpawnPoint[];
-  ambush_points: { id: string; pos: Vec2 }[];
+  /** layer: 'ground' (absent) or a route layer ('roof:<bid>', 'floor:<bid>:<n>') - the level the ambusher waits on (T-02 gap 3). */
+  ambush_points: { id: string; pos: Vec2; layer?: string }[];
   patrol_routes: PatrolRoute[];
   /** Global mantle edge markers for vaulting/climbing (50-150 cm). */
   mantle_edges?: MantleEdge[];
@@ -350,6 +631,12 @@ export interface GenLayout {
    */
   analysis?: LayoutAnalysis;
   /**
+   * Firing gaps in the parapets of overwatch roofs (firingGaps.ts withFiringGaps, written by «Принять» / scripts/add-firing-gaps.ts); the
+   * builder cuts each from its parapet and spawns a sill. TOP-LEVEL on purpose: geometryHash hashes `buildings`, and a derived field there
+   * would make the analysis stale. Not part of geometryHash. Absent = no gaps (the config is off, or no roof qualifies).
+   */
+  firing_gaps?: FiringGap[];
+  /**
    * PMC posts + the defend posts' charges (pmcPosts.ts / pmcCharges.ts, PMC_DEFENCE.md D2, task 087): the builder carries the posts into
    * the level JSON `pmc_squads`, the props autogen writes the charges as the locked props layer `pmc_charges`. Absent = no generated PMC.
    * Not part of geometryHash (it never changes the geometry); stale when its geometry_hash differs from the tactical map's.
@@ -358,7 +645,9 @@ export interface GenLayout {
 }
 
 /** The version of the `analysis` block; a file with a newer one is refused, an absent block = not analysed (old files load). */
-export const ANALYSIS_VERSION = 1;
+export const ANALYSIS_VERSION = 2;
+// 2 (firing gaps): the overwatch spots stand at the roof rim (threats.overwatch.rim_stand_inset_m) and count only targets OUTWARD of
+// their own roof edge (outward_only); a version-1 analysis still loads but its spots lie 1 m in and see across their own slab.
 
 /**
  * The version of the `regen` block; a file with a newer version is refused (validateGenLayout), an absent block = no locks.
@@ -410,6 +699,11 @@ export interface GenParams {
   verticality: 0 | 1 | 2 | 3;
   /** «Макс. угол поворота зданий», degrees (absent = levelgen_v2.json rotation.max_deg_default = 0): re-rolls / expansions rotate templates within +-it. */
   max_rotation_deg?: number;
+  /**
+   * «Планировки зданий (S2)»: enterable offices get a band plan with doors, windows and links (generate.ts addPlannedOffice; schema /2).
+   * Absent = off, and the output is byte for byte the /1 generator's - never put in DEFAULT_PARAMS.
+   */
+  building_plans?: boolean;
 }
 
 export const DEFAULT_PARAMS: GenParams = { size_m: [177, 124], density: 1, variants: 3, verticality: 3 };
@@ -422,7 +716,7 @@ export function validateGenLayout(data: unknown): string[] {
   if (!data || typeof data !== 'object') return ['expected a JSON object'];
   const l = data as Partial<GenLayout>;
   const e: string[] = [];
-  if (l.schema !== LEVELGEN_SCHEMA) e.push(`schema must be "${LEVELGEN_SCHEMA}"`);
+  if (!isLevelgenSchema(l.schema)) e.push(`schema must be "${LEVELGEN_SCHEMA}" or "${LEVELGEN_SCHEMA_V2}"`);
   if (!isNum(l.seed)) e.push('seed: expected a number');
   if (typeof l.profile !== 'string') e.push('profile: expected the reference profile id');
   if (!isVec(l.end)) e.push('end: expected [x, y]');
@@ -502,7 +796,16 @@ export function validateGenLayout(data: unknown): string[] {
   if (mandatory.length !== 1) e.push(`routes: exactly one mandatory route (found ${mandatory.length})`);
   for (const r of l.routes ?? []) {
     if (r.layers && r.layers.length !== r.points.length) e.push(`route ${r.id}: layers must match points (${r.layers.length} vs ${r.points.length})`);
-    for (const k of r.links ?? []) if (k.at < 1 || k.at >= r.points.length) e.push(`route ${r.id}: link at ${k.at} out of range`);
+    for (const k of r.links ?? []) {
+      if (k.at < 1 || k.at >= r.points.length) { e.push(`route ${r.id}: link at ${k.at} out of range`); continue; }
+      const edge = findMantleEdge(l, k.via);
+      if (edge) {
+        // a mantle link (T-02 gap 4): the leg must cross the edge, on one layer, within the mantle band
+        const lay = r.layers ?? r.points.map(() => 'ground');
+        const issue = isVec(r.points[k.at - 1]) && isVec(r.points[k.at]) ? mantleLegIssue(r.points[k.at - 1], r.points[k.at], lay[k.at - 1], lay[k.at], edge) : null;
+        if (issue) e.push(`route ${r.id}: link at ${k.at}: ${issue}`);
+      } else if (!isKnownLinkId(l, k.via)) e.push(`route ${r.id}: link at ${k.at}: unknown link "${k.via}" (a ladder, stair, hole, cut crossing or mantle edge id)`);
+    }
     if (r.intent !== undefined && !(ROUTE_INTENTS as readonly string[]).includes(r.intent)) e.push(`route ${r.id}: unknown intent "${r.intent}"`);
     if (r.intent === 'kill_zone' && r.mandatory) e.push(`route ${r.id}: the mandatory route is never a kill zone (a variant the player chooses)`);
   }
@@ -514,6 +817,26 @@ export function validateGenLayout(data: unknown): string[] {
   if (l.expansion !== undefined) e.push(...validateExpansionState(l.expansion));
   if (l.objectives !== undefined) e.push(...validateObjectives(l.objectives, l.bounds));
   if (l.analysis !== undefined) e.push(...validateAnalysis(l.analysis));
+  if (l.firing_gaps !== undefined) e.push(...validateFiringGaps(l.firing_gaps, l.buildings ?? []));
+  return e;
+}
+
+/** The `firing_gaps` list's own checks (empty = valid): shape, unique ids, a known building, the parapet one of its walls. */
+export function validateFiringGaps(g: unknown, buildings: readonly GenBuilding[]): string[] {
+  if (!Array.isArray(g)) return ['firing_gaps: expected an array'];
+  const e: string[] = [], seen = new Set<string>();
+  for (const x of g as Partial<FiringGap>[]) {
+    const id = typeof x?.id === 'string' ? x.id : '?';
+    if (typeof x?.id !== 'string' || !x.id) { e.push('firing_gaps: every gap needs an id'); continue; }
+    if (seen.has(id)) e.push(`firing_gap ${id}: duplicate id`);
+    seen.add(id);
+    const b = buildings.find((bb) => bb.id === x.building);
+    if (!b) e.push(`firing_gap ${id}: unknown building "${x.building}"`);
+    else if (!(b.parapets ?? []).some((p) => p.wall_id === x.parapet)) e.push(`firing_gap ${id}: building ${b.id} has no parapet "${x.parapet}"`);
+    for (const k of ['center', 'outward', 'stand'] as const) if (!isVec(x[k])) e.push(`firing_gap ${id}: ${k} must be [x, y]`);
+    for (const k of ['width_cm', 'sill_cm'] as const) if (!isNum(x[k]) || (x[k] as number) <= 0) e.push(`firing_gap ${id}: ${k} must be > 0`);
+    if (!isNum(x.facing_yaw)) e.push(`firing_gap ${id}: facing_yaw must be a number`);
+  }
   return e;
 }
 
@@ -586,12 +909,17 @@ export function validateRegenState(s: unknown): string[] {
   return e;
 }
 
-/** The named layers (walkable surfaces) a layout has: 'ground', 'cut', 'roof:<b>', 'floor:<b>:<n>' (none inside a hollow building). */
+/**
+ * The named layers (walkable surfaces) a layout has: 'ground', 'cut', 'roof:<b>', 'floor:<b>:<n>'. A hollow hall has a floor
+ * layer only where its stair core leaves a landing slab (floors_detail entry, BUILDING_GENERATOR.md 2026-11-18 switchback core).
+ */
 export function layersOf(l: GenLayout): string[] {
   const out = ['ground'];
   if (l.cut) out.push('cut');
   for (const b of l.buildings) {
-    if (!b.hollow) for (let n = 1; n < b.floors; n++) out.push(`floor:${b.id}:${n}`);
+    for (let n = 1; n < b.floors; n++) {
+      if (!b.hollow || (b.floors_detail ?? []).some((fd) => fd.floor === n)) out.push(`floor:${b.id}:${n}`);
+    }
     if (b.roof_walkable) out.push(`roof:${b.id}`);
   }
   return out;
@@ -640,7 +968,15 @@ export function layerWalls(l: GenLayout, layer: string): LayoutWall[] {
     return walls;
   }
   const floor = Number(m[3] ?? 1);
-  if (b.hollow || floor >= b.floors) throw new Error(`layer "${layer}": ${b.id} has no floor ${floor}`);
+  if (floor >= b.floors) throw new Error(`layer "${layer}": ${b.id} has no floor ${floor}`);
+  if (b.hollow) {
+    // a hall's upper level is only its stair-core landing: walk inside the core box, its edges toward the void are rails
+    const core = (b.rooms ?? []).find((rm) => rm.floor === floor && (rm.kind === 'stairwell' || rm.kind === 'balcony'));
+    if (!core) throw new Error(`layer "${layer}": ${b.id} has no floor ${floor}`);
+    const cp = rectPoly([core.bounds.min, core.bounds.max]);
+    cp.forEach((a, i) => walls.push({ id: `${b.id}_f${floor}_core_${i}`, a, b: cp[(i + 1) % 4], height: 100, thickness: 10 }));
+    return walls;
+  }
   fp.forEach((a, i) => walls.push({ id: `${b.id}_f${floor}_perimeter_${i}`, a, b: fp[(i + 1) % 4], height: LEVEL_HEIGHT, thickness: 30 }));
   const floorWalls = l.walls.filter((w) => w.building === b.id && (w.floor ?? 0) === floor);
   for (const w of floorWalls) walls.push({ id: w.id, a: w.a, b: w.b, height: w.height, thickness: w.thickness });
@@ -723,9 +1059,11 @@ export function toFormationLayout(l: GenLayout, layer = 'ground'): Layout {
     const layers = r.layers ?? r.points.map(() => 'ground');
     let run: Vec2[] = [];
     let k = 0;
+    // a mantle crossing is no walk: the run is cut at the leg that crosses the edge (the simulator never paths it through its obstacle)
+    const mantleAt = new Set((r.links ?? []).filter((x) => findMantleEdge(l, x.via)).map((x) => x.at));
     const flush = () => {
       if (run.length >= 2) {
-        const id = layers.every((x) => x === layer) ? r.id : `${r.id}_L${k++}`;
+        const id = layers.every((x) => x === layer) && !mantleAt.size ? r.id : `${r.id}_L${k++}`;
         // a split route keeps only the expectations of the zones THIS run enters (sampled every metre along its legs)
         const samples: Vec2[] = [];
         for (let i = 1; i < run.length; i++) {
@@ -738,7 +1076,7 @@ export function toFormationLayout(l: GenLayout, layer = 'ground'): Layout {
       }
       run = [];
     };
-    r.points.forEach((p, i) => { if (layers[i] === layer) run.push(p); else flush(); });
+    r.points.forEach((p, i) => { if (layers[i] === layer) { if (mantleAt.has(i)) flush(); run.push(p); } else flush(); });
     flush();
   }
   const zones: LayoutZone[] = layer === 'ground' ? l.zones.map((z) => ({ id: z.id, kind: labZoneKind(z.kind), poly: z.poly })) : [];

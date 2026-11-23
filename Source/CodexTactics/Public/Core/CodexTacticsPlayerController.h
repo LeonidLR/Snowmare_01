@@ -317,6 +317,13 @@ public:
 	/** The cursor's hit for PlayerTick's hover block (the simulated one in smokes). */
 	bool CursorHitForHover(FHitResult& OutHit) const;
 
+	/**
+	 * Every cursor trace of the controller (move, cover, door, hover, placement; designer bug 2026-11-22 "clicks hit the hidden storeys"): the
+	 * hit under the cursor on Visibility, refined through the storey cutaway for the selected operative (URoofCutawaySubsystem::RefineCursorHit:
+	 * cut pieces, the storeys above his, the wall tops under them are passed through).
+	 */
+	bool GetCursorHit(FHitResult& OutHit) const;
+
 	// --- R17-5 doorway breach (designer 2026-11-17 with R17-3; DOORWAY_BREACH.md, CodexTacticsPlayerControllerBreach.cpp) ---
 
 	/** The breach session's phase: none, the stack walking to its slots, stacked (a click inside the room enters), entering, cleared. */
@@ -530,6 +537,22 @@ public:
 	bool UpdateMantleHover(AOperativeCharacter* Operative, const FHitResult* Hit);
 	/** The mantle hover ghost is up (smokes). */
 	bool IsMantleHoverShown() const;
+	/**
+	 * Designer 2026-11-22: over a ground-floor window sill (tag "window_sill") the selected operative's silhouette stands where a click sends
+	 * him - on the window's far side (FindWindowSillTarget), facing through it; a click there = through the window (the formation follows).
+	 * Null Hit = clear. True while shown.
+	 */
+	bool UpdateWindowHover(AOperativeCharacter* Operative, const FHitResult* Hit);
+	/** The window hover silhouette is up (smokes). */
+	bool IsWindowHoverShown() const;
+	/** Designer 2026-11-22: over a stair flight in his building, the silhouette on the hidden storey's landing above (a click walks the squad up). */
+	bool UpdateStairHover(AOperativeCharacter* Operative, const FHitResult* Hit);
+	bool IsStairHoverShown() const;
+	/** The window / stair-up hover silhouettes (smokes; null before the first hover). */
+	const class ACoverGhostActor* GetWindowHoverGhost() const { return WindowGhost; }
+	const class ACoverGhostActor* GetStairHoverGhost() const { return StairGhost; }
+	/** Where a click on window sill Sill sends Operative: the navmesh point past the window on the side away from him (feet) and the yaw through it. */
+	bool FindWindowSillTarget(const AActor& Sill, const AOperativeCharacter& Operative, FVector& OutFeet, float& OutYaw) const;
 	/** The mantle hover ghost (smokes); null before the first hover. */
 	const class ACoverGhostActor* GetMantleHoverGhost() const { return MantleGhost; }
 	/** Smokes: the mantle hover set by the smoke stays up (PlayerTick does not follow the real cursor for it). */
@@ -1022,6 +1045,14 @@ private:
 	 *  cursor moves or the hover ages). */
 	UPROPERTY(Transient)
 	TObjectPtr<class ACoverGhostActor> MantleGhost;
+	/** The window hover silhouette (UpdateWindowHover) and the sill it stands for. */
+	UPROPERTY(Transient)
+	TObjectPtr<class ACoverGhostActor> WindowGhost;
+	TWeakObjectPtr<AActor> WindowHoverActor;
+	/** The stair-up hover silhouette (UpdateStairHover) and the spot it stands on. */
+	UPROPERTY(Transient)
+	TObjectPtr<class ACoverGhostActor> StairGhost;
+	FVector StairHoverFeet = FVector(TNumericLimits<float>::Max());
 	TWeakObjectPtr<AActor> MantleHoverActor;
 	FVector MantleHoverPoint = FVector(TNumericLimits<float>::Max());
 	double MantleHoverPlannedAt = -1.0;

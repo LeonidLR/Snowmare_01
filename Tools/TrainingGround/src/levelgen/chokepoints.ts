@@ -8,6 +8,7 @@
 //     1 drop-down ambush   - jumpers from roofs / thick wall tops within the drop-link height + gap (falls.json)
 //     2 window fire        - PMC at windows of enterable buildings, rifle range + falloff (weapons_tuning.json)
 //     3 marksmen on roofs  - reachable roofs, the marksman's rifle and height-boosted sight (weapons_tuning / enemy_perception)
+//                            spots at the roof RIM (rim_stand_inset_m, clear of the corners) counting only targets OUTWARD of their edge (analysis v2; firingGaps.ts)
 //     4 hidden enemies     - spots a short dash from the line that the squad sees only at close range; stealth (stealth_mode.json)
 //   A PLACE = a stretch of flagged samples; no alternative route = the stretch is blocked and the way round is searched again.
 //   Output: LayoutAnalysis (chokepoints + dropAmbushSpots + windowsCovering + overwatchRoofs + hidingSpots), saved into the layout
@@ -47,7 +48,7 @@ export interface ChokeConfig {
     conditions: Conditions;
     drop_ambush: { jumper_names?: Record<string, string>; strike_reach_cm_default: number; wall_top_min_thickness_cm_default: number; ladder_only_factor_default: number; max_spots: number };
     window_fire: { weapon: string; half_fov_deg_default: number; target_height_cm_default: number; require_enterable: boolean; full_windows: number };
-    overwatch: { weapon: string; archetype: string; eye_height_cm_default: number; edge_inset_m: number; spot_step_m: number; spots_per_roof: number; min_covered_m: number; max_roofs: number };
+    overwatch: { weapon: string; archetype: string; eye_height_cm_default: number; rim_stand_inset_m: number; rim_corner_clear_m: number; outward_only: boolean; spot_step_m: number; spots_per_roof: number; min_covered_m: number; max_roofs: number };
     hiding: { eye_height_cm_default: number; enemy_profile_cm_default: number; rush_max_m: number; min_offset_m: number; adjacent_m: number; min_concealment_cm: number; approach_window_m: number; reveal_close_m: number;
       stealth_reveal_threshold_m: number; stealth_score: number; candidate_step_m: number; spot_spacing_m: number; threat_span_m: number; full_spots: number; max_spots: number };
   };
@@ -205,6 +206,8 @@ export interface HidingSpot {
 }
 export interface LayoutAnalysis {
   version: number;
+  /** «Принять» forced with this many buildings failing traversal (buildingTraversal.ts, BUILDING_GENERATOR.md 5). Absent = none. */
+  forced_buildings?: number;
   /** The hash of the geometry the analysis was made for (geometryHash): another hash = the map changed, the analysis is stale. */
   geometry_hash: string;
   conditions: Conditions;
@@ -227,11 +230,12 @@ export function geometryHash(l: GenLayout): string {
   return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0');
 }
 
-/** The layout without a stale analysis (a map edited after the analysis was made). */
+/** The layout without a stale analysis (a map edited after the analysis was made); the firing gaps planned from it go too (firingGaps.ts). */
 export function withoutStaleAnalysis(l: GenLayout): GenLayout {
   if (!l.analysis || l.analysis.geometry_hash === geometryHash(l)) return l;
   const next = { ...l };
   delete next.analysis;
+  delete next.firing_gaps;
   return next;
 }
 
@@ -500,15 +504,37 @@ export function analyzeLayout(l: GenLayout, o: AnalyzeOptions = {}): LayoutAnaly
     const level = Math.floor(eyeZ / (T.overwatch.level_step_m * 100));
     const sightM = T.overwatch.sight_ground_m * Math.min(T.overwatch.max_multiplier, level >= 1 ? 1 + T.overwatch.bonus_per_level * level : 1);
     const rangeM = Math.min(sightM, T.overwatch.attack_m);
-    const [[fx0, fy0], [fx1, fy1]] = b.footprint, ins = Math.min(c.threats.overwatch.edge_inset_m * 100, (fx1 - fx0) / 4, (fy1 - fy0) / 4);
+    const [[fx0, fy0], [fx1, fy1]] = b.footprint, ins = Math.min(c.threats.overwatch.rim_stand_inset_m * 100, (fx1 - fx0) / 4, (fy1 - fy0) / 4);
     const ring = buildingRectPoly(b, [[fx0 + ins, fy0 + ins], [fx1 - ins, fy1 - ins]]);
-    const cand: Vec2[] = [];
-    ring.forEach((a, i) => { const q = ring[(i + 1) % ring.length], L = dist(a, q), n = Math.max(1, Math.round(L / (c.threats.overwatch.spot_step_m * 100))); for (let k = 0; k < n; k++) cand.push([a[0] + ((q[0] - a[0]) * k) / n, a[1] + ((q[1] - a[1]) * k) / n]); });
-    const spots = cand.map((sp) => {
+    // candidates on the ring at the rim (behind a firing gap); each knows the OUTWARD normal of its roof edge
+    const rc: Vec2 = [ring.reduce((sum, q) => sum + q[0], 0) / ring.length, ring.reduce((sum, q) => sum + q[1], 0) / ring.length];
+    const outN = (i: number): Vec2 => {
+      const a = ring[i], q = ring[(i + 1) % ring.length], L = dist(a, q) || 1;
+      let n: Vec2 = [(q[1] - a[1]) / L, -(q[0] - a[0]) / L];
+      if (n[0] * ((a[0] + q[0]) / 2 - rc[0]) + n[1] * ((a[1] + q[1]) / 2 - rc[1]) < 0) n = [-n[0], -n[1]];
+      return n;
+    };
+    // along each side, centred cells between the corner clear zones: a firing gap fits behind every candidate (a side too short for one has none)
+    const cand: { p: Vec2; normal: Vec2 }[] = [];
+    const clear = Math.max(0, c.threats.overwatch.rim_corner_clear_m * 100 - ins); // measured from the roof corner; the ring lies `ins` inside it
+    ring.forEach((a, i) => {
+      const q = ring[(i + 1) % ring.length], L = dist(a, q), usable = L - 2 * clear;
+      if (usable < 0) return;
+      const n = Math.max(1, Math.round(usable / (c.threats.overwatch.spot_step_m * 100)));
+      for (let k = 0; k < n; k++) {
+        const t = (clear + (usable * (k + 0.5)) / n) / L;
+        cand.push({ p: [a[0] + (q[0] - a[0]) * t, a[1] + (q[1] - a[1]) * t], normal: outN(i) });
+      }
+    });
+    const outwardOnly = c.threats.overwatch.outward_only;
+    const spots = cand.map(({ p: sp, normal: n }) => {
       const seen: number[] = [];
       let longest = 0, sx = 0, sy = 0;
       samplesNear(sp, rangeM * 100, (t, ti, dd) => {
-        if (dd < T.overwatch.preferred_min_m * 100 || !sight.los(sp, eyeZ, t.p, T.window.target_height_cm, b.id)) return;
+        if (dd < T.overwatch.preferred_min_m * 100) return;
+        // outward only: a street across the spot's own slab is not covered from this rim (the sight line below ignores the own building)
+        if (outwardOnly && (t.p[0] - sp[0]) * n[0] + (t.p[1] - sp[1]) * n[1] <= 0) return;
+        if (!sight.los(sp, eyeZ, t.p, T.window.target_height_cm, b.id)) return;
         seen.push(ti); if (dd > longest) longest = dd; sx += t.p[0] - sp[0]; sy += t.p[1] - sp[1];
       });
       seen.sort((x, y) => x - y);

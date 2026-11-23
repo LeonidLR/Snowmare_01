@@ -26,7 +26,8 @@ param(
     [int]$MaxJobs = 2,                      # i7-6700K
     [int]$Repeat = 1,
     [switch]$RepeatSeeds,
-    [string]$SmokeArgs = ""
+    [string]$SmokeArgs = "",
+    [switch]$ForceMap                       # smoke_parallel -ForceMap: -Map wins over the smoke's own map option
 )
 $ErrorActionPreference = "Stop"
 $ProjectDir = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
@@ -70,6 +71,7 @@ if ($Map -ne "/Game/Maps/L_MovementTest") { $extra += "-Map '$Map'" }
 if ($PreCmds) { $extra += "-PreCmds '$($PreCmds -replace "'", "''")'" }
 if ($RealTime) { $extra += "-RealTime" }
 if ($SmokeArgs) { $extra += "-SmokeArgs '$($SmokeArgs -replace "'", "''")'" }
+if ($ForceMap) { $extra += "-ForceMap" }
 $engineArgs = (@($ExtraArgs -split '\s+' | Where-Object { $_ }) + "-Multiprocess" | Select-Object -Unique) -join " "
 $resultDir = Join-Path $LogDir ("Worker\farm-{0}-{1}" -f (Get-Date -Format "yyyyMMdd-HHmmss"), $PID)
 Say "batch -> $Worker (jobs $width): $($Commands -join ',')"

@@ -13,13 +13,15 @@ import type { Vec2 } from '../movement/geometry.ts';
 import { dist, rng } from '../movement/geometry.ts';
 import type { ZoneKind } from '../movement/layout.ts';
 import type { Draft, DraftBuilding, Rect, Side } from './generate.ts';
-import { COVER_SIZE, addBuilding, addLadderAt, fenceRect, finalizeDraftToLayout, generateLayoutWithLots, splitWall } from './generate.ts';
+import { COVER_SIZE, addBuilding, addLadderAt, fenceRect, finalizeDraftToLayout, generateLayoutWithLots, levelLayer, splitWall, stairChainUp } from './generate.ts';
+import { BUILDING_PLANS } from './buildings/bandPlan.ts';
 import { obstacleHeight } from './obstacleHeights.ts';
+import { fnv1a } from './props/rng.ts';
 import { drawAngle, fitScale, ROTATION, rotateContent, rotPoint } from './rotation.ts';
 import type { Profile } from './profile.ts';
 import { fromUE, toUE } from './profile.ts';
 import type { BlockRecord, CoverKind, GenLayout, SetPiece } from './schema.ts';
-import { DEFAULT_PARAMS, HALL_ROOF_LEVEL, LEVEL_HEIGHT, rect } from './schema.ts';
+import { DEFAULT_PARAMS, HALL_ROOF_LEVEL, LEVEL_HEIGHT, TEMPLATE_ARCHETYPE, rect } from './schema.ts';
 
 /** The stage-2 configuration (templates, expansion, objectives). */
 export const V2 = cfg;
@@ -127,6 +129,8 @@ export interface TemplateContext {
   maxRotationDeg?: number;
   /** Scales the angle (the full re-roll's chaos when rotation.chaos_scales; default 1). */
   rotationScale?: number;
+  /** The map's `building_plans` toggle (S2.2): the template's offices get band plans (generate.ts addPlannedOffice). */
+  building_plans?: boolean;
 }
 
 export type TemplateContent = Pick<GenLayout, 'walls' | 'buildings' | 'ladders' | 'covers' | 'zones' | 'ambush_points'> & { mantle_edges: NonNullable<GenLayout['mantle_edges']> };
@@ -250,17 +254,33 @@ function fence3(c: Ctx, r: Rect, open: Side, gates: { side: Side; at: number; wi
   if (open !== 'east') splitWall(c.d, `${id}_E`, [x1, y0], [x1, y1], g('east'), FENCE_H, FENCE_T, 'fence');
 }
 const hallSpec = (c: Ctx, s: Side, piece: SetPiece) => ({ height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: c.V >= 1,
-  stairwell: c.V >= 2, set_piece: piece, doorSides: [s, s], windowSides: [s, OPP[s]], roofHatch: c.V >= 2 });
+  stairwell: true, set_piece: piece, archetype: TEMPLATE_ARCHETYPE[piece], doorSides: [s, s], windowSides: [s, OPP[s]], roofHatch: c.V >= 2 });
 /** The roof excursion of a hall with a stairwell: up the flight, across the roof, back down (links = the stair). */
 function roofVisit(b: DraftBuilding, s: Side): VisitM | null {
-  const st = b.stairs.find((x) => x.kind === 'stairwell' && x.from === 0 && x.to === b.floors);
+  const chain = stairChainUp(b);
   const inside = doorInside(b, s);
-  if (!st || !b.roof_walkable) return groundVisit(inside);
+  if (!chain || !b.roof_walkable) return groundVisit(inside);
   const roof = `roof:${b.id}`;
   const c = rect.centre(b.footprint);
-  const pts: Vec2[] = [...(inside ? [inside] : []), st.pos, st.top, c, st.top, st.pos];
-  const off = inside ? 1 : 0;
-  return { points: pts, layers: [...(inside ? ['ground'] : []), 'ground', roof, roof, roof, 'ground'], links: [{ at: off + 1, via: st.id }, { at: off + 4, via: st.id }] };
+  // up the switchback core flight by flight, across the roof, and back down the same flights
+  const pts: Vec2[] = [...(inside ? [inside] : [])];
+  const layers: string[] = [...(inside ? ['ground'] : [])];
+  const links: { at: number; via: string }[] = [];
+  for (let i = 0; i < chain.points.length; i++) {
+    pts.push(chain.points[i]);
+    layers.push(chain.layers[i]);
+    const l = chain.links.find((x) => x.at === i);
+    if (l) links.push({ at: pts.length - 1, via: l.via });
+  }
+  pts.push(c);
+  layers.push(roof);
+  for (let n = chain.flights.length - 1; n >= 0; n--) {
+    const st = chain.flights[n];
+    pts.push(st.top, st.pos);
+    layers.push(levelLayer(b, st.to), levelLayer(b, st.from));
+    links.push({ at: pts.length - 1, via: st.id });
+  }
+  return { points: pts, layers, links };
 }
 
 /** The catalog: each fills c.r (metres) and returns its visit (null = the route only passes by). */
@@ -285,7 +305,7 @@ const BUILD: Record<TemplateId, (c: Ctx) => VisitM | null> = {
     const gateAt = along(c.r, c.s, 0.5 + (c.random() * 2 - 1) * 0.15, TC.gate_w_m);
     fenceRect(c.d, `F_${c.tag}`, c.r, [{ side: c.s, at: gateAt, width: TC.gate_w_m }]);
     const shedR = placeIn(c.r, c.s, Math.min(sp.shed_m[0], lengthOf(c.r, c.s) * 0.6), Math.min(sp.shed_m[1], depthOf(c.r, c.s) * 0.45), OPP[c.s], 1.5, 0.5 + (c.random() * 2 - 1) * 0.1);
-    const shed = addBuilding(c.d, `B_${c.tag}_shed`, shedR, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'one_entry_compound', doorSides: [c.s], windowSides: [c.s], partitionRooms: true }, c.random);
+    const shed = addBuilding(c.d, `B_${c.tag}_shed`, shedR, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'one_entry_compound', archetype: TEMPLATE_ARCHETYPE.one_entry_compound, doorSides: [c.s], windowSides: [c.s], partitionRooms: true }, c.random);
     zoneOf(c, 'open', 'one_entry_compound');
     const gateIn = sidePoint(c.r, c.s, gateAt, TC.visit_inside_m);
     scatter(c, c.r, [shedR], [gateIn, ...(doorOutside(shed, c.s) ? [doorOutside(shed, c.s)!] : [])]);
@@ -317,7 +337,7 @@ const BUILD: Record<TemplateId, (c: Ctx) => VisitM | null> = {
     const sp = c.spec as typeof TC.catalog.small_office;
     const j = () => 0.9 + c.random() * 0.1;
     const r = placeIn(c.r, c.s, Math.min(sp.max_m[0], lengthOf(c.r, c.s)) * j(), Math.min(sp.max_m[1], depthOf(c.r, c.s)) * j(), c.s, 0.5, 0.5 + (c.random() * 2 - 1) * 0.1);
-    const b = addBuilding(c.d, `B_${c.tag}_office`, r, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'facade', doorSides: [c.s], windowSides: [c.s, OPP[c.s]], partitionRooms: true }, c.random);
+    const b = addBuilding(c.d, `B_${c.tag}_office`, r, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'facade', archetype: TEMPLATE_ARCHETYPE.small_office, doorSides: [c.s], windowSides: [c.s, OPP[c.s]], partitionRooms: true }, c.random);
     zoneOf(c, 'open', 'facade');
     scatter(c, c.r, [r], b.doors.map((x) => x.pos));
     cornerAmbush(c, b);
@@ -327,14 +347,14 @@ const BUILD: Record<TemplateId, (c: Ctx) => VisitM | null> = {
     const sp = c.spec as typeof TC.catalog.facade;
     const k = () => c.random() * 0.05;
     const r: Rect = [[c.r[0][0] + wOf(c.r) * k(), c.r[0][1] + hOf(c.r) * k()], [c.r[1][0] - wOf(c.r) * k(), c.r[1][1] - hOf(c.r) * k()]];
-    addBuilding(c.d, `B_${c.tag}_facade`, r, { height: sp.height_cm, floors: sp.floors, hollow: true, enterable: false, roof_walkable: false, set_piece: 'facade' }, c.random);
+    addBuilding(c.d, `B_${c.tag}_facade`, r, { height: sp.height_cm, floors: sp.floors, hollow: true, enterable: false, roof_walkable: false, set_piece: 'facade', archetype: TEMPLATE_ARCHETYPE.facade }, c.random);
     zoneOf(c, 'wall_run', 'facade');
     return null;
   },
   ladder_overwatch: (c) => {
     const sp = c.spec as typeof TC.catalog.ladder_overwatch;
     const r = placeIn(c.r, c.s, Math.min(sp.max_m[0], lengthOf(c.r, c.s) * 0.7), Math.min(sp.max_m[1], depthOf(c.r, c.s) * 0.6), OPP[c.s], 1.0, 0.5 + (c.random() * 2 - 1) * 0.15);
-    const b = addBuilding(c.d, `B_${c.tag}_gallery`, r, { height: LEVEL_HEIGHT, floors: 1, enterable: false, roof_walkable: c.V >= 1, set_piece: 'ladder_overwatch' }, c.random);
+    const b = addBuilding(c.d, `B_${c.tag}_gallery`, r, { height: LEVEL_HEIGHT, floors: 1, enterable: false, roof_walkable: c.V >= 1, set_piece: 'ladder_overwatch', archetype: TEMPLATE_ARCHETYPE.ladder_overwatch }, c.random);
     zoneOf(c, 'open', 'ladder_overwatch');
     let visit: VisitM | null = null;
     if (c.V >= 1) {
@@ -355,7 +375,7 @@ const BUILD: Record<TemplateId, (c: Ctx) => VisitM | null> = {
     const sp = c.spec as typeof TC.catalog.tank_farm;
     const { near, far } = splitAt(c.r, c.s, Math.min(depthOf(c.r, c.s) * 0.5, sp.pump_m[1] + 4));
     const pumpR = placeIn(near, c.s, Math.min(sp.pump_m[0], lengthOf(near, c.s) * 0.7), Math.min(sp.pump_m[1], depthOf(near, c.s) - 2), c.s, 1.0, 0.5 + (c.random() * 2 - 1) * 0.15);
-    const pump = addBuilding(c.d, `B_${c.tag}_pump`, pumpR, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'tank_farm', doorSides: [c.s], windowSides: [c.s, OPP[c.s]] }, c.random);
+    const pump = addBuilding(c.d, `B_${c.tag}_pump`, pumpR, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'tank_farm', archetype: TEMPLATE_ARCHETYPE.tank_farm, doorSides: [c.s], windowSides: [c.s, OPP[c.s]] }, c.random);
     const silo = COVER_SIZE.silo, rad = silo[0] / 200;
     const lenF = lengthOf(far, c.s), depF = depthOf(far, c.s);
     const yard: Rect = [[far[0][0] + 0.5, far[0][1] + 0.5], [far[1][0] - 0.5, far[1][1] - 0.5]];
@@ -385,7 +405,9 @@ const BUILD: Record<TemplateId, (c: Ctx) => VisitM | null> = {
   two_storey: (c) => {
     const sp = c.spec as typeof TC.catalog.two_storey;
     const r = placeIn(c.r, c.s, Math.min(sp.max_m[0], lengthOf(c.r, c.s)), Math.min(sp.max_m[1], depthOf(c.r, c.s)), c.s, 0.5, 0.5 + (c.random() * 2 - 1) * 0.1);
-    const b = addBuilding(c.d, `B_${c.tag}_block`, r, { height: 2 * LEVEL_HEIGHT, floors: 2, enterable: true, roof_walkable: c.V >= 1, stairwell: c.V >= 2, set_piece: 'facade', doorSides: [c.s], windowSides: [c.s, OPP[c.s]], partitionRooms: true, roofHatch: c.V >= 2 }, c.random);
+    // plans on (S2.3): a block has 2 or 3 storeys (building_plans.json recipes.block.p_three_storeys; its own stream, the lot's is not touched)
+    const floors = c.d.building_plans && rng(fnv1a(`${c.tag}|storeys`))() < BUILDING_PLANS.recipes.block.p_three_storeys ? 3 : 2;
+    const b = addBuilding(c.d, `B_${c.tag}_block`, r, { height: floors * LEVEL_HEIGHT, floors, enterable: true, roof_walkable: c.V >= 1, stairwell: true, set_piece: 'facade', archetype: TEMPLATE_ARCHETYPE.two_storey, doorSides: [c.s], windowSides: [c.s, OPP[c.s]], partitionRooms: true, roofHatch: c.V >= 2 }, c.random);
     zoneOf(c, 'open', 'facade');
     scatter(c, c.r, [r], b.doors.map((x) => x.pos));
     cornerAmbush(c, b);
@@ -426,6 +448,7 @@ export function buildTemplate(template: TemplateId, lot: BlockRecord, ctx: Templ
   const inset = TC.inset_m;
   const r: Rect = [[outer[0][0] + inset, outer[0][1] + inset], [outer[1][0] - inset, outer[1][1] - inset]];
   const d = emptyDraft();
+  if (ctx.building_plans) d.building_plans = true;
   const c: Ctx = { d, r, s: place?.side ?? streetSide(r, ctx.streets_m), random: rng(lotSeed(ctx.seed, `${lot.id}:${template}`)), tag: templateTag(lot.id, ctx.seed),
     V: ctx.verticality, density: ctx.density, spec: TC.catalog[template] };
   const vm = BUILD[template](c);
@@ -444,5 +467,6 @@ export function buildTemplate(template: TemplateId, lot: BlockRecord, ctx: Templ
 
 /** The layout's block-template context (frame, streets, the generation params). */
 export function templateContext(l: GenLayout, seed: number): TemplateContext {
-  return { seed, frame: frameOf(l), streets_m: streetRectsM(l), verticality: l.params.verticality, density: l.params.density, maxRotationDeg: l.params.max_rotation_deg ?? ROTATION.max_deg_default };
+  return { seed, frame: frameOf(l), streets_m: streetRectsM(l), verticality: l.params.verticality, density: l.params.density, maxRotationDeg: l.params.max_rotation_deg ?? ROTATION.max_deg_default,
+    ...(l.params.building_plans ? { building_plans: true } : {}) };
 }

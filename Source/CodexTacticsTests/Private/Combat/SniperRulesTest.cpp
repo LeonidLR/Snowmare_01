@@ -89,6 +89,10 @@ bool FSniperAnimRulesTest::RunTest(const FString&)
 	TestFalse(TEXT("Empty magazine: no bolt (reload)"), SniperRules::ShouldCycleBolt(0));
 	TestEqual(TEXT("3.3 s reload clip into 3.5 s"), SniperRules::PlayRateToFit(3.3f, 3.5f), 3.3f / 3.5f, 0.001f);
 	TestEqual(TEXT("No clip length: rate 1"), SniperRules::PlayRateToFit(0.f, 3.5f), 1.f);
+	// A door clip (root motion, not the layer's own) owns the body: the idle loop / bolt must not cut it (2026-11-22, PMC push 0 cm).
+	TestTrue(TEXT("Another montage with root motion: the layer yields"), SniperRules::YieldsToMontage(false, true));
+	TestFalse(TEXT("Its own loop / shot / bolt: no yield"), SniperRules::YieldsToMontage(true, true));
+	TestFalse(TEXT("Another montage in place (upper-body clip): no yield"), SniperRules::YieldsToMontage(false, false));
 	return true;
 }
 

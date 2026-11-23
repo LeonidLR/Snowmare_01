@@ -1,0 +1,24 @@
+{
+  "schema": "codex.building_stories/1",
+  "comment": "Building-story tuning (docs/design/levelgen/gdd/building-stories.md F1 / F2 / F3 / F5; BUILDINGS_TECH_SPEC.md section 2). Read by Tools/TrainingGround/src/levelgen/buildingStories.ts and later by the C++ runtime. pick.budget[role] = the share of a role's buildings that get a story other than open (F3); pick.weights[role][story] = F1 step-2 weights (archetype dimension not used yet); pick.t_max = tries per building before it keeps 'open' (F5); pick.p_two = the chance a storied building gets a second, compatible story (F2). compatible[first] = stories that may follow `first` on the same building (pairs touching the same opening are left out: 3 + 10). detour_roles = the roles a detour story (4, 7) is eligible for (F1). rubble_escape_set_pieces = story 4's 'block, office' as generator set pieces (both are 'facade'). loud_front_states = front-door states that make story 9 eligible (designer 2026-11-19). gable_door_state[story] = the state that story gives a building's GABLE door(s) (an exterior ground door on a side that is neither the front door's side nor the opposite one; khrushchevka gable door, designer 2026-11-22): story 9 locks it - the quiet entry must be the broken back window, not a closed end door. A building without a gable door is unaffected. All values *proposal*.",
+  "pick": {
+    "budget": { "objective": 1.0, "garrison": 0.8, "overwatch": 0.7, "transit": 0.5, "background": 0.1 },
+    "weights": {
+      "objective": { "locked_door": 1, "rubble_escape": 1, "roof_outside": 1, "broken_back_windows": 1, "snow_drift": 1 },
+      "garrison": { "locked_door": 1, "rubble_escape": 1, "roof_outside": 1, "broken_back_windows": 1, "snow_drift": 1 },
+      "overwatch": { "locked_door": 1, "rubble_escape": 0.5, "roof_outside": 1.5, "broken_back_windows": 0.5, "snow_drift": 1 },
+      "transit": { "locked_door": 1, "broken_back_windows": 1, "snow_drift": 1 },
+      "background": { "locked_door": 1, "broken_back_windows": 1, "snow_drift": 0.5 }
+    },
+    "t_max": 4,
+    "p_two": 0.25
+  },
+  "compatible": {
+    "locked_door": ["broken_back_windows"],
+    "broken_back_windows": ["locked_door"]
+  },
+  "detour_roles": ["objective", "garrison", "overwatch"],
+  "rubble_escape_set_pieces": ["facade"],
+  "loud_front_states": ["locked", "sealed", "barricaded"],
+  "gable_door_state": { "broken_back_windows": "locked" }
+}

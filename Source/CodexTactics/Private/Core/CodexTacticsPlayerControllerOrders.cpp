@@ -4,6 +4,7 @@
 // Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
 
 #include "Core/CodexTacticsPlayerController.h"
+#include "Interactables/WindowOrderRules.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "Characters/SquadAutonomySubsystem.h"
 #include "Combat/EnemyGhostActor.h"
@@ -15,6 +16,8 @@
 #include "Combat/CombatTimeModeRules.h"
 #include "Interactables/BarrelActor.h"
 #include "Interactables/DeployableActor.h"
+#include "Interactables/DoorActor.h"
+#include "Interactables/DoorSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "CodexTactics.h"
@@ -43,6 +46,11 @@
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "AI/StealthLureSubsystem.h"
+#include "Interactables/WindowBreakage.h"
+#include "Camera/RoofCutawaySubsystem.h"
+#include "NavigationSystem.h"
+#include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 #include "HAL/PlatformTime.h"
 #include "Vehicles/VehiclePawn.h"
@@ -228,6 +236,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	{
 		return;
 	}
+	Squad->SetWindowOrder(false); // only the click on a window sill (below) opens the windows to the squad's paths
 	// Ladders (docs/design/LADDERS.md 7.1): a click on a climbable ladder (its click proxy) = a move to the link point at its other end
 	// (the path then runs through the ladder's nav link); a decoration ladder has no proxy collision.
 	if (const ALadderActor* Ladder = Cast<ALadderActor>(Hit.GetActor()); Ladder && Ladder->IsClimbable())
@@ -237,6 +246,22 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		Hit = FHitResult(nullptr, nullptr, Target, FVector::UpVector);
 		Hit.bBlockingHit = true;
 		UE_LOG(LogCodexTactics, Display, TEXT("Click on ladder %s: a move to its %s end"), *Ladder->GetName(), bLeaderAbove ? TEXT("bottom") : TEXT("top"));
+	}
+
+	// Openable doors R1 (designer 2026-11-21 / door spec 2026-11-22, behind Codex.Doors.Openable): a click on a door leaf (or on the floor by
+	// an open leaf) sends the leader to it (UDoorSubsystem): click = open by hand / shut / the key, double click = kick, Ctrl + click on a
+	// locked door = shoot the lock. Real time / exploring only: the pause and the grid take the click as before.
+	if (UDoorSubsystem* Doors = GetWorld()->GetSubsystem<UDoorSubsystem>(); Doors && Doors->IsActive())
+	{
+		const UGameFlowSubsystem* DoorFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+		const ECodexCombatMode DoorMode = DoorFlow ? DoorFlow->GetCombatMode() : ECodexCombatMode::None;
+		ADoorActor* Door = DoorMode == ECodexCombatMode::None || DoorMode == ECodexCombatMode::RealTime ? Doors->FindClickedDoor(Hit) : nullptr;
+		const bool bDoorDouble = Door && Doors->NoteClick(Door, FApp::GetCurrentTime(), DoubleClickSeconds);
+		if (Door && Doors->RequestInteraction(Door, Leader, bDoorDouble, IsAttackModifierDown()))
+		{
+			return;
+		}
+		Doors->CancelInteraction(Leader); // any other click replaces his door order
 	}
 
 	// Rev 5g (user request 2026-10-14): an EXIT arrow at a door of the building whose interior camera shows - the squad (Solo: the
@@ -457,6 +482,43 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			IssueCtrlClick(Hit);
 		}
 		return;
+	}
+
+	// Designer 2026-11-22: a click on a ground-floor window sill = through that window - the leader goes to the window's far side (the side away
+	// from him) and climbs through on the way (breaking it the first time: loud); the window sills are open to every member's path for this
+	// order (SetWindowOrder), so the formation follows him through it. The click then goes on as a plain ground order to that point.
+	// Designer 2026-11-22: a click on a stair flight inside his building, the storey above hidden by the cutaway = up to that storey's landing
+	// (the silhouette UpdateStairHover shows); the click then goes on as a plain ground order to that point (the formation follows).
+	{
+		FVector StairFeet;
+		const URoofCutawaySubsystem* StairRoofs = GetWorld()->GetSubsystem<URoofCutawaySubsystem>();
+		if (!GetActiveTurnBased() && !IsAttackModifierDown() && StairRoofs && StairRoofs->FindStairUpTarget(Hit, *Leader, StairFeet))
+		{
+			UpdateStairHover(nullptr, nullptr);
+			const FVector StairTraceStart = Hit.TraceStart;
+			Hit = FHitResult();
+			Hit.bBlockingHit = true;
+			Hit.ImpactPoint = Hit.Location = StairFeet;
+			Hit.ImpactNormal = Hit.Normal = FVector::UpVector;
+			Hit.TraceStart = StairTraceStart;
+			UE_LOG(LogCodexTactics, Display, TEXT("Click on a stair flight: up to the hidden storey's landing at %s"), *StairFeet.ToCompactString());
+		}
+	}
+	FVector WindowFeet;
+	float WindowYaw = 0.f;
+	if (AActor* Sill = GetActiveTurnBased() ? nullptr : WindowBreakage::FindWindowSillAt(*GetWorld(), Hit); Sill
+		&& FindWindowSillTarget(*Sill, *Leader, WindowFeet, WindowYaw))
+	{
+		UpdateWindowHover(nullptr, nullptr);
+		const FVector TraceStart = Hit.TraceStart;
+		Hit = FHitResult();
+		Hit.bBlockingHit = true;
+		Hit.ImpactPoint = Hit.Location = WindowFeet;
+		Hit.ImpactNormal = Hit.Normal = FVector::UpVector;
+		Hit.TraceStart = TraceStart;
+		Squad->SetWindowOrder(true);
+		UE_LOG(LogCodexTactics, Display, TEXT("Click on the window sill %s: through the window to %s (window paths open for this order)"), *Sill->GetName(),
+			*Hit.ImpactPoint.ToCompactString());
 	}
 
 	// Mantling slice 1 (game designer 2026-11-15, trigger C; docs/design/MANTLING.md 11.6): in Solo a plain click on a reachable ledge top
@@ -718,6 +780,18 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	// Tutorial command lock (Demo 01 user decision 2026-10-12: no running until warmed up in A1): a locked sprint is
 	// degraded to a walk without any error line; the lock raises "Tutorial.Locked" for the one-time hint.
 	const bool bSprint = bDoubleClick && UTutorialSubsystem::FilterCommand(this, PlayerCommands::Sprint) == PlayerCommands::Sprint;
+	// Window rules (designer 2026-11-23, WindowOrderRules / windows.json): in a fight (a wave / firefight on, or enemies hunting the squad)
+	// Solo with the whole squad box-selected opens every window on the way (rule 1), a Solo run too; the formation never takes a whole window
+	// on its own (rule 2); out of a fight only the window click opens one (rule 3).
+	const UStealthLureSubsystem* FightLure = GetWorld()->GetSubsystem<UStealthLureSubsystem>();
+	const bool bInFight = bWave || (FightLure && FightLure->IsSquadDetected());
+	const int32 WindowSelected = Squad->HasMultiSelection() ? Squad->GetSelectedGroup().Num() : 1;
+	if (WindowOrderRules::MoveOpensWindows(Squad->IsSoloMode(), WindowSelected, Squad->GetMembers().Num(), bInFight, bSprint, WindowOrderRules::Get()))
+	{
+		Squad->SetWindowOrder(true);
+		UE_LOG(LogCodexTactics, Display, TEXT("Move order in a fight (%s, %d of %d selected%s): windows open for this order"), Squad->IsSoloMode() ? TEXT("Solo") : TEXT("formation"),
+			WindowSelected, Squad->GetMembers().Num(), bSprint ? TEXT(", run") : TEXT(""));
+	}
 	// Godot double click: sprint, or why not.
 	if (bSprint)
 	{
@@ -743,6 +817,14 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			}
 		}
 	}
+	// Openable doors (designer 2026-11-22, item 4): a click into a room behind a LOCKED door - he goes to that door, tries it and says it is
+	// locked (never a walk to the nearest reachable spot outside, never a cover hug there).
+	if (UDoorSubsystem* MoveDoors = GetWorld()->GetSubsystem<UDoorSubsystem>(); MoveDoors && MoveDoors->IsActive() && Dispatch == ECombatOrderDispatch::Execute
+		&& !IsAttackModifierDown() && MoveDoors->RedirectMoveToLockedDoor(*Leader, Hit.ImpactPoint))
+	{
+		HideCoverPreview();
+		return;
+	}
 	OrderGroupMove(Hit.ImpactPoint, bSprint, Dispatch == ECombatOrderDispatch::Queue);
 	ControllerCommands::Report(this, bSprint ? PlayerCommands::Sprint : PlayerCommands::Move, nullptr, Dispatch == ECombatOrderDispatch::Queue,
 		Squad->HasMultiSelection(), Leader, Hit.ImpactPoint);
@@ -766,6 +848,149 @@ bool ACodexTacticsPlayerController::CanOrderMantleClick(const FHitResult& Hit) c
 		OrderLock::CVarRealTimeOrders.GetValueOnGameThread() != 0) : ECombatOrderDispatch::Execute;
 	return MantleMode != ECodexCombatMode::TurnBased && MantleDispatch == ECombatOrderDispatch::Execute
 		&& !UTutorialSubsystem::FilterCommand(const_cast<ACodexTacticsPlayerController*>(this), PlayerCommands::Move).IsNone();
+}
+
+namespace WindowHoverLocal
+{
+	/** 1 (default) = the window hover silhouette in the climbing frame on the sill; 0 = standing past the window. */
+	TAutoConsoleVariable<int32> CVarClimbSilhouette(TEXT("Codex.Window.ClimbSilhouette"), 1,
+		TEXT("Window hover silhouette: 1 = the climbing frame on the sill (default), 0 = standing past the window"));
+}
+
+bool ACodexTacticsPlayerController::FindWindowSillTarget(const AActor& Sill, const AOperativeCharacter& Operative, FVector& OutFeet, float& OutYaw) const
+{
+	const FBox Local = Sill.CalculateComponentsBoundingBoxInLocalSpace(false);
+	if (!Local.IsValid)
+	{
+		return false;
+	}
+	const FVector Size = Local.GetSize() * Sill.GetActorScale3D().GetAbs();
+	const FVector Across = (Size.X < Size.Y ? Sill.GetActorForwardVector() : Sill.GetActorRightVector()).GetSafeNormal2D();
+	const float Thickness = static_cast<float>(FMath::Min(Size.X, Size.Y));
+	const FVector Center = Sill.GetActorTransform().TransformPosition(Local.GetCenter());
+	const float Side = FVector::DotProduct(Operative.GetActorLocation() - Center, Across) >= 0.0 ? -1.f : 1.f;
+	const FVector Beyond = Center + Across * (Side * (Thickness * 0.5f + 120.f));
+	const float FeetZ = static_cast<float>(Operative.GetActorLocation().Z - Operative.GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	OutFeet = FVector(Beyond.X, Beyond.Y, FeetZ);
+	OutYaw = static_cast<float>((Across * Side).Rotation().Yaw);
+	// The far side must be walkable ground at about his level (a window over a drop / into a wall is no way through).
+	if (const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
+	{
+		FNavLocation OnNav;
+		if (!Nav->ProjectPointToNavigation(OutFeet, OnNav, FVector(60.f, 60.f, 120.f)) || FMath::Abs(OnNav.Location.Z - FeetZ) > 120.f)
+		{
+			return false;
+		}
+		OutFeet = OnNav.Location;
+	}
+	return true;
+}
+
+bool ACodexTacticsPlayerController::IsStairHoverShown() const
+{
+	return StairGhost && StairGhost->IsShown();
+}
+
+bool ACodexTacticsPlayerController::UpdateStairHover(AOperativeCharacter* Operative, const FHitResult* Hit)
+{
+	const URoofCutawaySubsystem* Roofs = GetWorld() ? GetWorld()->GetSubsystem<URoofCutawaySubsystem>() : nullptr;
+	FVector Feet;
+	const bool bWanted = Operative && Hit && Roofs && !IsAttackModifierDown() && !GetActiveTurnBased() && Roofs->FindStairUpTarget(*Hit, *Operative, Feet);
+	if (!bWanted)
+	{
+		StairHoverFeet = FVector(TNumericLimits<float>::Max());
+		if (StairGhost && StairGhost->IsShown())
+		{
+			StairGhost->Hide();
+		}
+		return false;
+	}
+	if (StairGhost && StairGhost->IsShown() && FVector::DistSquared(StairHoverFeet, Feet) < FMath::Square(30.f))
+	{
+		return true;
+	}
+	StairHoverFeet = Feet;
+	if (!StairGhost)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		StairGhost = GetWorld()->SpawnActor<ACoverGhostActor>(Feet, FRotator::ZeroRotator, Params);
+	}
+	if (StairGhost)
+	{
+		const float Yaw = static_cast<float>((Feet - Operative->GetActorLocation()).GetSafeNormal2D().Rotation().Yaw);
+		StairGhost->ShowMantleFor(*Operative, Feet, Yaw, /*bCrouched*/ false);
+	}
+	return StairGhost != nullptr;
+}
+
+bool ACodexTacticsPlayerController::IsWindowHoverShown() const
+{
+	return WindowGhost && WindowGhost->IsShown();
+}
+
+bool ACodexTacticsPlayerController::UpdateWindowHover(AOperativeCharacter* Operative, const FHitResult* Hit)
+{
+	AActor* Sill = Hit && Hit->bBlockingHit && Operative ? WindowBreakage::FindWindowSillAt(*GetWorld(), *Hit) : nullptr;
+	FVector Feet;
+	float Yaw = 0.f;
+	const bool bWanted = Operative && Sill && !IsAttackModifierDown() && !GetActiveTurnBased()
+		&& FindWindowSillTarget(*Sill, *Operative, Feet, Yaw);
+	if (!bWanted)
+	{
+		WindowHoverActor.Reset();
+		if (WindowGhost && WindowGhost->IsShown())
+		{
+			WindowGhost->Hide();
+		}
+		return false;
+	}
+	if (WindowHoverActor.Get() == Sill && WindowGhost && WindowGhost->IsShown())
+	{
+		return true; // the same window: the silhouette stands
+	}
+	WindowHoverActor = Sill;
+	if (!WindowGhost)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		WindowGhost = GetWorld()->SpawnActor<ACoverGhostActor>(Feet, FRotator::ZeroRotator, Params);
+	}
+	if (WindowGhost)
+	{
+		// Designer 2026-11-22: the silhouette CLIMBING through the window - a frozen frame of the low climb clip (hands on the sill, a leg up),
+		// posed on the sill's near lip (the mantle hover ghost's B17-2 pose); the standing silhouette past the window when the clip is missing.
+		const FBox Local = Sill->CalculateComponentsBoundingBoxInLocalSpace(false);
+		const FVector Size = Local.GetSize() * Sill->GetActorScale3D().GetAbs();
+		const float Thickness = static_cast<float>(FMath::Min(Size.X, Size.Y));
+		const FVector Center = Sill->GetActorTransform().TransformPosition(Local.GetCenter());
+		const FVector Dir = FRotator(0.f, Yaw, 0.f).Vector();
+		const float TopZ = static_cast<float>(Sill->GetComponentsBoundingBox(true).Max.Z);
+		FMantleClickPlan Plan;
+		Plan.Dir = Dir;
+		Plan.bTop = false;
+		Plan.DepthCm = Thickness;
+		Plan.EdgeTop = FVector(Center.X, Center.Y, TopZ) - Dir * (Thickness * 0.5f);
+		Plan.Base = FVector(Plan.EdgeTop.X, Plan.EdgeTop.Y, Feet.Z) - Dir * 60.f;
+		Plan.Landing = Feet;
+		Plan.HeightCm = TopZ - Feet.Z;
+		Plan.Obstacle = Sill;
+		UMantleSubsystem* Mantle = GetWorld()->GetSubsystem<UMantleSubsystem>();
+		EMantleGait Gait = EMantleGait::Standing;
+		bool bStopFirst = false;
+		Plan.ClipIndex = Mantle ? MantleRules::ChooseClip(MantleRules::GetConfig(), FName(TEXT("low_mantle")), Operative->GetMantleBody(), /*bRunning*/ false, 0.f, 0,
+			[Mantle](int32 Index) { return Mantle->GetClip(Index) != nullptr; }, Gait, bStopFirst) : INDEX_NONE;
+		UAnimSequenceBase* PoseClip = nullptr;
+		float PoseSeconds = 0.f;
+		FVector PoseLocation = FVector::ZeroVector;
+		FName AnchorBone = NAME_None;
+		FVector AnchorTarget = FVector::ZeroVector;
+		const bool bPosed = WindowHoverLocal::CVarClimbSilhouette.GetValueOnGameThread() != 0 && Plan.ClipIndex != INDEX_NONE
+			&& Operative->PlanMantleGhostPose(Plan, PoseClip, PoseSeconds, PoseLocation, AnchorBone, AnchorTarget);
+		UE_LOG(LogCodexTactics, Verbose, TEXT("[Window] hover silhouette: clip %d posed %d at %s"), Plan.ClipIndex, bPosed ? 1 : 0, *PoseLocation.ToCompactString());
+		WindowGhost->ShowMantleFor(*Operative, Feet, Yaw, /*bCrouched*/ false, bPosed ? PoseClip : nullptr, PoseSeconds, PoseLocation, AnchorBone, AnchorTarget);
+	}
+	return WindowGhost != nullptr;
 }
 
 bool ACodexTacticsPlayerController::UpdateMantleHover(AOperativeCharacter* Operative, const FHitResult* Hit)
@@ -832,7 +1057,7 @@ void ACodexTacticsPlayerController::AssignDefenseUnderCursor()
 	USquadAutonomySubsystem* Autonomy = GetWorld()->GetSubsystem<USquadAutonomySubsystem>();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	FHitResult Hit;
-	if (!Leader || !GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+	if (!Leader || !GetCursorHit(Hit))
 	{
 		return;
 	}
@@ -1290,7 +1515,7 @@ void ACodexTacticsPlayerController::VehicleKey(bool bSquadWide)
 	{
 		// The hovered vehicle wins when several are near (design 1.1).
 		FHitResult Hover;
-		AVehiclePawn* Hovered = GetHitResultUnderCursor(ECC_Visibility, false, Hover) ? Cast<AVehiclePawn>(Hover.GetActor()) : nullptr;
+		AVehiclePawn* Hovered = GetCursorHit(Hover) ? Cast<AVehiclePawn>(Hover.GetActor()) : nullptr;
 		HideCoverPreview();
 		Vehicles->HandleBoardKey(bSquadWide, Hovered);
 	}

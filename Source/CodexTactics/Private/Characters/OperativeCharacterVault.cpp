@@ -3,6 +3,8 @@
 // Godot reference: Scenes/movements/player.gd (try_vault_obstacle, is_vaulting). Pure rules: Characters/VaultRules.
 
 #include "Characters/OperativeCharacter.h"
+#include "Core/PlayerCommands.h"
+#include "AI/StealthLureSubsystem.h"
 
 #include "CodexTactics.h"
 #include "Characters/OperativeAIController.h"
@@ -15,6 +17,8 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Interactables/VaultNavigation.h"
+#include "Interactables/WindowBreakage.h"
+#include "Interactables/WindowOrderRules.h"
 #include "Navigation/PathFollowingComponent.h"
 
 float AOperativeCharacter::GetVaultSpeed() const
@@ -93,6 +97,19 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 	{
 		return false;
 	}
+	// A whole (shut) window only by the window rules (designer 2026-11-23, WindowOrderRules: the window click, or Solo with the squad
+	// selected in a fight; never a formation follower - FormationStairSmoke S04: a plain walk's knee-height auto-vault broke a window).
+	// A broken window is an ordinary quiet vault.
+	if (const AActor* Window = Front.GetActor(); Window && Window->ActorHasTag(FName(TEXT("window_sill"))) && !Window->ActorHasTag(FName(TEXT("window_broken"))))
+	{
+		const USquadSubsystem* WindowSquad = World->GetSubsystem<USquadSubsystem>();
+		const bool bFormationFollower = WindowSquad && !WindowSquad->IsSoloMode() && WindowSquad->GetFormationLeader() != this;
+		if (WindowSquad && WindowSquad->GetMembers().Contains(this)
+			&& !WindowOrderRules::MayTakeWholeWindow(WindowSquad->IsWindowOrder(), bFormationFollower, WindowOrderRules::Get()))
+		{
+			return false;
+		}
+	}
 	// 2. Its height.
 	const FVector TopProbe = Front.ImpactPoint + Direction * 20.f;
 	FHitResult Top;
@@ -167,6 +184,25 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 	VaultLanding = FVector(LandingXY.X, LandingXY.Y, Land.ImpactPoint.Z + HalfHeight);
 	SetActorRotation(FRotator(0.f, Direction.Rotation().Yaw, 0.f));
 	UE_LOG(LogCodexTactics, Log, TEXT("%s vaults over %s (%.0f cm)"), *DisplayName.ToString(), *Front.GetActor()->GetName(), Height);
+	// Designer 2026-11-22: the first climb through a (shut) window breaks it - loud: a lure noise every enemy in earshot investigates and the
+	// sound spread rings on the ground. A broken window is quiet afterwards.
+	static const FName WindowSillTag(TEXT("window_sill"));
+	static const FName WindowBrokenTag(TEXT("window_broken"));
+	if (AActor* Sill = Front.GetActor(); Sill && Sill->ActorHasTag(WindowSillTag) && !Sill->ActorHasTag(WindowBrokenTag))
+	{
+		Sill->Tags.Add(WindowBrokenTag);
+		const FVector NoisePoint(Front.ImpactPoint.X, Front.ImpactPoint.Y, GroundZ + 5.f);
+		if (UStealthLureSubsystem* Lure = World->GetSubsystem<UStealthLureSubsystem>())
+		{
+			const int32 Heard = Lure->EmitNoise(NoisePoint, EStealthLureKind::Throw, this, VaultRules::WindowBreakNoiseCm, FName(TEXT("WindowBreak")));
+			Lure->ShowNoiseRing(NoisePoint, VaultRules::WindowBreakNoiseCm);
+			UE_LOG(LogCodexTactics, Display, TEXT("[Window] %s breaks the window %s climbing through: noise %.0f m, %d enemies heard it"), *DisplayName.ToString(),
+				*Sill->GetName(), VaultRules::WindowBreakNoiseCm / 100.f, Heard);
+		}
+		WindowBreakage::HideBrokenWindow(*Sill);
+		VaultNavigation::SetWindowBroken(*Sill); // designer 2026-11-22: a broken window is quiet - any path may take it when faster // designer 2026-11-22: a broken window shows - its glass is hidden (not destroyed)
+		GameplayEvents::Raise(this, FName(TEXT("WindowBroken")), Sill);
+	}
 	return true;
 }
 

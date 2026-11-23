@@ -1,5 +1,229 @@
 {
-  "_comment": "ADR-0004 P0 structure classes and hp classes mapping. All values are PLACEHOLDERS marked _placeholder: true.",
+  "schema": "codex.structure_classes/1",
+  "_comment": "ADR-0004 P0 structure classes and hp classes mapping. All values are PLACEHOLDERS marked _placeholder: true. Generator part (rules / free_walls: structureClasses.ts, schema /2 wall segments) from claude/bgen-test e338f5ec; hp classes per 'structure.material' from Gemini 099.",
+  "structures": [
+    "load_bearing",
+    "partition",
+    "annex",
+    "facade"
+  ],
+  "materials": [
+    "concrete_panel",
+    "brick",
+    "plaster",
+    "wood",
+    "sheet_metal"
+  ],
+  "rules": {
+    "block": {
+      "perimeter": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "core": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "cross": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "inner": [
+        "partition",
+        "plaster"
+      ]
+    },
+    "shop_flats": {
+      "perimeter": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "core": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "cross": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "inner": [
+        "partition",
+        "plaster"
+      ]
+    },
+    "hospital": {
+      "perimeter": [
+        "load_bearing",
+        "brick"
+      ],
+      "core": [
+        "load_bearing",
+        "brick"
+      ],
+      "cross": [
+        "load_bearing",
+        "brick"
+      ],
+      "inner": [
+        "partition",
+        "plaster"
+      ]
+    },
+    "office": {
+      "perimeter": [
+        "load_bearing",
+        "brick"
+      ],
+      "core": [
+        "load_bearing",
+        "brick"
+      ],
+      "cross": [
+        "partition",
+        "plaster"
+      ],
+      "inner": [
+        "partition",
+        "plaster"
+      ]
+    },
+    "hall": {
+      "perimeter": [
+        "facade",
+        "sheet_metal"
+      ],
+      "core": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "cross": [
+        "partition",
+        "sheet_metal"
+      ],
+      "inner": [
+        "partition",
+        "sheet_metal"
+      ]
+    },
+    "warehouse": {
+      "perimeter": [
+        "facade",
+        "sheet_metal"
+      ],
+      "core": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "cross": [
+        "partition",
+        "sheet_metal"
+      ],
+      "inner": [
+        "partition",
+        "sheet_metal"
+      ]
+    },
+    "gallery": {
+      "perimeter": [
+        "facade",
+        "sheet_metal"
+      ],
+      "core": [
+        "load_bearing",
+        "concrete_panel"
+      ],
+      "cross": [
+        "partition",
+        "sheet_metal"
+      ],
+      "inner": [
+        "partition",
+        "sheet_metal"
+      ]
+    },
+    "shed": {
+      "perimeter": [
+        "annex",
+        "wood"
+      ],
+      "core": [
+        "annex",
+        "wood"
+      ],
+      "cross": [
+        "annex",
+        "wood"
+      ],
+      "inner": [
+        "partition",
+        "wood"
+      ]
+    },
+    "ruin": {
+      "perimeter": [
+        "load_bearing",
+        "brick"
+      ],
+      "core": [
+        "load_bearing",
+        "brick"
+      ],
+      "cross": [
+        "load_bearing",
+        "brick"
+      ],
+      "inner": [
+        "partition",
+        "brick"
+      ]
+    },
+    "shell": {
+      "perimeter": [
+        "load_bearing",
+        "brick"
+      ],
+      "core": [
+        "load_bearing",
+        "brick"
+      ],
+      "cross": [
+        "partition",
+        "plaster"
+      ],
+      "inner": [
+        "partition",
+        "plaster"
+      ]
+    },
+    "default": {
+      "perimeter": [
+        "load_bearing",
+        "brick"
+      ],
+      "core": [
+        "load_bearing",
+        "brick"
+      ],
+      "cross": [
+        "partition",
+        "plaster"
+      ],
+      "inner": [
+        "partition",
+        "plaster"
+      ]
+    }
+  },
+  "free_walls": {
+    "fence": [
+      "annex",
+      "sheet_metal"
+    ],
+    "default": [
+      "annex",
+      "brick"
+    ]
+  },
   "classes": {
     "load_bearing.concrete_panel": "hp_heavy_concrete",
     "load_bearing.brick": "hp_load_bearing_brick",

@@ -34,7 +34,8 @@ with the world grid material, TargetPoints, ALadderActor, PlayerStart, NavMeshBo
     one-way point links from 70 cm outside each edge on the upper slab down to the hole's centre one level below - the squad
     (and the enemies) walk off the rim and fall 3 m instead of being teleported; only one-level drops onto a real slab;
   - the level JSON's "bot_route" (levelgen_bot_route.bot_route: the mandatory route as the playtest bot's planned route, with each
-    waypoint's floor height and the drop legs marked); a rebuild KEEPS the existing level JSON's "pressure" / "cheats" blocks;
+    waypoint's floor height and the drop legs marked, the mantle legs with the edge id) and "bot_route_variants" (the non-mandatory routes
+    that have a mantle link, same block format; the smokes pick one); a rebuild KEEPS the existing level JSON's "pressure" / "cheats" blocks;
     "drop_links": true (2026-11-03): the runtime drop nav links off the open edges (UDropLinkSubsystem, LEVEL_GENERATOR.md 8.6)
     (tuned on the Training Ground combat lab page) when it was written for the same layout;
   - the level JSON's "pmc_squads" from the layout's generated PMC posts (task 087, PMC_DEFENCE.md D2: layout["pmc"]["posts"] ->
@@ -52,6 +53,7 @@ Without Unreal: `python build_levelgen_map.py plan [layout.json]` prints the act
 import datetime
 import json
 import math
+import re
 import os
 import sys
 
@@ -69,6 +71,7 @@ PROJECT_DIR = os.path.abspath(os.path.join(HERE, "..", ".."))
 ACCEPTED_DIR = os.path.join(PROJECT_DIR, "Content", "Data", "LevelGen", "accepted")
 LEVELJSON_DIR = os.path.join(PROJECT_DIR, "Content", "Data", "LevelJson")
 SCHEMA = "codex.levelgen_layout/1"
+SCHEMA_V2 = "codex.levelgen_layout/2"   # BUILDINGS_TECH_SPEC.md 2: opening states, blocked flights, balconies, fire escapes, snow ramps
 TAG = "LevelGen"
 ENV_TAG = "LevelGen_Env"
 ROUTE_TAG = "LevelGenRoute"
@@ -112,8 +115,8 @@ def load_layout(path):
     with open(path, encoding="utf-8") as f:
         layout = json.load(f)
     problems = []
-    if layout.get("schema") != SCHEMA:
-        problems.append("schema must be %s" % SCHEMA)
+    if layout.get("schema") not in (SCHEMA, SCHEMA_V2):
+        problems.append("schema must be %s or %s" % (SCHEMA, SCHEMA_V2))
     for key in ("name", "bounds", "spawn", "walls", "buildings", "ladders", "covers", "zones", "routes", "end"):
         if key not in layout:
             problems.append("missing %s" % key)
@@ -170,6 +173,20 @@ def wall_cube(label, folder, a, b, z0, height, thickness, tags=None):
 
 def rect_slab(label, folder, x0, y0, x1, y1, top_z, tags=None):
     return cube(label, folder, [(x0 + x1) / 2.0, (y0 + y1) / 2.0, top_z - SLAB / 2.0], [x1 - x0, y1 - y0, SLAB], 0.0, tags)
+
+
+def stairwell_hole_rect(pos, top, length=None):
+    """The slab opening over a stairwell flight's last `length` (default STAIRWELL_HOLE) cm, as wide as the flight + 5 cm
+    each side: (x0, y0, x1, y1). Never past the flight's top (the arrival landing stays solid)."""
+    d = (top[0] - pos[0], top[1] - pos[1])
+    L = math.hypot(*d) or 1.0
+    ux, uy = d[0] / L, d[1] / L
+    back = min(STAIRWELL_HOLE if length is None else length, L)
+    hw = STAIR_W / 2.0 + 5.0
+    ax, ay = top[0] - ux * back, top[1] - uy * back
+    xs = [ax - uy * hw, ax + uy * hw, top[0] - uy * hw, top[0] + uy * hw]
+    ys = [ay + ux * hw, ay - ux * hw, top[1] + ux * hw, top[1] - ux * hw]
+    return (min(xs), min(ys), max(xs), max(ys))
 
 
 def slabs_with_holes(label, folder, x0, y0, x1, y1, top_z, holes, tags=None):
@@ -270,16 +287,366 @@ def ramp(label, folder, a, b, z0, z1, width=STAIR_W, tags=None):
                 math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])), tags, pitch)
 
 
+# ---- opening states, blocked flights, balconies, fire escapes, snow ramps (schema /2; BUILDINGS_TECH_SPEC.md 2-3, ADR-0003) ------
+# Pure: every function below returns spec dicts; Placer.place turns the optional spec keys "affects_navigation" (False ->
+# SetCanEverAffectNavigation(false)) and "collision" ({channel: "block" | "ignore"}) into component settings. A /1 layout (and a /2
+# one whose openings resolve to open / broken and that has none of the new fields) gets no extra spec: bit-identical rebuilds.
+
+RUIN_SET_PIECES = ("ruined_two_level",)   # Training Ground openingStates.ts RUIN_SET_PIECES: doors 'open', windows 'broken'
+DOOR_STATES = ("open", "closed", "locked", "barricaded", "sealed")
+WINDOW_STATES = ("broken", "glazed", "barred", "boarded", "fixed")
+BLOCKED_OPENING_STATES = ("sealed", "barricaded", "barred", "boarded", "fixed")
+DOOR_LEAF_T = 5.0          # cm: door leaf thickness
+WINDOW_PANE_T = 2.0        # cm: glass pane
+WINDOW_BARS_T = 6.0        # cm: bars / boards stand-in thickness
+BARRICADE_EXTRA_T = 40.0   # cm: the barricade box sticks out this much past the wall (both faces together)
+BARRICADE_H = 180.0        # cm: barricade box height (capped by the opening's top)
+BALCONY_RAIL_H = 95.0      # cm: default rail height (a low_vault mantle edge, like the window sills)
+BALCONY_RAIL_T = 20.0      # cm: rail thickness (as the parapets)
+RUBBLE_LEN = 150.0         # cm: rubble box at a blocked flight's foot
+RUBBLE_H = 100.0
+SNOW_RAMP_MAX_DEG = 35.0   # BUILDINGS_TECH_SPEC.md 2 (SnowRamp): slope <= 35 deg
+NAV_AREA_NULL = "NavArea_Null"
+
+# collision presets of the state specs (channel -> response); absent on every legacy spec (the StaticMeshActor default, BlockAll)
+COLLISION_LEAF = {"pawn": "ignore", "visibility": "block"}       # closed / locked leaf before R1: walk-through, blocks sight
+COLLISION_VISUAL_GLASS = {"pawn": "ignore", "visibility": "ignore"}  # glazed pane before R2: visual only
+COLLISION_PAWN_ONLY = {"pawn": "block", "visibility": "ignore"}  # bars, fixed glazing: block movement, not sight
+COLLISION_BLOCK_ALL = {"pawn": "block", "visibility": "block"}   # boards, barricade, wall fill, blocked flight box
+
+
+def classify_opening(layout, building, opening):
+    """(exterior, ground) of an opening (openingStates.ts classifyOpening): interior = one of a partition's openings (identity or
+    id) or its wall names a partition / an 'interior' / 'partition' layout wall; everything else is exterior."""
+    ground = int(opening.get("floor", 0) or 0) <= 0
+    oid = opening.get("id")
+    wall = opening.get("wall")
+    for pt in building.get("partitions", []) or []:
+        if wall is not None and wall == pt.get("id"):
+            return False, ground
+        for op in pt.get("openings", []) or []:
+            if op is opening or (oid is not None and op.get("id") == oid):
+                return False, ground
+    if wall is not None:
+        w = next((x for x in layout.get("walls", []) or [] if x.get("id") == wall), None)
+        if w is not None and w.get("kind") in ("interior", "partition"):
+            return False, ground
+    return True, ground
+
+
+def _default_state_v1(opening):
+    if opening.get("kind") == "loophole":
+        return "fixed"
+    return "open" if opening.get("kind") == "door" else "broken"
+
+
+def _default_state_v2(layout, building, opening):
+    kind = opening.get("kind")
+    if kind == "loophole":
+        return "fixed"
+    ruin = building.get("set_piece") in RUIN_SET_PIECES
+    if kind == "door":
+        if ruin or opening.get("role") == "portal":
+            return "open"  # a stair-core pad portal has no leaf (openingStates.ts, S2_ROOMS_PLAN.md 4.1)
+        if opening.get("role") == "unit_entry":
+            return "closed"  # a flat's front door is closed by default (designer 2026-11-19; openingStates.ts)
+        return "closed" if classify_opening(layout, building, opening)[0] else "open"
+    return "broken" if ruin else "glazed"
+
+
+def effective_opening_state(layout, building, opening):
+    """The opening's explicit "state" if set, else the default of the layout's schema: /2 -> the opening-states table (exterior
+    door 'closed', interior door 'open', windows 'glazed', loopholes 'fixed'; ruins open / broken), anything else -> the /1
+    legacy defaults (doors 'open', windows 'broken', loopholes 'fixed'). Mirrors openingStates.ts effectiveOpeningState."""
+    if opening.get("state") is not None:
+        return opening["state"]
+    if layout.get("schema") == SCHEMA_V2:
+        return _default_state_v2(layout, building, opening)
+    return _default_state_v1(opening)
+
+
+def is_passable_state(state):
+    """Does a state give a reachability edge without an explosive (openingStates.ts isPassableState)?"""
+    return state not in BLOCKED_OPENING_STATES
+
+
+def _flagged(spec, collision=None, affects_navigation=None):
+    if collision is not None:
+        spec["collision"] = dict(collision)
+    if affects_navigation is not None:
+        spec["affects_navigation"] = bool(affects_navigation)
+    return spec
+
+
+def opening_state_specs(label, folder, pa, pb, z0, thickness, floor_idx, building_id, opening, state):
+    """The extra actors of an opening in its state, spanning pa..pb (the cut-out along the wall) from z0 (the floor):
+    door  open: none | closed / locked: a leaf (door_state=*, no pawn collision, CanEverAffectNavigation false - ADR-0003 'before
+          R1') | barricaded: a blocking leaf + a barricade box | sealed: a wall fill;
+    window broken: none | glazed: a visual pane | barred: bars (pawn collision, no sight block) | boarded: boards (collision +
+          sight) | fixed: glazing with pawn collision.
+    Loopholes get nothing: their small aperture already stops a pawn, and a pane would close the firing slot."""
+    kind = opening.get("kind")
+    if kind not in ("door", "window") or state in (None, "open", "broken"):
+        return []
+    sill_h = float(opening.get("sill_height", 0.0 if kind == "door" else 90.0))
+    top_h = float(opening.get("top_height", 210.0))
+    h = top_h - sill_h
+    if h < 2.0:
+        return []
+    zb = z0 + sill_h
+    base = ["building=" + building_id, "floor=%d" % floor_idx]
+    if opening.get("id"):
+        base.append("opening=%s" % opening["id"])
+    out = []
+    if kind == "door":
+        if state not in DOOR_STATES:
+            report("REVIEW: opening %s: unknown door state %r - built as open" % (opening.get("id"), state))
+            return []
+        tag = "door_state=%s" % state
+        if state in ("closed", "locked"):
+            leaf_tags = base + ["door_leaf", tag] + (["door_lock_plate"] if state == "locked" else [])
+            out.append(_flagged(wall_cube(label + "_leaf", folder, pa, pb, zb, h, DOOR_LEAF_T, leaf_tags), COLLISION_LEAF, False))
+        elif state == "barricaded":
+            out.append(_flagged(wall_cube(label + "_leaf", folder, pa, pb, zb, h, DOOR_LEAF_T, base + ["door_leaf", tag]), COLLISION_BLOCK_ALL))
+            out.append(_flagged(wall_cube(label + "_barricade", folder, pa, pb, zb, min(h, BARRICADE_H), thickness + BARRICADE_EXTRA_T,
+                                          base + ["door_barricade", tag]), COLLISION_BLOCK_ALL))
+        else:  # sealed
+            out.append(_flagged(wall_cube(label + "_fill", folder, pa, pb, zb, h, thickness, base + ["opening_fill", tag]), COLLISION_BLOCK_ALL))
+        return out
+    if state not in WINDOW_STATES:
+        report("REVIEW: opening %s: unknown window state %r - built as broken" % (opening.get("id"), state))
+        return []
+    tag = "window_state=%s" % state
+    if state == "glazed":
+        out.append(_flagged(wall_cube(label + "_glass", folder, pa, pb, zb, h, WINDOW_PANE_T, base + ["window_glass", tag]), COLLISION_VISUAL_GLASS, False))
+    elif state == "barred":
+        out.append(_flagged(wall_cube(label + "_bars", folder, pa, pb, zb, h, WINDOW_BARS_T, base + ["window_bars", tag]), COLLISION_PAWN_ONLY))
+    elif state == "boarded":
+        out.append(_flagged(wall_cube(label + "_boards", folder, pa, pb, zb, h, WINDOW_BARS_T, base + ["window_boards", tag]), COLLISION_BLOCK_ALL))
+    else:  # fixed
+        out.append(_flagged(wall_cube(label + "_glass", folder, pa, pb, zb, h, WINDOW_PANE_T * 2.0, base + ["window_glass", "window_fixed", tag]), COLLISION_PAWN_ONLY))
+    return out
+
+
+def blocked_flight_specs(label, folder, a, b, z0, z1, kind, width=STAIR_W):
+    """A blocked flight (Stair.blocked rubble | burnt | barricade): the ramp stays; over it a blocking box (the flight's run,
+    floor to under the upper slab), a nav modifier (NavArea_Null) a bit larger, and a rubble box at the foot."""
+    run = math.hypot(b[0] - a[0], b[1] - a[1])
+    if run < 2.0:
+        return []
+    yaw = math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))
+    ux, uy = (b[0] - a[0]) / run, (b[1] - a[1]) / run
+    mid = [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0]
+    tags = ["stair_blocked=%s" % kind, "blocked_flight"]
+    box_h = max(SLAB, (z1 - z0) - SLAB)
+    out = [_flagged(cube(label + "_blockbox", folder, [mid[0], mid[1], z0 + box_h / 2.0], [run, width, box_h], yaw, tags + ["flight_block"]), COLLISION_BLOCK_ALL)]
+    nz0, nz1 = z0 - 50.0, z1 + 50.0
+    out.append({"kind": "nav_modifier", "label": label + "_navnull", "folder": folder, "location": [mid[0], mid[1], (nz0 + nz1) / 2.0], "yaw": yaw, "pitch": 0.0,
+                "scale": [(run + 50.0) / 200.0, (width + 50.0) / 200.0, (nz1 - nz0) / 200.0], "area": NAV_AREA_NULL, "tags": tags + ["nav_null"]})
+    rl = min(RUBBLE_LEN, run)
+    rc = [a[0] + ux * rl / 2.0, a[1] + uy * rl / 2.0, z0 + RUBBLE_H / 2.0]
+    out.append(_flagged(cube(label + "_rubble", folder, rc, [rl, width, RUBBLE_H], yaw, tags + ["rubble_flight"]), COLLISION_BLOCK_ALL))
+    return out
+
+
+LANE_WALL_RE = re.compile(r"_lanewall_f\d+$")
+
+
+def is_switchback(s):
+    """A half-landing switchback stairwell (Training Ground kitPlan.ts / schema.ts isSwitchback): `turn` and `mid` set."""
+    return s.get("kind") == "stairwell" and bool(s.get("turn")) and bool(s.get("mid"))
+
+
+def switchback_specs(bid, s, gz, folder):
+    """A switchback stair (kit block, docs/design/levelgen/BGEN_KIT_PLANS_2026-11-21.md): flight a pos -> turn (from -> half level), the
+    mid landing slab (`mid_rect`, building frame, top at the half level), flight b mid -> top (half level -> to). Blocked: both flights
+    get the blocked-flight extras. The slab opening above is the generator's floors_detail gap (no stairwell_hole_rect)."""
+    z0, z1 = gz + z_of(int(s["from"])), gz + z_of(int(s["to"]))
+    zm = (z0 + z1) / 2.0
+    label = "%s_%s" % (bid, s["id"])
+    tags = ["stair=%s" % s["id"], "switchback"]
+    w = float(s.get("width") or STAIR_W)
+    out = [ramp(label, folder, s["pos"], s["turn"], z0, zm, width=w, tags=list(tags) + ["flight=a"]),
+           ramp(label + "_b", folder, s["mid"], s["top"], zm, z1, width=w, tags=list(tags) + ["flight=b"])]
+    if s.get("mid_rect"):
+        (ax, ay), (bx, by) = s["mid_rect"]
+        out.append(rect_slab(label + "_midlanding", folder, min(ax, bx), min(ay, by), max(ax, bx), max(ay, by), zm, list(tags) + ["mid_landing"]))
+    if s.get("blocked"):
+        for o in out[:2]:
+            o["tags"] = o["tags"] + ["stair_blocked=%s" % s["blocked"]]
+        out.extend(blocked_flight_specs(label, folder, s["pos"], s["turn"], z0, zm, s["blocked"], width=w))
+        out.extend(blocked_flight_specs(label + "_b", folder, s["mid"], s["top"], zm, z1, s["blocked"], width=w))
+        report("blocked switchback %s (%s): ramps kept, blocking boxes + NavArea_Null + rubble" % (label, s["blocked"]))
+    return out
+
+
+def switchback_hole_rect(s):
+    """The slab opening of a switchback stair on its arrival level: the core beyond the floor landing = the bounding box of the floor-landing
+    edge (`pos`, `top`) and the mid landing (`mid_rect`), (x0, y0, x1, y1). The generator writes the same rectangle as the floors_detail gap of
+    every storey below the roof; the roof has no floors_detail entry, so the builder cuts it there (switchback_roof_holes)."""
+    (ax, ay), (bx, by) = s["mid_rect"]
+    xs = [s["pos"][0], s["top"][0], ax, bx]
+    ys = [s["pos"][1], s["top"][1], ay, by]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _stair_specs(bid, s, gz, folder):
+    """A building stair's ramp (+ landing for an external flight with a mid point), plus the blocked-flight extras when
+    s["blocked"] is set (absent on every /1 stair: the legacy specs, unchanged). A switchback: switchback_specs."""
+    if is_switchback(s):
+        return switchback_specs(bid, s, gz, folder)
+    z0, z1 = gz + z_of(int(s["from"])), gz + z_of(int(s["to"]))
+    label = "%s_%s" % (bid, s["id"])
+    out = []
+    if s.get("kind") == "external" and s.get("mid"):
+        a, b = s["pos"], s["mid"]
+        out.append(ramp(label, folder, a, b, z0, z1))
+        x0_, y0_, x1_, y1_ = landing_rect(s["pos"], s["mid"], s["top"])
+        out.append(rect_slab(label + "_landing", folder, x0_, y0_, x1_, y1_, z1))
+    else:
+        a, b = s["pos"], s["top"]
+        out.append(ramp(label, folder, a, b, z0, z1))
+    if s.get("blocked"):
+        out[0]["tags"] = ["stair=%s" % s["id"], "stair_blocked=%s" % s["blocked"]]
+        out.extend(blocked_flight_specs(label, folder, a, b, z0, z1, s["blocked"]))
+        report("blocked flight %s (%s): ramp kept, blocking box + NavArea_Null + rubble" % (label, s["blocked"]))
+    return out
+
+
+def _rect_edges(rect):
+    (x0, y0), (x1, y1) = rect
+    x0, x1 = min(x0, x1), max(x0, x1)
+    y0, y1 = min(y0, y1), max(y0, y1)
+    return (x0, y0, x1, y1), [("S", [x0, y0], [x1, y0]), ("E", [x1, y0], [x1, y1]), ("N", [x1, y1], [x0, y1]), ("W", [x0, y1], [x0, y0])]
+
+
+def balcony_wall_side(balcony, footprint, tol=30.0):
+    """The rect side of a balcony lying on the building's footprint edge (the facade it hangs on): 'S' / 'E' / 'N' / 'W', or None."""
+    (x0, y0, x1, y1), _ = _rect_edges(balcony["rect"])
+    (fx0, fy0), (fx1, fy1) = footprint
+    fx0, fx1, fy0, fy1 = min(fx0, fx1), max(fx0, fx1), min(fy0, fy1), max(fy0, fy1)
+    cands = [("S", abs(y0 - fy1)), ("N", abs(y1 - fy0)), ("W", abs(x0 - fx1)), ("E", abs(x1 - fx0))]
+    side, d = min(cands, key=lambda c: c[1])
+    return side if d <= tol else None
+
+
+def balcony_specs(b, bal, gz):
+    """A balcony: the slab (top at the floor's level) + a rail (rail_cm, default 95; CodexMantleEdge like the parapets) on the
+    three sides away from the facade. The door opening is cut by the wall slicing (balcony_door_openings)."""
+    bid = b["id"]
+    folder = "Buildings/%s/Balconies" % bid
+    fl = int(bal["floor"])
+    top = gz + z_of(fl)
+    (x0, y0, x1, y1), edges = _rect_edges(bal["rect"])
+    tags = ["building=" + bid, "floor=%d" % fl, "balcony=%s" % bal["id"]]
+    out = [rect_slab("%s_slab" % bal["id"], folder, x0, y0, x1, y1, top, ["balcony_slab"] + tags)]
+    wall_side = balcony_wall_side(bal, b["footprint"])
+    if wall_side is None:
+        report("REVIEW: balcony %s does not touch %s's footprint - railed on all four sides" % (bal["id"], bid))
+    rail_h = float(bal.get("rail_cm") or BALCONY_RAIL_H)
+    half = BALCONY_RAIL_T / 2.0
+    cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+    for side, pa, pb in edges:
+        if side == wall_side:
+            continue
+        # inset by half the rail so it stands on the slab
+        ix = half if pa[0] == pb[0] and pa[0] < cx else (-half if pa[0] == pb[0] else 0.0)
+        iy = half if pa[1] == pb[1] and pa[1] < cy else (-half if pa[1] == pb[1] else 0.0)
+        out.append(wall_cube("%s_rail_%s" % (bal["id"], side), folder, [pa[0] + ix, pa[1] + iy], [pb[0] + ix, pb[1] + iy], top, rail_h, BALCONY_RAIL_T,
+                             ["balcony_rail", "CodexMantleEdge"] + tags))
+    return out
+
+
+def balcony_door_openings(b):
+    """Door openings for balconies whose door_id is not among b["openings"] (synthesised at the middle of the facade side, 120 x
+    210 cm): the wall slicing then cuts them like any upper-storey door."""
+    have = {op.get("id") for op in b.get("openings", [])}
+    out = []
+    for bal in b.get("balconies", []) or []:
+        if not bal.get("door_id") or bal["door_id"] in have:
+            continue
+        side = balcony_wall_side(bal, b["footprint"])
+        if side is None:
+            continue
+        _, edges = _rect_edges(bal["rect"])
+        _, pa, pb = next(e for e in edges if e[0] == side)
+        out.append({"id": bal["door_id"], "kind": "door", "floor": int(bal["floor"]), "pos": [(pa[0] + pb[0]) / 2.0, (pa[1] + pb[1]) / 2.0],
+                    "width": 120.0, "sill_height": 0.0, "top_height": 210.0, "balcony": bal["id"]})
+        report("balcony %s: door %s not in openings - cut at its facade side" % (bal["id"], bal["door_id"]))
+    return out
+
+
+def snow_ramp_specs(layout, b, sr, gz):
+    """A snow ramp (story 10): a walkable ramp like a stair flight from sr["from"] (ground) up to the sill of the opening
+    sr["to_opening"], ending at the wall's outer face; tags snow_ramp=<id>."""
+    op = next((o for o in b.get("openings", []) if o.get("id") == sr.get("to_opening")), None)
+    if op is None:
+        report("REVIEW: snow ramp %s: opening %s not found in %s - skipped" % (sr.get("id"), sr.get("to_opening"), b["id"]))
+        return []
+    wid = op.get("wall")  # the opening's facade id; layout walls may be pre-split round ground doors (<id>_0, <id>_1, ...)
+    wall = next((w for w in layout.get("walls", []) if wid and (w.get("id") == wid or str(w.get("id", "")).startswith(wid + "_"))), None)
+    t = float(wall["thickness"]) if wall else 20.0
+    fx, fy = sr["from"]
+    px, py = op["pos"]
+    d = math.hypot(px - fx, py - fy)
+    if d < t:
+        report("REVIEW: snow ramp %s: starts inside the wall - skipped" % sr.get("id"))
+        return []
+    end = [px - (px - fx) / d * t / 2.0, py - (py - fy) / d * t / 2.0]
+    kind = op.get("kind")
+    sill = float(op.get("sill_height", 0.0 if kind == "door" else 90.0))
+    z1 = gz + z_of(int(op.get("floor", 0))) + sill
+    run = d - t / 2.0
+    slope = math.degrees(math.atan2(z1 - gz, run))
+    if slope > SNOW_RAMP_MAX_DEG:
+        report("REVIEW: snow ramp %s: %.1f deg > %.0f" % (sr["id"], slope, SNOW_RAMP_MAX_DEG))
+    return [ramp("%s_%s" % (b["id"], sr["id"]), "Buildings/%s/SnowRamps" % b["id"], [fx, fy], end, gz, z1, float(sr.get("width_cm") or STAIR_W),
+                 ["snow_ramp", "snow_ramp=%s" % sr["id"], "building=" + b["id"], "to_opening=%s" % sr["to_opening"]])]
+
+
+def fire_escape_check(layout, b):
+    """Fire escapes: kind 'ladder' is built by the ladder pass (its ladder_ids are entries of layout.ladders) - only checked here;
+    kind 'stair' (steel flights / landings) has no builder yet and is reported."""
+    ids = {ld["id"] for ld in layout.get("ladders", [])}
+    for fe in b.get("fire_escapes", []) or []:
+        if fe.get("kind") == "ladder":
+            missing = [lid for lid in fe.get("ladder_ids", []) or [] if lid not in ids]
+            if missing:
+                report("REVIEW: fire escape %s: ladder_ids %s not in layout.ladders" % (fe["id"], ", ".join(missing)))
+        else:
+            report("REVIEW: fire escape %s: kind %r not built yet (stair flights pending)" % (fe.get("id"), fe.get("kind")))
+
+
 def _has_combat_building_features(layout):
     if layout.get("mantle_edges"):
         return True
     for b in layout.get("buildings", []):
-        if any(b.get(k) for k in ("openings", "floors_detail", "hatches", "parapets", "mantle_edges", "partitions")):
+        if any(b.get(k) for k in ("openings", "floors_detail", "hatches", "parapets", "mantle_edges", "partitions", "balconies", "snow_ramps")):
             return True
     return False
 
 
-def _slice_wall_with_openings(label_prefix, folder, a, b, z0, thickness, floor_idx, building_id, wall_kind, openings, base_tags, exit_intervals=None):
+def structure_tags(rec):
+    """Schema /2 data tags (lead addendum 2026-11-21, Training Ground structureClasses.ts): a wall / partition / opening record's structural
+    class and material as actor tags structure=<class> / material=<material>. Absent fields add nothing (a /1 layout builds bit for bit)."""
+    out = []
+    if rec.get("structure"):
+        out.append("structure=%s" % rec["structure"])
+    if rec.get("material"):
+        out.append("material=%s" % rec["material"])
+    return out
+
+
+def vault_tags(op):
+    """Schema /2 window vault data as tags on the window's sill: vaultable=0|1 and vault_onto=<ground|balcony|roof|none> (absent: none)."""
+    if "vaultable" not in op:
+        return []
+    return ["vaultable=%d" % int(bool(op["vaultable"]))] + (["vault_onto=%s" % op["vault_onto"]] if op.get("vault_onto") else [])
+
+
+def _slice_wall_with_openings(label_prefix, folder, a, b, z0, thickness, floor_idx, building_id, wall_kind, openings, base_tags, exit_intervals=None, state_of=None):
+    """The wall a..b cut round its openings (sills, lintels); state_of(opening) -> the effective state adds the opening-state
+    actors after each cut-out (opening_state_specs; nothing for open / broken)."""
     dx, dy = b[0] - a[0], b[1] - a[1]
     L = math.hypot(dx, dy)
     if L < 2.0:
@@ -327,36 +694,64 @@ def _slice_wall_with_openings(label_prefix, folder, a, b, z0, thickness, floor_i
                     sill_tags = ["building=" + building_id, "floor=%d" % floor_idx, "loophole_sill"]
                 else:
                     sill_kind_tag = "window_sill" if floor_idx == 0 else "mantle_sill"
-                    sill_tags = ["building=" + building_id, "floor=%d" % floor_idx, sill_kind_tag, "CodexMantleEdge"]
-                out.append(wall_cube("%s_o%d_sill" % (label_prefix, idx), folder, pt(c0), pt(c1), z0, sill_h, thickness, sill_tags))
+                    sill_tags = ["building=" + building_id, "floor=%d" % floor_idx, sill_kind_tag, "CodexMantleEdge"] + vault_tags(op)
+                out.append(wall_cube("%s_o%d_sill" % (label_prefix, idx), folder, pt(c0), pt(c1), z0, sill_h, thickness, sill_tags + structure_tags(op)))
             lintel_h = LEVEL_HEIGHT - top_h
             if lintel_h >= 2.0:
                 lintel_tags = ["building=" + building_id, "floor=%d" % floor_idx, "opening_lintel"]
                 if op_kind == "door":
                     lintel_tags.append("door_lintel")
-                out.append(wall_cube("%s_o%d_lintel" % (label_prefix, idx), folder, pt(c0), pt(c1), z0 + top_h, lintel_h, thickness, lintel_tags))
+                out.append(wall_cube("%s_o%d_lintel" % (label_prefix, idx), folder, pt(c0), pt(c1), z0 + top_h, lintel_h, thickness, lintel_tags + structure_tags(op)))
+            if state_of is not None:
+                out.extend(opening_state_specs("%s_o%d" % (label_prefix, idx), folder, pt(c0), pt(c1), z0, thickness, floor_idx, building_id, op, state_of(op)))
         cur = max(cur, c1)
     if L > cur + 2.0:
         out.append(wall_cube("%s_tail" % label_prefix if cutouts else label_prefix, folder, pt(cur), pt(L), z0, LEVEL_HEIGHT, thickness, list(base_tags)))
     return out
 
 
+AXIS_TOL_CM = 0.05  # a wall within 0.05 cm of an axis counts as axis-aligned: a rotated building's walls turned back into its own
+                   # frame carry the Training Ground's 0.01 cm rounding (S2 R3); integer / exact layouts are unaffected
+
+
+def _wall_axis(w):
+    """(along_y, fixed) of an axis-aligned wall (within AXIS_TOL_CM), or None for a diagonal one; exact walls give fixed = ax / ay."""
+    ax, ay = w["a"]
+    bx, by = w["b"]
+    if abs(ax - bx) <= AXIS_TOL_CM:
+        return True, (ax + bx) / 2.0
+    if abs(ay - by) <= AXIS_TOL_CM:
+        return False, (ay + by) / 2.0
+    return None
+
+
+def _axis_groups(segs):
+    """[(prefix, along_y, fixed, [walls])] in first-appearance order: the axis-aligned walls grouped by id prefix, axis and fixed
+    coordinate (within AXIS_TOL_CM of the group's first wall); diagonal walls as ("free", None, None, [wall])."""
+    groups = []
+    for w in segs:
+        axis = _wall_axis(w)
+        if axis is None:
+            groups.append(("free", None, None, [w]))
+            continue
+        along_y, fixed = axis
+        prefix = w["id"].rsplit("_", 1)[0]
+        g = next((g for g in groups if g[0] == prefix and g[1] == along_y and abs(g[2] - fixed) <= AXIS_TOL_CM), None)
+        if g is None:
+            groups.append((prefix, along_y, fixed, [w]))
+        else:
+            g[3].append(w)
+    return groups
+
+
 def _collinear_gaps(segs, building_id, floor_idx):
     """Find axis-aligned collinear gaps between wall segments (door openings pre-split in walls[])."""
-    groups = {}
-    for w in segs:
-        ax, ay = w["a"]
-        bx, by = w["b"]
-        if ax != bx and ay != by:
-            continue
-        along_y = (ax == bx)
-        fixed = ax if along_y else ay
-        t0, t1 = (min(ay, by), max(ay, by)) if along_y else (min(ax, bx), max(ax, bx))
-        prefix = w["id"].rsplit("_", 1)[0]
-        groups.setdefault((prefix, along_y, fixed), []).append((t0, t1, float(w["thickness"])))
     gaps_out = []
-    for (prefix, along_y, fixed), spans in groups.items():
-        spans.sort()
+    for prefix, along_y, fixed, ws in _axis_groups(segs):
+        if along_y is None:
+            continue
+        spans = sorted(((min(w["a"][1], w["b"][1]), max(w["a"][1], w["b"][1])) if along_y else (min(w["a"][0], w["b"][0]), max(w["a"][0], w["b"][0])))
+                       + (float(w["thickness"]),) for w in ws)
         for i in range(len(spans) - 1):
             g0, g1 = spans[i][1], spans[i + 1][0]
             if 40.0 <= g1 - g0 <= 300.0:
@@ -368,23 +763,11 @@ def _collinear_gaps(segs, building_id, floor_idx):
 
 def _merged_building_edges(ext_walls):
     """Merge collinear ground-split building perimeter pieces into continuous edges for upper storeys (f >= 1)."""
-    groups = {}
-    for w in ext_walls:
-        ax, ay = w["a"]
-        bx, by = w["b"]
-        if ax != bx and ay != by:
-            groups[("free", w["id"])] = [w]
-            continue
-        along_y = (ax == bx)
-        fixed = ax if along_y else ay
-        prefix = w["id"].rsplit("_", 1)[0]
-        groups.setdefault((prefix, along_y, fixed), []).append(w)
     merged = []
-    for key, ws in groups.items():
-        if key[0] == "free":
+    for prefix, along_y, fixed, ws in _axis_groups(ext_walls):
+        if along_y is None:
             merged.extend(ws)
             continue
-        prefix, along_y, fixed = key
         pts = [coord for w in ws for coord in ([w["a"][1], w["b"][1]] if along_y else [w["a"][0], w["b"][0]])]
         lo, hi = min(pts), max(pts)
         a = [fixed, lo] if along_y else [lo, fixed]
@@ -421,16 +804,72 @@ def _intersect_box_to_edge(x0, y0, x1, y1, e0, e1, margin=10.0, tag="stair_exit"
     L = math.hypot(ex, ey)
     if L < 1.0:
         return None
-    if abs(ex) <= 1e-3 and (x0 - margin <= e0[0] <= x1 + margin):
+    if abs(ex) <= AXIS_TOL_CM and (x0 - margin <= e0[0] <= x1 + margin):
         sign = 1.0 if ey > 0.0 else -1.0
         t_a, t_b = (y0 - margin - e0[1]) * sign, (y1 + margin - e0[1]) * sign
-    elif abs(ey) <= 1e-3 and (y0 - margin <= e0[1] <= y1 + margin):
+    elif abs(ey) <= AXIS_TOL_CM and (y0 - margin <= e0[1] <= y1 + margin):
         sign = 1.0 if ex > 0.0 else -1.0
         t_a, t_b = (x0 - margin - e0[0]) * sign, (x1 + margin - e0[0]) * sign
     else:
         return None
     t0, t1 = max(0.0, min(t_a, t_b)), min(L, max(t_a, t_b))
     return (t0, t1, tag) if t1 - t0 > 1.0 else None
+
+
+def firing_gap_spans(p_walls, fgaps):
+    """{parapet wall id: [(t0, t1, gap id), ...]}: the span each firing gap cuts from its parapet (cm along the wall from its `a`, the
+    centre's projection +- width / 2) - the same shape as levelgen_ladders.exit_gaps, fed to split_walls. A gap whose parapet is not
+    there (the layout changed after it was planned) is skipped."""
+    by_id = {w["id"]: w for w in p_walls}
+    spans = {}
+    for g in fgaps:
+        w = by_id.get(g["parapet"])
+        if w is None:
+            continue
+        a, wv, _length = levelgen_ladders._wall_frame(w)
+        t = (g["center"][0] - a[0]) * wv[0] + (g["center"][1] - a[1]) * wv[1]
+        half = float(g["width_cm"]) / 2.0
+        spans.setdefault(w["id"], []).append((t - half, t + half, g["id"]))
+    return spans
+
+
+def _span_minus(span, cuts, min_piece_cm=10.0):
+    """The parts of the interval span = (t0, t1) not covered by any of the cuts [(c0, c1, ...)], pieces shorter than min_piece_cm dropped."""
+    t0, t1 = span
+    out = []
+    t = t0
+    for c0, c1, _ in sorted(cuts):
+        if c0 - t >= min_piece_cm:
+            out.append((t, min(c0, t1)))
+        t = max(t, c1)
+        if t >= t1:
+            break
+    if t1 - t >= min_piece_cm:
+        out.append((t, t1))
+    return [(p0, p1) for p0, p1 in out if p1 - p0 >= min_piece_cm]
+
+
+def firing_gap_sill_specs(bid, floors, base_z, p_walls, fgaps, ladder_cuts):
+    """The sill piece of each firing gap: over the cut span, the parapet's thickness and base z, `sill_cm` high; clipped to the parts a
+    ladder exit / external stair cut leaves standing (none left = no sill: the opening is already wider). Tags: parapet, firing_gap,
+    CodexMantleEdge, building=, floor=, gap=<id>. Label <gap id>_sill (clipped in several parts: _sill_l<n>), folder Buildings/<id>/Parapets."""
+    by_id = {w["id"]: w for w in p_walls}
+    specs = []
+    for g in fgaps:
+        w = by_id.get(g["parapet"])
+        if w is None:
+            continue
+        a, wv, _length = levelgen_ladders._wall_frame(w)
+        for wid, spans in firing_gap_spans([w], [g]).items():
+            for t0, t1, gid in spans:
+                parts = _span_minus((t0, t1), ladder_cuts.get(wid, []))
+                for n, (p0, p1) in enumerate(parts):
+                    label = "%s_sill" % gid if len(parts) == 1 else "%s_sill_l%d" % (gid, n)
+                    pa = [round(a[0] + wv[0] * p0, 1), round(a[1] + wv[1] * p0, 1)]
+                    pb = [round(a[0] + wv[0] * p1, 1), round(a[1] + wv[1] * p1, 1)]
+                    specs.append(wall_cube(label, "Buildings/%s/Parapets" % bid, pa, pb, base_z, float(g["sill_cm"]), float(w["thickness"]),
+                                           ["parapet", "firing_gap", "CodexMantleEdge", "building=" + bid, "floor=%d" % floors, "gap=" + gid]))
+    return specs
 
 
 def _hatch_rim_specs(b, h, gz, roof_z, frames):
@@ -471,6 +910,32 @@ def _point_in_cover(px, py, c, margin=12.0):
     return abs(lx) <= c["size"][0] * 0.5 + margin and abs(ly) <= c["size"][1] * 0.5 + margin
 
 
+MANTLE_WALL_EDGE_KINDS = ("obstacle", "wall", "crate", "cover")
+
+
+def _wall_mantle_tags(w, edges):
+    """["CodexMantleEdge"] when a layout mantle edge (kind obstacle / wall / crate / cover) runs along this wall piece - parallel, its
+    midpoint within half the thickness + 15 cm of the wall axis and inside the piece's span - else []. MantleRules refuses a plain
+    "wall" tag, so an authored mantle-able wall (T-02 gap 2: the bridge obstacle, the arenas' low walls) needs it like parapets / sills."""
+    ax, ay = w["a"]
+    bx, by = w["b"]
+    L = math.hypot(bx - ax, by - ay)
+    if L < 1.0:
+        return []
+    ux, uy = (bx - ax) / L, (by - ay) / L
+    reach = float(w.get("thickness", 20.0)) * 0.5 + 15.0
+    for m in edges:
+        (sx, sy), (ex, ey) = m["start"], m["end"]
+        ml = math.hypot(ex - sx, ey - sy)
+        if ml < 1.0 or abs(((ex - sx) * uy - (ey - sy) * ux) / ml) > 0.05:
+            continue
+        mx, my = 0.5 * (sx + ex), 0.5 * (sy + ey)
+        t = (mx - ax) * ux + (my - ay) * uy
+        if -1.0 <= t <= L + 1.0 and abs((mx - ax) * uy - (my - ay) * ux) <= reach:
+            return ["CodexMantleEdge"]
+    return []
+
+
 def _walls_and_buildings_legacy(layout, gz, chimneys, frames, gaps):
     specs = []
     for w in levelgen_ladders.split_walls(layout["walls"], gaps):
@@ -486,7 +951,8 @@ def _walls_and_buildings_legacy(layout, gz, chimneys, frames, gaps):
         for h in b.get("floor_holes", []):
             holes_by_floor.setdefault(int(h["floor"]), []).append(h["pos"])
         for s in b.get("stairs", []):
-            if s.get("kind") == "stairwell":
+            if s.get("kind") == "stairwell" and not is_switchback(s):
+                # legacy layouts keep their square hole (bit-identical rebuilds); the extended path uses stairwell_hole_rect
                 end = s["top"]
                 d = (end[0] - s["pos"][0], end[1] - s["pos"][1])
                 L = math.hypot(*d) or 1.0
@@ -504,20 +970,54 @@ def _walls_and_buildings_legacy(layout, gz, chimneys, frames, gaps):
         else:
             specs.append(cube("%s_block" % b["id"], "Buildings/%s" % b["id"], [(bx0 + bx1) / 2.0, (by0 + by1) / 2.0, gz + float(b["height"]) / 2.0], [bx1 - bx0, by1 - by0, float(b["height"])]))
         for s in b.get("stairs", []):
-            z0, z1 = gz + z_of(int(s["from"])), gz + z_of(int(s["to"]))
-            if s.get("kind") == "external" and s.get("mid"):
-                specs.append(ramp("%s_%s" % (b["id"], s["id"]), "Buildings/%s" % b["id"], s["pos"], s["mid"], z0, z1))
-                x0_, y0_, x1_, y1_ = landing_rect(s["pos"], s["mid"], s["top"])
-                specs.append(rect_slab("%s_%s_landing" % (b["id"], s["id"]), "Buildings/%s" % b["id"], x0_, y0_, x1_, y1_, z1))
-            else:
-                specs.append(ramp("%s_%s" % (b["id"], s["id"]), "Buildings/%s" % b["id"], s["pos"], s["top"], z0, z1))
+            specs.extend(_stair_specs(b["id"], s, gz, "Buildings/%s" % b["id"]))
+        fire_escape_check(layout, b)
     return specs
+
+
+def partition_driven(layout, building):
+    """True when the building's interior walls are built from its partitions[] (one record per wall with its openings) instead of
+    the pre-split interior walls[] (S2 R3, S2_ROOMS_PLAN 7.3 / 4.5): an S2 planned building (it carries "plan") or a layout that
+    opts in with "interior_walls": "partitions". Legacy files keep the walls[] path, bit for bit."""
+    return bool(building.get("plan")) or layout.get("interior_walls") == "partitions"
+
+
+def _partition_wall_specs(layout, b, gz):
+    """Interior walls of a partition-driven building: each partition cut round its openings by _slice_wall_with_openings (door gap =
+    the opening's width, lintel, sill, opening-state actors at the cut - so a sealed / barricaded interior door of a rotated
+    building is never an open gap). Every piece carries the "interior" tag like the legacy walls[] cubes."""
+    bid = b["id"]
+    out = []
+    for pt in b.get("partitions", []) or []:
+        lvl = int(pt.get("floor", 0))
+        orig = {}
+        ops = []
+        for op in pt.get("openings", []) or []:
+            o = op if "floor" in op else dict(op, floor=lvl)
+            orig[id(o)] = op
+            ops.append(o)
+        state_of = lambda o, _orig=orig: effective_opening_state(layout, b, _orig.get(id(o), o))  # noqa: E731
+        base = ["interior", "building=" + bid, "floor=%d" % lvl] + structure_tags(pt)
+        pieces = _slice_wall_with_openings(pt["id"], "Buildings/%s/L%d" % (bid, lvl), pt["start"], pt["end"], gz + z_of(lvl),
+                                           float(pt.get("thickness", 20.0)), lvl, bid, "interior", ops, base, state_of=state_of)
+        for s in pieces:
+            if "interior" not in s.get("tags", []):
+                s["tags"] = ["interior"] + list(s.get("tags", []))
+        out.extend(pieces)
+    return out
 
 
 def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
     specs = []
     b_by_id = {b["id"]: b for b in layout["buildings"]}
     split = [w for w in levelgen_ladders.split_walls(layout["walls"], gaps) if w.get("building") not in chimneys]
+    mantle_edges = [m for m in layout.get("mantle_edges", []) or [] if m.get("kind") in MANTLE_WALL_EDGE_KINDS]
+    by_partitions = {bid for bid, b in b_by_id.items() if bid not in chimneys and partition_driven(layout, b)}
+    # kit blocks: the lane wall between the two flights of a switchback core is a layout wall, not a partition - it is built (the S2 offices keep
+    # their old output: their lane walls stay unbuilt, a separate review item)
+    switchback_buildings = {bid for bid, b in b_by_id.items() if any(is_switchback(s) for s in b.get("stairs", []) or [])}
+    for bid in sorted(by_partitions):
+        specs.extend(_partition_wall_specs(layout, b_by_id[bid], gz))
 
     # Non-building and interior partition walls
     interior_by_building_floor = {}
@@ -526,9 +1026,21 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
         bid = w.get("building")
         lvl = int(w.get("floor", 0))
         if not bid or bid not in b_by_id:
-            specs.append(wall_cube(w["id"], "Walls/L%d" % lvl, w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), [w.get("kind", "wall")]))
+            specs.append(wall_cube(w["id"], "Walls/L%d" % lvl, w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), [w.get("kind", "wall")] + _wall_mantle_tags(w, mantle_edges) + structure_tags(w)))
+        elif w.get("kind") == "interior" and bid in by_partitions and not (bid in switchback_buildings and LANE_WALL_RE.search(w["id"])):
+            continue  # built from its partitions[] above (a switchback core's lane walls are no partitions: built below)
         elif w.get("kind") == "interior":
-            specs.append(wall_cube(w["id"], "Buildings/%s/L%d" % (bid, lvl), w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), ["interior", "building=" + bid, "floor=%d" % lvl]))
+            spec = wall_cube(w["id"], "Buildings/%s/L%d" % (bid, lvl), w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), ["interior", "building=" + bid, "floor=%d" % lvl] + structure_tags(w))
+            if LANE_WALL_RE.search(w["id"]):
+                # 2026-11-21 night (nav lab, docs/design/levelgen/STORY_SHOWCASE_2026-11-22.md): the 10 cm wall between a switchback's two flights
+                # broke Recast in some tile / voxel alignments - the whole core column (ground landing, flights, next landing) came out without
+                # navmesh (L_Gen_BgenPlans B_b18 / B_y, showcase S10). Now it only blocks sight and the camera: the navmesh ignores it and so
+                # do pawns (a nav-only removal left pawns cutting its end on the mid landing and sticking there: nav lab Y_1_c1). The flights
+                # are 0.5 storey apart along it, so nobody crosses sideways except at its ends, where both flights meet the same landing.
+                spec["affects_navigation"] = False
+                spec["collision"] = {"pawn": "ignore"}
+                spec["tags"] = spec["tags"] + ["lane_wall"]
+            specs.append(spec)
             interior_by_building_floor.setdefault((bid, lvl), []).append(w)
         else:
             ext_by_building.setdefault(bid, []).append(w)
@@ -545,6 +1057,8 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
                 top_h = float(match.get("top_height", 210.0))
                 if LEVEL_HEIGHT - top_h >= 2.0:
                     specs.append(wall_cube("%s_ilintel_%d_%d" % (bid, lvl, idx), "Buildings/%s/L%d" % (bid, lvl), gap["a"], gap["b"], gz + z_of(lvl) + top_h, LEVEL_HEIGHT - top_h, gap["thickness"], ["interior", "building=" + bid, "floor=%d" % lvl, "door_lintel", "opening_lintel"]))
+                specs.extend(opening_state_specs("%s_idoor_%d_%d" % (bid, lvl, idx), "Buildings/%s/L%d" % (bid, lvl), gap["a"], gap["b"], gz + z_of(lvl), gap["thickness"], lvl, bid, match,
+                                                 effective_opening_state(layout, b, match)))
 
     # Building perimeters sliced by floor & openings, slabs, hatches, parapets, stairs
     for b in layout["buildings"]:
@@ -552,16 +1066,17 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
         (bx0, by0), (bx1, by1) = b["footprint"]
         floors = int(b["floors"])
         hollow = bool(b.get("hollow"))
-        openings = b.get("openings", [])
+        openings = b.get("openings", []) + balcony_door_openings(b)
+        state_of = lambda op, _b=b: effective_opening_state(layout, _b, op)  # noqa: E731
         raw_ext = ext_by_building.get(bid, [])
 
         # Floor 0 perimeter (pre-split around ground doors in layout["walls"])
         f0_walls = [w for w in raw_ext if int(w.get("floor", 0)) == 0]
         for w in f0_walls:
-            if not openings:
-                specs.append(wall_cube(w["id"], "Buildings/%s/L0" % bid, w["a"], w["b"], gz, min(LEVEL_HEIGHT, float(w["height"])), float(w["thickness"]), [w.get("kind", "building"), "building=" + bid, "floor=0"]))
+            if not b.get("openings"):
+                specs.append(wall_cube(w["id"], "Buildings/%s/L0" % bid, w["a"], w["b"], gz, min(LEVEL_HEIGHT, float(w["height"])), float(w["thickness"]), [w.get("kind", "building"), "building=" + bid, "floor=0"] + structure_tags(w)))
             else:
-                specs.extend(_slice_wall_with_openings(w["id"], "Buildings/%s/L0" % bid, w["a"], w["b"], gz, float(w["thickness"]), 0, bid, w.get("kind", "building"), openings, [w.get("kind", "building"), "building=" + bid, "floor=0"]))
+                specs.extend(_slice_wall_with_openings(w["id"], "Buildings/%s/L0" % bid, w["a"], w["b"], gz, float(w["thickness"]), 0, bid, w.get("kind", "building"), openings, [w.get("kind", "building"), "building=" + bid, "floor=0"] + structure_tags(w), state_of=state_of))
 
         # Ground exterior door lintels (210..300 cm)
         ext_doors_f0 = [op for op in openings if op.get("kind") == "door" and int(op.get("floor", 0)) == 0]
@@ -573,6 +1088,7 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
                 top_h = float(match.get("top_height", 210.0))
                 if LEVEL_HEIGHT - top_h >= 2.0:
                     specs.append(wall_cube("%s_dlintel_0_%d" % (bid, idx), "Buildings/%s/L0" % bid, gap["a"], gap["b"], gz + top_h, LEVEL_HEIGHT - top_h, gap["thickness"], ["building=" + bid, "floor=0", "door_lintel", "opening_lintel"]))
+                specs.extend(opening_state_specs("%s_door_0_%d" % (bid, idx), "Buildings/%s/L0" % bid, gap["a"], gap["b"], gz, gap["thickness"], 0, bid, match, state_of(match)))
 
         # Upper storeys (f >= 1): reconstruct unified perimeter edges so upper windows never split over floor-0 doors
         if floors > 1 and raw_ext:
@@ -583,20 +1099,22 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
                 # Apply ladder exit gaps targeting this upper floor if any exist
                 dummy_walls = [dict(e, id="%s_f%d" % (e["id"], f), floor=f, height=LEVEL_HEIGHT) for e in unified_edges]
                 f_gaps = levelgen_ladders.exit_gaps(dict(layout, walls=dummy_walls), list(frames.values()))
+                outer_tags = structure_tags(raw_b_ext[0]) if raw_b_ext else []
                 for ew in levelgen_ladders.split_walls(dummy_walls, f_gaps):
-                    specs.extend(_slice_wall_with_openings(ew["id"], "Buildings/%s/L%d" % (bid, f), ew["a"], ew["b"], z_f, float(ew["thickness"]), f, bid, ew.get("kind", "building"), openings, [ew.get("kind", "building"), "building=" + bid, "floor=%d" % f]))
+                    specs.extend(_slice_wall_with_openings(ew["id"], "Buildings/%s/L%d" % (bid, f), ew["a"], ew["b"], z_f, float(ew["thickness"]), f, bid, ew.get("kind", "building"), openings, [ew.get("kind", "building"), "building=" + bid, "floor=%d" % f] + outer_tags, state_of=state_of))
 
         # Slabs, floor_holes, stairwell holes, floors_detail[].gaps, hatches
         holes_by_floor = {}
         for h in b.get("floor_holes", []):
             holes_by_floor.setdefault(int(h["floor"]), []).append(h["pos"])
         for s in b.get("stairs", []):
-            if s.get("kind") == "stairwell":
-                end = s["top"]
-                d = (end[0] - s["pos"][0], end[1] - s["pos"][1])
-                L = math.hypot(*d) or 1.0
-                half = STAIRWELL_HOLE / 2.0
-                holes_by_floor.setdefault(int(s["to"]), []).append((end[0] - d[0] / L * half, end[1] - d[1] / L * half, half))
+            if is_switchback(s) and s.get("mid_rect") and int(s["to"]) >= floors:
+                # the roof over the last switchback (a walkable roof): open over both flights and the mid landing
+                holes_by_floor.setdefault(int(s["to"]), []).append(switchback_hole_rect(s))
+            if s.get("kind") == "stairwell" and not is_switchback(s):
+                # head room over the flight's last STAIRWELL_HOLE, only as wide as the flight (BUILDING_GENERATOR.md 2026-11-18:
+                # a square hole cut the neighbouring lane of the switchback core, where the next flight starts)
+                holes_by_floor.setdefault(int(s["to"]), []).append(stairwell_hole_rect(s["pos"], s["top"]))
         for fd in b.get("floors_detail", []):
             fl = int(fd["floor"])
             for g in fd.get("gaps", []):
@@ -611,8 +1129,10 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
             for fl in range(h_floor + 1, floors + 1):
                 holes_by_floor.setdefault(fl, []).append(h_rect)
 
-        if not hollow:
-            for n in range(1, floors):
+        slab_levels = {int(fd["floor"]) for fd in b.get("floors_detail", [])}
+        for n in range(1, floors):
+            # a hollow hall gets a slab only where the generator emitted one (its stair-core landings; the rest is an 'atrium' gap)
+            if not hollow or n in slab_levels:
                 specs.extend(slabs_with_holes("%s_floor%d" % (bid, n), "Buildings/%s" % bid, bx0, by0, bx1, by1, gz + z_of(n), holes_by_floor.get(n, []), tags=["floor_slab", "building=" + bid, "floor=%d" % n]))
         if b.get("roof_walkable") or b.get("enterable"):
             roof_holes = list(b.get("roof_holes", [])) + holes_by_floor.get(floors, [])
@@ -641,25 +1161,35 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
                             hit = _intersect_box_to_edge(*lrect, pw["a"], pw["b"]) or hit
                         if hit:
                             p_gaps.setdefault(pw["id"], []).append(hit)
+            # FIRING GAPS (the layout's top-level `firing_gaps`, Tools/TrainingGround firingGaps.ts): each is a span cut from its parapet
+            # (the data shape of the exit_gaps spans) and refilled with a low sill; every number comes from the gap entry
+            fgaps = [g for g in layout.get("firing_gaps", []) or [] if g.get("building") == bid]
+            fg_spans = firing_gap_spans(p_walls, fgaps)
+            ladder_cuts = {wid: list(cuts) for wid, cuts in p_gaps.items()}  # the ladder / stair cuts only: the sill is clipped to what still stands
+            for wid, cuts in fg_spans.items():
+                p_gaps.setdefault(wid, []).extend(cuts)
             for pw in levelgen_ladders.split_walls(p_walls, p_gaps):
                 specs.append(wall_cube(pw["id"], "Buildings/%s/Parapets" % bid, pw["a"], pw["b"], gz + z_of(floors), float(pw["height"]), float(pw["thickness"]), ["parapet", "CodexMantleEdge", "building=" + bid, "floor=%d" % floors]))
+            specs.extend(firing_gap_sill_specs(bid, floors, gz + z_of(floors), p_walls, fgaps, ladder_cuts))
 
         for s in b.get("stairs", []):
-            z0, z1 = gz + z_of(int(s["from"])), gz + z_of(int(s["to"]))
-            if s.get("kind") == "external" and s.get("mid"):
-                specs.append(ramp("%s_%s" % (bid, s["id"]), "Buildings/%s" % bid, s["pos"], s["mid"], z0, z1))
-                x0_, y0_, x1_, y1_ = landing_rect(s["pos"], s["mid"], s["top"])
-                specs.append(rect_slab("%s_%s_landing" % (bid, s["id"]), "Buildings/%s" % bid, x0_, y0_, x1_, y1_, z1))
-            else:
-                specs.append(ramp("%s_%s" % (bid, s["id"]), "Buildings/%s" % bid, s["pos"], s["top"], z0, z1))
+            specs.extend(_stair_specs(bid, s, gz, "Buildings/%s" % bid))
+        # schema /2 building features (absent on /1 layouts)
+        for bal in b.get("balconies", []) or []:
+            specs.extend(balcony_specs(b, bal, gz))
+        for sr in b.get("snow_ramps", []) or []:
+            specs.extend(snow_ramp_specs(layout, b, sr, gz))
+        fire_escape_check(layout, b)
     return specs
 
 
 # ---- rotated buildings (levelgen v2, designer 2026-11-16 item 4; Training Ground src/levelgen/rotation.ts) -------------------------
-# A building with "rotation" (degrees, UE yaw sense) stands turned about its footprint centre: "footprint" / room bounds are the
-# UNROTATED rectangles, every other point of it (doors, openings, stairs, holes, hatches, parapets, partitions) and its walls /
-# ladders are world coordinates. The builder plans such a building in its own frame (the points turned back, so the slab / hole /
-# landing / rim code stays axis-aligned) and turns the resulting actors back: location about the centre, yaw + rotation.
+# A building with "rotation" (degrees, UE yaw sense) stands turned about its footprint centre: "footprint" / room bounds and the
+# schema /2 balconies, fire escapes, snow ramps, breach panels are in the UNROTATED building frame, every other point of it (doors,
+# openings, stairs, holes, hatches, parapets, partitions) and its walls / ladders are world coordinates (the one list:
+# Content/Data/LevelGen/building_coord_fields.json). The builder plans such a building in its own frame (the points turned back,
+# so the slab / hole / landing / rim code stays axis-aligned) and turns the resulting actors back: location about the centre,
+# yaw + rotation.
 
 def _rot_xy(p, c, deg):
     """The point p (x, y[, ...]) turned by deg about c; extra coordinates are kept."""
@@ -675,44 +1205,84 @@ def building_rotation(b):
     return float(b.get("rotation") or 0.0)
 
 
+# The one table of a building's coordinate fields (S2_ROOMS_PLAN.md R4; shared with Training Ground buildingCoordFields.ts):
+# path ("partitions[].openings[].pos"), kind (point / point_list / rect / bounds / direction / yaw), frame ("building" = its own
+# unrotated frame like "footprint", "world" = layout coordinates).
+BUILDING_COORD_FIELDS_FILE = os.path.join(PROJECT_DIR, "Content", "Data", "LevelGen", "building_coord_fields.json")
+with open(BUILDING_COORD_FIELDS_FILE, encoding="utf-8") as _f:
+    BUILDING_COORD_TABLE = json.load(_f)
+BUILDING_COORD_FIELDS = BUILDING_COORD_TABLE["fields"]
+
+
+def _visit_path(node, keys, fn):
+    """fn applied in place to the value at keys under node ("name[]" = every element of that list); absent values are skipped."""
+    head, rest = keys[0], keys[1:]
+    many = head.endswith("[]")
+    key = head[:-2] if many else head
+    v = node.get(key) if isinstance(node, dict) else None
+    if v is None:
+        return
+    if not rest:
+        node[key] = fn(v)
+    elif many:
+        for el in v:
+            _visit_path(el, rest, fn)
+    else:
+        _visit_path(v, rest, fn)
+
+
+def map_building_coords(b, maps, fields=None):
+    """In place: every BUILDING_COORD_FIELDS value of the building dict b mapped by maps[kind](value, frame, path), kinds point /
+    rect / direction / yaw (point_list and bounds go through point / rect; a yaw that is not a number is kept). Returns b."""
+    for f in BUILDING_COORD_FIELDS if fields is None else fields:
+        kind, frame, path = f["kind"], f["frame"], f["path"]
+        if kind == "point_list":
+            fn = lambda v, fr=frame, pa=path: [maps["point"](q, fr, pa) for q in v]  # noqa: E731
+        elif kind == "bounds":
+            def fn(v, fr=frame, pa=path):
+                r = maps["rect"]([v["min"], v["max"]], fr, pa)
+                return dict(v, min=r[0], max=r[1])
+        elif kind == "yaw":
+            fn = lambda v, fr=frame, pa=path: maps["yaw"](v, fr, pa) if isinstance(v, (int, float)) else v  # noqa: E731
+        elif kind in ("point", "rect", "direction"):
+            fn = lambda v, k=kind, fr=frame, pa=path: maps[k](v, fr, pa)  # noqa: E731
+        else:
+            raise ValueError("building_coord_fields.json: %s: unknown kind %r" % (path, kind))
+        _visit_path(b, path.split("."), fn)
+    return b
+
+
+def _no_rule(kind):
+    def fail(v, frame, path):
+        raise ValueError("building coordinate %s: no rule for %s in the %s frame" % (path, kind, frame))
+    return fail
+
+
 def _building_local(layout, b):
-    """(local layout, centre, deg): the building, its walls and the ladders onto it turned back into its own frame (deg = rotation)."""
+    """(local layout, centre, deg): the building, its walls and the ladders onto it turned back into its own frame (deg = rotation).
+    Building fields per BUILDING_COORD_FIELDS: world points / yaws / directions turned back, building-frame fields (footprint, room
+    bounds, balconies, fire escapes, snow ramps, breach panels) already local - kept."""
     deg = building_rotation(b)
     (x0, y0), (x1, y1) = b["footprint"]
     c = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
     P = lambda q: [round(v, 4) for v in _rot_xy(q, c, -deg)]  # noqa: E731  (rounded: an integer layout turns back exactly)
+    world = lambda fn, kind: lambda v, frame, path: fn(v) if frame == "world" else _no_rule(kind)(v, frame, path)  # noqa: E731
     lb = json.loads(json.dumps(b))
     lb.pop("rotation", None)
-    for d in lb.get("doors", []):
-        d["pos"] = P(d["pos"])
-    for st in lb.get("stairs", []):
-        for k in ("pos", "mid", "top"):
-            if st.get(k):
-                st[k] = P(st[k])
-    lb["roof_holes"] = [P(h) for h in lb.get("roof_holes", [])]
-    for h in lb.get("floor_holes", []):
-        h["pos"] = P(h["pos"])
-    for op in lb.get("openings", []) + [o for pt in lb.get("partitions", []) for o in pt.get("openings", [])]:
-        op["pos"] = P(op["pos"])
-        if isinstance(op.get("yaw"), (int, float)):
-            op["yaw"] = float(op["yaw"]) - deg
-    for pt in lb.get("partitions", []):
-        pt["start"], pt["end"] = P(pt["start"]), P(pt["end"])
-    for pp in lb.get("parapets", []):
-        pp["start"], pp["end"] = P(pp["start"]), P(pp["end"])
-    for h in lb.get("hatches", []):
-        h["pos"] = P(h["pos"])
-    for fd in lb.get("floors_detail", []):
-        for g in fd.get("gaps", []):
-            g["poly"] = [P(q) for q in g["poly"]]
-    for m in lb.get("mantle_edges", []):
-        m["start"], m["end"] = P(m["start"]), P(m["end"])
-        m["normal"] = _rot_xy(m["normal"], (0.0, 0.0), -deg)
+    map_building_coords(lb, {
+        "point": lambda q, frame, path: P(q) if frame == "world" else q,
+        "rect": lambda r, frame, path: r if frame == "building" else _no_rule("rect")(r, frame, path),
+        "direction": world(lambda v: _rot_xy(v, (0.0, 0.0), -deg), "direction"),
+        "yaw": world(lambda y: float(y) - deg, "yaw"),
+    })
     walls = [dict(w, a=P(w["a"]), b=P(w["b"])) for w in layout["walls"] if w.get("building") == b["id"]]
     mine = ("roof:%s" % b["id"], "floor:%s:" % b["id"])
     ladders = [dict(ld, pos=P(ld["pos"]), foot=P(ld["foot"]), top=P(ld["top"]), yaw=float(ld.get("yaw", 0.0)) - deg)
                for ld in layout.get("ladders", []) if any(str(ld.get(k, "")).startswith(mine) for k in ("from", "to"))]
-    return dict(layout, buildings=[lb], walls=walls, ladders=ladders), c, deg
+    # firing gaps (top-level, world frame) of this building, turned back like its ladders: points, the outward vector, the facing yaw
+    fgaps = [dict(g, center=P(g["center"]), stand=P(g["stand"]), outward=[round(v, 6) for v in _rot_xy(g["outward"], (0.0, 0.0), -deg)], facing_yaw=float(g.get("facing_yaw", 0.0)) - deg)
+             for g in layout.get("firing_gaps", []) or [] if g.get("building") == b["id"]]
+    return dict(layout, buildings=[lb], walls=walls, ladders=ladders, firing_gaps=fgaps), c, deg
 
 
 def _globalize_specs(specs, c, deg):
@@ -840,14 +1410,21 @@ def plan(layout):
     for sp in layout.get("spawn_points", []):
         specs.append({"kind": "target_point", "label": sp["id"], "folder": "Spawns", "location": [sp["pos"][0], sp["pos"][1], gz + 50.0], "yaw": 0.0, "tags": ["LevelGenSpawn", sp.get("kind", "edge")]})
     for ap in layout.get("ambush_points", []):
-        specs.append({"kind": "target_point", "label": ap["id"], "folder": "Ambush", "location": [ap["pos"][0], ap["pos"][1], gz + 50.0], "yaw": 0.0, "tags": [AMBUSH_TAG]})
+        # an optional route layer ('roof:<bid>', 'floor:<bid>:<n>') lifts the point onto that level (T-02 gap 3); ground points as before
+        alayer = ap.get("layer")
+        az = gz + z_of(layer_level(layout, alayer)) + 50.0 if alayer else gz + 50.0
+        specs.append({"kind": "target_point", "label": ap["id"], "folder": "Ambush", "location": [ap["pos"][0], ap["pos"][1], az], "yaw": 0.0,
+                      "tags": [AMBUSH_TAG] + (["layer=%s" % alayer] if alayer else [])})
     for pr in layout.get("patrol_routes", []):
         for n, (px, py) in enumerate(pr["points"]):
             specs.append({"kind": "target_point", "label": "%s_%d" % (pr["id"], n), "folder": "Patrols/" + pr["id"], "location": [px, py, gz + 50.0], "yaw": 0.0, "tags": ["LevelGenPatrol", pr["id"]]})
     for z in layout["zones"]:
         cx = sum(p[0] for p in z["poly"]) / len(z["poly"])
         cy = sum(p[1] for p in z["poly"]) / len(z["poly"])
-        specs.append({"kind": "text", "label": "Zone_" + z["id"], "folder": "Zones", "text": "%s (%s)" % (z["id"], z.get("set_piece", z["kind"])), "location": [cx, cy, gz + 3.0], "yaw": 0.0})
+        zspec = {"kind": "text", "label": "Zone_" + z["id"], "folder": "Zones", "text": "%s (%s)" % (z["id"], z.get("set_piece", z["kind"])), "location": [cx, cy, gz + 3.0], "yaw": 0.0}
+        if z.get("intent") and layout.get("export_intents"):  # a designer-marked killing ground (T-02 gap 1): tagged; the outline is in the tactical file's kill_zones
+            zspec["tags"] = ["LevelGenZone", "zone=%s" % z["id"], "intent=%s" % z["intent"]]
+        specs.append(zspec)
     # ---- drop nav links through the roof / floor holes (one level down; levelgen_bot_route.drop_links)
     for dl in levelgen_bot_route.drop_links(layout, gz):
         hx, hy = dl["hole"]
@@ -944,6 +1521,9 @@ def level_json(layout, map_path):
     route = levelgen_bot_route.bot_route(layout)
     if route:
         data["bot_route"] = route
+        variants = levelgen_bot_route.bot_route_variants(layout)
+        if variants:
+            data["bot_route_variants"] = variants  # non-mandatory mantle routes, picked by the smokes (SetRouteOverride)
     return data
 
 
@@ -1055,6 +1635,48 @@ class Placer:
         self.placed += 1
         return actor
 
+    def apply_flags(self, comp, spec):
+        """The optional state-spec keys (opening_state_specs / blocked_flight_specs): "affects_navigation" False ->
+        SetCanEverAffectNavigation(false); "collision" {"pawn" | "visibility" | "camera": "block" | "ignore"} -> per-channel
+        responses on top of the default BlockAll. Legacy specs carry neither key."""
+        if spec.get("affects_navigation") is False:
+            # UE 5.8 Python does not expose SetCanEverAffectNavigation (engine check 2026-11-20): use the property when the setter is missing
+            if hasattr(comp, "set_can_ever_affect_navigation"):
+                comp.set_can_ever_affect_navigation(False)
+            else:
+                comp.set_editor_property("can_ever_affect_navigation", False)
+        coll = spec.get("collision")
+        if coll:
+            self.apply_collision_responses(comp, spec["label"], coll)
+
+    def apply_collision_responses(self, comp, label, coll):
+        """Per-channel responses written into the body instance's CollisionResponses.ResponseArray (profile Custom).
+
+        NOT through set_collision_response_to_channel: in UE 5.8 that setter changes the live container and the array in memory but the
+        value never survives a save + reload (engine check 2026-11-20: any load of the saved map reads BLOCK again; the bake commandlet
+        was not the cause). Only the array assigned as a property is serialized, and the container is rebuilt from it on load
+        (FBodyInstance::FixupData -> UpdateResponseContainerFromArray). So the live container of this editor session stays stale;
+        the builder does not simulate."""
+        channels = {"pawn": "Pawn", "visibility": "Visibility", "camera": "Camera"}          # UCollisionProfile channel display names
+        responses = {"block": unreal.CollisionResponseType.ECR_BLOCK, "ignore": unreal.CollisionResponseType.ECR_IGNORE,
+                     "overlap": unreal.CollisionResponseType.ECR_OVERLAP}
+        try:
+            entries = []
+            for ch, resp in sorted(coll.items()):
+                entry = unreal.ResponseChannel()
+                entry.set_editor_property("channel", channels[ch])
+                entry.set_editor_property("response", responses[resp])
+                entries.append(entry)
+            comp.set_editor_property("use_default_collision", False)
+            body = comp.get_editor_property("body_instance")
+            col = body.get_editor_property("collision_responses")
+            col.set_editor_property("response_array", entries)
+            body.set_editor_property("collision_responses", col)
+            body.set_editor_property("collision_profile_name", "Custom")
+            comp.set_editor_property("body_instance", body)
+        except Exception as exc:
+            report("REVIEW: %s: collision %s not set: %r" % (label, sorted(coll.items()), exc))
+
     def place(self, spec):
         kind = spec["kind"]
         tags = [TAG] + [str(t) for t in spec.get("tags", [])]
@@ -1063,6 +1685,14 @@ class Placer:
             comp = actor.static_mesh_component
             comp.set_static_mesh(self.cube if kind == "cube" else self.cylinder)
             comp.set_material(0, self.grid)
+            self.apply_flags(comp, spec)
+        elif kind == "nav_modifier":
+            # a blocked flight's NavArea_Null volume (default brush = 200 cm cube, scaled like the NavMeshBoundsVolume)
+            actor = self.spawn(unreal.NavModifierVolume, spec, tags=tags)
+            try:
+                actor.set_editor_property("area_class", getattr(unreal, spec.get("area", NAV_AREA_NULL)).static_class())
+            except Exception as exc:
+                report("REVIEW: nav modifier %s: area %s not set: %r" % (spec["label"], spec.get("area"), exc))
         elif kind == "player_start":
             self.spawn(unreal.PlayerStart, spec)
         elif kind == "nav_bounds":

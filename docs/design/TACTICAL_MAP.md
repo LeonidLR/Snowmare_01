@@ -67,7 +67,10 @@ analysis thresholds + `ladder_only_factor` 0.65), and the lists (one compact ite
 - `windows[]`: id, building, floor, layer (ground / floor:B:n), kind, `pos` xyz (the window, floor z), `stand` xyz (60 cm inside), `yaw`
   (outward look), covered_m, min_dist_m, places.
 - `overwatch_roofs[]`: building, layer, level, z, height_cm, range_m, access[] (stair:/ladder:/hatch:), `access_kind`, `ladder_only`,
-  `spots[]` {pos xyz, facing_yaw, covered_m, longest_los_m}, places.
+  `spots[]` {pos xyz, facing_yaw, covered_m, longest_los_m, `gap`? (the firing gap id the shooter stands behind)}, places. Since analysis v2 a spot stands at the roof
+  rim (60 cm inside the parapet line) and counts only what lies outward of its edge.
+- `firing_gaps[]` (only when the layout has gaps, BUILDING_GENERATOR.md section 8): id, building, layer (roof:B), parapet (wall id), `pos` xyz (gap centre, roof
+  floor z), `stand` xyz (60 cm behind it), `outward` [x, y], `yaw`, width_cm, sill_cm (a kneeling muzzle clears the sill, not the 95 cm parapet).
 - `hiding_spots[]`: id, layer, pos xyz, facing_yaw, reveal_normal_m, reveal_stealth_m, stealth_only, blind, rush_m, cover, cover_height_cm,
   `threatens` {line, route?, pos xyz}, place.
 - `ladder_only_roofs[]`: every walkable roof reached by ladder(s) and no stair - building, layer, z, center xyz, poly, ladders, ladder_tops

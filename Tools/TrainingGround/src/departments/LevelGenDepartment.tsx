@@ -33,6 +33,7 @@ import type { PlanView } from '../levelgen/planView';
 import { FIT_VIEW, PLAN_VIEW, planTransform, viewOfRect, zoomAt } from '../levelgen/planView';
 import type { Conditions, LayoutAnalysis } from '../levelgen/chokepoints';
 import { analyzeLayout, CHOKE, geometryHash, threatNumbers, withoutStaleAnalysis } from '../levelgen/chokepoints';
+import { withFiringGaps } from '../levelgen/firingGaps';
 import type { LayerVisibility } from '../levelgen/layers';
 import { assignMap, defaultVisibility, editLayout, editProps, hiddenKeys, layerById, layerCounts, LAYERS, layerMovable, layerTints, MAP_PLAN_HIDDEN, mergeLayerReroll, movableTypes, pickMoveEntity, resolveProps } from '../levelgen/layers';
 import type { LevelPropsFile } from '../levelgen/props/schema';
@@ -60,10 +61,15 @@ import type { Vec2 } from '../movement/geometry';
 import type { CriticVerdict } from '../levelgen/critic';
 import type { Evaluation } from '../levelgen/evaluate';
 import { evaluateLayout } from '../levelgen/evaluate';
-import { generateLayout } from '../levelgen/generate';
 import type { Profile } from '../levelgen/profile';
+import type { StoryState } from '../levelgen/storyPass';
+import { generateCandidate, hasStories, lockedBuildingIds, replanBuildingStory, rerollBuildingStory, restoryForGoals, storyMapSummary, withBuildingStories } from '../levelgen/storyPass';
 import type { GenBuilding, GenLayout, GenParams } from '../levelgen/schema';
 import { layersOf, mandatoryRoute } from '../levelgen/schema';
+import { BuildingsPanel } from './BuildingsPanel';
+import { PlansLegend, PlansOverlay } from './PlansOverlay';
+import { planOverlays } from '../levelgen/buildings/planOverlay';
+import { hasPlans, planMapSummary } from '../levelgen/buildings/planSummary';
 
 /** `key` = the slot's history key (the first layout name: an expansion renames the map to <name>_x<N>). */
 interface Candidate { layout: GenLayout; ev: Evaluation; simmed: boolean; verdicts: CriticVerdict[]; key?: string; /** The squad playback of the last simulator walk (task 072; never sent to the server). */ track?: SquadTrack;
@@ -122,6 +128,15 @@ export const LevelGenDepartment: React.FC = () => {
   const [count, setCount] = useState(3);
   const [params, setParams] = useState<GenParams>({ size_m: [177, 124], density: 1, variants: 3, verticality: 3 });
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  /** «Истории зданий (S1)»: the story pass as the last generation step (storyPass.ts); off = the generator's /1 output unchanged. */
+  const [storiesOn, setStoriesOn] = useState(true);
+  /** «Планировки зданий (S2)»: enterable offices get a band plan with doors / windows / links (generate.ts addPlannedOffice, schema /2); off = the /1 output unchanged. */
+  const [plansOn, setPlansOn] = useState(false);
+  /** The layout with the plans toggle in its params (what a re-roll / an expansion reads); unchanged (same object) when it already matches. */
+  const withPlansParam = (l: GenLayout): GenLayout => ((l.params.building_plans ?? false) === plansOn ? l : { ...l, params: { ...l.params, building_plans: plansOn } });
+  /** The story pass state per layout object (pristine buildings for «другая история», rollback log); history steps share it. */
+  const storyStates = useRef(new WeakMap<GenLayout, StoryState>());
+  const [storyMsg, setStoryMsg] = useState('');
   const [sel, setSel] = useState(0);
   const [layer, setLayer] = useState('all');
   const [floorMode, setFloorMode] = useState<FloorViewMode>('all');
@@ -226,7 +241,9 @@ export const LevelGenDepartment: React.FC = () => {
       try {
         const out: Candidate[] = [];
         for (let i = 0; i < count; i++) {
-          const layout = generateLayout({ profile, seed: seed + i, params });
+          const res = generateCandidate({ profile, seed: seed + i, params: plansOn ? { ...params, building_plans: true } : params, stories: storiesOn });
+          const layout = res.layout;
+          if ('base' in res) storyStates.current.set(layout, res);
           out.push({ layout, ev: evaluateLayout({ layout, profile, config, noSim: true }), simmed: false, verdicts: [] });
         }
         setCandidates(out); setSel(0); setLayer('all');
@@ -264,8 +281,14 @@ export const LevelGenDepartment: React.FC = () => {
     setBusy('');
   };
 
+  /** BUILDING_GENERATOR.md section 5: «Принять» waits while a building fails traversal, unless the designer forces it. */
+  const [forceBroken, setForceBroken] = useState(false);
+  const brokenBuildings = cur?.ev.buildings?.failed ?? 0;
+  // the override is per candidate: a new candidate / seed / slot starts unforced again (API review 2026-11-18)
+  useEffect(() => { setForceBroken(false); }, [sel, cur?.layout.name, cur?.layout.seed]);
   const accept = async () => {
     if (!cur) return;
+    if (brokenBuildings > 0 && !forceBroken) return;
     // T-022: never silently accept an overlap a move made (the server refuses a layout that breaks the schema's rules at all)
     const errs = (sinceOpen?.issues ?? []).filter((i) => i.severity === 'error');
     const bad = [...errs.map((i) => i.message), ...(sinceOpen?.schema ?? []), ...(edited ? wallConflicts.map((c) => c.reason) : [])];
@@ -276,9 +299,11 @@ export const LevelGenDepartment: React.FC = () => {
     try {
       // the chokepoint / threat analysis is saved with the map (block `analysis`): the shown one, else computed now
       const an = analysis ?? analyzeLayout(cur.layout, { conditions });
-      // task 087: the «ЧВК» layer's plan (posts + charges) goes with the map only while the layer is on (opt-in until the C++ spawn-at-post)
+      // a forced accept is recorded in the map JSON (analysis.forced_buildings = how many buildings failed traversal); task 087: the
+      // «ЧВК» layer's plan (posts + charges) goes with the map only while the layer is on (opt-in until the C++ spawn-at-post)
       const pmc = pmcOn ? (pmcPlan ?? planPmc(cur.layout, tacticalMapFor(cur.layout, cur.layout.name, cur.layout.name, an), pmcSeed ?? cur.layout.seed)) : undefined;
-      const layout: GenLayout = { ...cur.layout, analysis: an, ...(pmc ? { pmc } : {}) };
+      // FIRING GAPS (firingGaps.ts, FIRING_GAPS_HANDOVER.md): the parapet gaps of the overwatch roofs go with the map (top-level `firing_gaps`)
+      const layout: GenLayout = withFiringGaps({ ...cur.layout, analysis: brokenBuildings > 0 ? { ...an, forced_buildings: brokenBuildings } : an, ...(pmc ? { pmc } : {}) }, an);
       const r = await fetch('/api/levelgen/accept', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout, evaluation: cur.ev, verdicts: cur.verdicts }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? r.statusText);
@@ -396,6 +421,8 @@ export const LevelGenDepartment: React.FC = () => {
     if (!profile || !config) return;
     window.clearTimeout(evalTimer.current);
     const layout = withoutStaleAnalysis(shown); // an edited map: the stored analysis no longer describes it
+    const st = storyStates.current.get(shown);
+    if (st) storyStates.current.set(layout, st);
     const slot = sel;
     if (defer) {
       setCandidates((cs) => cs.map((c, i) => (i === slot ? { ...c, key: c.key ?? c.layout.name, layout, evStale: true, simmed: false, verdicts: [], track: undefined, analysis: undefined } : c)));
@@ -410,14 +437,29 @@ export const LevelGenDepartment: React.FC = () => {
     const ev = evaluateLayout({ layout, profile, config, noSim: true });
     setCandidates((cs) => cs.map((c, i) => (i === slot ? { ...c, key: c.key ?? c.layout.name, layout, ev, evStale: false, simmed: false, verdicts: [], track: undefined, analysis: undefined } : c)));
   };
-  /** One undo step; `coalesce` merges runs of the same gesture (arrow-key nudges of one entity) into a single step. */
-  const pushStep = (layout: GenLayout, label: string, coalesce?: string, defer = false) => {
+  /**
+   * One undo step. `stories` = the story state of `layout`; absent = the current one carries over (locks, goals: the same buildings).
+   * `coalesce` merges runs of the same gesture (arrow-key nudges of one entity) into a single step (T-022).
+   */
+  const pushStep = (layout: GenLayout, label: string, stories?: StoryState, coalesce?: string, defer = false) => {
     if (!cur) return;
+    const st = stories ?? storyStates.current.get(cur.layout);
+    if (st) storyStates.current.set(layout, st);
     setHistories((hs) => {
       const h = hs[curKey] ?? historyInit(cur.layout, 'исходная');
       return { ...hs, [curKey]: coalesce ? historyPushCoalesced(h, layout, label, coalesce) : historyPush(h, layout, label) };
     });
     showLayout(layout, defer);
+  };
+  /**
+   * A step that wrote `layout.objectives` (place / clear / add / move / remove a goal): with the story toggle on and a storied map,
+   * the story pass re-runs for the buildings whose role changed (restoryForGoals; locked districts keep theirs), else as it is.
+   */
+  const pushGoalStep = (layout: GenLayout, label: string) => {
+    if (!cur) return;
+    if (!storiesOn || !hasStories(layout)) { pushStep(layout, label); return; }
+    const r = restoryForGoals(layout, layout.seed, storyStates.current.get(cur.layout));
+    pushStep(r.layout, r.repicked.length ? `${label}; истории заново: ${r.repicked.length}` : label, r);
   };
   const cleanFences = () => {
     if (!cur) return;
@@ -430,9 +472,11 @@ export const LevelGenDepartment: React.FC = () => {
     setBusy('Перегенерация зоны...'); setError('');
     setTimeout(() => {
       try {
-        const r = regenerateRegion({ layout: cur.layout, zone, seed: rerollSeed, profile, maxRetries, blocks: blockMode, chaos, maxRotationDeg: maxRot });
+        const r = regenerateRegion({ layout: withPlansParam(cur.layout), zone, seed: rerollSeed, profile, maxRetries, blocks: blockMode, chaos, maxRotationDeg: maxRot });
         setRegenReport(r);
-        if (r.ok && r.layout !== cur.layout) pushStep(r.layout, `зона (${blockMode === 'full' ? `полностью, хаос ${chaos}` : blockMode === 'types' ? 'типы' : 'наполнение'}), seed ${r.seed}${r.retries ? ` (повторов ${r.retries})` : ''}`);
+        // kept / locked buildings keep their stories; the regenerated ones get new stories from the re-roll seed's sub-seeds
+        const sp = storiesOn && r.ok && r.layout !== cur.layout ? withBuildingStories(r.layout, r.seed, storyStates.current.get(cur.layout)) : null;
+        if (r.ok && r.layout !== cur.layout) pushStep(sp?.layout ?? r.layout, `зона (${blockMode === 'full' ? `полностью, хаос ${chaos}` : blockMode === 'types' ? 'типы' : 'наполнение'}), seed ${r.seed}${r.retries ? ` (повторов ${r.retries})` : ''}`, sp ?? undefined);
         setRerollSeed((s) => s + 1);
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
       setBusy('');
@@ -451,6 +495,35 @@ export const LevelGenDepartment: React.FC = () => {
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   };
   const unlock = (id: string) => { if (cur) pushStep(removeLock(cur.layout, id), `снято закрепление ${id}`); };
+  // ---- building stories (S1 step 4) -------------------------------------------------------------------------------------
+  const storyState = cur ? storyStates.current.get(cur.layout) : undefined;
+  const lockedBuildings = useMemo(() => (cur ? lockedBuildingIds(cur.layout) : new Set<string>()), [cur]);
+  const storySummary = useMemo(() => (cur && cur.layout.buildings.some((b) => b.stories?.length) ? storyMapSummary(cur.layout, storyStates.current.get(cur.layout)?.log) : null), [cur]);
+  /** «другая история»: one building's story re-rolled with the next sub-seed (refused inside a lock). */
+  const rerollStory = (id: string) => {
+    if (!cur) return;
+    const st = storyStates.current.get(cur.layout);
+    if (!st) { setStoryMsg(`${id}: нет состояния историй (карта загружена или сгенерирована без историй)`); return; }
+    try {
+      const r = rerollBuildingStory(cur.layout, id, st);
+      setStoryMsg(r.message);
+      if (r.ok && r.layout) pushStep(r.layout, `другая история ${id}: ${r.from} -> ${r.to}`, { base: r.base!, log: r.log! });
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  };
+  /** «другой план» (S2.7): one planned building re-planned with the next counter of its plan seed; its stories re-run, the rest of the map untouched (one undo step). */
+  const replanStory = (id: string) => {
+    if (!cur) return;
+    try {
+      const r = replanBuildingStory(cur.layout, id, storyStates.current.get(cur.layout));
+      setStoryMsg(r.message);
+      if (r.ok && r.layout) pushStep(r.layout, `другой план ${id} (${r.counter})${r.from ? `: история ${r.from} -> ${r.to}` : ''}`, r.base ? { base: r.base, log: r.log ?? [] } : undefined);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  };
+  /** Can «другой план» run for this building: null = never planned, 'locked' = inside a locked district, 'no_base' = storied without a pristine copy (a loaded map). */
+  const replanStateOf = (id: string): 'ok' | 'locked' | 'no_base' | null => {
+    const b = cur?.layout.buildings.find((x) => x.id === id);
+    return !b?.plan ? null : lockedBuildings.has(id) ? 'locked' : b.stories?.length && !storyState?.base[id] ? 'no_base' : 'ok';
+  };
   const [locksSaved, setLocksSaved] = useState('');
   // map expansion x2 / x4 / x6 + start and goals (levelgen v2 stage 2)
   const [expandFactor, setExpandFactor] = useState(4);
@@ -483,7 +556,7 @@ export const LevelGenDepartment: React.FC = () => {
     if (!cur || busy) return;
     const r = a.kind === 'add' ? addGoal(cur.layout, a.pos, nav ?? undefined) : a.kind === 'move' ? moveObjective(cur.layout, a.id, a.pos, nav ?? undefined) : removeGoal(cur.layout, a.id, nav ?? undefined);
     setObjMsg({ ok: r.ok && !!r.check?.ok, text: r.message });
-    if (r.ok) { pushStep(r.layout, r.message.split(';')[0]); setGoalReport(null); }
+    if (r.ok) { pushGoalStep(r.layout, r.message.split(';')[0]); setGoalReport(null); }
   };
   const zoomBy = (f: number) => setView((v) => zoomAt(v, [planBox.current ? planBox.current.clientWidth / 2 : 0, planBox.current ? planBox.current.clientHeight / 2 : 260], f));
   const planBox = useRef<HTMLDivElement>(null);
@@ -519,10 +592,13 @@ export const LevelGenDepartment: React.FC = () => {
     setTimeout(() => {
       try {
         // the rotation setting rides in the map's params (absent / unchanged = the map as it is: byte-identical expansions)
-        const src = maxRot === (cur.layout.params.max_rotation_deg ?? 0) ? cur.layout : { ...cur.layout, params: { ...cur.layout.params, max_rotation_deg: maxRot } };
+        const base = withPlansParam(cur.layout);
+        const src = maxRot === (base.params.max_rotation_deg ?? 0) ? base : { ...base, params: { ...base.params, max_rotation_deg: maxRot } };
         const r = expandLayout({ layout: src, factor: expandFactor, seed: expandSeed, profile });
         setExpandReport({ ...r, seamChecks: r.ok ? checkSeams(r.layout, r.roads) : [] });
-        if (r.ok) { pushStep(r.layout, `расширение x${expandFactor}, seed ${r.seed}`); setZone(null); setRegenReport(null); setExpandSeed((s) => s + 1); }
+        // the old map's buildings keep their stories; the new blocks' buildings get stories from the expansion seed's sub-seeds
+        const sp = storiesOn && r.ok ? withBuildingStories(r.layout, r.seed, storyStates.current.get(cur.layout)) : null;
+        if (r.ok) { pushStep(sp?.layout ?? r.layout, `расширение x${expandFactor}, seed ${r.seed}`, sp ?? undefined); setZone(null); setRegenReport(null); setExpandSeed((s) => s + 1); }
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
       setBusy('');
     }, 20);
@@ -534,7 +610,7 @@ export const LevelGenDepartment: React.FC = () => {
       try {
         const r = placeObjectives({ layout: cur.layout, seed: goalSeed, count: goalCount || undefined, start: goalStart });
         setGoalReport(r);
-        if (r.ok) pushStep(r.layout, `старт + цели, seed ${goalSeed}`);
+        if (r.ok) pushGoalStep(r.layout, `старт + цели, seed ${goalSeed}`);
         setGoalSeed((s) => s + 1);
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
       setBusy('');
@@ -544,7 +620,7 @@ export const LevelGenDepartment: React.FC = () => {
     if (!cur?.layout.objectives) return;
     const next = { ...cur.layout };
     delete next.objectives;
-    pushStep(next, 'цели убраны'); setGoalReport(null);
+    pushGoalStep(next, 'цели убраны'); setGoalReport(null);
   };
   const saveLocksNow = async () => {
     if (!cur) return;
@@ -648,7 +724,15 @@ export const LevelGenDepartment: React.FC = () => {
   const hidden = useMemo(() => (assignment ? hiddenKeys(assignment, vis) : undefined), [assignment, vis]);
   const tints = useMemo(() => (assignment && tintOn ? layerTints(assignment) : undefined), [assignment, tintOn]);
   const layerCountsNow = useMemo(() => (assignment ? layerCounts(assignment, { fire_line: cur?.ev.tactical?.firingLines.lines.length ?? 0, chokepoint: analysis?.chokepoints.length ?? 0, drop_spot: analysis?.dropAmbushSpots.length ?? 0,
-    window: analysis?.windowsCovering.length ?? 0, overwatch: analysis?.overwatchRoofs.length ?? 0, hiding: analysis?.hidingSpots.length ?? 0 }) : {}), [assignment, cur, analysis]);
+    window: analysis?.windowsCovering.length ?? 0, overwatch: analysis?.overwatchRoofs.length ?? 0, hiding: analysis?.hidingSpots.length ?? 0,
+    plan: cur?.layout.buildings.filter((b) => b.plan?.kind === 'bands').length ?? 0 }) : {}), [assignment, cur, analysis]);
+  // the «Планировки» layer (S2.7): the room plans of the planned buildings for the floor selector; the validator's issues of the shown report ride along
+  const planOverlaysNow = useMemo(() => {
+    if (!cur || vis.plans === false || !hasPlans(cur.layout)) return [];
+    const issues = new Map((cur.ev.buildings?.buildings ?? []).map((b) => [b.id, b.issues] as const));
+    try { return planOverlays(cur.layout, floorMode, layer, (id) => issues.get(id) ?? []); } catch { return []; }
+  }, [cur, vis.plans, floorMode, layer]);
+  const planSummary = useMemo(() => (cur && hasPlans(cur.layout) ? planMapSummary(cur.layout, cur.ev.buildings?.buildings) : null), [cur]);
   const selectedEntity = useMemo(() => (assignment && selKey ? Object.values(assignment.byLayer).flat().find((e) => e.key === selKey) ?? null : null), [assignment, selKey]);
   const propsOnMap = useMemo(() => (assignment ? resolveProps(propsFile).map((prop) => ({ layer: assignment.layerOf[`prop:${prop.object.id}`] ?? 'special', prop })) : []), [assignment, propsFile]);
   const activeDef = activeLayer ? layerById(activeLayer) ?? null : null;
@@ -752,7 +836,7 @@ export const LevelGenDepartment: React.FC = () => {
       noteMove(r.key);
     }
     setLayerMsg({ ok, text });
-    if (r.ok) pushStep(r.layout, `${activeDef?.name ?? activeLayer}: ${r.message}`, coalesce, edit.op === 'move' || edit.op === 'move_end');
+    if (r.ok) pushStep(r.layout, `${activeDef?.name ?? activeLayer}: ${r.message}`, undefined, coalesce, edit.op === 'move' || edit.op === 'move_end');
     return r.ok ? r.key : undefined;
   };
   /** What the accepted file's derived data lost its match with: remembered per layout until «Принять» (the stale notice). */
@@ -883,9 +967,9 @@ export const LevelGenDepartment: React.FC = () => {
       {layers.map((l) => <option key={l} value={l}>{l === 'all' ? 'все слои' : l}</option>)}
     </select>
   </>);
-  const acceptBlocked = !cur || !!busy || !!cur.evStale || !cur.ev.route.completable || (!!cur.layout.objectives && !!objCheck && objCheck.errors.length > 0);
+  const acceptBlocked = !cur || !!busy || !!cur.evStale || !cur.ev.route.completable || (!!cur.layout.objectives && !!objCheck && objCheck.errors.length > 0) || (brokenBuildings > 0 && !forceBroken);
   const acceptButton = (
-    <button onClick={accept} disabled={acceptBlocked} title={cur?.layout.objectives && objCheck?.errors.length ? `Цели с ошибками: ${objCheck.errors.join('; ')}` : wallConflicts.length > 0 ? `Внимание: обнаружено ${wallConflicts.length} пересечений стен/заборов!` : ''} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50" data-accept><ThumbsUp size={13} />Принять{wallConflicts.length > 0 ? ' (!)' : ''}{mapDirty ? ' *' : ''}</button>
+    <button onClick={accept} disabled={acceptBlocked} title={cur?.layout.objectives && objCheck?.errors.length ? `Цели с ошибками: ${objCheck.errors.join('; ')}` : brokenBuildings > 0 && !forceBroken ? `${brokenBuildings} зданий не проходят проверку проходимости (панель «Здания»)` : wallConflicts.length > 0 ? `Внимание: обнаружено ${wallConflicts.length} пересечений стен/заборов!` : ''} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50" data-accept><ThumbsUp size={13} />Принять{wallConflicts.length > 0 ? ' (!)' : ''}{mapDirty ? ' *' : ''}</button>
   );
   const mapBanner = cur ? (
     <div className="flex flex-col gap-1 text-[11px] mb-1" data-map-banner>
@@ -946,6 +1030,7 @@ export const LevelGenDepartment: React.FC = () => {
   const layersPanel = cur && assignment ? (
     <LayersPanel counts={layerCountsNow} vis={vis} onVis={setVis} active={activeLayer} onActive={(id) => { setActiveLayer(id); if (id) { setRegionMode('off'); setGoalTool(false); } }}
       tool={layerTool} onTool={setLayerTool} addIdx={addIdx} onAddIdx={setAddIdx} tintOn={tintOn} onTint={setTintOn} selected={selectedEntity} onDelete={deleteSelected}
+      onReplan={replanStory} replanState={replanStateOf}
       onRotate={(deg) => { if (selKey && !selKey.startsWith('prop:')) applyLayout({ op: 'rotate', key: selKey, deg }); }}
       onRerollLayer={zone && profileOk && activeDef?.size_class ? rerollLayer : null} message={layerMsg}
       propsInfo={propsState ? { map: propsState.map, path: propsState.path, revision: propsState.file.revision, frozen: propsState.file.frozen, dirty: propsState.dirty } : null} propsNote={NO_PROPS} onSaveProps={saveProps} busy={!!busy}
@@ -1025,6 +1110,12 @@ export const LevelGenDepartment: React.FC = () => {
                 <option value={0}>0 — плоско</option><option value={1}>1 — лестницы и крыши</option><option value={2}>2 — + лестничные клетки, этажи</option><option value={3}>3 — + проломы в руине</option>
               </select>
             </label>
+            <label className="flex items-center justify-between gap-2 text-xs text-slate-300" title="Последний шаг генерации: роли зданий, истории (запертая дверь, завал + пожарная лестница, крыша снаружи, сугроб), ключевые маршруты; схема /2. Действует на генерацию, расширение и перегенерацию зоны.">Истории зданий (S1)
+              <input type="checkbox" checked={storiesOn} onChange={(e) => setStoriesOn(e.target.checked)} />
+            </label>
+            <label className="flex items-center justify-between gap-2 text-xs text-slate-300" title="Офисы и жилые блоки получают планировку по полосам: комнаты, коридор, двери с ролями и связями, окна по фасаду; схема /2. Планы видны слоем «Планировки» (этаж — переключателем этажей); «другой план» — в панели «Здания». Выключено — прежний генератор без изменений. Действует на генерацию, расширение и перегенерацию зоны.">Планировки зданий (S2)
+              <input type="checkbox" checked={plansOn} onChange={(e) => setPlansOn(e.target.checked)} />
+            </label>
             <button onClick={generate} disabled={!profile || !config || !!busy} className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-semibold text-sm disabled:opacity-50"><Play size={15} />Сгенерировать</button>
             {busy && <p className="text-xs text-cyan-300">{busy}</p>}
             <h4 className="text-[11px] font-bold tracking-widest uppercase text-slate-400 mt-2">Кандидаты</h4>
@@ -1052,6 +1143,12 @@ export const LevelGenDepartment: React.FC = () => {
               <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400 mr-1" data-testid="layout-title">{cur ? cur.layout.name : 'Кандидат'}{cur && currentEntry && currentEntry.layout === cur.layout.name ? <span className="ml-2 normal-case tracking-normal font-mono text-cyan-300">карта {currentEntry.map}</span> : null}</h3>
               {!full && floorBar}
               <button onClick={walk} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"><Footprints size={13} />Прогнать отряд (симулятор)</button>
+              {brokenBuildings > 0 && (
+                <label className="inline-flex items-center gap-1 text-[11px] text-amber-300" title="Принять карту, хотя часть зданий не проходит проверку проходимости (этажи / крыши недостижимы)">
+                  <input type="checkbox" checked={forceBroken} onChange={(e) => setForceBroken(e.target.checked)} />
+                  принять с {brokenBuildings} сломанными зданиями
+                </label>
+              )}
               {wallConflicts.length > 0 && (
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/70 border border-rose-700 text-xs text-rose-200" title={wallConflicts.map((c) => c.reason).join('; ')}>
                   <AlertTriangle size={13} className="text-rose-400 shrink-0" />
@@ -1272,10 +1369,11 @@ export const LevelGenDepartment: React.FC = () => {
                   addGoal={goalTool} onObjective={cur ? onObjective : undefined} squad={squadNow?.members ?? null} trail={squadNow?.trail ?? null} trails={squadNow?.trails ?? null}
                   objectivesEditable={!activeLayer || activeLayer === 'objectives'} showObjectives={vis.objectives !== false}
                   layerTool={activeDef && activeDef.id !== 'objectives' && !goalTool ? layerTool : 'off'} pickLayer={pickLayer} onLayerAction={onLayerAction}
-                  overlay={(h) => <><LayersOverlay h={h} vis={vis} analysis={analysis} selChoke={selChoke} onSelChoke={setSelChoke} props={propsOnMap} selected={selectedEntity} activeEntities={activeEntities} />{pmcPlan && <PmcOverlay h={h} plan={pmcPlan} />}</>}>
-                  <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={planHeight} marks={marks} view={view} hideObjectives hidden={hidden} tints={tints} conflicts={wallConflicts} issueMarks={issueMarks} />
+                  overlay={(h) => <>{planOverlaysNow.length > 0 && <PlansOverlay h={h} overlays={planOverlaysNow} />}<LayersOverlay h={h} vis={vis} analysis={analysis} selChoke={selChoke} onSelChoke={setSelChoke} props={propsOnMap} selected={selectedEntity} activeEntities={activeEntities} />{pmcPlan && <PmcOverlay h={h} plan={pmcPlan} />}</>}>
+                  <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={planHeight} marks={marks} view={view} hideObjectives hidden={hidden} tints={tints} conflicts={wallConflicts} plansOverlay={planOverlaysNow.length > 0} issueMarks={issueMarks} />
                 </RegionOverlay>
                 </div>
+                {planOverlaysNow.length > 0 && <div className="mt-1.5"><PlansLegend /></div>}
                 {cur && (track ? (
                   <div className="mt-1.5 flex flex-col gap-1 bg-slate-950/60 border border-pink-900/60 rounded-lg p-2 text-[11px]" data-player>
                     <div className="flex flex-wrap items-center gap-2">
@@ -1313,6 +1411,8 @@ export const LevelGenDepartment: React.FC = () => {
               <ul className="text-xs text-slate-300 flex flex-col gap-1">
                 {cur.ev.variants.map((v) => <li key={v.id} className="flex items-center gap-2">{v.completable ? <CheckCircle2 size={12} className="text-emerald-400" /> : <XCircle size={12} className="text-rose-400" />}{v.id}: {v.length_m} м{v.fail ? ` — ${v.fail}` : ''}{v.intent === 'kill_zone' ? <span className="text-rose-300"> — зона убийства по замыслу (не дефект)</span> : null}</li>)}
               </ul>
+              {cur.ev.buildings && <BuildingsPanel report={cur.ev.buildings} summary={storySummary} message={storyMsg} planSummary={planSummary}
+                onReroll={storyState ? rerollStory : undefined} onReplan={replanStory} isLocked={(id) => lockedBuildings.has(id)} canReroll={(id) => !!storyState?.base[id]} replanState={replanStateOf} />}
               <table className="text-xs text-slate-300">
                 <tbody>
                   <tr><td className="pr-2 text-slate-500">Итог</td><td className="font-mono">{cur.ev.score} (сходство с эталоном {cur.ev.similarity.score})</td></tr>

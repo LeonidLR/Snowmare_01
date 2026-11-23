@@ -231,7 +231,10 @@ describe('tactical map runtime file (TACTICAL_MAP P1)', () => {
     const have = fs.readFileSync(path.join(root, 'Content/Data/LevelGen/tactical/L_Gen_Depot_X4.tactical.json'), 'utf8').split('\r\n').join('\n'); // autocrlf checkouts
     assert.equal(have, formatTacticalMap(f));
     // LEVELGEN_LAYERS_REPORT.md §7: Depot x4 = 46 places, 7 drop spots, 163 windows, 22 roofs, 150 hiding spots
-    assert.deepEqual([f.chokepoints.length, f.drop_spots.length, f.windows.length, f.overwatch_roofs.length, f.hiding_spots.length], [46, 7, 163, 22, 150]);
+    // analysis v2 (rim spots, outward only; firing gaps): 46 -> 44 places - the street-across-the-slab 'sniper' places are gone; the rest is unchanged
+    assert.deepEqual([f.chokepoints.length, f.drop_spots.length, f.windows.length, f.overwatch_roofs.length, f.hiding_spots.length], [44, 7, 163, 22, 150]);
+    assert.equal(f.firing_gaps?.length, x4.firing_gaps?.length, "the file lists the layout's firing gaps (none on main's x4)");
+    assert.ok(!f.firing_gaps || f.overwatch_roofs.every((r) => r.spots.length > 0) && f.overwatch_roofs.flatMap((r) => r.spots).filter((s) => s.gap).length >= 40, 'the rim spots link to their gaps');
     assert.ok(f.ladder_only_roofs.length > 0, 'the x4 Depot has ladder-only roofs');
     assert.equal(f.walkable_roofs?.length, 22, 'x4 Depot has 22 walkable roofs');
     assert.equal(f.goal_sites?.length, 25, 'x4 Depot has 25 goal sites');

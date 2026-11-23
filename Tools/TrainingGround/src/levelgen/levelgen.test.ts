@@ -147,7 +147,9 @@ test('height levels: 3 m steps, ladders sized to the level difference, every lay
   assert.equal(layerLevel(l, 'roof:B_gallery'), 1);
   for (const ld of l.ladders) assert.ok(Math.abs(ld.rungs * 36.4 + ld.plinth_cm - (ld.level_to - ld.level_from) * LEVEL_HEIGHT) < 1, ld.id);
   assert.ok(l.buildings.filter((b) => b.roof_walkable).every((b) => b.height === b.floors * LEVEL_HEIGHT), 'walkable roofs sit on their level');
-  assert.ok(l.buildings.some((b) => b.hollow && b.stairs.some((s) => s.from === 0 && s.to === HALL_ROOF_LEVEL)), 'a hollow hall climbs ground -> roof in one flight');
+  // BUILDING_GENERATOR.md 2026-11-18: a hall climbs ground -> roof by a switchback core, one 300-rise flight per level
+  assert.ok(l.buildings.some((b) => b.hollow && Array.from({ length: HALL_ROOF_LEVEL }, (_, lv) => lv)
+    .every((lv) => b.stairs.some((s) => s.kind === 'stairwell' && s.from === lv && s.to === lv + 1))), 'a hollow hall climbs ground -> roof flight by flight');
   assert.equal(l.cut?.floor_z, -300);
   const ev = evaluateLayout({ layout: l, profile, config, noSim: true });
   assert.deepEqual(ev.mechanics.levels, [0, 1, 2]);
@@ -166,10 +168,12 @@ test('game designer 2026-11-02 (6): the hall roofs sit on +3 = 9 m, their stairw
       const b = l.buildings.find((x) => x.id === id)!;
       assert.equal(b.height, 900, `${seed} ${id} height`);
       assert.equal(layerLevel(l, `roof:${id}`), 3, `${seed} ${id} roof level`);
-      const flight = b.stairs.find((s) => s.kind === 'stairwell')!;
-      assert.equal(flight.to - flight.from, 3, `${seed} ${id}: one flight ground -> +3`);
-      // 35 deg: run = 1.43 x 9 m
-      assert.ok(Math.abs(flatDist(flight.pos, flight.top) - 3 * STAIR_RUN_PER_RISE * LEVEL_HEIGHT) < 2, `${seed} ${id} run ${flatDist(flight.pos, flight.top)}`);
+      // switchback core (2026-11-18): flights 0->1->2->3, each one storey (35 deg: run = 1.43 x 3 m)
+      const flights = b.stairs.filter((s) => s.kind === 'stairwell').sort((a, c) => a.from - c.from);
+      assert.deepEqual(flights.map((s) => [s.from, s.to]), [[0, 1], [1, 2], [2, 3]], `${seed} ${id}: one flight per storey up to +3`);
+      for (const flight of flights) {
+        assert.ok(Math.abs(flatDist(flight.pos, flight.top) - STAIR_RUN_PER_RISE * LEVEL_HEIGHT) < 2, `${seed} ${id} run ${flatDist(flight.pos, flight.top)}`);
+      }
       assert.ok(hallWalls(l, id).every((w) => w.height === 900), `${seed} ${id}: the walls reach the roof`);
     }
     const ruin = l.buildings.find((x) => x.id === 'B_ruin')!;

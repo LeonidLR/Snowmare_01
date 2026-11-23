@@ -1,5 +1,289 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**Window order rules (`claude/bgen-test`, 2026-11-23 morning; designer decision via Lead).** `WindowOrderRules` + `Content/Data/Interactables/windows.json`:
+(1) Solo with the WHOLE squad box-selected, in a fight (wave / firefight / squad detected): every move order opens the windows on the way;
+(2) formation: a follower never paths / auto-vaults through a WHOLE window, even on the leader's window order - he follows once the leader
+broke it (a broken window is an ordinary vault); a run in a fight no longer opens windows for the formation (`formation_run_in_fight_windows` 0);
+(3) Solo out of a fight: only the window click. A Solo run in a fight still opens them (2026-11-22 rule, `solo_run_in_fight_windows`). Wired into
+the order's window flag (PlayerControllerOrders), `ChooseMoveFilter` and `TryVault`. Tests `CodexTactics.Interactables.WindowOrder.*` 4/4; smoke
+`FormationWindowSmoke` (no whole window on a plain click; on the window click the leader breaks it, followers through after it). Worker
+2026-11-23 07:41: 13/13 PASS (windows, doors, formation set, stairs, cutaway).
+
+**Stairwell / window night fixes (`claude/bgen-test`, 2026-11-23 night; designer "stuck on the stairwell too").** (1) Follower goals are snapped
+to the leader's FEET floor (`SnapGoalToFloor`, the capsule-centre height put them on the next flight), ring search only over a stairwell (XY has
+navmesh on another level alone). (2) Stepped kit stairs (tag `stair=*`, height gradient over +-40 cm is a slope) count for `IsRampUnder`
+(no follower slot on them while the leader stands on a floor) but form NO single file (every flight of a stairwell is one component: one
+uphill axis for a switchback made the two flights wait for each other). (3) `FindWindowSillAt`: a ray through
+a window opening is a window click only when it lands within 150 cm of the sill (a far floor click became a window order). (4) `TryVault`: no
+knee-height auto-vault through a SHUT window in formation without a window order (the leader broke a window on a plain walk); broken windows
+stay ordinary vaults. Smokes: `FormationStairSmoke` (kit map, `-DPCVars=Codex.Doors.InnerLockedShare=0`, flags window-only storeys as gaps),
+`CutawayClickSmoke` (locked-door redirects / window clicks counted apart). (5) `RedirectMoveToLockedDoor` also finds a locked door ON THE WAY (the nearest of 8
+within 30 m he can walk up to and from whose far side the goal is reachable; paths judged with the squad's no-window filter) - a click onto a
+storey cut off by it sends the leader to try it (was: he walked under the goal). `FormationStairSmoke` checks it in a last locked-way case.
+Worker 2026-11-23 01:12 on ac3d7297: 15 smokes PASS (formation set, stairs x3, ramp, mantle, cutaway click, doors, breach, window/stair hover,
+buildings).
+
+**Story-showcase labels (`claude/bgen-test`, 2026-11-22, designer test item 6; dev overlay, CodexTacticsDev).** `UStoryLabelSubsystem` draws
+on the game canvas (debug draw "Game": PIE, -game, screenshots) the story of every house ("3 · Запертая дверь", layout `buildings[].stories`)
+over its roof and the state of every shut door ("заперта" / "закрыта" / "заколочена" / "завалена" from the leaf tags; with the doors on the
+live state, the strength and "открыта"; the story that set it). Door labels follow the cutaway (`StoryLabelRules::IsDoorLabelHidden`: inside a
+house only his storey, outside the ground storey + story doors). Console `Codex.Debug.StoryLabels` -1 = the showcase maps only. The texts are
+Russian (a test overlay for the designer, not HUD): pure rules in the runtime `Private/Debug` (the player-text guard skips it), tests
+`CodexTactics.Debug.StoryLabels.*` 3/3. Pictures: `CodexTactics.StoryShowcaseFixShots` (needs rendering) -> `Saved/StoryShowcase/fixes/`
+(31 per map: the street, every house, every entrance's leaf swing oblique + top). Designer summary: `docs/design/levelgen/STORY_SHOWCASE_2026-11-22.md`
+"Исправления по вашему тесту".
+
+**Doors: the open leaf's side (`claude/bgen-test`, 2026-11-22, designer test item 3; game C++ + doors.json).** Every door now opens to one
+side chosen at the adoption (`DoorRules::ChooseSwing`, `doors.json swing_fixed`): clear of walls, of every other doorway's approach zone
+(leafless layout doorways too) and of stair mouths; entrances open OUTWARD; where neither side is free the angle is limited (>= 30 deg).
+`DoorsSmoke` A3: 0 open leaves over another doorway / stair mouth (grey 0/111, dressed 0/635), entrances outward 12/12; test
+`CodexTactics.Doors.Swing.SideClearOfDoorways`. Also fixed: a96c07f3 committed the PMC agent's RM-P diagnostics into DoorsSmoke stage 22
+(KC, `Fighter` undeclared: the pushed head did not compile on its own) - moved back into stage 21 unchanged. Rule:
+`docs/systems/interactables-traps-loot.md` "The open leaf's side".
+
+**Doors: one strength + the handle try (`claude/bgen-test`, 2026-11-22, designer test items 2 / 1 / 4; game C++ + doors.json, behind
+`Codex.Doors.Openable`).** Item 2: every door has a strength class (wood / steel / reinforced) from its tag / the layout role (entry steel,
+flat doors a stable wood/steel mix, room doors wood, story-locked doors reinforced) and ONE rule judges kicks and lock shots
+(`DoorRules::BreakChance`: (power - resist) / (1 - resist); a kick never above the weakest gun) - steel: kick 0.10, pistol 0.20, shotgun 0.90;
+reinforced: no kick, shotgun 0.75. Item 1: a single click on a locked door nobody tried = he walks up, the open clip starts, "Locked" (+ a
+floating LOCKED), the door is known-locked for the squad; later clicks say it from afar. Item 4 (rest): a move click into a room behind a
+locked door sends him to try that door (`RedirectMoveToLockedDoor`). HUD stays English ("Locked" = «Заперто», user decision 2026-10-08).
+Tests `CodexTactics.Doors.*` 27/27 (new `Strength.*`, `Click.Actions` TryOpen); `DoorsSmoke` A2 / T / K pass on the grey showcase (its RM-P
+stage - the PMC push clip 0 cm - is the PMC door-anim agent's open item, not this change). Rule: `docs/systems/interactables-traps-loot.md`
+"Door strength and the handle try". Designer question: story-locked doors are reinforced as asked - that makes S03 / S09's "kick it" fast
+entry impossible (shotgun / blast / key only); `strength_story_locked` "steel" restores the kick.
+
+**Cursor through the storey cutaway (`claude/bgen-test`, 2026-11-22, designer test of the dressed showcase items 5 + 4; isolated game C++,
+cherry-pickable).** Clicks with the storey cutaway on landed on the invisible upper storey (dressed S04: 70 / 96 far-floor rays stopped on a
+hidden grey proxy of a storey above - proxies carry the collision and are never "cut") and on his storey's wall tops under the cut storeys
+(grey S04: 19 / 96; a wall top is the cover rule's "high wall top" -> the exterior cover hug of item 4). `URoofCutawaySubsystem::RefineCursorHit`
+(`Codex.Cursor.ThroughCutaway` 1) re-traces the ray past cut pieces, pieces of the selected man's building above his storey and his storey's
+wall tops (not stairs); `ACodexTacticsPlayerController::GetCursorHit` serves every controller cursor trace; a visible interior floor is never
+"the ground behind a high wall" (`IsInteriorFloor`). Tests `CodexTactics.Camera.RoofCutaway.Cursor.*` (RoofCutaway 10/10); smoke
+`CutawayClickSmoke` PASS grey (storeys 0/1/2) and dressed (0/1): 0 hidden-storey / wall-top hits, 145 + 97 floor clicks all moves on his
+storey to the clicked point, 0 cover orders; `RoofCutawayStoreySmoke` PASS both maps. Doc: `docs/systems/camera-hud-minimap.md`.
+
+**Confined entry: door mouth + the leader makes room (`claude/bgen-test`, 2026-11-22, Lead day plan row 4; designer 2026-11-21 "everybody
+must get in"; isolated formation code, cherry-pickable).** The walk smoke's FOLLOWER_STUCK hall legs had no mesh behind them: the "stuck
+mesh" actors of the morning digest (kit StaticMeshActor_258 / _1024 / _1200, grey _2853 / _2951) all lie 40-55 cm from a 150 cm flat-door
+centre and 22-34 cm off its partition = the door JAMB corners (no leaf: doors OFF / ON give the same legs, an open door has no leaf), and the
+current runs log no "stuck and failed to move" at all - the follower stands with velocity 0 pushing into a BODY. Causes (S01 with
+`Codex.Formation.Debug 2` + `Codex.Debug.MoveTrace 1`): (1) a man in the door mouth counted as "through the door" and was dealt from there,
+his own straight line cut by the jamb - the entry point itself (depth 5): he stood in the door for good (S01 / S07, S04); (2) the leader stands
+at his click 70-85 cm inside a 2.3 m hall door - no body's width between him and the jambs / the hall wall; the first man's path ran straight
+through him, no step-round side was walkable, he pushed into the leader in the door mouth and the man behind waited on the landing. Fix
+(`FormationConfinedRules` + runtime): `door_mouth_cm` 70 - a man within it of the inside entry point is not through (dealt from the entry
+point), a door-mouth place goes only to the last man in; `leader_room_cm` 130 / `leader_room_max_cm` 60 - a follower near the door with the
+standing leader first on his way and no side to step round him (or a step point whose way passes him under 70 cm) asks the leader to step
+straight away from the inside entry point to 130 cm from it (at most 60 cm, on the navmesh, once per player order; log "[Formation] confined:
+the leader makes room"); pure `FirstBodyOnWay` / `LeaderRoomStep`, request in `SquadSubsystemFormation.cpp`, the step in
+`SquadSubsystemFormationConfined.cpp`. Both keys 0 = the rule before (that is how the "before" runs below were made, same binary). Tests
+`CodexTactics.Formation.Confined.Queue.DoorMouthManDealtFromTheDoor`, `Queue.LeaderMakesRoom` (Confined 18/18). Walk smoke (local, fixed
+60 fps, -SquadStart=formation, budget 1500, `walk_smoke_digest.py`, two runs each, identical): grey showcase doors OFF flat entries 73 -> 82/84
+(STUCK 10 -> 1, ratio 1 -> 1, buildings 0 -> 4/6), doors ON 73 / 72 -> 81/84 (STUCK 10-11 -> 1, ratio 1 -> 2); L_Gen_BgenPlans 70 -> 75/78
+(STUCK 4 -> 3, ratio 2 -> 0, other 2 -> 0, buildings 6 -> 8/9). Left: S04 f1 (a 1-body hall: the second man's only place is in the door
+mouth), S01 f0 ratio 2.10 (2.5 s vs solo 1.2 s), doors ON S07 f1 ratio, B_b18 f0 / f1 STUCK x3. Reports `Saved/LevelGen/mouth_ab/` (untracked).
+
+**Openable doors R2 (`claude/bgen-test`, 2026-11-22; designer decisions 2026-11-22): still behind `Codex.Doors.Openable` (off by default:
+nothing of R2 runs).** (1) CLIPS from the designer's pack `/Game/Free_Interaction_Animation/Animations/Door` (UE5 Manny skeleton): open by hand
+`anim_OpenDoor_L/R`, kick `..._Kick_L/R` (legs alternate per attempt), push `..._Push_L/R` after the key / a shot lock (a shot now breaks
+the lock - Locked -> Closed - and he walks up and pushes; `lock_shot_push`); L / R = the handle's side; per-skeleton montage sets in
+`doors.json` `montages`, the leaf moves at the measured contact time (`montage_contact_s` open 0.73 / kick 0.55 / push 0.80 s).
+`Scripts/Editor/setup_door_animation.py` made `/Game/Animations/Door/UE4/` (6 IK-retargeted copies via RTG_UE5Manny_UE4Manny + 6 AM_Door_*)
+and `/Game/Animations/Door/Pmc/` (6 AM_Door_* of the pack clips, PMC skeleton by bone name) - UNTRACKED (derived from the untracked pack;
+missing assets = a warning, the timings hold). Measured: the pack clips walk the pelvis forward with root motion OFF (open 74 cm, kick
+104 cm, push 195 cm) - in place they slide and snap back at the blend-out: open question below. (2) KIT ENTRANCE LEAF: kit_dress no longer
+places the combined `SM_SH_Ent_Door_*`; a shut entrance gets `SM_SH_Door_Int` scaled into the 130 x 205 hole (`MI_SH_SteelDoor` /
+`MI_SH_Door`, part `entrance_leaf`), a shut balcony / escape door a leaf in its door hole (`balcony_door_leaf`) - lifted onto the hinges
+(showcase plan: 12 + 2 = the 14 R1 doors without a kit leaf). (3) ENEMIES BREACH LOCKED DOORS (`doors.json` `breach`): a partial path that
+stops at a locked doorway (or a locked door right by the goal at its level) starts a breach in the archetype's escalation order - `pmc`
+key / shoot / kick / blast, `marksman` key / kick, `brute` kick, horde / dogs none; the PMC fighter works it as an operative (walk-up,
+clips, his key, the lock burst, kicks, a grenade from 6.5 m), then walks on; monsters bash in place. Hook `AOperativeCharacter::RequestMove`
+-> `UDoorSubsystem::NotifyMoveRequested` (team != 0) + a 0.25 s poll; the PMC commander counts a breach as the walk going on
+(`IsTraversingLink`). Rolls are deterministic (`DoorRules::DeterministicRoll`, `Codex.Doors.Seed` / `-DoorSeed=` / `roll_seed`; the
+arena sets it to the round seed). (4) KEYS ARE ITEMS: `ELootItem::DoorKey` + `FLootContents::KeyIds` (containers), a dead carrier's
+searchable remains (`GiveKeyToPawn`), mission goals' `grant_keys`; the squad's key ring (`AddKey`), `Codex.Doors.GiveKey` stays.
+Full rule: `docs/systems/interactables-traps-loot.md` "Openable doors R2".
+Checked 2026-11-22 (local): tests `CodexTactics.Doors.*` 22/22 (+ Loot 8, MissionGoals 11, Interactables 21), `test_kit_dress.py` 23;
+`DoorsSmoke` PASS on the grey showcase (montages AM_Door_Open_R / Kick_R + Kick_L / Push_R / Push_L played; the PMC fighter "shoot:gives
+push" through the locked S01 f1 flat door twice with seed 7 - the same trace; keys from his body and from a container).
+On the dressed `L_Gen_StoryShowcase_Kit` (rebuilt with the new leaves, LevelGenBuildingsSmoke 6/6): `DoorsSmoke` PASS, 56 / 56 hidden-proxy
+doors got kit leaves (98 instances; R1 42 / 56). Walk smoke (fixed 60, -SquadStart=formation, budget 1500) OFF vs ON: showcase walk legs 21/21, 21/21 vs 21/21, 21/21, flat entries 73, 73 vs 73, 73 of 84 (max ratio 2.54 both), path check 6/6 - doors on change nothing in the walk (the R1 S03 / S09 loss is gone with the vault-resume fix a129c671); the smoke verdict FAIL 0/6 is the known STUCK hall follower (one per building), identical on and off.
+Open (R2): the pack clips' forward travel without root motion (bake root motion from the pelvis, or start them farther back - designer
+call); the PMC commander does not price locked doors itself (it only learns at the partial path); monsters never shoot / blow locks; the
+props generator does not place keys in containers yet (KeyIds per placed crate in the editor works); keys / door states in saves.
+
+**Doors R2c - PMC door clips with root motion (`claude/bgen-test`, 2026-11-22, designer "door animations for the PMC").** Code 01dfb8f9:
+`UDoorSubsystem::UsesRootMotionClips(Pawn, Clip)` -> pure `DoorRules::ClipMovesPawn` - the operatives' default set always moves them; the
+PMC body's own set (`doors.json` `montages.SK_PmcOperator_Skeleton`, paths unchanged) moves him only when the clip asset is ON his skeleton
+with root motion; then his breach uses the clip start pose (`montage_approach_cm`) exactly like the operatives (facing lock as before);
+old bone-name copies keep playing in place without a start pose (no regression on a machine without the new assets). `FClipMove` +
+pawn name / skeleton / after-end move along his facing; `DoorsSmoke` RM-P (logs `Smoke info: RM PMC <clip> ...` per clip; checks open /
+push >= half the root travel and <= root + 40 cm, a kick >= 20 cm, no snap back < -10 cm along his facing - he walks on after a breach;
+info-only where the PMC set is not retargeted); test `CodexTactics.Doors.Clips.RootMotionMovesPawn`. Script fe5ca015:
+`setup_door_animation.py` IK-retargets the 6 pack clips onto `SKM_PmcOperator` (transient RTG from `RTG_UE4Manny_UE5Manny`'s op stack,
+`IK_Mannequin` both sides, Blend to Source off; deleted after the run), re-keys, bakes pelvis -> root as for the operatives (root_inner
+counted), remakes `AM_Door_*` (0.1 s blends); copies still on the pack skeleton are replaced. Assets UNTRACKED: `/Game/Animations/Door/Pmc/`
+(6 `anim_OpenDoor_*` + 6 `AM_Door_*`, all on SK_PmcOperator_Skeleton; regenerate with `CODEX_DOOR_BODIES=Pmc` and every editor closed).
+086eefcf: in a commandlet `delete_asset` keeps the package (file stays, `create_asset` refuses the name) - stale PMC montages (registry Skeleton
+tag not the PMC skeleton) have their files removed before anything loads them, then are created anew. PMC copies' root travel: open 74 /
+kick 105 / push 196 cm (the operatives' UE4 copies 81 / 115 / 214). THE REAL CAUSE of the PMC's 0 cm (the retarget alone did not fix it,
+measured): the SNIPER anim layer - `UpdateSniperLayer` replays its idle loop / bolt one-shots in the FullBody slot of DefaultGroup and cut the
+door montage at 0.03 s (the PMC smoke fighter carries the sniper rifle; the operatives use the M16). Fix: the layer yields to a root-motion
+montage it did not start (`SniperRules::YieldsToMontage`, test `CodexTactics.Combat.Sniper.AnimRules`); an operative with the sniper rifle
+gains the same fix. Checked 2026-11-22 (local): tests Doors.* + Combat.Sniper.* 32/32; DoorsSmoke PASS on the grey showcase (75 ok) and
+on `L_Gen_StoryShowcase_Kit` (78 ok): RM-P "push_r 151 cm forward (root 214), 8 cm after the end, along his facing" x2 (both seed-7 runs;
+he starts on the S01 f1 stair landing 160 cm from the leaf - the 240 cm start pose does not fit there, the stuck-near fallback - and the
+clip carries him to 9 cm before the leaf); operatives unchanged (open 75-76 / kick 74 / push 199 cm). The smoke logs "RM-P diag" lines
+(montage instances, root motion mode / instance, movement mode, controller, tick option) for 1.2 s after each PMC door clip.
+Open: the PMC breach only exercised the push here (seed 7 = "shoot:gives push"); open / kick on the PMC are not covered by a smoke run yet.
+
+**Doors R2b (`claude/bgen-test`, 2026-11-22, designer bugs on the kit showcase + root motion option a).** OPEN doors are doors on kit-dressed
+maps (the kit's open leaves -> 262 open `ADoorActor`s on the showcase kit; click = shut / open; grey maps have leafless open doorways); the
+cursor ray through an open leaf or the floor at a shut doorway is the door and beats the cover hug; hand cursor over doors; he steps out of
+the doorway before shutting; only capsules occupy a doorway. Kick facing: `AOperativeCharacter::SetDoorFacingLock` holds him square to the
+leaf through every attempt / the lock shot / the key / the push (smoke: 2 kicks, 0 deg off). ROOT MOTION: the clips move the capsule
+(open / push / kick root 81 / 214 / 115 cm; montage blends 0.1 s), he starts each clip at its start pose (`montage_approach_cm` 95 / 240 /
+95, square to the leaf; the push waits for the lock burst); measured on the kit map: open 75-76 cm (from 120 to 44 cm before the leaf plane),
+push after the shot 199 cm (264 -> 66 cm), a held kick 74 cm (stops at the leaf, 43 cm), 0-9 cm after the end (no pop). The designer only
+needs `Codex.Doors.Openable 1` in the console (doors.json keeps it 0). Open: the PMC body plays the door clips in place (its root motion
+does not come through the bone-name playback - retarget the clips onto SK_PmcOperator like the launcher set); grey maps' open doorways.
+
+**Openable doors R1 (`claude/bgen-test`, 2026-11-22; designer 2026-11-21, Lead day plan row 5): behind `Codex.Doors.Openable`, OFF by default
+(`Content/Data/Interactables/doors.json` `"enabled": 0`; on in main only after the enemy-AI session's A/B).** Game C++ only, no builder / map
+change: at runtime `UDoorSubsystem` adopts the builder's `door_leaf` actors tagged `door_state=closed|locked` (ADR-0003: one leaf per opening,
+tags `building=` / `opening=`) as `ADoorActor`s - leaves on hinges (a pair above 130 cm), closed / locked block sight, bullets and bodies,
+the doorway's nav box prices a closed door (`UNavArea_DoorClosed`, 350) and nulls a locked one; anyone whose path crosses a closed door opens
+it after 0.3 s. Designer door spec 2026-11-22: click = open by hand (unlocked) / shut / unlock with the squad's key (locked; keys are a
+stub: `start_keys`, `Codex.Doors.GiveKey`); double click = kick (loud, chance per attempt, up to 4, may hurt him); Ctrl + click on a locked
+door = shoot the lock (a real burst, chance per weapon); any explosion within 3 m breaks a door. Montage hooks + every number in doors.json.
+The cold shelter follows; kit-dressed maps lift the kit leaf instances onto the hinges. Switch off (also at runtime) = every door released,
+the game exactly as before. Pure `Interactables/DoorRules` (tests `CodexTactics.Doors.*`), smoke `DoorsSmoke` (L_Gen_StoryShowcase). Full
+rule: `docs/systems/interactables-traps-loot.md` "Openable doors R1".
+Checked 2026-11-22 (local, fixed step 60, -SquadStart=formation, budget 1500): tests 13/13; `DoorsSmoke` PASS on the grey showcase and on
+the dressed `L_Gen_StoryShowcase_Kit` (42 of 56 hidden-proxy doors got their kit leaves - 84 instances; 14 without, see open items). Walk
+smoke OFF vs ON, two runs each: showcase walk legs 19/21, 19/21 vs 17/21, 17/21, flat entries 74, 71 vs 71, 71 of 84; BgenPlans walk 32/32 x4,
+entries 71, 71 vs 70, 70 of 78; path check 6/6 and 9/9 everywhere. The 2 lost walk legs are S03 / S09 "door_1 -> storey_0": the leg starts at
+the story's LOCKED front door, the route goes round through a ground window and the vault does not resume the walk (`UpdateVault` resumes
+only when the target lies within ~84 deg of the vault direction - pre-existing vault rule, exposed by real locked doors). Open: the 14 kit
+doors without a lifted leaf (12 entrances: `SM_SH_Ent_Door_Steel` is one frame + leaf module, pivot 165 cm off the doorway centre - needs a
+leaf-only instance from kit_dress; 2 balcony escape doors: no kit leaf) stay static on the dressed map; the vault resume (fixed, below); keys as loot;
+kick / hand / key clips; enemies vs doors; door states in saves. Door actors carry the leaf's building= / floor= tags (storey cutaway).
+
+**Vault resume fixed (`claude/bgen-test` a3d8c0e4 + 20733cc2, 2026-11-22; isolated vault code + test, cherry-pickable to main).** The ~84 deg
+gate in `UpdateVault` (Godot `vault_resume_target`; Godot walks straight, here the resume is a new navmesh path) is replaced by
+`VaultRules::DecideResume`: after any arc (vault, step-off, mantle hop) the walk goes on whatever the angle; only a vault back over the same
+obstacle of the same walk (`VaultRules::IsRecrossing`) with the goal behind it again ends it (ping-pong guard). Tests
+`CodexTactics.Characters.Vault.*` 3/3; VaultSmoke, DepotVaultSmoke, BarricadeVaultBackSmoke, BarricadeContactSmoke, MantleSmoke,
+MantleDescentSmoke PASS. Showcase walk (local, fixed 60, -SquadStart=formation, budget 1500, two runs each): doors ON walk legs 21/21, 21/21
+(was 17/21), flat entries 72, 72 of 84; doors OFF 21/21, 21/21 (was 19/21), entries 73, 73; BgenPlans walk 32/32, entries 70/78. The walk
+smoke verdict stays FAIL on the known follower-STUCK hall legs (entry queue item above). Rule: [stances-and-movement](../systems/stances-and-movement.md).
+
+**Storey cutaway (`claude/bgen-test`, 2026-11-22; designer bug, top priority: "in the dressed khrushchevka showcase I cannot see what
+happens inside").** Root cause: `URoofCutawaySubsystem` only cut static meshes whose bottom is above the selected man's head, found by an
+upward collision trace + a footprint overlap of the hit roof piece. On the dressed map the kit is NoCollision instanced components, one per
+mesh spanning ALL storeys (bounds from the ground) and the grey pieces under it are hidden proxies - nothing of the kit was ever cut (only
+the visible grey slabs: 3 pieces); on the grey map the footprint was one slab strip, so upper storeys were cut only partly (S04, man on
+storey 0: storey 1 72/135 pieces, the roof 1/8) while 21 ground-floor pieces (lintels) were cut. Fix, game C++: a **storey rule** (pure
+`RoofCutawayRules::ParseStoreyTags / StoreyBasesFromBottoms / StoreyAt / ShouldCutStorey / IsInsideBuilding / ClaimsUntaggedPiece`, tests
+`CodexTactics.Camera.RoofCutaway.Storey*`; CVar `Codex.RoofCutaway.Storeys` 1, 0 = the old rule alone; under `Codex.RoofCutaway`): a storey
+index of the level's static meshes tagged `building=<id>` / `floor=<n>` (actor tags of the generator's pieces, component tags of the kit's
+components; untagged fixed pieces over a building's slabs - ramps, props, ladders - by their bottom; rebuilt every 5 s); the selected man
+over / under one of a building's `floor_slab` / `roof_slab` pieces (kept 2 m past them while he was inside: stair holes, the doorway) is on
+the storey his feet stand on (50 cm tolerance; the floor he left while on a ladder), every visible piece of a higher storey is cut (roof,
+upper walls, partitions, the ceiling over him = the slab above), none of his storey or below (the head-clearance rule spares them too).
+Dresser (`kit_dress.py` / `kit_dress_lib.py`): every instance has a storey (`storey_of_z`, roof group = the roof storey, the ceiling under
+slab f+1 = f+1, stair glass column modules by their centre, drains one pipe per storey), one ISM component per mesh / material / mirror /
+group / **storey**, component tags `building=<id>` + `floor=<n>`; the showcase has 271 components (was 161). Smoke
+`RoofCutawayStoreySmoke` (`building=`, `storeys=0+1+2`, `shots=1 dir=`): grey and dressed showcase S04 storeys 0 / 1 / 2 and dressed S07 PASS
+(before = `Storeys 0` logged per storey); pictures `Saved/StoryShowcase/cutaway/` (old dresser: `old_dresser/`). Dressed map rebuilt
+(untracked), LevelGenBuildingsSmoke 6/6. Designer decision the same day: cut pieces cast no shadow (CVar `Codex.RoofCutaway.HiddenShadow`
+0; 1 = the old dark interior; set on cut, restored with the piece; test `RoofCutaway.HiddenShadow`); pictures `*_noshadow.png`.
+
+**Building generator branch `claude/building-generator` (2026-11-21, not in main).** Residential blocks are planned from a template catalog (`building_plans.json` `recipes.block.templates`, default `block_khrushchevka`, series 1-464) with the kit pattern of the
+Soviet panel-block pack (three flats per landing round a half-landing switchback core on the court side, flats with hall / bath / kitchen /
+living rooms; `Tools/TrainingGround/src/levelgen/buildings/kitPlan.ts`, `building_plans.json` `recipes.block_kit`), flat-door roles follow
+the units, and every /2 layout carries structure classes and window vault data (data only). Status and open questions:
+`docs/design/levelgen/S2_ROOMS_PLAN.md` (STATUS block), designer summary `docs/design/levelgen/BGEN_KIT_PLANS_2026-11-21.md`.
+2026-11-22: the khrushchevka has a gable door (template `gable_door`: an end-wall ground door into a ground-floor SERVICE ROOM - the whole end flat of the gable is a service bay
+дворницкая / щитовая / ЖЭК with a stair door; upper storeys unchanged, designer 2026-11-22) and balcony slots on its street living rooms
+(`balcony_slots`); stories 3 and 4 hold on it, story 9 locks the gable door itself (`building_stories.json gable_door_state`; no manual override needed). Tests `buildings/kitGable.test.ts`.
+
+**Test branch `claude/bgen-test` (2026-11-21 night):** building-generator merged in, engine-checked locally. Fix: a switchback core's 10 cm
+lane wall now blocks sight only (builder: `affects_navigation` False + pawn collision ignored, tag `lane_wall`) - in some tile / voxel
+alignments it made Recast drop the whole core column (B_y / B_b18, nav lab `scripts/gen-nav-lab.ts`); L_Gen_BgenPlans now path 9/9, walk
+legs 32/32, one island per building - the remaining walk failures are the flat-hall squad entries (designer 2026-11-21: the squad must
+compress and enter = a formation task; `Scripts/Tools/walk_report_breakdown.py` splits them out, the gate is unchanged). The smoke's roof
+target moves off a switchback roof opening. Story showcase: `docs/design/levelgen/STORY_SHOWCASE_2026-11-22.md` (grey
+`/Game/Maps/Generated/L_Gen_StoryShowcase`, dressed untracked `/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit`, `kit_dress.py` story shots).
+2026-11-22: all six showcase houses are khrushchevka blocks (gable door + balcony slots merged from the generator branch; S09 has a locked
+gable door - story 9's F4 needs it, designer question in the guide); kit_dress dresses gable doors as entrances and story-4 balconies with the
+kit balcony door + balcony (no decorative slot balconies beside them).
+2026-11-22 (afternoon, merge 867b0788 of 6b1a5c70): the gable door opens on a ground-floor service room (dvornitskaya / shchitovaya / ZhEK);
+story 9 locks the gable door itself, so `gen-story-showcase.ts` no longer sets S09's `gable_door_state` (field kept). Grey showcase + BgenPlans
+rebuilt, dressed kit map rebuilt: LevelGenBuildingsSmoke 6/6, 6/6, 9/9, IslandsProbe 0 multi-island buildings on all three. kit_dress story views
+`<bid>_service_room_interior` (eye from the gable door) + `<bid>_service_bay_cutaway`. Tooling for worker A/B: smoke_parallel / smoke_remote /
+worker_sync from main (-Repeat, -RepeatSeeds, -SmokeArgs) + `smoke_parallel -ForceMap` (-Map wins over the smoke's map option, its -LevelJson
+follows) + an explicit -TimeoutSeconds extends a shorter smoke "timeout" option; walk smoke `tag=<s>` -> buildings_walk_<map>_<s>.json.
+Entry-queue A/B on codex-worker (2026-11-22, f20a2bef, `worker_sync -Repeat 3 -RepeatSeeds`, fixed step 60 fps, -SquadStart=formation,
+budget=1500; flat entry legs are 84 / 78 now - the gable door leads into the service room, no flat): showcase ON 72/72/72 of 84 vs OFF
+(`Codex.Formation.ConfinedQueue 0`) 65/66/65; BgenPlans ON 72/72/72 of 78 vs OFF 62/60/63 - the ranges do not overlap, the queue stays ON.
+Hall legs STUCK/ratio/STOPPED: showcase ON 10/2/0, 12/0/0, 10/2/0 vs OFF 8/10/1, 6/11/1, 7/12/0 (the queue turns the slow legs into fewer,
+but slightly more STUCK); BgenPlans ON 4/0/2 x3 vs OFF 11/3/2, 11/5/2, 9/4/2; max ratio ON 1.85-2.74 / 1.85-1.97, OFF 2.57-2.74 / 2.41-3.72.
+Open: the 10-12 STUCK hall legs on the showcase (follower held at the door) remain the main walk failure. Reports
+`Saved/LevelGen/walk_ab_worker/` (local, untracked).
+
+**Formation compresses in confined spaces (`claude/bgen-test`, 2026-11-22; designer decision 2026-11-21 "the whole squad must enter").** In a
+confined navmesh pocket round the leader's arrival (16 navmesh rays round his destination, median free distance <= 2 m - a flat hall, a 2.5 m
+corridor; open ground never qualifies, the formation there is unchanged) the follower slots that lie outside it move to places inside it
+(`Formation/FormationConfinedRules` pure, `Characters/SquadSubsystemFormationConfined.cpp` runtime): off the leader's way and the entry line,
+never past the leader in a one-body-wide hall, the first man in goes deepest; the automatic wall layout is skipped there, the followers face their
+walk to the place and their crowd separation / obstacle avoidance are off while compressed (the 4 m crowd query held them at the door). Tunables
+`Content/Data/AI/squad_confined.json`; A/B `Codex.Formation.Confined 0`, `Codex.Formation.ConfinedCrowd 1`; tests `CodexTactics.Formation.Confined.*`.
+Walk smoke (budget 1500): flat entry legs showcase 74 -> 99/120, kit 77 -> 102/120, L_Gen_BgenPlans 65 -> 83/100; hall-question legs 44 -> 20,
+41 -> 17, 34 -> 16 (gate unchanged, still FAIL). Left: a follower's 40 cm capsule snags the door jamb when his place lies round the corner right
+behind the door (navmesh agent radius 35 cm; "stuck and failed to move" on the jamb), and some legs still take > 2 x solo.
+2026-11-22 Lead review round: a place must be seen from the entry point on a clear navmesh line whose samples keep `jamb_clear_cm` (10) from
+the navmesh edge (35 cm erosion + 10 > the 40 cm capsule; the navmesh agent radius is unchanged - a designer decision), a follower already inside
+needs his own clear line, and a ray that sees through a door alone reaches only its shorter neighbour (`gap_factor`; the grey S03 leg whose
+man stood in the door). Final build walk smoke: showcase 95/120, kit 98/120, L_Gen_BgenPlans 81/100 (hall legs 24 / 21 / 17); run-to-run
+spread is about +-4 legs (the previous build gave 99 / 102 / 83). Open: STUCK followers at the door are still the main hall failure; grey
+S09 r_f0_c13 -> r_f0_c17 (not a hall) went 2.02 -> 5.50.
+Round 2 (2026-11-22): STUCK root cause (only= diagnostics B_y / S10 / S09, `Codex.Formation.Debug 2` + `Codex.Debug.MoveTrace 1`): in all 15
+STUCK legs the stuck follower stands 78-80 cm from his team-mate (two 40 cm capsules touching, velocity 0, path move running), the mate at or
+near a place by the door on his way in - formation code, not geometry (the door-jamb StaticMeshActor contacts, e.g. StaticMeshActor_2245 at
+B_x_f0_d30, showed up only in the first round). Fixes: a follower keeps the place he was given while it stays valid (places swapped frame by
+frame), no place beyond a throat on the line from the pocket centre (`throat_clear_cm`), `confined_median_m` 2.0 -> 1.7 (grey S09 r_f0_c17,
+a 3.5 x 5 m living room, no longer compresses: 10.5 s -> 3.3 s). A place-swap rule for the blocker was tried and reverted (no effect on B_y).
+Final: showcase 98 and 100/120 (two runs), kit 99/120, L_Gen_BgenPlans 75/100; STUCK showcase / kit 16 -> 7, BgenPlans 12 (unchanged).
+Open: BgenPlans dropped 81 -> 75 (more legs just over 2 x solo); the door-side blocker ordering is the next step.
+Round 3 (2026-11-22): the BgenPlans 81 -> 75 drop was noise - bisected on B_x + B_y (only=, `hold_places` switch new in squad_confined.json,
+`confined_median_m` 1.7 / 2.0): 56 / 55 / 53 / 55 of 68 for hold+1.7 / no hold+1.7 / hold+2.0 / no hold+2.0, the earlier final 56; two full
+BgenPlans runs on the kept setting (hold + 1.7) both 81/100. Final: showcase 100/120, kit 100/120, BgenPlans 81 and 81/100 - no map below
+the previous final. NEXT STEP (not started, Lead 2026-11-22): the entry order at the door - the STUCK legs (6-9 per map) are a follower held
+at the door by his team-mate's body (78-80 cm apart, velocity 0) whose place lies on his way in. Design it as a queue: places ranked by depth
+from an entry point INSIDE the doorway (the leader's first position within the room radius; within the 160 cm pocket radius it lies on the
+landing and the door line test drops out), the man first through the door takes the deepest reachable place, the next the next; re-rank only
+when a man is blocked (no progress while a team-mate stands within two radii on his way). A plain place swap was tried and gave nothing.
+Entry order (2026-11-22, done): why round 2's inside entry point raised the slow legs - it was taken from the leader's walk and moved mid-walk
+into the door throat, where the jamb test saw 0 places, the filter was dropped and the places were dealt again as the men reached the door
+(one right at the door's inner mouth: the 78-80 cm blocker; B_y diagnostics). Now (`FormationConfinedRules` `EntryOnPath` / `QueueOrder` /
+`QueueSlots` / `StepRoundBody`, runtime `SquadSubsystemFormationConfined.cpp`): the inside entry point comes from the squad's navmesh way in
+(the leader's path to the pocket centre, else the farthest follower's) once per pocket, the door side `entry_back_cm` back along it (entry line);
+the jamb test runs from the inside point; places rank by depth from it, the man nearest the door (navmesh way, `queue_hysteresis_cm`) takes the
+deepest that keeps the spacing, lies off every earlier man's way in and has his own way clear (pools seen+in room / in room / any; the last tier
+the shallowest); a man through the door keeps his place; a block (standing `block_s` with a mate on his way) swaps held places; a follower
+walks round a standing body head on his way (`body_clear_cm` 55: the first man in pushed into the leader standing 60 cm inside the door); a
+confined place has no slot velocity (the feed-forward sent the first move 120 cm past it). Switch `entry_queue` / `Codex.Formation.ConfinedQueue 0`.
+Tried and dropped: `arrive_m` 4.5 (compress from the order) - B_y 36 -> 23/40. Walk smoke (budget 1500) final: showcase 100 -> 104/120, kit
+100 -> 104/120, BgenPlans 81 -> 85/100; hall legs STUCK/ratio/STOPPED 6/14/0 -> 10/6/0, 7/11/2 -> 11/5/0, 8/6/3 -> 6/5/3 - the slow legs are
+mostly gone, STUCK is not: in the showcase halls the first man (no way past the standing leader) still takes a shallow place by the door.
+Follow-up (same day): the standing leader no longer blocks a way in the queue (the step round takes the man past him) and the first man never
+takes the last tier's shallowest place (he had taken the entry point itself, depth 5) - showcase 104/120, kit 105/120, BgenPlans 87/100; hall
+legs STUCK/ratio/STOPPED 15/1/0, 14/1/0, 6/2/4 (max ratio 2.29 / 2.17 / 2.71): the hall failures are now almost all STUCK. Open (next): those
+STUCK legs - the man in the doorway is "through" (IsInside + InRoom) with his own navmesh line to every place cut by the jamb, so he is dealt
+from his doorway position; and the block swap is a no-op while the blocker is not through yet (only held places swap).
+
 **Buildings lane handoff READY (2026-11-22, 19c):** final claude/bgen-test head `54f49612` - clean build verified from a temporary sparse worktree (Source / Config / Scripts / uproject, no uncommitted files): `Result: Succeeded`; the temp worktree C:/cc54 is removed (C: 97.0 GB free before and after). Designer test fixes 1-6 done (23830eae clicks through cutaway, 44195d58 handle try + one door strength, 32774bdb swing side, 54f49612 story/door labels `Codex.Debug.StoryLabels`); PMC door clips with root motion (01dfb8f9, fe5ca015, 086eefcf, a96c07f3 - the sniper anim layer killed door montages, `SniperRules::YieldsToMontage`). Door montages `Content/Animations/Door/{UE4,Pmc}` are UNTRACKED (derived from the designer's untracked pack Content/Free_Interaction_Animation): regenerate in CodexTactics-agents with `UnrealEditor-Cmd.exe CodexTactics.uproject -run=pythonscript "-Script=Scripts/Editor/setup_door_animation.py" -unattended -nullrhi -nosplash` (editor closed). Open designer question: story-locked doors reinforced (now) vs steel (`doors.json` `strength_story_locked`).
 
 **Buildings lane handoff (2026-11-22 evening, 19c -> new session):** prompt `docs/port/CLAUDE_SESSION_PROMPT_2026-11-22_BGEN.md`. In main today: confined formation + entry queue + door mouth / leader makes room, vault resume. Only on claude/bgen-test (head fe5ca015 at handoff): khrushchevka gable door -> service room, 6-house story showcase, storey cutaway (no hidden shadow), doors R1/R2/R2b behind `Codex.Doors.Openable` (default 0), PMC door clips. Open: designer's 6 door/click findings (executor running), balconies (queued), showcase merge into main (tomorrow, after his test), destruction P0 wiring (Gemini 099 contract in main, not wired).
