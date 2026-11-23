@@ -5,8 +5,8 @@ Claude Code cannot switch the main session's model per prompt. The closest nativ
   2. the router asks TypeSafe Jev ONE question — which of 4 complexity levels the task is (a choice with
      probabilities) — plus whether it is a short follow-up only understandable in the dialogue;
   3. when the level's probability >= the threshold (0.6) and it is not a follow-up, the hook adds a note telling the
-     main session to hand the task to the level's subagent (.claude/agents/ue-l{1..4}-*.md, each pinned to a model:
-     Haiku 4.5 / Sonnet 5.5 / Opus 5.5 / Fable 5.2); otherwise nothing is added and the main session does it itself.
+     main session to use the configured L1–L3 subagent only when Saved/Lead/ALLOW_SUBAGENTS is present.
+     L4 stays with Lead or Codex. The router never recommends Fable or ue-l4-architect.
 Never blocking: disabled -> exits at once; any error / timeout -> exits 0 without output (the prompt runs as if the
 router did not exist).
 
@@ -26,11 +26,13 @@ import re
 import sys
 import threading
 import time
+from pathlib import Path
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 CONFIG = os.path.join(ROOT, ".claude", "model_router.json")
 STATS = os.path.join(ROOT, "Saved", "ModelRouter", "stats.json")
 sys.path.insert(0, os.path.dirname(__file__))
+from agent_guard import AGENT_FLAG, NO_SUBAGENTS, is_fable_request
 # UTF-8 out whatever the console code page (the hook's JSON and the status carry Cyrillic).
 for _stream in (sys.stdout, sys.stderr):
     try:
@@ -86,11 +88,18 @@ def is_followup_by_text(text):
     return words <= 3 or bool(FOLLOWUP.match(text.strip()))
 
 
+def route_block_reason(level, config, policy):
+    if level == "4" or is_fable_request(config["model"], config["agent"]) or is_fable_request(config["model_name"], ""):
+        return "do it yourself (Lead) or Codex"
+    return policy
+
+
 def classify(text, config, timeout=None):
     """{level, model, agent, confidence, route, reason}. Never raises; a failure -> route False."""
     timeout = timeout if timeout is not None else config.get("timeout_seconds", 4.0)
     threshold = config.get("confidence_threshold", 0.6)
-    result = {"level": None, "model": None, "agent": None, "confidence": 0.0, "route": False, "reason": ""}
+    policy = "" if (Path(ROOT) / AGENT_FLAG).is_file() else NO_SUBAGENTS
+    result = {"level": None, "model": None, "agent": None, "confidence": 0.0, "route": False, "reason": "", "policy": policy}
     if is_followup_by_text(text):
         result["reason"] = "short follow-up (context of the dialogue): main session"
         result["followup"] = True
@@ -138,7 +147,12 @@ def classify(text, config, timeout=None):
     if not level_config:
         result["reason"] = "no level: main session"
         return result
-    result.update(level=str(level), model=level_config["model_name"], agent=level_config["agent"], confidence=confidence)
+    result.update(level=str(level), confidence=confidence)
+    blocked = route_block_reason(result["level"], level_config, policy)
+    if blocked:
+        result.update(reason=blocked, policy_blocked=True)
+        return result
+    result.update(model=level_config["model_name"], agent=level_config["agent"])
     result["route"] = confidence >= threshold
     result["reason"] = ("routed to %s" % level_config["agent"]) if result["route"] else "confidence %.0f%% < %.0f%%: main session" % (
         confidence * 100, threshold * 100)
@@ -150,6 +164,8 @@ def record(stats, config, result):
         stats["errors"] += 1
     elif result.get("followup"):
         stats["self_followup"] += 1
+    elif result.get("policy_blocked"):
+        stats["self_policy"] = stats.get("self_policy", 0) + 1
     elif not result["route"]:
         stats["self_low_confidence"] += 1
     else:
@@ -180,6 +196,13 @@ def hook():
         record(stats, config, result)
         save_stats(stats)
         if not result["route"]:
+            lines = dict.fromkeys(text for text in (
+                result["reason"] if result.get("policy_blocked") else "",
+                result["policy"],
+            ) if text)
+            if lines:
+                note = "[model-router] " + "\n".join(lines)
+                print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": note}}, ensure_ascii=False))
             return 0
         level = config["levels"][result["level"]]
         note = ("[model-router] Уровень %s «%s», уверенность %.0f%%. Передай эту задачу субагенту `%s` (модель %s) через Agent "
@@ -223,7 +246,7 @@ def test():
         result = classify(task, config, timeout=max(config.get("timeout_seconds", 4.0), 8.0))
         level = result["level"] or "—"
         name = config["levels"][result["level"]]["name"] if result["level"] else ("контекстная реплика" if result.get("followup") else "—")
-        target = (config["levels"][result["level"]]["model_name"] if result["route"] else "основная сессия (без маршрутизации)")
+        target = result["model"] if result["route"] else "основная сессия (без маршрутизации)"
         rows.append((task, "%s %s" % (level, name), target, "%.0f%%" % (result["confidence"] * 100) if result["level"] else "—", result["reason"]))
     print("| Задача | Уровень | Модель | Уверенность | Решение |")
     print("|---|---|---|---|---|")
@@ -237,10 +260,13 @@ def status():
     stats = load_stats()
     print("model router: %s (threshold %.0f%%, timeout %.1f s)" % ("ON" if config.get("enabled") else "OFF",
           config["confidence_threshold"] * 100, config["timeout_seconds"]))
+    policy = "" if (Path(ROOT) / AGENT_FLAG).is_file() else NO_SUBAGENTS
     for level, item in sorted(config["levels"].items()):
-        print("  level %s %-11s -> %-16s %-45s tasks: %d" % (level, item["name"], item["agent"], item["model_name"], stats["routed"].get(level, 0)))
-    print("  main session: low confidence %d, follow-ups %d; router errors / timeouts %d" % (
-        stats["self_low_confidence"], stats["self_followup"], stats["errors"]))
+        reason = route_block_reason(level, item, policy)
+        target = reason or "%s (%s)" % (item["agent"], item["model_name"])
+        print("  level %s %-11s -> %s; tasks routed: %d" % (level, item["name"], target, stats["routed"].get(level, 0)))
+    print("  main session: low confidence %d, follow-ups %d, policy %d; router errors / timeouts %d" % (
+        stats["self_low_confidence"], stats["self_followup"], stats.get("self_policy", 0), stats["errors"]))
     print("  estimated saving vs the flagship (relative units, see config notes): ~%d tokens, ~%.1f min" % (
         stats["tokens_saved_estimate"], stats["minutes_saved_estimate"]))
     return 0
