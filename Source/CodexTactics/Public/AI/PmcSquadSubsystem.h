@@ -4,6 +4,7 @@
 #include "AI/PmcCommanderRules.h"
 #include "AI/PmcDefenceRules.h"
 #include "AI/PmcEncounterRules.h"
+#include "AI/PmcOrderProvider.h"
 #include "AI/PmcTacticalRules.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Tactics/CoverTypes.h"
@@ -158,6 +159,15 @@ public:
 	bool CopyDefenceSnapshot(int32 TeamId, FPmcDefenceSnapshot& Out) const;
 	/** The objective's live state for the team's next decisions: the round's time fraction, the capture clock, an enemy on the point. */
 	void UpdateTeamObjective(int32 TeamId, float TimeFrac, float HoldFrac, bool bEnemyOnPoint);
+	/**
+	 * Learning Agents probe P0 (2026-11-23; AI/PmcOrderProvider.h): the team's orders come from Provider instead of the scorer's pick.
+	 * Every decision the team's requests (each fighter's view, scores, commitment) go to it in one call; its picks pass the scorer's
+	 * gates (PmcPolicyRules::GatePick) and run through ExecuteOrder like the scorer's. A pick that cannot be taken fails and cools
+	 * down (no second choice from the scorer). nullptr clears it; a team without a (live) provider decides exactly as before the hook
+	 * existed. The subsystem keeps a weak pointer: the caller owns the provider.
+	 */
+	void SetTeamOrderProvider(int32 TeamId, const TSharedPtr<IPmcOrderProvider>& Provider);
+	bool HasTeamOrderProvider(int32 TeamId) const;
 
 	// --- Encounter postures (level JSON "pmc_squads", CodexTactics.PmcSpawn; docs/systems/pmc-squad-ai.md 7) ---
 	/**
@@ -351,6 +361,8 @@ private:
 		double LastShotTime = -1e9;
 		FPmcTeamStats Stats;
 		TOptional<FVector> AssaultPoint;
+		/** Learning Agents probe P0: SetTeamOrderProvider (unset / expired: the scorer picks). */
+		TWeakPtr<IPmcOrderProvider> OrderProvider;
 		/** The round objective (the arena, task #53; DistanceCm is filled per fighter) and when it was set (the quiet clock's start). */
 		TOptional<FPmcObjectiveView> Objective;
 		double ObjectiveSetTime = -1e9;
@@ -422,6 +434,15 @@ private:
 	bool IsOrderRunning(const AOperativeCharacter& Fighter, const FFighterState& State) const;
 	bool ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeCharacter& Fighter, FFighterState& State, EPmcOrder Order, const FPmcFighterView& View,
 		AActor* ThreatActor, const FCoverSlot& Cover, const TArray<AOperativeCharacter*>& Mates);
+	/**
+	 * The second half of one fighter's decision (Decide): Pick is given unless it is what he already does - executed, the failed
+	 * pick replaced by the scorer's next best (twice at most), the statistics / OnFighterOrder / the mates' counters of Squad updated.
+	 * bProviderPick (Learning Agents probe P0): the pick came from the team's order provider - a pick that cannot be taken fails
+	 * (its cooldown) and is NOT replaced by the scorer's.
+	 */
+	void IssuePick(int32 TeamId, FTeam& Team, AOperativeCharacter* Fighter, FFighterState& State, EPmcOrder Pick, EPmcPickReason Reason,
+		const FPmcFighterView& View, AActor* ThreatActor, const FCoverSlot& Cover, const TArray<AOperativeCharacter*>& Mates,
+		const TArray<FPmcOrderScore>& Scored, FPmcCommitment& Commitment, bool bRunning, double Now, FPmcSquadView& Squad, bool bProviderPick);
 	/** The best cover slot against Threat within RadiusCm (rays round him + spots up to Weights.HighGroundMaxLevels floors up), high ground favoured. */
 	/**
 	 * The best cover slot round Fighter against Threat (quality x nearness x height x - 2026-11-04 - the slot's distance to the threat in his

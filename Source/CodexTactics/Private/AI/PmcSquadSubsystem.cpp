@@ -6,6 +6,7 @@
 #include "AI/PmcArenaBehaviourRules.h"
 #include "AI/PmcDefenceRules.h"
 #include "AI/PmcOperatorRules.h"
+#include "AI/PmcPolicyRules.h"
 #include "Combat/LauncherTacticsRules.h"
 #include "Combat/MortarNestActor.h"
 #include "Combat/MortarRules.h"
@@ -999,6 +1000,17 @@ void UPmcSquadSubsystem::SetTeamWeights(int32 TeamId, const FPmcWeights& Weights
 	TeamOf(TeamId).Weights = Weights;
 }
 
+void UPmcSquadSubsystem::SetTeamOrderProvider(int32 TeamId, const TSharedPtr<IPmcOrderProvider>& Provider)
+{
+	TeamOf(TeamId).OrderProvider = Provider;
+}
+
+bool UPmcSquadSubsystem::HasTeamOrderProvider(int32 TeamId) const
+{
+	const FTeam* Team = FindTeam(TeamId);
+	return Team && Team->OrderProvider.IsValid();
+}
+
 const FPmcWeights* UPmcSquadSubsystem::GetTeamWeights(int32 TeamId) const
 {
 	const FTeam* Team = FindTeam(TeamId);
@@ -1625,6 +1637,7 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 	Squad.QuietSeconds = static_cast<float>(FMath::Max(0.0, Now - FMath::Max(Team.LastShotTime, Team.ObjectiveSetTime)));
 	for (AOperativeCharacter* Mate : Mates)
 	{
+		Squad.MatesReloading += Mate->bIsReloading ? 1 : 0; // LA probe P0: observed by the order policy, read by no score
 		if (const FFighterState* State = Team.Fighters.Find(Mate); State && IsOrderRunning(*Mate, *State))
 		{
 			Squad.MatesSuppressing += State->Order == EPmcOrder::Suppress ? 1 : 0;
@@ -1705,6 +1718,11 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		}
 	}
 
+	// Learning Agents probe P0 (2026-11-23, AI/PmcOrderProvider.h): a team with an order provider decides in two passes - every
+	// fighter's request first, ONE call to the provider (a neural policy evaluates its agents together), then the picks. Without a
+	// provider every fighter's pick is issued at once (IssuePick), in the same order of operations as before the hook existed.
+	const TSharedPtr<IPmcOrderProvider> Provider = Team.OrderProvider.Pin();
+	TArray<FPmcOrderRequest> Requests;
 	for (AOperativeCharacter* Fighter : Mates)
 	{
 		if (Mortars && Mortars->FindNestOf(Fighter))
@@ -1734,6 +1752,7 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		View.RunningOrder = bRunning ? State.Order : EPmcOrder::Count;
 		// The mates' counters are about the OTHERS: his own running order is not a mate's.
 		FPmcSquadView Own = Squad;
+		Own.MatesReloading = FMath::Max(0, Own.MatesReloading - (Fighter->bIsReloading ? 1 : 0));
 		if (bRunning)
 		{
 			Own.MatesSuppressing -= State.Order == EPmcOrder::Suppress ? 1 : 0;
@@ -1781,58 +1800,109 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		Commitment.NowSeconds = Now;
 		EPmcPickReason Reason = EPmcPickReason::Best;
 		EPmcOrder Pick = PmcCommanderRules::PickCommitted(Scored, Commitment, Team.Weights, &Reason);
-		if (Pick == State.Order && bRunning)
+		if (Provider)
 		{
-			continue; // the running order keeps going
+			// The provider decides for the whole team at once: this fighter's request waits for the batch below.
+			FPmcOrderRequest& Request = Requests.AddDefaulted_GetRef();
+			Request.Fighter = Fighter;
+			Request.View = View;
+			Request.Squad = Own;
+			Request.Scored = Scored;
+			Request.Commitment = Commitment;
+			Request.ScorerPick = Pick;
+			Request.Pick = Pick;
+			continue;
 		}
-		// TACTICAL_MAP P2: an Ambush that walked him to his post settles on it (faces its look, crouches) once the walk ended.
-		// Not for a defender with a defence post: Ambush walks him to that post first, so his tactical post never settles and this
-		// re-ran the defence walk every decision (stalemate smoke: 44 Ambush re-issues for one man).
-		const bool bDefencePosted = State.bHasDefencePost && Team.Defence.bActive;
-		const bool bSettlePost = Pick == EPmcOrder::Ambush && State.Order == EPmcOrder::Ambush && State.Post.IsValid() && !State.bPostSettled
-			&& !bDefencePosted && !Fighter->HasOwnMoveOrder() && !PmcSquadLocal::IsTraversingLink(*Fighter);
-		// G008 follow-up (review finding 1): the same for a defence post. Ambush is never "running", so without this a defence walk
-		// that ended short of the post was never retried or counted, and he stood there for the rest of the round. Now the walk's
-		// end re-executes Ambush: it settles him on the post, or counts the short walk and walks again (defence_post_walks drop it).
-		// HasOwnMoveOrder alone is not "the walk ended": it read false mid-sprint (roof smoke: three re-issues a second, every post
-		// dropped as "short"). He must stand still, and the Ambush must be older than the stalemate smoke's 2 s re-decide window.
-		const bool bStandingStill = Fighter->GetVelocity().SizeSquared2D() < FMath::Square(PmcSquadLocal::StillSpeedCm)
-			&& Now - State.OrderSince >= PmcSquadLocal::DefenceRetrySeconds;
-		const bool bSettleDefence = Pick == EPmcOrder::Ambush && State.Order == EPmcOrder::Ambush && State.bHasDefencePost && Team.Defence.bActive
-			&& (!State.bDefenceSettled || !View.bAtPost) && bStandingStill && !Fighter->HasOwnMoveOrder() && !PmcSquadLocal::IsTraversingLink(*Fighter);
-		if (Pick == State.Order && PmcCommanderRules::IsStaticOrder(Pick) && !bSettlePost && !bSettleDefence)
+		IssuePick(TeamId, Team, Fighter, State, Pick, Reason, View, ThreatActor, Cover, Mates, Scored, Commitment, bRunning, Now, Squad, false);
+	}
+	if (Provider && !Requests.IsEmpty())
+	{
+		Provider->PickOrders(TeamId, Team.Weights, Requests);
+		for (FPmcOrderRequest& Request : Requests)
 		{
-			continue; // nothing new to do
-		}
-		// An order that cannot be taken now (no path, no target) fails at once: the next best one this decision, not the same one again.
-		bool bTaken = ExecuteOrder(TeamId, Team, *Fighter, State, Pick, View, ThreatActor, Cover, Mates);
-		for (int32 Retry = 0; !bTaken && Retry < 2 && !PmcCommanderRules::IsStaticOrder(Pick); ++Retry)
-		{
-			MarkFailed(TeamId, Team, *Fighter, State, Pick, TEXT("could not be taken"));
-			Commitment.FailedUntil = State.FailedUntil;
-			Commitment.bRunning = false;
-			Pick = PmcCommanderRules::PickCommitted(Scored, Commitment, Team.Weights, &Reason);
-			if (Pick == State.Order && PmcCommanderRules::IsStaticOrder(Pick))
+			AOperativeCharacter* Fighter = Request.Fighter.Get();
+			FFighterState* State = PmcSquadLocal::IsLiveOperative(Fighter) ? Team.Fighters.Find(Fighter) : nullptr;
+			if (!State)
 			{
-				break;
+				continue;
 			}
-			bTaken = ExecuteOrder(TeamId, Team, *Fighter, State, Pick, View, ThreatActor, Cover, Mates);
+			// The scorer's gates stay: an order it rules out becomes Hold, a running order inside its minimum hold goes on.
+			const uint32 Allowed = PmcPolicyRules::AllowedOrderMask(Request.Scored, Request.Commitment, Team.Weights);
+			const EPmcOrder Pick = PmcPolicyRules::GatePick(Request.Pick, Allowed, Request.Commitment);
+			const EPmcPickReason Reason = PmcPolicyRules::PickReason(Pick, Request.Scored, Request.Commitment);
+			// The view is built again for the execution: the mates' orders issued in this pass claimed their cover slots in between.
+			FCoverSlot Cover;
+			float CoverQuality = 0.f;
+			AActor* ThreatActor = nullptr;
+			FPmcFighterView View = BuildFighterView(TeamId, Team, *Fighter, *State, Mates, Cover, CoverQuality, ThreatActor);
+			View.RunningOrder = Request.View.RunningOrder;
+			View.bObjectiveToPoint = Request.View.bObjectiveToPoint;
+			IssuePick(TeamId, Team, Fighter, *State, Pick, Reason, View, ThreatActor, Cover, Mates, Request.Scored, Request.Commitment, Request.Commitment.bRunning,
+				Now, Squad, true);
 		}
-		if (bTaken)
+	}
+}
+
+void UPmcSquadSubsystem::IssuePick(int32 TeamId, FTeam& Team, AOperativeCharacter* Fighter, FFighterState& State, EPmcOrder Pick, EPmcPickReason Reason,
+	const FPmcFighterView& View, AActor* ThreatActor, const FCoverSlot& Cover, const TArray<AOperativeCharacter*>& Mates,
+	const TArray<FPmcOrderScore>& Scored, FPmcCommitment& Commitment, bool bRunning, double Now, FPmcSquadView& Squad, bool bProviderPick)
+{
+	if (Pick == State.Order && bRunning)
+	{
+		return; // the running order keeps going
+	}
+	// TACTICAL_MAP P2: an Ambush that walked him to his post settles on it (faces its look, crouches) once the walk ended.
+	// Not for a defender with a defence post: Ambush walks him to that post first, so his tactical post never settles and this
+	// re-ran the defence walk every decision (stalemate smoke: 44 Ambush re-issues for one man).
+	const bool bDefencePosted = State.bHasDefencePost && Team.Defence.bActive;
+	const bool bSettlePost = Pick == EPmcOrder::Ambush && State.Order == EPmcOrder::Ambush && State.Post.IsValid() && !State.bPostSettled
+		&& !bDefencePosted && !Fighter->HasOwnMoveOrder() && !PmcSquadLocal::IsTraversingLink(*Fighter);
+	// G008 follow-up (review finding 1): the same for a defence post. Ambush is never "running", so without this a defence walk
+	// that ended short of the post was never retried or counted, and he stood there for the rest of the round. Now the walk's
+	// end re-executes Ambush: it settles him on the post, or counts the short walk and walks again (defence_post_walks drop it).
+	// HasOwnMoveOrder alone is not "the walk ended": it read false mid-sprint (roof smoke: three re-issues a second, every post
+	// dropped as "short"). He must stand still, and the Ambush must be older than the stalemate smoke's 2 s re-decide window.
+	const bool bStandingStill = Fighter->GetVelocity().SizeSquared2D() < FMath::Square(PmcSquadLocal::StillSpeedCm)
+		&& Now - State.OrderSince >= PmcSquadLocal::DefenceRetrySeconds;
+	const bool bSettleDefence = Pick == EPmcOrder::Ambush && State.Order == EPmcOrder::Ambush && State.bHasDefencePost && Team.Defence.bActive
+		&& (!State.bDefenceSettled || !View.bAtPost) && bStandingStill && !Fighter->HasOwnMoveOrder() && !PmcSquadLocal::IsTraversingLink(*Fighter);
+	if (Pick == State.Order && PmcCommanderRules::IsStaticOrder(Pick) && !bSettlePost && !bSettleDefence)
+	{
+		return; // nothing new to do
+	}
+	// An order that cannot be taken now (no path, no target) fails at once: the next best one this decision, not the same one again.
+	bool bTaken = ExecuteOrder(TeamId, Team, *Fighter, State, Pick, View, ThreatActor, Cover, Mates);
+	if (bProviderPick && !bTaken && !PmcCommanderRules::IsStaticOrder(Pick))
+	{
+		// The provider's pick is not replaced by the scorer's next best: it fails, and its cooldown gates it at the next decisions.
+		MarkFailed(TeamId, Team, *Fighter, State, Pick, TEXT("could not be taken"));
+	}
+	for (int32 Retry = 0; !bProviderPick && !bTaken && Retry < 2 && !PmcCommanderRules::IsStaticOrder(Pick); ++Retry)
+	{
+		MarkFailed(TeamId, Team, *Fighter, State, Pick, TEXT("could not be taken"));
+		Commitment.FailedUntil = State.FailedUntil;
+		Commitment.bRunning = false;
+		Pick = PmcCommanderRules::PickCommitted(Scored, Commitment, Team.Weights, &Reason);
+		if (Pick == State.Order && PmcCommanderRules::IsStaticOrder(Pick))
 		{
-			++Team.Stats.OrdersIssued;
-			Team.Stats.Preempts += Reason == EPmcPickReason::Preempt ? 1 : 0;
-			OnFighterOrder.Broadcast(TeamId, Fighter, Pick, Scored[0].Score, Reason);
-			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s -> %s (score %.2f; threat %s at %.0f cm, hp %.0f%%, cover %.2f)"), TeamId,
-				*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(Pick), Scored[0].Score, View.bHasThreat ? (View.Threat.bSeenNow ? TEXT("seen") : TEXT("remembered")) : TEXT("none"),
-				View.Threat.DistanceCm, View.HealthFrac * 100.f, View.CoverQuality);
-			// Counting the orders the next decision reads as "running" relies on these mate counters being fresh.
-			Squad.MatesSuppressing += Pick == EPmcOrder::Suppress ? 1 : 0;
-			Squad.MatesFlanking += Pick == EPmcOrder::Flank ? 1 : 0;
-			Squad.MatesAdvancing += Pick == EPmcOrder::Advance ? 1 : 0;
-			Squad.MatesHealing += Pick == EPmcOrder::Heal ? 1 : 0;
-			Squad.MatesRpgStriking += Pick == EPmcOrder::RpgStrike ? 1 : 0;
+			break;
 		}
+		bTaken = ExecuteOrder(TeamId, Team, *Fighter, State, Pick, View, ThreatActor, Cover, Mates);
+	}
+	if (bTaken)
+	{
+		++Team.Stats.OrdersIssued;
+		Team.Stats.Preempts += Reason == EPmcPickReason::Preempt ? 1 : 0;
+		OnFighterOrder.Broadcast(TeamId, Fighter, Pick, Scored[0].Score, Reason);
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s -> %s (score %.2f; threat %s at %.0f cm, hp %.0f%%, cover %.2f)"), TeamId,
+			*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(Pick), Scored[0].Score, View.bHasThreat ? (View.Threat.bSeenNow ? TEXT("seen") : TEXT("remembered")) : TEXT("none"),
+			View.Threat.DistanceCm, View.HealthFrac * 100.f, View.CoverQuality);
+		// Counting the orders the next decision reads as "running" relies on these mate counters being fresh.
+		Squad.MatesSuppressing += Pick == EPmcOrder::Suppress ? 1 : 0;
+		Squad.MatesFlanking += Pick == EPmcOrder::Flank ? 1 : 0;
+		Squad.MatesAdvancing += Pick == EPmcOrder::Advance ? 1 : 0;
+		Squad.MatesHealing += Pick == EPmcOrder::Heal ? 1 : 0;
+		Squad.MatesRpgStriking += Pick == EPmcOrder::RpgStrike ? 1 : 0;
 	}
 }
 

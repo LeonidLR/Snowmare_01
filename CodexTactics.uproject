@@ -59,6 +59,10 @@
                         "Enabled":  true
                     },
                     {
+                        "Name":  "LearningAgents",
+                        "Enabled":  true
+                    },
+                    {
                         "Name":  "ModelingToolsEditorMode",
                         "Enabled":  true,
                         "TargetAllowList":  [

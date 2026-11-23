@@ -26,6 +26,12 @@ public class CodexTacticsDev : ModuleRules
 			"Json",
 			"RHI",        // EnvironmentShots snowcover perf A/B: GNumDrawCallsRHI / RHIGetGPUFrameCycles
 			"RenderCore", // ... GRenderThreadTime / GGameThreadTime
+			// Learning Agents probe P0 (2026-11-23): the PMC arena's Policy=train|infer (Debug/PmcPolicyTraining) - the PPO trainer,
+			// the training environment and the Python trainer process (LearningTraining: FSharedMemoryTrainerServerProcess).
+			"LearningAgents",
+			"LearningAgentsTraining",
+			"Learning",
+			"LearningTraining",
 			"CodexTactics"
 		});
 

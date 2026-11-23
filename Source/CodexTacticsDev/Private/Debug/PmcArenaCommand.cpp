@@ -42,6 +42,18 @@
 //   B's spawn to the objective) to its end in one go, waypoints every script_waypoint_m (the level JSON's "pmc_arena" keys script_waypoint_m /
 //   script_arrive_m / script_level_m / script_sprint), and the men fire back by the operative body's own rules. Nothing in the walk is random:
 //   the same seed gives the same walk. Script=bound is T-07's seam (a bounding follower): until it is filled it plays as run with a warning.
+// Learning Agents probe P0 (2026-11-23, docs/systems/pmc-policy-probe.md; Debug/PmcPolicyTraining.h): Policy=off|train|infer (default off = the
+//   utility scorer picks every order, exactly as before). With train / infer a neural policy (UE LearningAgents) picks the ORDER of every
+//   fighter of the round's DEFENDING PMC team in place of the scorer's pick (the scorer's gates stay as an action mask; walking, aiming,
+//   the cover search are UPmcSquadSubsystem::ExecuteOrder's as ever); the attackers keep the scorer. It needs Objective=1 and a PMC side B
+//   (Opponent=Pmc|Script). train = the rounds (Rounds=N, round n's seed = seed + n - 1 as always) feed a PPO trainer (a Python process,
+//   LearningCore's train.py) back to back, the mean episode reward is logged per iteration ("[PmcPolicy] iteration ..."), the policy is
+//   saved after every iteration and at the end; infer = a saved policy plays (its most likely order, no trainer). PolicyFile=<base path>
+//   (project-relative or absolute; default Saved/Arena/Policy/pmc_policy): <base>.encoder.bin / .policy.bin / .decoder.bin / .critic.bin -
+//   train goes on from an existing one, infer needs it. PolicyPython=<python.exe> = the trainer's interpreter with torch, numpy and
+//   smart_open (default: the CODEX_LA_PYTHON environment variable, else the plugin's <project>/Intermediate/PipInstall/Scripts/python.exe).
+//   PolicyMinutes=<wall minutes> ends the training after the round in which they passed (0 = Rounds= alone), PolicyRounds=<n> (2) = rounds
+//   per PPO iteration, PolicyDevice=cpu|gpu (cpu). Rounds get "policy": "<mode>" and "policy_side": "A" | "B" | "" (the side it played).
 // CodexTactics.PmcArenaSmoke = one pmc round + the JSON validated (Smoke RESULT: PASS / FAIL).
 // CodexTactics.PmcStalemateSmoke (fix/pmc-arena-stalemate 2026-11-10) = one real 3v3 objective round on the Depot: contact happens and resumes
 //   within 45 s after every quiet spell, the attackers reach the point area, no running order is replaced inside its minimum hold, the
@@ -96,6 +108,7 @@
 #include "Containers/Ticker.h"
 #include "Data/LevelJsonRules.h"
 #include "Environment/EnvironmentSubsystem.h"
+#include "Debug/PmcPolicyTraining.h"
 #include "Debug/SmokeUtils.h"
 #include "Dom/JsonObject.h"
 #include "Engine/GameViewportClient.h"
@@ -227,6 +240,11 @@ namespace PmcArena
 		 * sides' spawns (PmcArenaRoundRules::IsReachableFromBoth), else another point; off = the old placement (the measurement).
 		 */
 		bool bObjectiveReach = true;
+		/**
+		 * Policy=off|train|infer + PolicyFile= / PolicyPython= / PolicyMinutes= / PolicyRounds= / PolicyDevice= (Learning Agents probe P0,
+		 * 2026-11-23; Debug/PmcPolicyTraining.h): a neural policy picks the defending PMC team's orders. Off = the scorer, as before.
+		 */
+		FPmcArenaPolicyOptions Policy;
 	};
 
 	/** PmcStalemateSmoke's limits (the designer 2026-11-08): the fight resumes within this after a quiet spell, s. */
@@ -363,6 +381,9 @@ namespace PmcArena
 		float GuardShare = 0.f;
 		int32 SharedCoverPairs = 0;
 		float ObjectiveShare = 0.f;
+		/** Learning Agents probe P0: "train" / "infer" when the order policy played this round's defenders (PolicySide "A" / "B"), else "off". */
+		FString Policy = TEXT("off");
+		FString PolicySide;
 	};
 
 	/** The last hit a fighter took (the HP drops of the next samples are that shooter's damage). */
@@ -552,6 +573,8 @@ namespace PmcArena
 		TArray<int32> LadderRoofsPicked;
 		/** Opponent=Script (T-03): this round's walk. */
 		FScriptRun Script;
+		/** Learning Agents probe P0 (Policy=train|infer): the order policy's brain and trainer; idle with Policy=off. */
+		FPmcArenaPolicy Policy;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -601,6 +624,19 @@ namespace PmcArena
 			else if (Key == TEXT("rocketcontact")) { Options.bRocketContact = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
 			else if (Key == TEXT("fallbackcover")) { Options.bFallBackCover = FCString::Atoi(*Value) != 0; }
 			else if (Key == TEXT("objectivereach")) { Options.bObjectiveReach = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
+			else if (Key == TEXT("policy"))
+			{
+				// A mode this build does not know must not play a plain scorer round instead (like an unknown key).
+				if (!FPmcArenaPolicy::ParseMode(Value, Options.Policy.Mode))
+				{
+					Options.UnknownKeys.Add(FString::Printf(TEXT("policy=%s"), *Value));
+				}
+			}
+			else if (Key == TEXT("policyfile")) { Options.Policy.File = bNone ? FString() : Value; }
+			else if (Key == TEXT("policypython")) { Options.Policy.Python = bNone ? FString() : Value; }
+			else if (Key == TEXT("policyminutes")) { Options.Policy.Minutes = FMath::Max(0.f, FCString::Atof(*Value)); }
+			else if (Key == TEXT("policyrounds")) { Options.Policy.RoundsPerIteration = FMath::Clamp(FCString::Atoi(*Value), 1, 64); }
+			else if (Key == TEXT("policydevice")) { Options.Policy.bGpu = Value.Equals(TEXT("gpu"), ESearchCase::IgnoreCase); }
 			else if (Key == TEXT("scenario"))
 			{
 				EPmcScenario Scenario = EPmcScenario::Skirmish;
@@ -2544,6 +2580,22 @@ namespace PmcArena
 		Root->SetStringField(TEXT("weights_b"), State.Options.Opponent == EOpponent::Bot || State.Options.Opponent == EOpponent::Script ? TEXT("None") : (State.Options.WeightsB.IsEmpty() ? TEXT("Content/Data/AI/pmc_commander.json") : State.Options.WeightsB));
 		Root->SetBoolField(TEXT("objective"), State.Options.bObjective);
 		Root->SetStringField(TEXT("scenario"), State.Options.Scenario < 0 ? TEXT("random") : PmcCommanderRules::ScenarioName(static_cast<EPmcScenario>(State.Options.Scenario)));
+		// Learning Agents probe P0: the run's order policy (the rounds say which side it played).
+		Root->SetStringField(TEXT("policy"), FPmcArenaPolicy::ModeName(State.Options.Policy.Mode));
+		if (State.Options.Policy.Mode != EPmcArenaPolicyMode::Off)
+		{
+			TSharedRef<FJsonObject> PolicyRun = MakeShared<FJsonObject>();
+			PolicyRun->SetStringField(TEXT("file"), State.Policy.GetOptions().File);
+			PolicyRun->SetStringField(TEXT("python"), State.Policy.GetPythonPath());
+			PolicyRun->SetNumberField(TEXT("rounds_per_iteration"), State.Options.Policy.RoundsPerIteration);
+			PolicyRun->SetStringField(TEXT("device"), State.Options.Policy.bGpu ? TEXT("gpu") : TEXT("cpu"));
+			PolicyRun->SetNumberField(TEXT("iterations"), State.Policy.GetIterations());
+			PolicyRun->SetNumberField(TEXT("episodes"), State.Policy.GetEpisodes());
+			PolicyRun->SetNumberField(TEXT("steps"), State.Policy.GetSteps());
+			PolicyRun->SetNumberField(TEXT("last_mean_episode_reward"), FMath::RoundToFloat(State.Policy.GetLastMeanEpisodeReward() * 1000.f) / 1000.f);
+			PolicyRun->SetBoolField(TEXT("failed"), State.Policy.HasFailed());
+			Root->SetObjectField(TEXT("policy_run"), PolicyRun);
+		}
 		{
 			TSharedRef<FJsonObject> Config = MakeShared<FJsonObject>();
 			Config->SetNumberField(TEXT("objective_radius_m"), State.Config.ObjectiveRadiusCm / 100.f);
@@ -2611,6 +2663,8 @@ namespace PmcArena
 			// fix/pmc-arena-stalemate: a round without a shot between the sides is a no-reward draw for the trainer; the fight flow numbers.
 			Round->SetBoolField(TEXT("contact"), Result.bContact);
 			Round->SetBoolField(TEXT("fallback_cover"), State.Options.bFallBackCover);
+			Round->SetStringField(TEXT("policy"), Result.Policy);
+			Round->SetStringField(TEXT("policy_side"), Result.PolicySide);
 			{
 				TSharedRef<FJsonObject> Flow = MakeShared<FJsonObject>();
 				auto Round1 = [](float Value) { return FMath::RoundToFloat(Value * 10.f) / 10.f; };
@@ -3056,6 +3110,7 @@ namespace PmcArena
 	bool Finish(FState& State, UWorld* World, bool bComplete)
 	{
 		RestoreSyncNavTiles(); // also for a world already gone
+		State.Policy.Finish(); // Policy=train: the trainer process stops and the policy is saved (the JSON reads its totals)
 		if (World)
 		{
 			if (UCodexGameplayRandom* Random = UCodexGameplayRandom::Get(World))
@@ -3497,6 +3552,20 @@ namespace PmcArena
 				}
 			}
 		}
+		// Learning Agents probe P0 (Policy=train|infer): this round's defending PMC team takes its orders from the policy.
+		if (State.Policy.IsActive() && State.bRoundObjective && DefenderTeam != PmcTeam::Player && !State.Options.bSmokeCapture)
+		{
+			TArray<AOperativeCharacter*> Defenders;
+			for (const TWeakObjectPtr<AOperativeCharacter>& Member : State.Sides[1 - AttackerIndex].Members)
+			{
+				if (AOperativeCharacter* Defender = Member.Get())
+				{
+					Defenders.Add(Defender);
+				}
+			}
+			const FPmcWeights& DefenderWeights = AttackerIndex == 0 ? State.WeightsB : State.WeightsA;
+			State.Policy.BeginRound(*Pmc, DefenderTeam, Defenders, DefenderWeights.AreaFactor, CountAlive(State.Sides[AttackerIndex].Members));
+		}
 		State.Script = FScriptRun();
 		if (State.Options.Opponent == EOpponent::Script)
 		{
@@ -3518,6 +3587,11 @@ namespace PmcArena
 		Result.bReachAttacker = State.bReachAttacker;
 		Result.bReachDefender = State.bReachDefender;
 		Result.bTacticalMap = State.bTacticalMap;
+		if (State.Policy.IsRoundActive())
+		{
+			Result.Policy = FPmcArenaPolicy::ModeName(State.Policy.GetMode());
+			Result.PolicySide = State.Sides[1 - AttackerIndex].Label;
+		}
 		if (bTacticalRound)
 		{
 			Result.RouteM = 0.f;
@@ -3774,6 +3848,8 @@ namespace PmcArena
 			Result.ObjectiveHoldS[1], Result.MedianEngagementM[0], Result.MedianEngagementM[1], Result.StrikesUnobserved[0], Result.StrikesUnobserved[1]);
 		if (Pmc)
 		{
+			// Learning Agents probe P0: the policy's episodes end with the round (the survivors' last rewards), its provider is cleared.
+			State.Policy.EndRound(*Pmc, Outcome, !State.bAAttacks);
 			for (const int32 Team : { TeamA, TeamB, PmcTeam::Player })
 			{
 				Pmc->SetTeamObjective(Team, EPmcRole::None, FVector::ZeroVector, 0.f);
@@ -3959,6 +4035,22 @@ namespace PmcArena
 				*World->GetMapName(), State.Options.Rounds, State.Options.Seed, OpponentName(State.Options.Opponent), *State.WeightsA.Name,
 				State.bWeightsALoaded ? TEXT("file") : TEXT("defaults"), *State.WeightsB.Name, State.bWeightsBLoaded ? TEXT("file") : TEXT("defaults"), State.Options.TimeLimit,
 				*Start.ToCompactString(), *Far.ToCompactString(), FVector::Dist2D(Start, Far));
+			if (State.Options.Policy.Mode != EPmcArenaPolicyMode::Off)
+			{
+				// Learning Agents probe P0: the policy plays the defending PMC team of objective rounds. Policy=train starts the Python
+				// trainer here (a blocking handshake of a few seconds; a fixed-step run's world clock does not move meanwhile).
+				const bool bUsable = State.Options.bObjective && IsPmcSideB(State.Options.Opponent) && !State.Options.bSmokeCapture;
+				FPmcArenaPolicyOptions PolicyOptions = State.Options.Policy;
+				PolicyOptions.File = ResolveProjectPath(PolicyOptions.File);
+				const float DecisionInterval = FMath::Min(State.WeightsA.DecisionInterval, State.WeightsB.DecisionInterval);
+				if (!bUsable || !State.Policy.Start(*World, PolicyOptions, State.Options.Squad, State.Options.TimeLimit, DecisionInterval, State.Options.Seed))
+				{
+					UE_LOG(LogCodexTactics, Error, TEXT("[PmcArena] Policy=%s did not start: %s"), FPmcArenaPolicy::ModeName(State.Options.Policy.Mode),
+						bUsable ? TEXT("see the [PmcPolicy] lines above") : TEXT("it needs Objective=1 and a PMC side B (Opponent=Pmc|Script), and no parked defenders"));
+					Check(State, false, TEXT("the order policy starts (Policy=train|infer)"));
+					return Finish(State, World, false);
+				}
+			}
 			State.Stage = 1;
 			State.StageTime = 0.f;
 			return true;
@@ -3986,6 +4078,12 @@ namespace PmcArena
 			UpdateDamage(State);
 			ResupplyAmmo(State);
 			UpdateObjective(State, World);
+			if (State.Policy.IsRoundActive())
+			{
+				// The policy's team events since its last step: the attackers still alive (kills), one of them on the point.
+				const FSide& Attackers = State.Sides[State.bAAttacks ? 0 : 1];
+				State.Policy.Sample(CountAlive(Attackers.Members), State.bRoundObjective && CountOnPoint(State, Attackers) > 0, StepSeconds);
+			}
 			SampleDefence(State, World, StepSeconds);
 			const FPmcRoundOutcome Outcome = PmcCommanderRules::ResolveRound(CountAlive(State.Sides[0].Members), CountAlive(State.Sides[1].Members),
 				State.StageTime >= State.Options.TimeLimit, State.bRoundObjective, State.Clock, State.bAAttacks,
@@ -3995,7 +4093,19 @@ namespace PmcArena
 				return true;
 			}
 			EndRound(State, World, Outcome);
-			State.Stage = State.Round >= State.Options.Rounds ? 4 : 3;
+			if (State.Policy.HasFailed())
+			{
+				Check(State, false, TEXT("the order policy's training keeps running (Policy=train)"));
+				return Finish(State, World, false);
+			}
+			// Policy=train PolicyMinutes=<m>: the wall-clock budget ends the run after this round.
+			const bool bPolicyTimeUp = State.Policy.IsTimeUp();
+			if (bPolicyTimeUp && State.Round < State.Options.Rounds)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] PolicyMinutes=%.1f are over after round %d of %d: the training run ends here"),
+					State.Options.Policy.Minutes, State.Round, State.Options.Rounds);
+			}
+			State.Stage = State.Round >= State.Options.Rounds || bPolicyTimeUp ? 4 : 3;
 			State.StageTime = 0.f;
 			return true;
 		}
@@ -4169,7 +4279,7 @@ namespace PmcArena
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.PmcArena"),
-		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot|script script=run|bound time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard|tactical; writes Saved/Arena/<timestamp>.json, then exits."),
+		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot|script script=run|bound time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard|tactical policy=off|train|infer policyfile=<base path> policypython=<python.exe> policyminutes=<m> policyrounds=<n> policydevice=cpu|gpu; writes Saved/Arena/<timestamp>.json, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 
 	static FAutoConsoleCommandWithWorldAndArgs SmokeCommand(

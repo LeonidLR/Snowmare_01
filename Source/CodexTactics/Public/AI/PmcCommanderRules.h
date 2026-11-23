@@ -559,6 +559,8 @@ struct CODEXTACTICS_API FPmcSquadView
 	int32 MatesHealing = 0;
 	/** Mates running an RpgStrike (one rocket at a time per squad). */
 	int32 MatesRpgStriking = 0;
+	/** Mates reloading now (LA probe P0, 2026-11-23: an observation of the order policy, AI/PmcPolicyRules.h; no order's score reads it). */
+	int32 MatesReloading = 0;
 	/** A shot was fired between this team and an enemy in this fight (an ambush holding its fire is blown). */
 	bool bShotsExchanged = false;
 	/** Seconds since the team's first contact of the fight (0 before it). */

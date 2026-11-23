@@ -29,6 +29,7 @@
 | CommonUI (+ CommonInput) | stable | frontend / pause menu framework (2026-10-08): activatable screens on layer stacks, `CommonGameViewportClient`, input data `/Game/UI/Frontend/Input`; `bEnableDefaultInputConfig=False` |
 | PythonScriptPlugin, EditorScriptingUtilities | stable (editor) | asset / import scripts in `Scripts/Editor/*.py` |
 | ModelingToolsEditorMode | stable (editor) | editor tooling |
+| LearningAgents (+ LearningCore, NNERuntimeBasicCpu, PythonMLPackages) | Experimental 0.2 | **branch `ai/la-probe` only** (probe P0, 2026-11-23, `docs/systems/pmc-policy-probe.md`): a neural policy picks the PMC defenders' orders in the arena, PPO training in the arena. `CodexTactics` links `LearningAgents` + `Learning` (`AI/PmcPolicy*`), `CodexTacticsDev` adds `LearningAgentsTraining` + `LearningTraining` (`Debug/PmcPolicyTraining`). `bRunPipInstallOnStartup=False` in DefaultEngine.ini (no automatic torch download) |
 | ModelContextProtocol (Unreal MCP), ToolsetRegistry, EditorToolset, LiveCodingToolset, AutomationTestToolset, UMGToolSet, NiagaraToolsets, ConfigSettingsToolset, AIModuleToolset, StateTreeToolset | Experimental (editor) | AI agent access to the open editor at `http://127.0.0.1:8000/mcp` (auto-start on) |
 
 **In-house plugins:** none · **Fab / marketplace:** Ultra Dynamic Sky / Weather planned for Phase 6 (not installed)

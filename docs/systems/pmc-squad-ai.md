@@ -368,7 +368,8 @@ stalls at a defender in cover (the commander's advance stops at 60 % of the rang
 ## 6. Follow-ups (not in the MVP)
 
 - Learning Agents imitation / reinforcement learning on the arena (the trainer: weights files in, `Saved/Arena/*.json` out; later the player's own
-  tracks as demonstrations).
+  tracks as demonstrations). **Probe P0 on branch `ai/la-probe` (2026-11-23):** the commander's order provider hook, a PPO-trained policy that
+  picks the defenders' orders, the arena's `Policy=train|infer` - [pmc-policy-probe.md](pmc-policy-probe.md).
 - Ghost silhouettes of concealed hostile fighters, hearing, turn-based combat with PMC fighters, the bot and `USquadAutonomySubsystem` perceiving
   hostile operatives, team-aware grenades / panic, PMC corpse loot, the HUD plate on a PMC fighter, suppression of the player's men by PMC rounds
   (checked only generically). (Done 2026-11-03, section 7: fog-of-war hiding, minimap marks, level JSON `pmc_squads`, `CodexTactics.PmcSpawn`.)

@@ -25,7 +25,11 @@ public class CodexTactics : ModuleRules
 			"CommonInput",
 			"DeveloperSettings",
 			"ProceduralMeshComponent",
-			"MotionWarping" // the mantle climb (docs/design/MANTLING.md 11.3): root-motion clips warped onto the real ledge top
+			"MotionWarping", // the mantle climb (docs/design/MANTLING.md 11.3): root-motion clips warped onto the real ledge top
+			// Learning Agents probe P0 (2026-11-23, docs/systems/pmc-policy-probe.md): the PMC order policy's interactor / inference
+			// (AI/PmcPolicyInteractor, AI/PmcPolicyBrain). Training lives in CodexTacticsDev (LearningAgentsTraining is not linked here).
+			"LearningAgents",
+			"Learning"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "Json", "RenderCore", "AnimationCore", "Navmesh" }); // RenderCore: GWhiteTexture for the minimap canvas triangles; AnimationCore: the ladder rung IK (TwoBoneIK); Navmesh: Detour's nav link directions (FDropLinkReach)
