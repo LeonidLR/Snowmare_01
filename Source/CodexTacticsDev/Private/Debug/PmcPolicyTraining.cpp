@@ -272,7 +272,13 @@ bool FPmcArenaPolicy::StartTrainer(int32 Squad, int32 MaxEpisodeSteps, int32 See
 	Game.bDisableUseLessCPUInTheBackground = false;
 	Game.bDisableEditorVSync = false;
 #endif
+	const bool bFixedStepBefore = FApp::UseFixedTimeStep();
+	const double FixedDeltaBefore = FApp::GetFixedDeltaTime();
 	NewTrainer->BeginTraining(Training, Game, false);
+	// BeginTraining sets the fixed step again from a float frequency (1 / 60.f is not the launcher's 1 / 60.0): the exact value back,
+	// so a training run steps the world exactly like an inference or a scorer run.
+	FApp::SetUseFixedTimeStep(bFixedStepBefore);
+	FApp::SetFixedDeltaTime(FixedDeltaBefore);
 	if (!NewTrainer->IsTraining() || NewTrainer->HasTrainingFailed())
 	{
 		UE_LOG(LogCodexTactics, Error, TEXT("[PmcPolicy] the PPO training did not start (see LogLearning: the trainer process, its Python packages)"));
@@ -542,7 +548,12 @@ void FPmcArenaPolicy::Finish()
 	{
 		if (LiveTrainer->IsTraining())
 		{
+			const bool bFixedStepBefore = FApp::UseFixedTimeStep();
+			const double FixedDeltaBefore = FApp::GetFixedDeltaTime();
 			LiveTrainer->EndTraining(); // stops the Python process
+			// The plugin's revert of the fixed step goes through a float as well: the exact value back.
+			FApp::SetUseFixedTimeStep(bFixedStepBefore);
+			FApp::SetFixedDeltaTime(FixedDeltaBefore);
 		}
 		if (Options.Mode == EPmcArenaPolicyMode::Train && !bFailed)
 		{
@@ -737,6 +748,8 @@ bool FPmcPolicyTrainerLoopTest::RunTest(const FString&)
 	// The plugin's EndTraining re-applies the game user settings (its revert of the trainer's game settings): the scalability levels
 	// of this editor process are put back afterwards.
 	const Scalability::FQualityLevels QualityBefore = Scalability::GetQualityLevels();
+	const bool bFixedStepBefore = FApp::UseFixedTimeStep();
+	const double FixedDeltaBefore = FApp::GetFixedDeltaTime();
 
 	const FString PolicyDir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Automation") / TEXT("PmcPolicyTrainerLoop"));
 	IFileManager::Get().DeleteDirectory(*PolicyDir, false, true);
@@ -754,6 +767,8 @@ bool FPmcPolicyTrainerLoopTest::RunTest(const FString&)
 			Scalability::SetQualityLevels(QualityBefore);
 			return false;
 		}
+		TestTrue(TEXT("the training's start leaves the fixed step exactly as it was"),
+			FApp::UseFixedTimeStep() == bFixedStepBefore && FApp::GetFixedDeltaTime() == FixedDeltaBefore);
 		TestEqual(TEXT("the configs went to the trainer once"), StandIn->Configs, 1);
 		TestEqual(TEXT("policy, critic, encoder, decoder registered"), StandIn->Networks, 4);
 		const TSharedPtr<FPmcPolicyBrain> Brain = Policy.GetBrain();
@@ -824,6 +839,8 @@ bool FPmcPolicyTrainerLoopTest::RunTest(const FString&)
 
 		Policy.Finish();
 		TestEqual(TEXT("the trainer was told to stop"), StandIn->Stops, 1);
+		TestTrue(TEXT("the training's end leaves the fixed step exactly as it was"),
+			FApp::UseFixedTimeStep() == bFixedStepBefore && FApp::GetFixedDeltaTime() == FixedDeltaBefore);
 		TestEqual(TEXT("the step total survives Finish"), Policy.GetSteps(), 4 + 2);
 		TestFalse(TEXT("no brain after Finish"), Policy.GetBrain().IsValid());
 	}

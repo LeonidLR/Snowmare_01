@@ -102,7 +102,7 @@ The result JSON gets `"policy"` (the run's mode) and `"policy_run"` (file, pytho
 ```
 & "C:/Program Files/Epic Games/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" "<repo>/CodexTactics.uproject" /Game/Maps/Generated/L_Gen_Depot_1 `
   -game -nullrhi -nosound -nosplash -unattended -NoTelemetry "-LevelJson=L_PmcArenaDepot.json" -UseFixedTimeStep -FPS=60 -FixedSeed `
-  "-ExecCmds=CodexTactics.PmcArena Rounds=100000 Seed=1060 Opponent=Script Scenario=street Squad=3 TimeLimit=120 Policy=train PolicyMinutes=10 PolicyFile=Saved/Arena/Policy/p0 PolicyPython=C:/Work/Lanes/la-venv/Scripts/python.exe" `
+  "-ExecCmds=CodexTactics.PmcArena Rounds=100000 Seed=20001 Opponent=Script Scenario=street Squad=3 TimeLimit=120 Policy=train PolicyMinutes=10 PolicyFile=Saved/Arena/Policy/p0 PolicyPython=C:/Work/Lanes/la-venv/Scripts/python.exe" `
   "-abslog=<repo>/Saved/Logs/PmcPolicyTrain.log"
 ```
 
@@ -110,6 +110,7 @@ The result JSON gets `"policy"` (the run's mode) and `"policy_run"` (file, pytho
 - Per PPO iteration the log has `[PmcPolicy] iteration N: mean episode reward R over K episodes (S steps), ...` (C++ side) and the Python
   trainer's `Iter: N | Avg Rew: .. | Avg Rew Sum: .. | Avg Return: .. | Avg Episode Len: ..` (`LogLearning`). At the end
   `[PmcPolicy] training over: ...` and `[PmcPolicy] picks ...` (how often each order was picked).
+- Train on seeds outside the baseline's set (the example starts at 20001; det/r1-cover is judged on 1060-1359).
 - Evaluate: the same command with `Policy=infer` (no `PolicyPython` / `PolicyMinutes`), fixed `Rounds=` and the baseline's seeds.
 - **Which Python.** The plugin's own spawn only knows `<project>/Intermediate/PipInstall/Scripts/python.exe` (the editor's pip-install
   venv). The arena builds the trainer process object itself (`UE::Learning::FSharedMemoryTrainerServerProcess`, which takes any
@@ -139,7 +140,8 @@ The result JSON gets `"policy"` (the run's mode) and `"policy_run"` (file, pytho
 - The replay buffer cuts an episode that does not fit (its end, with the round's reward, is lost) and drops the rest of the batch: the
   buffer is sized by EPISODES (`squad x PolicyRounds`), with room for full-length ones, so it fills exactly at a round's end.
 - `ULearningAgentsPPOTrainer::BeginTraining` applies its game settings (fixed step, physics step, max FPS, VSync); the session passes
-  the launcher's own values so the arena's clock is untouched.
+  the launcher's own values and puts the exact fixed delta back afterwards (the plugin re-sets it as `1 / float frequency`), so the
+  arena's clock is untouched.
 - A policy file is tied to the observation layout, the action count and the network shape (2 x 64, no memory cell); loading checks
   input / output sizes, the compatibility hash and the byte count before any network is replaced.
 - Shipping / packaged targets were not built with the plugin (the runtime module now links `LearningAgents`).
