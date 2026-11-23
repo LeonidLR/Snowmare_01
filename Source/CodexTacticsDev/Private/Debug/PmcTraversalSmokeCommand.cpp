@@ -373,22 +373,6 @@ namespace PmcTraversalSmoke
 			Stats.Failures.Add({ Leg.Id, Reason, PmcTraversalRules::FailureGroupKey(KindName(Leg.Kind), SubKind, Reason), Leg.LinkStart, Leg.LinkEnd });
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: [%s] %s %s FAIL (%s) link %s -> %s, nav goal %s, walker feet %s"), *Pass.Name,
 				KindName(Leg.Kind), *Leg.Id, *Reason, *Vec(Leg.LinkStart), *Vec(Leg.LinkEnd), *Vec(Leg.NavGoal), Walker ? *Vec(Feet(*Walker)) : TEXT("-"));
-			if (Leg.Kind == ELinkKind::Stair)
-			{
-				const AAIController* AI = Walker ? Cast<AAIController>(Walker->GetController()) : nullptr;
-				const UPathFollowingComponent* Follow = AI ? AI->GetPathFollowingComponent() : nullptr;
-				const FNavPathSharedPtr Path = Follow ? Follow->GetPath() : nullptr;
-				const bool bValidPath = Path.IsValid() && Path->IsValid();
-				const bool bPartial = bValidPath && Path->IsPartial();
-				const int32 NumPts = bValidPath ? Path->GetPathPoints().Num() : 0;
-				const FVector LastPt = bValidPath && NumPts > 0 ? Path->GetPathPoints().Last().Location : FVector::ZeroVector;
-				const FNavMeshPath* NavMeshPath = Path.IsValid() ? Path->CastPath<FNavMeshPath>() : nullptr;
-				const NavNodeRef EndPoly = NavMeshPath && NavMeshPath->PathCorridor.Num() > 0 ? NavMeshPath->PathCorridor.Last() : 0;
-				UE_LOG(LogCodexTactics, Display, TEXT("Smoke diag stair fail: %s at feet %s, partial=%d, numPts=%d, endPoly=%llu, lastPt=%s, distToNavGoal=%.0f (Z=%.0f)"),
-					*Leg.Id, Walker ? *Vec(Feet(*Walker)) : TEXT("-"), bPartial ? 1 : 0, NumPts, static_cast<uint64>(EndPoly), *Vec(LastPt),
-					Walker ? static_cast<float>(FVector::Dist2D(Feet(*Walker), Leg.NavGoal)) : 0.f,
-					Walker ? static_cast<float>(FMath::Abs(Feet(*Walker).Z - Leg.NavGoal.Z)) : 0.f);
-			}
 		}
 		++State.LegCursor;
 		State.Phase = EPhase::PrepareLeg;
@@ -1174,32 +1158,6 @@ namespace PmcTraversalSmoke
 			{
 				UE_LOG(LogCodexTactics, Log, TEXT("Smoke: [%s] %s (%s) order %d, IsMantlePathAllowed=%d"), *Pass.Name, *Leg.Id,
 					Leg.bMantleDown ? TEXT("down") : TEXT("up/over"), static_cast<int32>(Result), Walker->IsMantlePathAllowed() ? 1 : 0);
-			}
-			if (Leg.Kind == ELinkKind::Stair)
-			{
-				const AAIController* AI = Cast<AAIController>(Walker->GetController());
-				const UPathFollowingComponent* Follow = AI ? AI->GetPathFollowingComponent() : nullptr;
-				const FNavPathSharedPtr Path = Follow ? Follow->GetPath() : nullptr;
-				const bool bValidPath = Path.IsValid() && Path->IsValid();
-				const bool bPartial = bValidPath && Path->IsPartial();
-				const int32 NumPts = bValidPath ? Path->GetPathPoints().Num() : 0;
-				FString PtsStr;
-				if (bValidPath)
-				{
-					for (int32 PtIdx = 0; PtIdx < FMath::Min(NumPts, 5); ++PtIdx)
-					{
-						PtsStr += FString::Printf(TEXT(" pt%d=%s"), PtIdx, *Vec(Path->GetPathPoints()[PtIdx].Location));
-					}
-					if (NumPts > 5)
-					{
-						PtsStr += FString::Printf(TEXT(" ... pt%d=%s"), NumPts - 1, *Vec(Path->GetPathPoints().Last().Location));
-					}
-				}
-				const FNavMeshPath* NavMeshPath = Path.IsValid() ? Path->CastPath<FNavMeshPath>() : nullptr;
-				const int32 NumPolys = NavMeshPath ? NavMeshPath->PathCorridor.Num() : 0;
-				UE_LOG(LogCodexTactics, Display, TEXT("Smoke diag: [%s] stair %s: order=%d, validPath=%d, partial=%d, numPts=%d, numPolys=%d, len=%.0f, pts:%s"),
-					*Pass.Name, *Leg.Id, static_cast<int32>(Result), bValidPath ? 1 : 0, bPartial ? 1 : 0, NumPts, NumPolys,
-					bValidPath ? Path->GetLength() : 0.f, *PtsStr);
 			}
 			switch (Result)
 			{
