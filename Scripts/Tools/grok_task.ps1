@@ -17,7 +17,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-$Tree = if ($TreePath) { $TreePath } else { Join-Path (Split-Path $Repo -Parent) "CodexTactics-grok" }
+$Tree = if ($TreePath) { $TreePath } else { "C:/Work/Lanes/CodexTactics-grok" }
 $Grok = if ($GrokPath) { $GrokPath } else { Join-Path $env:USERPROFILE ".grok\bin\grok.exe" }
 if (-not (Test-Path $Grok)) { throw "grok.exe not found at $Grok" }
 if (-not (Test-Path $Tree)) { throw "Grok worktree not found: $Tree" }

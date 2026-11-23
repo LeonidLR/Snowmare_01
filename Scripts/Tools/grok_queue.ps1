@@ -16,7 +16,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-$Tree = Join-Path (Split-Path $Repo -Parent) "CodexTactics-grok"
+$Tree = "C:/Work/Lanes/CodexTactics-grok"
 $Inbox = Join-Path $Repo "docs\port\grok\inbox"
 $Outboxes = @((Join-Path $Repo "docs\port\grok\outbox"), (Join-Path $Tree "docs\port\grok\outbox"))
 $Log = Join-Path $Repo "Saved\Orchestrator\grok_runs"
