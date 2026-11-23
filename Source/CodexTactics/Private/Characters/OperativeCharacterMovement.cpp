@@ -4,6 +4,7 @@
 // _process_leader_movement).
 
 #include "Characters/OperativeCharacter.h"
+#include "Interactables/WindowOrderRules.h"
 #include "Core/CodexGameplayRandom.h"
 #include "Interactables/VaultNavigation.h"
 #include "AI/PmcEncounterNav.h"
@@ -519,8 +520,11 @@ TSubclassOf<UNavigationQueryFilter> AOperativeCharacter::ChooseMoveFilter() cons
 	// player's window order (the silhouette click, SetWindowOrder) - then for everyone in the order, the followers' window costing nothing so
 	// they follow the commander through it; a BROKEN window is an ordinary vault area (VaultNavigation::SetWindowBroken) any path may take
 	// when it is faster - it makes no noise any more.
+	// Rule 2 (designer 2026-11-23, WindowOrderRules): a formation follower never paths through a WHOLE window, even on the leader's window
+	// order - he follows once the leader broke it (then it is an ordinary vault area).
 	const USquadSubsystem* WindowSquad = MoveSquad;
-	if (!WindowSquad || !WindowSquad->IsWindowOrder())
+	const bool bFormationFollower = WindowSquad && !WindowSquad->IsSoloMode() && WindowSquad->GetFormationLeader() != this;
+	if (!WindowSquad || !WindowOrderRules::MayTakeWholeWindow(WindowSquad->IsWindowOrder(), bFormationFollower, WindowOrderRules::Get()))
 	{
 		return MantleNavigation::NoWindowVariant(Chosen, bMantlePathAllowed);
 	}

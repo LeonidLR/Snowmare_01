@@ -1,0 +1,13 @@
+{
+  "_comment": "Window order rules (designer decision 2026-11-23). Read by WindowOrderRules (C++, Source/CodexTactics/Public/Interactables/WindowOrderRules.h). A WHOLE (shut) window is loud to climb (glass, 15 m noise) and opens only per these rules; a BROKEN window is an ordinary quiet vault for every path. 1 = on, 0 = off.",
+  "solo_group_combat_windows": 1,
+  "_solo_group_combat_windows": "Rule 1: Solo with the squad box-selected, IN A FIGHT (wave / firefight / enemies hunting the squad): every move order opens the windows on the way - the men never get stuck, the noise no longer matters.",
+  "solo_group_whole_squad_only": 1,
+  "_solo_group_whole_squad_only": "Rule 1 needs the WHOLE squad selected (0: any box selection of 2+ men).",
+  "solo_run_in_fight_windows": 1,
+  "_solo_run_in_fight_windows": "Solo: a run order (double click) in a fight opens the windows (the 2026-11-22 'run in a fight' rule).",
+  "formation_run_in_fight_windows": 0,
+  "_formation_run_in_fight_windows": "Rule 2: the formation never takes a whole window on its own - a run in a fight opens none (1 = the 2026-11-22 behaviour).",
+  "formation_follow_broken_only": 1,
+  "_formation_follow_broken_only": "Rule 2: on the leader's window order the followers go through only once he has broken it (0: they may take the whole window too)."
+}

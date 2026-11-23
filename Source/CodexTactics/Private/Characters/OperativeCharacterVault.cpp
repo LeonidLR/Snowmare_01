@@ -18,6 +18,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Interactables/VaultNavigation.h"
 #include "Interactables/WindowBreakage.h"
+#include "Interactables/WindowOrderRules.h"
 #include "Navigation/PathFollowingComponent.h"
 
 float AOperativeCharacter::GetVaultSpeed() const
@@ -96,13 +97,15 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 	{
 		return false;
 	}
-	// A whole (shut) window only on a window order or in Solo (designer 2026-11-22: "in formation they follow their leader and only that";
-	// FormationStairSmoke S04: the formation leader's walk ran along a window and the knee-height auto-vault took him out through it, loud).
+	// A whole (shut) window only by the window rules (designer 2026-11-23, WindowOrderRules: the window click, or Solo with the squad
+	// selected in a fight; never a formation follower - FormationStairSmoke S04: a plain walk's knee-height auto-vault broke a window).
 	// A broken window is an ordinary quiet vault.
 	if (const AActor* Window = Front.GetActor(); Window && Window->ActorHasTag(FName(TEXT("window_sill"))) && !Window->ActorHasTag(FName(TEXT("window_broken"))))
 	{
 		const USquadSubsystem* WindowSquad = World->GetSubsystem<USquadSubsystem>();
-		if (WindowSquad && !WindowSquad->IsWindowOrder() && !WindowSquad->IsSoloMode() && WindowSquad->GetMembers().Contains(this))
+		const bool bFormationFollower = WindowSquad && !WindowSquad->IsSoloMode() && WindowSquad->GetFormationLeader() != this;
+		if (WindowSquad && WindowSquad->GetMembers().Contains(this)
+			&& !WindowOrderRules::MayTakeWholeWindow(WindowSquad->IsWindowOrder(), bFormationFollower, WindowOrderRules::Get()))
 		{
 			return false;
 		}

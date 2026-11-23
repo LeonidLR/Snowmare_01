@@ -4,6 +4,7 @@
 // Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
 
 #include "Core/CodexTacticsPlayerController.h"
+#include "Interactables/WindowOrderRules.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "Characters/SquadAutonomySubsystem.h"
 #include "Combat/EnemyGhostActor.h"
@@ -779,14 +780,17 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	// Tutorial command lock (Demo 01 user decision 2026-10-12: no running until warmed up in A1): a locked sprint is
 	// degraded to a walk without any error line; the lock raises "Tutorial.Locked" for the one-time hint.
 	const bool bSprint = bDoubleClick && UTutorialSubsystem::FilterCommand(this, PlayerCommands::Sprint) == PlayerCommands::Sprint;
-	// Designer 2026-11-22 ("run in a fight"): a run order (double click; Solo, a box selection or the formation) while the squad is in a fight
-	// - a wave / firefight on, or enemies hunting the squad - is urgent: every restriction is off, the men may climb through any window on
-	// the way, whole ones too (the noise no longer matters). Out of a fight a run never breaks windows (stealth stays safe).
+	// Window rules (designer 2026-11-23, WindowOrderRules / windows.json): in a fight (a wave / firefight on, or enemies hunting the squad)
+	// Solo with the whole squad box-selected opens every window on the way (rule 1), a Solo run too; the formation never takes a whole window
+	// on its own (rule 2); out of a fight only the window click opens one (rule 3).
 	const UStealthLureSubsystem* FightLure = GetWorld()->GetSubsystem<UStealthLureSubsystem>();
-	if (bSprint && (bWave || (FightLure && FightLure->IsSquadDetected())))
+	const bool bInFight = bWave || (FightLure && FightLure->IsSquadDetected());
+	const int32 WindowSelected = Squad->HasMultiSelection() ? Squad->GetSelectedGroup().Num() : 1;
+	if (WindowOrderRules::MoveOpensWindows(Squad->IsSoloMode(), WindowSelected, Squad->GetMembers().Num(), bInFight, bSprint, WindowOrderRules::Get()))
 	{
 		Squad->SetWindowOrder(true);
-		UE_LOG(LogCodexTactics, Display, TEXT("Run order in a fight: windows open for this order"));
+		UE_LOG(LogCodexTactics, Display, TEXT("Move order in a fight (%s, %d of %d selected%s): windows open for this order"), Squad->IsSoloMode() ? TEXT("Solo") : TEXT("formation"),
+			WindowSelected, Squad->GetMembers().Num(), bSprint ? TEXT(", run") : TEXT(""));
 	}
 	// Godot double click: sprint, or why not.
 	if (bSprint)
