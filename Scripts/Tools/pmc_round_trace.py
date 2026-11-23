@@ -262,8 +262,8 @@ def parse_log_for_round(
     res: Dict[str, Any] = {
         "found": False,
         "round_found": False,
-        "spawned": {},        # name -> {team, look, weapon, pos}
-        "posts": {},          # name -> {role, pos, yaw, score, danger, post_id}
+        "spawned": {},        # (team, short name) -> {team, look, weapon, pos}
+        "posts": {},          # (team, short name) -> {role, pos, yaw, score, danger, post_id}
         "decisions": [],      # [{t_log, team, who, order, score, threat_state, threat_dist_cm, hp, cover}]
         "failures": [],       # [{t_log, team, who, order, reason, delay_s}]
         "fire_events": [],    # [{t_log, team, who, action, dist_m, attention_off}]
@@ -341,9 +341,6 @@ def parse_log_for_round(
             weapon = next((p for p in look_parts if not p.startswith("look ")), "n/a")
             spawn_entry = {"team": int(team), "look": look, "pos": pos_str, "weapon": weapon}
             res["spawned"][(int(team), name)] = spawn_entry
-            res["spawned"][(int(team), f"Operator {name}")] = spawn_entry
-            res["spawned"][name] = spawn_entry
-            res["spawned"][f"Operator {name}"] = spawn_entry
             continue
 
         m_p = post_re.search(line)
@@ -376,9 +373,6 @@ def parse_log_for_round(
                 else:
                     post_info["post_id"] = part
             res["posts"][(int(team), name)] = post_info
-            res["posts"][(int(team), f"Operator {name}")] = post_info
-            res["posts"][name] = post_info
-            res["posts"][f"Operator {name}"] = post_info
             continue
 
         m_o = order_re.search(line)
@@ -549,74 +543,69 @@ def compute_trace_metrics(
     dt = float(track.get("dt", 0.2)) if track else 0.2
 
     def_fighters: List[dict] = []
-    atk_fighters: List[dict] = []
-    fighter_idx_map: Dict[Tuple[str, str], int] = {}
-    for i, f in enumerate(fighters):
-        s = str(f.get("side"))
-        fid = str(f.get("id"))
-        fighter_idx_map[(s, fid)] = i
-        if s == def_side:
-            def_fighters.append(dict(f, idx=i))
-        else:
-            atk_fighters.append(dict(f, idx=i))
+    # Side A = team 1, Side B = team 2 in arena logs.
+    teams = {"A": 1, "B": 2}
+    roster = [dict(f, idx=i) for i, f in enumerate(fighters)]
+    track_sides = {f["side"] for f in roster}
+    roster.extend(
+        {"id": f"Operator {name}", "name": name, "side": side, "team": team}
+        for side, side_team in teams.items() if side not in track_sides
+        for team, name in log_data.get("spawned", {})
+        if team == side_team
+    )
 
-    # If track has no fighters, populate from log spawned
-    if not def_fighters and log_data.get("spawned"):
-        for key, s_info in log_data["spawned"].items():
-            if isinstance(key, tuple):
-                team, name = key
-            else:
-                name = key
-                team = s_info.get("team")
-            # Side A = team 1, Side B = team 2 in UE log convention
-            expected_team = 1 if def_side == "A" else 2
-            if team is not None and team != expected_team:
-                continue
-            if not any(df["id"] in (name, f"Operator {name}") for df in def_fighters):
-                def_fighters.append({
-                    "id": f"Operator {name}" if not name.startswith("Operator ") else name,
-                    "name": name[len("Operator "):] if name.startswith("Operator ") else name,
-                    "side": def_side,
-                    "team": team,
-                })
+    fighters_by_key = {}
+    keys_by_name = {}
+    for f in roster:
+        key = (f["side"], f["id"])
+        f["team"] = f.get("team") if f.get("team") is not None else teams.get(f["side"])
+        fighters_by_key[key] = f
+        for name in {f["id"].removeprefix("Operator "), f.get("name")} - {None, ""}:
+            keys_by_name.setdefault(name.removeprefix("Operator "), set()).add(key)
+        if f["side"] == def_side:
+            def_fighters.append(f)
+
+    def fighter_key(name, side=None, team=None):
+        if name is None:
+            return None
+        exact_key = (side, str(name))
+        if exact_key in fighters_by_key and (team is None or fighters_by_key[exact_key]["team"] == team):
+            return exact_key
+        candidates = [
+            key for key in keys_by_name.get(str(name).removeprefix("Operator "), ())
+            if (side is None or key[0] == side)
+            and (team is None or fighters_by_key[key]["team"] == team)
+        ]
+        return candidates[0] if len(candidates) == 1 else None
 
     # Close range stats from track_stats
     close_stats_def = side_stats(track, def_side) if track else None
     close_stats_atk = side_stats(track, atk_side) if track else None
 
-    # First contact determination
-    shots = [e for e in events if e.get("type") == "shot"]
-    t_first_shot = min([float(e.get("t", 0.0)) for e in shots]) if shots else None
+    # First contact includes shots with an unknown shooter.
+    t_first_shot = min((float(e.get("t", 0.0)) for e in events if e.get("type") == "shot"), default=None)
 
     t_first_contact = t_first_shot
     if t_first_contact is None:
         t_first_contact = duration_s
 
     # Tactic decisions per fighter - strictly filter by side & team
-    decisions_by_fighter: Dict[str, List[dict]] = {}
-    for f in def_fighters:
-        decisions_by_fighter[f["id"]] = []
-
-    track_tactic_events = [e for e in events if e.get("type") == "tactic"]
-    for ev in track_tactic_events:
-        ev_side = ev.get("side")
-        if ev_side is not None and str(ev_side) != str(def_side):
-            continue
-
-        ev_who = str(ev.get("who", ""))
-        for f in def_fighters:
-            fid = f["id"]
-            fname = f.get("name") or (fid[len("Operator "):] if fid.startswith("Operator ") else fid)
-            if "team" in ev and "team" in f and ev["team"] != f["team"]:
-                continue
-            if ev_who in (fid, fname, f"Operator {fname}"):
-                decisions_by_fighter[fid].append({
+    decisions_by_fighter = {(f["side"], f["id"]): [] for f in def_fighters}
+    shots_by_fighter = {}
+    for ev in events:
+        if ev.get("type") == "tactic":
+            key = fighter_key(ev.get("who"), ev.get("side"), ev.get("team"))
+            if key in decisions_by_fighter:
+                decisions_by_fighter[key].append({
                     "t": float(ev.get("t", 0.0)),
                     "decision": ev.get("decision"),
                     "score": float(ev.get("score") or 0.0),
                     "why": ev.get("why"),
                 })
-                break
+        elif ev.get("type") == "shot":
+            key = fighter_key(ev.get("from"), ev.get("side"))
+            if key is not None:
+                shots_by_fighter.setdefault(key, []).append(ev)
 
     # Seconds standing in the open per defender (C++ open_idle_s with fighter_index and side)
     arena_defence = rnd.get("defence") or {}
@@ -628,26 +617,13 @@ def compute_trace_metrics(
             fi_idx = entry.get("fighter_index")
             if fi_idx is not None:
                 idle_by_idx[int(fi_idx)] = entry
-            ef_id = entry.get("id")
-            ef_side = entry.get("side")
-            if ef_id:
-                id_str = str(ef_id)
-                short_id = id_str[len("Operator "):] if id_str.startswith("Operator ") else id_str
-                full_id = f"Operator {short_id}"
-                if ef_side:
-                    s_str = str(ef_side)
-                    idle_by_side_id[(s_str, id_str)] = entry
-                    idle_by_side_id[(s_str, short_id)] = entry
-                    idle_by_side_id[(s_str, full_id)] = entry
-                else:
-                    idle_by_side_id[("", id_str)] = entry
-                    idle_by_side_id[("", short_id)] = entry
-                    idle_by_side_id[("", full_id)] = entry
+            key = fighter_key(entry.get("id"), entry.get("side"))
+            if key is not None:
+                idle_by_side_id[key] = entry
 
-    exposure_stats: Dict[str, dict] = {}
+    exposure_stats: Dict[Tuple[str, str], dict] = {}
     for f in def_fighters:
-        fid = f["id"]
-        fname = f.get("name") or (fid[len("Operator "):] if fid.startswith("Operator ") else fid)
+        key = (f["side"], f["id"])
         fi = f.get("idx")
         total_stand_s = 0.0
         pre_contact_stand_s = 0.0
@@ -659,17 +635,11 @@ def compute_trace_metrics(
         open_idle_source = "none"
 
         # Ground truth from arena.json if available
-        matched_idle = None
-        if fi is not None and fi in idle_by_idx:
-            matched_idle = idle_by_idx[fi]
-        elif (def_side, fid) in idle_by_side_id:
-            matched_idle = idle_by_side_id[(def_side, fid)]
-        elif (def_side, fname) in idle_by_side_id:
-            matched_idle = idle_by_side_id[(def_side, fname)]
-        elif ("", fid) in idle_by_side_id:
-            matched_idle = idle_by_side_id[("", fid)]
-        elif ("", fname) in idle_by_side_id:
-            matched_idle = idle_by_side_id[("", fname)]
+        matched_idle = idle_by_idx.get(fi)
+        if matched_idle is not None and matched_idle.get("side") not in (None, key[0]):
+            matched_idle = None
+        if matched_idle is None:
+            matched_idle = idle_by_side_id.get(key)
 
         if matched_idle is not None:
             total_stand_s = float(matched_idle.get("total_s", 0.0))
@@ -692,18 +662,18 @@ def compute_trace_metrics(
                             idle_stand_s += dt
 
         # Shots fired by this fighter
-        for s in shots:
-            s_from = str(s.get("from", ""))
-            if (s_from in (fid, fname, f"Operator {fname}")) and (
-                s.get("side") is None or str(s.get("side")) == str(def_side)
-            ):
-                shots_fired += 1
-                if first_shot_t is None:
-                    first_shot_t = float(s.get("t", 0.0))
-                    first_shot_hit = bool(s.get("hit"))
-                    first_shot_target = str(s.get("to"))
+        fighter_shots = shots_by_fighter.get(key, [])
+        shots_fired = len(fighter_shots)
+        if fighter_shots:
+            first = fighter_shots[0]
+            first_shot_t = float(first.get("t", 0.0))
+            first_shot_hit = bool(first.get("hit"))
+            first_shot_target = str(first.get("to"))
+            target_key = fighter_key(first_shot_target, atk_side)
+            if target_key is not None:
+                first_shot_target = fighter_label(target_key)
 
-        exposure_stats[fid] = {
+        exposure_stats[key] = {
             "total_stand_s": round(total_stand_s, 2),
             "pre_contact_stand_s": round(pre_contact_stand_s, 2),
             "idle_stand_s": round(idle_stand_s, 2),
@@ -715,25 +685,30 @@ def compute_trace_metrics(
         }
 
     # Initial posts assigned to defenders
-    posts_assigned: Dict[str, dict] = {}
-    f_posts_map = log_data.get("posts", {})
+    posts_assigned = {}
     for f in def_fighters:
-        fid = f["id"]
-        fname = f.get("name") or (fid[len("Operator "):] if fid.startswith("Operator ") else fid)
-        f_team = f.get("team")
-        post = None
-        if f_team is not None:
-            post = f_posts_map.get((int(f_team), fname)) or f_posts_map.get((int(f_team), fid))
-        if post is None:
-            post = f_posts_map.get(fname) or f_posts_map.get(fid)
+        post = log_data.get("posts", {}).get(log_fighter_key(f))
         if post:
-            posts_assigned[fid] = post
+            posts_assigned[(f["side"], f["id"])] = post
+
+    defender_log_keys = {log_fighter_key(f) for f in def_fighters}
+    def_log = {
+        field: [
+            entry for entry in log_data.get(field, [])
+            if (entry["team"], entry["who"].removeprefix("Operator ")) in defender_log_keys
+            or (not defender_log_keys and entry["team"] == teams.get(def_side))
+        ]
+        for field in ("decisions", "failures", "fire_events")
+    }
+    def_log.update(found=log_data["found"], round_found=log_data["round_found"])
+    sides_by_team = {team: side for side, team in teams.items()}
+    sides_by_team.update((f["team"], f["side"]) for f in roster if f["team"] is not None)
 
     # Evaluate Hypotheses H1 - H4
     h1_verdict, h1_evidence = evaluate_h1(scenario, obj, rnd, log_data, decisions_by_fighter, t_first_contact)
-    h2_verdict, h2_evidence = evaluate_h2(posts_assigned, decisions_by_fighter, log_data, def_fighters)
-    h3_verdict, h3_evidence = evaluate_h3(log_data, exposure_stats, rnd, def_fighters)
-    h4_verdict, h4_evidence = evaluate_h4(log_data, exposure_stats, t_first_contact, shots, def_fighters)
+    h2_verdict, h2_evidence = evaluate_h2(posts_assigned, decisions_by_fighter, def_log, def_side)
+    h3_verdict, h3_evidence = evaluate_h3(def_log, exposure_stats)
+    h4_verdict, h4_evidence = evaluate_h4(def_log, exposure_stats, t_first_contact, def_side)
 
     return {
         "scenario": scenario,
@@ -764,6 +739,7 @@ def compute_trace_metrics(
         "close_stats_atk": close_stats_atk,
         "log_fire_events": log_data.get("fire_events", []),
         "log_spawned": log_data.get("spawned", {}),
+        "sides_by_team": sides_by_team,
         "hypotheses": {
             "H1": {"verdict": h1_verdict, "evidence": h1_evidence},
             "H2": {"verdict": h2_verdict, "evidence": h2_evidence},
@@ -831,11 +807,20 @@ def evaluate_h1(
         )
 
 
+def log_fighter_key(fighter: dict) -> Tuple[Optional[int], str]:
+    name = fighter.get("name") or fighter["id"]
+    return fighter.get("team"), name.removeprefix("Operator ")
+
+
+def fighter_label(key: Tuple[str, str]) -> str:
+    return f"{key[0]}:{key[1]}"
+
+
 def evaluate_h2(
     posts: dict,
     decisions: dict,
     log_data: dict,
-    def_fighters: list,
+    def_side: str,
 ) -> Tuple[str, str]:
     """H2: Defenders had tactical posts along route and left them on contact at long range."""
     if not log_data.get("found") or not log_data.get("round_found"):
@@ -845,9 +830,7 @@ def evaluate_h2(
     if not fighters_with_posts:
         return "DOES NOT HOLD", "Defenders had no tactical posts along the route; spawned directly on/near the point."
 
-    def_names = {f["id"] for f in def_fighters} | {f.get("name") for f in def_fighters if f.get("name")}
-    def_teams = {f.get("team") for f in def_fighters if f.get("team") is not None}
-
+    post_fighters = ", ".join(fighter_label(key) for key in fighters_with_posts)
     abandoned = []
     for fid, dec_list in decisions.items():
         if fid in fighters_with_posts:
@@ -859,47 +842,34 @@ def evaluate_h2(
 
     long_range_threats = []
     for d in log_data.get("decisions", []):
-        if def_teams and d.get("team") not in def_teams:
-            continue
-        if def_names and d.get("who") not in def_names and f"Operator {d.get('who')}" not in def_names:
-            continue
         if d.get("threat_dist_m", 0) > 40.0:
-            long_range_threats.append(f"{d['who']} -> {d['order']} (threat seen at {d['threat_dist_m']:.1f}m)")
+            long_range_threats.append(
+                f"{fighter_label((def_side, d['who']))} -> {d['order']} (threat seen at {d['threat_dist_m']:.1f}m)"
+            )
 
     if abandoned:
         details = []
         for a in abandoned:
             p_desc = posts[a[0]].get("post_id") or posts[a[0]].get("role") or "post"
-            details.append(f"{a[0]} left {p_desc} for {a[1]} at t={a[2]}s")
+            details.append(f"{fighter_label(a[0])} left {p_desc} for {a[1]} at t={a[2]}s")
         threat_note = f"; long-range threat triggers: {'; '.join(long_range_threats[:2])}" if long_range_threats else ""
-        return "HOLDS", f"Defenders started on posts ({', '.join(fighters_with_posts)}) and abandoned them: {', '.join(details)}{threat_note}."
+        return "HOLDS", f"Defenders started on posts ({post_fighters}) and abandoned them: {', '.join(details)}{threat_note}."
     else:
-        return "CANNOT TELL", f"Defenders were assigned posts ({', '.join(fighters_with_posts)}), but clear abandonment order transition could not be verified."
+        return "CANNOT TELL", f"Defenders were assigned posts ({post_fighters}), but clear abandonment order transition could not be verified."
 
 
 def evaluate_h3(
     log_data: dict,
     exposure_stats: dict,
-    rnd: dict,
-    def_fighters: list,
 ) -> Tuple[str, str]:
     """H3: No cover slot was found near defenders (bCoverAvailable false / cover 0.00 / crates not cover)."""
-    def_names = {f["id"] for f in def_fighters} | {f.get("name") for f in def_fighters if f.get("name")}
-    def_teams = {f.get("team") for f in def_fighters if f.get("team") is not None}
-
-    decisions = [
-        d for d in log_data.get("decisions", [])
-        if (not def_teams or d.get("team") in def_teams) and
-           (not def_names or d.get("who") in def_names or f"Operator {d.get('who')}" in def_names)
-    ]
+    decisions = log_data.get("decisions", [])
     zero_cover_count = sum(1 for d in decisions if d.get("cover") == 0.0)
     total_decisions_with_cover = sum(1 for d in decisions if "cover" in d)
 
     take_cover_failures = [
         f for f in log_data.get("failures", [])
-        if f.get("order") == "TakeCover" and
-           (not def_teams or f.get("team") in def_teams) and
-           (not def_names or f.get("who") in def_names or f"Operator {f.get('who')}" in def_names)
+        if f.get("order") == "TakeCover"
     ]
 
     total_pre_contact_stand = sum(st["pre_contact_stand_s"] for st in exposure_stats.values())
@@ -925,20 +895,10 @@ def evaluate_h4(
     log_data: dict,
     exposure_stats: dict,
     t_contact: Optional[float],
-    shots: list,
-    def_fighters: list,
+    def_side: str,
 ) -> Tuple[str, str]:
     """H4: 'Let them run through' caused by ShouldHoldFire, attention rule, or weapon range band."""
-    def_names = {f["id"] for f in def_fighters} | {f.get("name") for f in def_fighters if f.get("name")}
-    def_teams = {f.get("team") for f in def_fighters if f.get("team") is not None}
-
-    fire_events = [
-        fe for fe in log_data.get("fire_events", [])
-        if (not def_teams or fe.get("team") in def_teams) and
-           (not def_names or fe.get("who") in def_names or f"Operator {fe.get('who')}" in def_names)
-    ]
-
-    hold_events = [fe for fe in fire_events if fe.get("action") == "holds his fire"]
+    hold_events = [fe for fe in log_data.get("fire_events", []) if fe.get("action") == "holds his fire"]
 
     first_def_shots = [st["first_shot_t"] for st in exposure_stats.values() if st["first_shot_t"] is not None]
     min_def_shot = min(first_def_shots) if first_def_shots else None
@@ -950,7 +910,7 @@ def evaluate_h4(
     if hold_events:
         he = hold_events[0]
         evidence = (
-            f"Defenders explicitly held fire via ShouldHoldFire: {he['who']} holds his fire "
+            f"Defenders explicitly held fire via ShouldHoldFire: {fighter_label((def_side, he['who']))} holds his fire "
             f"(threat at {he['dist_m']:.1f}m, attention off {he['attention_off']:.2f})."
         )
         return "HOLDS", evidence
@@ -992,16 +952,9 @@ def format_markdown_report(metrics: dict, arena_path: Path, round_arg: Union[int
     md.append("| Defender | Weapon / Look | Initial Post / Role | Coordinates / Post ID | Post Score | Danger |")
     md.append("|---|---|---|---|---|---|")
     for f in metrics["def_fighters"]:
-        fid = f["id"]
-        fname = f.get("name") or (fid[len("Operator "):] if fid.startswith("Operator ") else fid)
-        post = metrics["posts_assigned"].get(fid)
-        f_team = f.get("team")
-        spawn_map = metrics.get("log_spawned", {})
-        spawn_info = None
-        if f_team is not None:
-            spawn_info = spawn_map.get((int(f_team), fname)) or spawn_map.get((int(f_team), fid))
-        if spawn_info is None:
-            spawn_info = spawn_map.get(fname) or spawn_map.get(fid)
+        key = (f["side"], f["id"])
+        post = metrics["posts_assigned"].get(key)
+        spawn_info = metrics.get("log_spawned", {}).get(log_fighter_key(f))
         weapon = (spawn_info.get("weapon") if spawn_info else None) or f.get("weapon") or "n/a"
         if post:
             role = post.get("role", "custom")
@@ -1013,7 +966,7 @@ def format_markdown_report(metrics: dict, arena_path: Path, round_arg: Union[int
             coord = "Spawn ring"
             score_s = "n/a"
             danger_s = "0.00"
-        md.append(f"| **{fid}** | {weapon} | `{role}` | `{coord}` | {score_s} | {danger_s} |")
+        md.append(f"| **{fighter_label(key)}** | {weapon} | `{role}` | `{coord}` | {score_s} | {danger_s} |")
     md.append("")
 
     md.append("## 3. Order Sequence & Decision Timeline (Spawn to Engagement)")
@@ -1024,7 +977,7 @@ def format_markdown_report(metrics: dict, arena_path: Path, round_arg: Union[int
     for fid, d_list in metrics["decisions_by_fighter"].items():
         for d in d_list:
             t_val = d["t"]
-            timeline_rows.append((t_val, fid, d["decision"], f"{d['score']:.2f}", d.get("why") or "tactic eval", f"{t_val:.1f} s"))
+            timeline_rows.append((t_val, fighter_label(fid), d["decision"], f"{d['score']:.2f}", d.get("why") or "tactic eval", f"{t_val:.1f} s"))
 
     for fe in metrics.get("log_fire_events", []):
         act_label = "Holds Fire" if fe.get("action") == "holds his fire" else "Opens Fire"
@@ -1033,7 +986,7 @@ def format_markdown_report(metrics: dict, arena_path: Path, round_arg: Union[int
         t_display = f"{t_val:.1f} s" if t_val is not None else "t n/a"
         timeline_rows.append((
             t_sort,
-            fe["who"],
+            fighter_label((metrics["sides_by_team"].get(fe["team"], "?"), fe["who"])),
             act_label,
             "-",
             f"threat at {fe['dist_m']:.1f}m, attention off {fe['attention_off']:.2f}",
@@ -1055,15 +1008,15 @@ def format_markdown_report(metrics: dict, arena_path: Path, round_arg: Union[int
     md.append("| Defender | Total Standing in Open (s) | Pre-Contact Standing (s) | Source | First Shot Time (s) | Hits / Targets |")
     md.append("|---|---|---|---|---|---|")
     for f in metrics["def_fighters"]:
-        fid = f["id"]
-        st = metrics["exposure_stats"].get(fid, {})
+        key = (f["side"], f["id"])
+        st = metrics["exposure_stats"].get(key, {})
         first_shot_s = f"{st['first_shot_t']:.1f} s" if st.get("first_shot_t") is not None else "None"
         hits_str = f"{st.get('shots_fired', 0)} shots"
         if st.get("first_shot_target"):
             hits_str += f" (first -> {st['first_shot_target']})"
         src_str = f"`{st.get('source', 'n/a')}`"
         md.append(
-            f"| **{fid}** | {st.get('total_stand_s', 0.0):.1f} s | {st.get('pre_contact_stand_s', 0.0):.1f} s | "
+            f"| **{fighter_label(key)}** | {st.get('total_stand_s', 0.0):.1f} s | {st.get('pre_contact_stand_s', 0.0):.1f} s | "
             f"{src_str} | {first_shot_s} | {hits_str} |"
         )
     md.append("")

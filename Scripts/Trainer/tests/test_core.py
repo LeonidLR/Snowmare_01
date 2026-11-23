@@ -269,6 +269,26 @@ class CloseRangeTests(unittest.TestCase):
         self.assertEqual(st["shots"], 0)
         self.assertEqual(track_stats.side_stats(self.track(weapon="Shotgun"), "A", 10.0, False)["shots"], 3)
 
+    def test_interleaved_fighters_with_same_id(self):
+        track = {
+            "dt": 1,
+            "fighters": [
+                {"id": "Lind", "side": "A"},
+                {"id": "Lind", "side": "B"},
+                {"id": "Vance", "side": "B"},
+            ],
+            "frames": [[[0, 0], [15, 0], [3, 0]], [[0, 0], [5, 0], [3, 0]]],
+            "events": [
+                {"t": 0, "type": "shot", "side": "A", "from": "Lind", "to": "Lind", "hit": True},
+                {"t": 1, "type": "shot", "side": "B", "from": "Lind", "to": "Lind", "hit": True},
+                {"t": 1, "type": "shot", "from": "Lind", "to": "Lind", "hit": True},
+                {"t": 1, "type": "shot", "from": "Vance", "to": "Lind", "hit": True},
+            ],
+        }
+        a, b = (track_stats.side_stats(track, side) for side in "AB")
+        self.assertEqual((a["shots"], a["close_shots"], a["close_hits_taken"]), (1, 0, 2))
+        self.assertEqual((b["shots"], b["close_shots"], b["close_hits_taken"]), (2, 2, 0))
+
     def test_real_arena_track(self):
         # real new-format track (cm, duplicate fighter ids across sides, target = actor name "BP_Operative_C_N" / "?")
         path = os.path.join(os.path.dirname(__file__), "..", "fixtures", "real_arena_round.track.json")
