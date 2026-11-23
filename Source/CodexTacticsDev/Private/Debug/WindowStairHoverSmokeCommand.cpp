@@ -266,6 +266,17 @@ namespace WindowStairHoverSmoke
 			PC->bFreezeMantleHoverForTesting = true; // the real (off-window) cursor must not clear the hover the smoke sets
 			Check(bHit && PC->UpdateWindowHover(Leader, &Hit) && PC->IsWindowHighlightShown(), TEXT("W: the window opening highlight shows"));
 			Check(!PC->IsWindowHoverShown(), TEXT("W: the legacy silhouette is hidden"));
+			IConsoleVariable* Style = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Window.HoverStyle"));
+			if (bHit && Style)
+			{
+				const int32 PriorStyle = Style->GetInt();
+				Style->Set(1, ECVF_SetByConsole);
+				Check(PC->UpdateWindowHover(Leader, &Hit) && PC->IsWindowHoverShown() && !PC->IsWindowHighlightShown(),
+					TEXT("W: HoverStyle 1 switches back to the legacy silhouette"));
+				Style->Set(PriorStyle, ECVF_SetByConsole);
+				Check(PC->UpdateWindowHover(Leader, &Hit) && PC->IsWindowHighlightShown() && !PC->IsWindowHoverShown(),
+					TEXT("W: restoring the default switches back to the opening highlight"));
+			}
 			Shot(*World, *PC, Glass + R.Across * (R.StartSide * 350.f) + FVector(0.f, 0.f, 20.f), Glass, TEXT("window_hover"));
 			R.PendingClick = Hit;
 			Go(EStep::WindowShot);
