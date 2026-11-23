@@ -1,12 +1,12 @@
-// Dev-only check of the window / stair-up silhouettes and their clicks (designer test 2026-11-22 on the dressed khrushchevka showcase: "no
-// silhouette when I hover a window; the click made him look for a door", "the same with the stairs"). Real cursor rays (URoofCutawaySubsystem::
-// TraceCursorRay, as the controller traces them) and the real click (ACodexTacticsPlayerController::HandlePlayerClick, the click preview included).
+// Dev-only check of opening highlights (designer 2026-11-23), the stair-up silhouette, and the window and stair clicks.
+// Uses the real cursor trace (URoofCutawaySubsystem::TraceCursorRay) and click (ACodexTacticsPlayerController::HandlePlayerClick).
 // W: the leader outside a ground-floor window (tag window_sill, its far side walkable), Solo; the ray from a camera on his side onto the glass
-//    must resolve to that sill (WindowBreakage::FindWindowSillAt), the hover silhouette must show, the click must take him THROUGH the window
+//    must resolve to that sill (WindowBreakage::FindWindowSillAt), the opening highlight must show, the click must take him THROUGH the window
 //    (on its far side within 20 s) and break it (tag window_broken).
 // S: the leader on storey 0 of a 3+ storey house next to a stair flight (a piece tagged stair=<id>); the storeys above are cut; the ray onto the
 //    flight must give the stair-up target (FindStairUpTarget), the hover silhouette must show and the click must take him up to storey 1 within
 //    30 s.
+// D: the leader in front of a closed inner door. A ray to its leaf must show a blue highlight, then red when the leaf is locked.
 //   UnrealEditor.exe <uproject> /Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit -game -nullrhi -nosound -LevelJson=L_Gen_StoryShowcase_Kit.json
 //     -ExecCmds="CodexTactics.WindowStairHoverSmoke"
 // Godot reference: none (UE-only).
@@ -27,6 +27,8 @@
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
+#include "Interactables/DoorActor.h"
+#include "Interactables/DoorSubsystem.h"
 #include "Interactables/WindowBreakage.h"
 #include "Tactics/CoverGhostActor.h"
 #include "Camera/CameraActor.h"
@@ -44,7 +46,7 @@ namespace WindowStairHoverSmoke
 	constexpr int32 SettleFrames = 90;
 	constexpr int32 MaxFrames = 60 * 240;
 
-	enum class EStep : uint8 { Warmup, WindowPlace, WindowHover, WindowShot, WindowWalk, StairPlace, StairHover, StairShot, StairWalk, Done };
+	enum class EStep : uint8 { Warmup, WindowPlace, WindowHover, WindowShot, WindowWalk, StairPlace, StairHover, StairShot, StairWalk, DoorPlace, DoorHover, Done };
 
 	struct FRunner
 	{
@@ -61,6 +63,9 @@ namespace WindowStairHoverSmoke
 		float Storey1Z = 0.f;
 		TWeakObjectPtr<UPrimitiveComponent> Stair;
 		TArray<TWeakObjectPtr<UPrimitiveComponent>> TriedStairs;
+		TWeakObjectPtr<ADoorActor> Door;
+		FVector DoorEye = FVector::ZeroVector;
+		FVector DoorAim = FVector::ZeroVector;
 		bool bShots = false;
 		FHitResult PendingClick;
 		TWeakObjectPtr<ACameraActor> ShotCamera;
@@ -259,12 +264,9 @@ namespace WindowStairHoverSmoke
 			Check(Found == Sill, FString::Printf(TEXT("W: the cursor on the window (hit %s %s at %s, normal z %.2f) resolves to its sill (%s)"), bHit ? *GetNameSafe(Hit.GetActor()) : TEXT("-"),
 				bHit ? *GetNameSafe(Hit.GetComponent()) : TEXT(""), *Hit.ImpactPoint.ToCompactString(), Hit.ImpactNormal.Z, *GetNameSafe(Found)));
 			PC->bFreezeMantleHoverForTesting = true; // the real (off-window) cursor must not clear the hover the smoke sets
-			Check(bHit && PC->UpdateWindowHover(Leader, &Hit) && PC->IsWindowHoverShown(), TEXT("W: the hover silhouette shows past the window"));
-			DescribeGhost(TEXT("W"), PC->GetWindowHoverGhost(), R.SillCenter + FVector(0.f, 0.f, 60.f));
-			// Straight through the window opening at glass height (no wall between the camera and a silhouette standing in / past the window).
-			const ACoverGhostActor* WGhost = PC->GetWindowHoverGhost();
-			const FVector GhostAt = WGhost ? WGhost->GetComponentsBoundingBox(true).GetCenter() : Glass;
-			Shot(*World, *PC, Glass + R.Across * (R.StartSide * 350.f) + FVector(0.f, 0.f, 20.f), GhostAt, TEXT("window_hover"));
+			Check(bHit && PC->UpdateWindowHover(Leader, &Hit) && PC->IsWindowHighlightShown(), TEXT("W: the window opening highlight shows"));
+			Check(!PC->IsWindowHoverShown(), TEXT("W: the legacy silhouette is hidden"));
+			Shot(*World, *PC, Glass + R.Across * (R.StartSide * 350.f) + FVector(0.f, 0.f, 20.f), Glass, TEXT("window_hover"));
 			R.PendingClick = Hit;
 			Go(EStep::WindowShot);
 			return true;
@@ -274,9 +276,9 @@ namespace WindowStairHoverSmoke
 			{
 				return true;
 			}
-			DescribeGhost(TEXT("W (after the shot)"), PC->GetWindowHoverGhost(), R.SillCenter + FVector(0.f, 0.f, 60.f));
 			PC->bFreezeMantleHoverForTesting = false;
 			PC->UpdateWindowHover(nullptr, nullptr);
+			Check(!PC->IsWindowHighlightShown(), TEXT("W: the window highlight clears without a hit"));
 			if (R.PendingClick.bBlockingHit)
 			{
 				PC->HandlePlayerClick(R.PendingClick);
@@ -339,7 +341,7 @@ namespace WindowStairHoverSmoke
 				}
 			}
 			Check(false, FString::Printf(TEXT("S: a storey-0 stair flight with navmesh near it (%d pieces tried)"), R.TriedStairs.Num()));
-			Finish();
+			Go(EStep::DoorPlace);
 			return true;
 		}
 		case EStep::StairHover:
@@ -389,6 +391,100 @@ namespace WindowStairHoverSmoke
 				return true;
 			}
 			Check(bUp, FString::Printf(TEXT("S: the click took him up to storey 1 (feet %.0f, storey 1 at %.0f, %.1f s)"), FeetZ(*Leader), R.Storey1Z, R.StepFrame / 60.f));
+			Go(EStep::DoorPlace);
+			return true;
+		}
+		case EStep::DoorPlace:
+		{
+			const UDoorSubsystem* Doors = World->GetSubsystem<UDoorSubsystem>();
+			if (!Doors || !Doors->IsActive())
+			{
+				Check(false, TEXT("D: openable doors are active on the showcase"));
+				Finish();
+				return true;
+			}
+			for (ADoorActor* Door : Doors->GetDoors())
+			{
+				if (!Door || Door->GetDoorState() != EDoorLeafState::Closed || Door->IsBroken()
+					|| Door->GetRole() == TEXT("entry") || Door->GetFloor() != 0)
+				{
+					continue;
+				}
+				const FVector Normal = Door->GetNormal();
+				const FVector Middle = Door->GetDoorwayCenter();
+				FCollisionQueryParams Query(SCENE_QUERY_STAT(OpeningHoverSmokeDoor), false, Door);
+				// Match the door subsystem's inner-door test: there is a ceiling on each side of the doorway.
+				bool bInner = true;
+				for (const float Side : { 1.f, -1.f })
+				{
+					const FVector Probe = Middle + Normal * (80.f * Side);
+					FHitResult Ceiling;
+					bInner = bInner && World->LineTraceSingleByChannel(Ceiling, Probe, Probe + FVector(0.f, 0.f, 600.f), ECC_Visibility, Query);
+				}
+				if (!bInner)
+				{
+					continue;
+				}
+				const FVector Aim = Door->GetLeafFootprintMid(0) + FVector(0.f, 0.f, Door->GetHeightCm() * 0.5f);
+				for (const float Side : { 1.f, -1.f })
+				{
+					const FVector Probe = Door->GetActorLocation() + Normal * (140.f * Side);
+					FNavLocation Stand;
+					if (!Nav->ProjectPointToNavigation(Probe, Stand, FVector(55.f, 55.f, 60.f))
+						|| FMath::Abs(Stand.Location.Z - Probe.Z) > 40.f)
+					{
+						continue;
+					}
+					const FVector Eye = Aim + Normal * (140.f * Side) + FVector(0.f, 0.f, 30.f);
+					FHitResult Leaf;
+					FCollisionQueryParams LeafQuery(SCENE_QUERY_STAT(OpeningHoverSmokeDoorLeaf), false, Leader);
+					if (!World->LineTraceSingleByChannel(Leaf, Eye, Aim - Normal * (60.f * Side), ECC_Visibility, LeafQuery)
+						|| Leaf.GetActor() != Door)
+					{
+						continue;
+					}
+					Put(*Leader, Stand.Location, static_cast<float>((-Normal * Side).Rotation().Yaw));
+					R.Door = Door;
+					R.DoorEye = Eye;
+					R.DoorAim = Aim;
+					Go(EStep::DoorHover);
+					return true;
+				}
+			}
+			Check(false, TEXT("D: found a closed inner door with a leaf to trace and a stand on the navmesh"));
+			Finish();
+			return true;
+		}
+		case EStep::DoorHover:
+		{
+			if (R.StepFrame < SettleFrames)
+			{
+				return true;
+			}
+			ADoorActor* Door = R.Door.Get();
+			FHitResult Hit;
+			const EDoorLeafState PriorState = Door ? Door->GetDoorState() : EDoorLeafState::Open;
+			const bool bHit = Door && CursorHit(*World, R.DoorEye, R.DoorAim, *Leader, Hit) && Hit.GetActor() == Door;
+			Check(bHit && PriorState == EDoorLeafState::Closed,
+				FString::Printf(TEXT("D: the cursor ray hit the closed leaf %s (hit %s)"), *GetNameSafe(Door), *GetNameSafe(Hit.GetActor())));
+			FLinearColor Color = FLinearColor::Black;
+			const bool bBlue = bHit && PC->UpdateDoorHover(Leader, &Hit) && PC->GetDoorHighlightColor(Color) && Color.B > FMath::Max(Color.R, Color.G);
+			Check(bBlue, FString::Printf(TEXT("D: the closed leaf's highlight is blue (%s)"), *Color.ToString()));
+			if (Door && Door->ForceState(EDoorLeafState::Locked))
+			{
+				FHitResult LockedHit;
+				Color = FLinearColor::Black;
+				const bool bRed = CursorHit(*World, R.DoorEye, R.DoorAim, *Leader, LockedHit) && LockedHit.GetActor() == Door
+					&& PC->UpdateDoorHover(Leader, &LockedHit) && PC->GetDoorHighlightColor(Color) && Color.R > FMath::Max(Color.G, Color.B);
+				Check(bRed, FString::Printf(TEXT("D: the locked leaf's highlight is red (%s)"), *Color.ToString()));
+				Check(Door->ForceState(PriorState), TEXT("D: restored the door's original state"));
+			}
+			else
+			{
+				Check(false, TEXT("D: forced the closed leaf to locked"));
+			}
+			PC->UpdateDoorHover(nullptr, nullptr);
+			Check(!PC->GetDoorHighlightColor(Color), TEXT("D: the door highlight clears without a hit"));
 			Finish();
 			return true;
 		}
@@ -414,8 +510,8 @@ namespace WindowStairHoverSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.WindowStairHoverSmoke"),
-		TEXT("Dev check (designer test 2026-11-22): the window silhouette + window click (through, breaks it) and the stair-up silhouette + click (up a storey) with ")
-		TEXT("real cursor rays and the real click. PASS/FAIL, then exits."),
+		TEXT("Dev check (designer 2026-11-23): window opening highlight + click, stair-up silhouette + click, and closed/locked door highlight colours. ")
+		TEXT("Uses real cursor rays. PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

@@ -11,6 +11,8 @@
 
 ## Openable doors R1 (2026-11-22, behind a switch, OFF by default)
 
+- Designer 2026-11-23 hover highlight — window amber / broken green, door closed blue / locked red. `Codex.Window.HoverStyle 1` restores the old window climb silhouette.
+
 Designer 2026-11-21: generated buildings need doors that can be opened. Roadmap (docs/port/ROADMAP_THREE_TRACKS_2026-11-21.md): doors change
 sight / cover / paths, so R1 sits behind `Codex.Doors.Openable` (-1 = `Content/Data/Interactables/doors.json` `"enabled"`, shipped 0; 0 off,
 1 on; read every tick - switching at runtime adopts / releases). Turning it on in main waits for the enemy-AI session's A/B.
