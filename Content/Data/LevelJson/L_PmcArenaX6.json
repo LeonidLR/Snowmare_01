@@ -2,15 +2,23 @@
   "$schema": "../Schemas/level_config.schema.json",
   "level_id": "L_PmcArenaX6",
   "level_name": "Generated ref_01_02_depot (seed 1)",
-  "description": "PMC arena copy of L_Gen_Depot_1_X6.json (enemy-AI session 2026-11-23) + its pmc_arena block - the designer's X6 file stays untouched. Generated greybox (docs/design/levelgen/LEVEL_GENERATOR.md) from ref_01_02_depot seed 1 by Scripts/Editor/build_levelgen_map.py; the squad walks the mandatory route (LevelGenRouteSmoke); combat-lab style pressure. ONE small wave only (a valid wave list is required).",
+  "description": "PMC arena copy of L_Gen_Depot_1_X6.json (enemy-AI session 2026-11-23, rebuilt from the designer's committed X6) + its pmc_arena block - the designer's X6 file stays untouched. Generated greybox (docs/design/levelgen/LEVEL_GENERATOR.md) from ref_01_02_depot seed 1 by Scripts/Editor/build_levelgen_map.py; the squad walks the mandatory route (LevelGenRouteSmoke); combat-lab style pressure. ONE small wave only (a valid wave list is required).",
   "combat_start": "ambush",
   "ambush_fight": "skirmish",
   "susanin_wave": 0,
   "horde_enabled": false,
   "prep_phase_duration": 60,
   "wave_rest_duration": 20,
-  "cold_rate_mult": 0,
   "intro_dialogue": false,
+  "environment": {
+    "_comment": "Generated map (designer 2026-11-18): live weather ladder, random start weather; tune here or in the Wave Editor.",
+    "locked": true,
+    "weather": "Clear",
+    "start_hour": 2,
+    "snow_cover": 0.1,
+    "override_carry": true,
+    "weather_strength": 0.3
+  },
   "cheats": {
     "immortal": true,
     "infinite_ammo": true
@@ -199,31 +207,31 @@
       {
         "at": [
           2356,
-          -6084
+          -6796
         ],
         "z": 0,
         "label": "R_main 1 - ground"
       },
       {
         "at": [
-          1200,
-          -6084
+          905,
+          -4266
         ],
         "z": 0,
         "label": "R_main 2 - ground"
       },
       {
         "at": [
-          980,
-          -7070
+          972,
+          -4615
         ],
         "z": 0,
         "label": "R_main 3 - ground"
       },
       {
         "at": [
-          1200,
-          -6084
+          2356,
+          -6796
         ],
         "z": 0,
         "label": "R_main 4 - ground"
@@ -231,14 +239,14 @@
       {
         "at": [
           2356,
-          -6084
+          -3182
         ],
         "z": 0,
         "label": "R_main 5 - ground"
       },
       {
         "at": [
-          2356,
+          693,
           -3182
         ],
         "z": 0,
@@ -247,14 +255,14 @@
       {
         "at": [
           693,
-          -3182
+          7969
         ],
         "z": 0,
         "label": "R_main 7 - ground"
       },
       {
         "at": [
-          693,
+          -5767,
           7969
         ],
         "z": 0,
@@ -263,18 +271,10 @@
       {
         "at": [
           -5767,
-          7969
-        ],
-        "z": 0,
-        "label": "R_main 9 - ground"
-      },
-      {
-        "at": [
-          -5767,
           3650
         ],
         "z": 0,
-        "label": "R_main 10 - ground"
+        "label": "R_main 9 - ground"
       },
       {
         "at": [
@@ -282,7 +282,7 @@
           1622
         ],
         "z": 0,
-        "label": "R_main 11 - ground"
+        "label": "R_main 10 - ground"
       },
       {
         "at": [
@@ -290,7 +290,7 @@
           2480
         ],
         "z": 600,
-        "label": "R_main 12 - roof:B_ruin via STAIR_ext_7"
+        "label": "R_main 11 - roof:B_ruin via STAIR_ext_7"
       },
       {
         "at": [
@@ -298,7 +298,7 @@
           1847
         ],
         "z": 600,
-        "label": "R_main 13 - roof:B_ruin"
+        "label": "R_main 12 - roof:B_ruin"
       },
       {
         "at": [
@@ -306,7 +306,7 @@
           1720
         ],
         "z": 300,
-        "label": "R_main 14 - floor:B_ruin:1",
+        "label": "R_main 13 - floor:B_ruin:1",
         "drop": "hole_roof_0"
       },
       {
@@ -315,7 +315,7 @@
           1773
         ],
         "z": 300,
-        "label": "R_main 15 - floor:B_ruin:1"
+        "label": "R_main 14 - floor:B_ruin:1"
       },
       {
         "at": [
@@ -323,7 +323,7 @@
           1815
         ],
         "z": 0,
-        "label": "R_main 16 - ground",
+        "label": "R_main 15 - ground",
         "drop": "hole_floor_0"
       },
       {
@@ -332,11 +332,19 @@
           1025
         ],
         "z": 0,
-        "label": "R_main 17 - ground"
+        "label": "R_main 16 - ground"
       },
       {
         "at": [
           -5767,
+          -520
+        ],
+        "z": 0,
+        "label": "R_main 17 - ground"
+      },
+      {
+        "at": [
+          -3827,
           -520
         ],
         "z": 0,
@@ -345,18 +353,10 @@
       {
         "at": [
           -3827,
-          -520
-        ],
-        "z": 0,
-        "label": "R_main 19 - ground"
-      },
-      {
-        "at": [
-          -3827,
           -2080
         ],
         "z": 0,
-        "label": "R_main 20 - ground"
+        "label": "R_main 19 - ground"
       },
       {
         "at": [
@@ -364,7 +364,7 @@
           -2080
         ],
         "z": 0,
-        "label": "R_main 21 - ground"
+        "label": "R_main 20 - ground"
       },
       {
         "at": [
@@ -372,7 +372,7 @@
           -2080
         ],
         "z": 0,
-        "label": "R_main 22 - ground"
+        "label": "R_main 21 - ground"
       },
       {
         "at": [
@@ -380,7 +380,7 @@
           -7800
         ],
         "z": 0,
-        "label": "R_main 23 - ground"
+        "label": "R_main 22 - ground"
       },
       {
         "at": [
