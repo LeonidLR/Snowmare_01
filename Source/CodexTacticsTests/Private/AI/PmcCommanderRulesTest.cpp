@@ -455,6 +455,17 @@ bool FPmcCommanderGeometryTest::RunTest(const FString&)
 	TestEqual(TEXT("Advance stops at the range fraction"), static_cast<float>(FVector::Dist2D(PmcCommanderRules::AdvancePoint(Centre, Threat, 1400.f, W), Threat)), 1400.f * W.AdvanceStopRangeFrac, 1.f);
 	TestEqual(TEXT("Advance from inside the stop range stays put"), PmcCommanderRules::AdvancePoint(FVector(500.f, 0.f, 0.f), Threat, 1400.f, W), FVector(500.f, 0.f, 0.f));
 	TestEqual(TEXT("Fall back straight away"), PmcCommanderRules::FallBackPoint(Centre, Threat, 800.f), FVector(2800.f, 0.f, 0.f));
+	{
+		// R1 (loss autopsy 2026-11-23): a zone defender's fall-back slot - within 6 m and never out of the 6 m zone.
+		using PmcCommanderRules::IsDefenceFallBackSlotAllowed;
+		const FVector Point(0.f, 0.f, 0.f);
+		TestTrue(TEXT("R1: near slot inside the zone"), IsDefenceFallBackSlotAllowed(FVector(200.f, 0.f, 0.f), FVector(500.f, 0.f, 0.f), Point, 600.f));
+		TestFalse(TEXT("R1: slot outside the zone"), IsDefenceFallBackSlotAllowed(FVector(400.f, 0.f, 0.f), FVector(800.f, 0.f, 0.f), Point, 600.f));
+		TestFalse(TEXT("R1: slot over 6 m away"), IsDefenceFallBackSlotAllowed(FVector(-300.f, 0.f, 0.f), FVector(400.f, 0.f, 0.f), Point, 600.f));
+		TestTrue(TEXT("R1: outside the zone, a slot no farther from the point"), IsDefenceFallBackSlotAllowed(FVector(1000.f, 0.f, 0.f), FVector(900.f, 300.f, 0.f), Point, 600.f));
+		TestFalse(TEXT("R1: outside the zone, a slot farther away"), IsDefenceFallBackSlotAllowed(FVector(1000.f, 0.f, 0.f), FVector(1300.f, 0.f, 0.f), Point, 600.f));
+		TestTrue(TEXT("R1: planar - a roof slot over the point counts"), IsDefenceFallBackSlotAllowed(FVector(100.f, 0.f, 300.f), FVector(300.f, 0.f, 300.f), Point, 600.f));
+	}
 	// Cover quality: the wall behind the man (he faces along the normal) shields threats on the -normal side.
 	TestEqual(TEXT("Threat behind the wall: full cover"), PmcCommanderRules::CoverQualityAgainst(FVector::ZeroVector, FVector(1.f, 0.f, 0.f), FVector(-1000.f, 0.f, 0.f)), 1.f, 0.001f);
 	TestEqual(TEXT("Threat in front of the man: no cover"), PmcCommanderRules::CoverQualityAgainst(FVector::ZeroVector, FVector(1.f, 0.f, 0.f), FVector(1000.f, 0.f, 0.f)), 0.f, 0.001f);

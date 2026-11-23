@@ -216,6 +216,11 @@ namespace PmcArena
 		 */
 		bool bRocketContact = true;
 		/**
+		 * FallBackCover=1 (R1, loss autopsy 2026-11-23, default 0): the defending PMC team falls back in contact only into a near cover
+		 * slot that keeps it in the zone (UPmcSquadSubsystem::SetDefenceFallBackCover). Written to the round as "fallback_cover".
+		 */
+		bool bFallBackCover = false;
+		/**
 		 * ObjectiveReach=on|off (fix/arena-rpg-contact-roof, default on): the objective must be reached by a full navmesh path from BOTH
 		 * sides' spawns (PmcArenaRoundRules::IsReachableFromBoth), else another point; off = the old placement (the measurement).
 		 */
@@ -592,6 +597,7 @@ namespace PmcArena
 			else if (Key == TEXT("cammax")) { Options.CamMaxCm = FMath::Clamp(FCString::Atof(*Value), 10.f, 300.f) * 100.f; }
 			else if (Key == TEXT("playarea")) { Options.bPlayArea = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
 			else if (Key == TEXT("rocketcontact")) { Options.bRocketContact = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
+			else if (Key == TEXT("fallbackcover")) { Options.bFallBackCover = FCString::Atoi(*Value) != 0; }
 			else if (Key == TEXT("objectivereach")) { Options.bObjectiveReach = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
 			else if (Key == TEXT("scenario"))
 			{
@@ -2602,6 +2608,7 @@ namespace PmcArena
 			Round->SetBoolField(TEXT("fight_started"), Result.bFightStarted);
 			// fix/pmc-arena-stalemate: a round without a shot between the sides is a no-reward draw for the trainer; the fight flow numbers.
 			Round->SetBoolField(TEXT("contact"), Result.bContact);
+			Round->SetBoolField(TEXT("fallback_cover"), State.Options.bFallBackCover);
 			{
 				TSharedRef<FJsonObject> Flow = MakeShared<FJsonObject>();
 				auto Round1 = [](float Value) { return FMath::RoundToFloat(Value * 10.f) / 10.f; };
@@ -3463,6 +3470,7 @@ namespace PmcArena
 			Pmc->SetTeamObjective(State.Sides[AttackerIndex].TeamId, EPmcRole::Attacker, State.Objective, State.Config.ObjectiveRadiusCm, State.Config.ObjectiveLevelCm);
 			Pmc->SetTeamObjective(DefenderTeamId, EPmcRole::Defender, State.Objective, State.Config.ObjectiveRadiusCm, State.Config.ObjectiveLevelCm);
 		}
+		Pmc->SetDefenceFallBackCover(State.bRoundObjective && State.Options.bFallBackCover);
 		// TACTICAL_MAP P2/P3: on a map with a tactical file the defenders know the attackers' way to the point (cover slots facing it); the
 		// tactical round set it with their posts already.
 		const int32 DefenderTeam = State.Sides[1 - AttackerIndex].TeamId;
@@ -3768,6 +3776,7 @@ namespace PmcArena
 			{
 				Pmc->SetTeamObjective(Team, EPmcRole::None, FVector::ZeroVector, 0.f);
 			}
+			Pmc->SetDefenceFallBackCover(false);
 			Pmc->SetTeamCommanded(TeamA, false);
 			Pmc->SetTeamCommanded(TeamB, false);
 			Pmc->SetTeamCommanded(PmcTeam::Player, false);

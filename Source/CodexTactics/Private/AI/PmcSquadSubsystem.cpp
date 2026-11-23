@@ -2104,6 +2104,33 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		Team.Stats.Suppressions += bTaken ? 1 : 0;
 		break;
 	case EPmcOrder::FallBack:
+		if (bDefenceFallBackCover && View.bHasThreat && Team.Objective.IsSet() && Team.Objective->Role == EPmcRole::Defender)
+		{
+			// R1 (loss autopsy 2026-11-23, FallBackCover=1): a zone defender falls back only into a near cover slot that keeps him in
+			// the zone (PmcCommanderRules::IsDefenceFallBackSlotAllowed); none = no walk - the order fails, he fights from where he is.
+			const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
+			FCoverSlot NearCover;
+			float NearQuality = 0.f;
+			if (FindCoverNear(Fighter, View.Threat.Location, PmcCommanderRules::DefenceFallBackRunCm, nullptr, Team.Weights, NearCover, NearQuality, View.Band, nullptr,
+					TConstArrayView<FVector>(), TConstArrayView<FString>(), bPostLevelOnly ? &PostLevelZ : nullptr)
+				&& PmcCommanderRules::IsDefenceFallBackSlotAllowed(Feet, NearCover.WorldLocation, Team.Objective->Location, Team.Objective->RadiusCm)
+				&& !(Fighter.bInCover && Fighter.GetCoverSlot().WorldLocation.Equals(NearCover.WorldLocation, 50.f)))
+			{
+				Context.Cover = NearCover;
+				Context.bSprint = true;
+				bTaken = SquadOrderCatalog::Execute(ESquadOrder::TakeCover, Context);
+				Goal = NearCover.WorldLocation;
+				State.Slot = NearCover;
+			}
+			if (!bTaken)
+			{
+				UE_LOG(LogCodexTactics, Verbose, TEXT("[PmcAI] team %d: %s R1 - no cover within %.0f m inside the zone, no fall-back walk"), TeamId,
+					*Fighter.DisplayName.ToString(), PmcCommanderRules::DefenceFallBackRunCm / 100.f);
+			}
+			++Team.Stats.DefenceFallBackCover;
+			Team.Stats.Retreats += bTaken ? 1 : 0;
+			break;
+		}
 		if (View.bHasThreat && PmcCommanderRules::IsTooClose(View.Threat.DistanceCm, View.Band, Team.Weights))
 		{
 			// Too close for his weapon (2026-11-04): back to the band - a cover slot round him already at band distance from the threat
