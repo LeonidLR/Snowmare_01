@@ -154,7 +154,7 @@ void UOperativeAnimInstance::ResolveCoverAnimSets(TArray<FSoftObjectPath>* OutPa
 		{
 			continue;
 		}
-		FCoverAnimSetLoaded& Loaded = LoadedCoverSets.Add(Set.Key);
+		FCoverAnimSetLoaded Loaded;
 		Loaded.GrenadeReleaseSeconds = Set.Value.GrenadeReleaseSeconds;
 		Loaded.ShimmyClipSpeed = Set.Value.ShimmyClipSpeed;
 		int32 Found = 0;
@@ -189,12 +189,19 @@ void UOperativeAnimInstance::ResolveCoverAnimSets(TArray<FSoftObjectPath>* OutPa
 			FCoverSetAssets Pair = Map.KeyBase ? LoadPair(Map.KeyBase, false) : FCoverSetAssets();
 			Loaded.Slots.Add(Map.Slot, MoveTemp(Pair));
 		}
+		if (!CoverAnimSetRules::CanActivateSet(Found))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[CoverSet] %s: set '%s' for skeleton %s has no loaded cover slots; using native clips"),
+				*GetNameSafe(GetOwningActor()), *Set.Key, *SkeletonName);
+			continue;
+		}
 		for (const TCHAR* Extra : GCoverExtras)
 		{
 			Loaded.Extras.Add(Extra, LoadPair(Extra, FString(Extra).EndsWith(TEXT("_ao"))));
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("[CoverSet] %s: set '%s' for skeleton %s - %d assets, %d missing"), *GetNameSafe(GetOwningActor()), *Set.Key,
 			*SkeletonName, Found, Missing);
+		LoadedCoverSets.Add(Set.Key, MoveTemp(Loaded));
 	}
 }
 
@@ -276,7 +283,7 @@ void UOperativeAnimInstance::ApplyCoverAnimSet(const FString& Set)
 	}
 	ActiveCoverAnimSet = Loaded ? Set : FString();
 	bCoverOverTopFireSet = false;
-	bCoverOverSideSwitched = false;
+	ResetCoverOverTopSwitch();
 }
 
 const FCoverSetAssets* UOperativeAnimInstance::FindCoverSetExtra(const TCHAR* KeyBase) const
@@ -358,7 +365,6 @@ void UOperativeAnimInstance::TrackCoverSetChanges(const AOperativeCharacter& Ope
 	if (bShimmying || bCoverEnteredThisFrame)
 	{
 		bCoverSetFacingChangePending = false;
-		bCoverOverSideSwitched = bShimmying ? false : bCoverOverSideSwitched; // a walk off cancels the switch back
 	}
 	bCoverSetWasShimmying = bShimmying;
 	CoverSetLastShimmyDirection = bShimmying ? ShimmyDir : 0.f;
@@ -373,28 +379,32 @@ bool UOperativeAnimInstance::UpdateCoverSetStates(const AOperativeCharacter& Ope
 	}
 	// The fire set: the over-the-top shot crouched at a low cover away from its corner (a window sill), else the side peek. Switched only
 	// outside the fire pose, so a pose never changes under its own exit.
-	if (!bCoverInFirePose)
+	if (!bCoverInFirePose && CoverOverTopPhase != ECoverOverTopPhase::SwitchingIn)
 	{
-		const bool bHasOver = HasCoverSetClip(TEXT("crouch_over_fire_idle"), CoverFacing);
+		const bool bHasOver = HasCoverSetClip(TEXT("crouch_over_fire_idle"), CoverFacing)
+			&& (CoverFacing != ECoverFacing::Right || HasCoverSetClip(TEXT("crouch_side_switch"), ECoverFacing::Left));
 		const bool bOver = CoverAnimSetRules::DecideFireSet(bIsCrouching, CoverHeight, bCoverAtCorner, bHasOver) == ECoverFireSet::Over;
 		if (bOver != bCoverOverTopFireSet)
 		{
 			bCoverOverTopFireSet = bOver;
-			const TCHAR* Prefix = bOver ? TEXT("crouch_over_fire_") : TEXT("crouch_fire_");
 			const TPair<const TCHAR*, const TCHAR*> Slots[] = {
 				{ TEXT("CoverCrouchFireEnter"), TEXT("enter") }, { TEXT("CoverCrouchFireIdle"), TEXT("idle") },
 				{ TEXT("CoverCrouchFireExit"), TEXT("exit") }, { TEXT("CoverCrouchFire"), TEXT("idle") } };
 			for (const TPair<const TCHAR*, const TCHAR*>& Slot : Slots)
 			{
 				TArray<TObjectPtr<UAnimSequenceBase>>* Target = FindCoverArray(Slot.Key);
-				const FString Key = FString(Prefix) + Slot.Value;
+				const FCoverSetAssets* Native = NativeCoverArrays.Find(Slot.Key);
+				const FString SideKey = FString(TEXT("crouch_fire_")) + Slot.Value;
+				const FString OverKey = FString(TEXT("crouch_over_fire_")) + Slot.Value;
 				for (const ECoverFacing Facing : { ECoverFacing::Left, ECoverFacing::Right })
 				{
 					const int32 Index = CoverFacingRules::ClipIndex(Facing);
-					UAnimSequenceBase* Clip = PickCoverSetClip(*Key, Facing);
-					if (Target && Target->IsValidIndex(Index) && Clip)
+					if (Target && Target->IsValidIndex(Index))
 					{
-						(*Target)[Index] = Clip;
+						UAnimSequenceBase* NativeClip = Native && Native->Assets.IsValidIndex(Index)
+							? Cast<UAnimSequenceBase>(Native->Assets[Index].Get()) : nullptr;
+						(*Target)[Index] = CoverAnimSetRules::ResolveFireClip(bOver ? ECoverFireSet::Over : ECoverFireSet::Side,
+							bOver ? PickCoverSetClip(*OverKey, Facing) : nullptr, PickCoverSetClip(*SideKey, Facing), NativeClip);
 					}
 				}
 			}
@@ -405,17 +415,19 @@ bool UOperativeAnimInstance::UpdateCoverSetStates(const AOperativeCharacter& Ope
 	{
 		return false;
 	}
-	if (bCoverOverSideSwitched)
+	if (CoverOverTopPhase == ECoverOverTopPhase::Firing)
 	{
-		// Out of the over-the-top pose that started from his left: back to the right-hand side he faces (the pack's CrouchL_To_R).
-		bCoverOverSideSwitched = false;
-		if (CoverFacing == ECoverFacing::Right && bIsCrouching && !bShimmying)
+		CoverOverTopPhase = CoverAnimSetRules::AdvanceOverTopPhase(CoverOverTopPhase, ECoverOverTopEvent::FireEnded);
+		UAnimSequenceBase* Back = PickCoverSetClip(TEXT("crouch_side_switch"), ECoverFacing::Right);
+		if (PlayCoverSetOneShot(Back, TEXT("over_switch_out"), 0.15f, 0.2f))
 		{
-			if (UAnimSequenceBase* Back = PickCoverSetClip(TEXT("crouch_side_switch"), ECoverFacing::Right))
-			{
-				return PlayCoverSetOneShot(Back, TEXT("over_switch_out"), 0.15f, 0.2f);
-			}
+			return true;
 		}
+	}
+	CoverOverTopPhase = CoverAnimSetRules::AdvanceOverTopPhase(CoverOverTopPhase, ECoverOverTopEvent::SwitchOutFinished);
+	if (CoverOverTopPhase == ECoverOverTopPhase::SwitchingIn)
+	{
+		return false; // fire-ready takes over from the completed switch-in
 	}
 	const TCHAR* StanceKey = bIsCrouching ? TEXT("crouch") : TEXT("stand");
 	// The walk along the wall: start / turn / stop clips for walks of ShimmyTransitionMinCm and more (designer Q5).
@@ -473,7 +485,12 @@ bool UOperativeAnimInstance::UpdateCoverSetStates(const AOperativeCharacter& Ope
 
 bool UOperativeAnimInstance::TryCoverSetOverSideSwitch()
 {
-	if (ActiveCoverAnimSet.IsEmpty() || !bCoverOverTopFireSet || !bIsCrouching || bShimmying || CoverFacing != ECoverFacing::Right || bCoverOverSideSwitched)
+	if (CoverOverTopPhase == ECoverOverTopPhase::SwitchingIn || CoverOverTopPhase == ECoverOverTopPhase::SwitchingOut)
+	{
+		return IsCoverSetOneShotPlaying();
+	}
+	if (CoverOverTopPhase != ECoverOverTopPhase::Idle || ActiveCoverAnimSet.IsEmpty()
+		|| !bCoverOverTopFireSet || !bIsCrouching || bShimmying || CoverFacing != ECoverFacing::Right)
 	{
 		return false;
 	}
@@ -482,8 +499,27 @@ bool UOperativeAnimInstance::TryCoverSetOverSideSwitch()
 	{
 		return false;
 	}
-	bCoverOverSideSwitched = true;
+	CoverOverTopPhase = CoverAnimSetRules::AdvanceOverTopPhase(CoverOverTopPhase, ECoverOverTopEvent::SwitchInStarted);
 	return true;
+}
+
+void UOperativeAnimInstance::ResetCoverOverTopSwitch()
+{
+	bCoverOverTopShotPending = false;
+	if (CoverOverTopPhase == ECoverOverTopPhase::Idle)
+	{
+		return;
+	}
+	if (UAnimMontage* Switch = CoverSetOneShotMontage.Get(); CoverSetOneShotKind.StartsWith(TEXT("over_switch_"))
+		&& Switch && CoverOneShotMontage.Get() == Switch)
+	{
+		Montage_Stop(0.2f, Switch);
+		CoverOneShotMontage.Reset();
+		CoverSetOneShotMontage.Reset();
+		CoverSetOneShotKind.Reset();
+	}
+	CoverOverTopPhase = CoverAnimSetRules::AdvanceOverTopPhase(CoverOverTopPhase, ECoverOverTopEvent::Cancelled);
+	CoverPendingFireClip.Reset();
 }
 
 bool UOperativeAnimInstance::IsCoverSetWalkOneShotPlaying() const
@@ -545,6 +581,7 @@ bool UOperativeAnimInstance::PlayCoverSetGrenadeThrow(AOperativeCharacter& Opera
 	const FCoverAnimSetLoaded* Loaded = LoadedCoverSets.Find(ActiveCoverAnimSet);
 	const FString ReleaseKey = CoverAnimSetRules::SideKey(StanceKey, CoverFacing);
 	const float* Release = Loaded ? Loaded->GrenadeReleaseSeconds.Find(ReleaseKey) : nullptr;
+	ResetCoverOverTopSwitch();
 	bCoverInFirePose = false;
 	CoverPendingFireClip.Reset();
 	if (!PlayCoverSetOneShot(Clip, TEXT("grenade"), 0.15f, 0.2f))

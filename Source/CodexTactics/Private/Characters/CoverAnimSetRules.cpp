@@ -184,6 +184,36 @@ ECoverFireSet CoverAnimSetRules::DecideFireSet(bool bCrouching, ECoverHeight Hei
 	return bSetHasOverClips && bCrouching && Height == ECoverHeight::LowCover && !bAtCorner ? ECoverFireSet::Over : ECoverFireSet::Side;
 }
 
+ECoverOverTopPhase CoverAnimSetRules::AdvanceOverTopPhase(ECoverOverTopPhase Phase, ECoverOverTopEvent Event)
+{
+	if (Event == ECoverOverTopEvent::Cancelled)
+	{
+		return ECoverOverTopPhase::Idle;
+	}
+	switch (Phase)
+	{
+	case ECoverOverTopPhase::Idle:
+		return Event == ECoverOverTopEvent::SwitchInStarted ? ECoverOverTopPhase::SwitchingIn : Phase;
+	case ECoverOverTopPhase::SwitchingIn:
+		return Event == ECoverOverTopEvent::FireStarted ? ECoverOverTopPhase::Firing : Phase;
+	case ECoverOverTopPhase::Firing:
+		return Event == ECoverOverTopEvent::FireEnded ? ECoverOverTopPhase::SwitchingOut : Phase;
+	case ECoverOverTopPhase::SwitchingOut:
+		return Event == ECoverOverTopEvent::SwitchOutFinished ? ECoverOverTopPhase::Idle : Phase;
+	}
+	return ECoverOverTopPhase::Idle;
+}
+
+UAnimSequenceBase* CoverAnimSetRules::ResolveFireClip(ECoverFireSet FireSet, UAnimSequenceBase* Over,
+	UAnimSequenceBase* Side, UAnimSequenceBase* Native)
+{
+	if (FireSet == ECoverFireSet::Over && Over)
+	{
+		return Over;
+	}
+	return Side ? Side : Native;
+}
+
 bool CoverAnimSetRules::UseShimmyTransitions(float WalkCm, float MinCm, bool bHasClip)
 {
 	return bHasClip && WalkCm >= MinCm;

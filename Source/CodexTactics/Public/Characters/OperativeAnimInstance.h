@@ -4,6 +4,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimInstanceProxy.h"
 #include "Characters/BlizzardWalkRules.h"
+#include "Characters/CoverAnimSetRules.h"
 #include "Characters/InjuredLocomotionRules.h"
 #include "Characters/InteractionAnimRules.h"
 #include "Characters/OperativeMovementRules.h"
@@ -2401,13 +2402,12 @@ private:
 	FString CoverSetOneShotKind;
 	TWeakObjectPtr<UAnimMontage> CoverSetOneShotMontage;
 	bool bCoverSetReloadPlaying = false;
-	/** Over the top on his right (designer 2026-11-23 "switch side first"): he moved to his left side first; the switch back plays after the pose. */
-	bool bCoverOverSideSwitched = false;
-	/**
-	 * The over-the-top set exists for his LEFT only (the mirrored right copies hold the rifle left-handed): facing right, he first plays the
-	 * side switch to the left (true = it started; the fire stance follows it). Fire-ready block and the shot from cover call it.
-	 */
+	ECoverOverTopPhase CoverOverTopPhase = ECoverOverTopPhase::Idle;
+	uint32 CoverOverTopMoveOrderSerial = 0;
+	bool bCoverOverTopShotPending = false;
+	/** Facing right, switch left before Aim/2. True while the switch owns the pose. */
 	bool TryCoverSetOverSideSwitch();
+	void ResetCoverOverTopSwitch();
 	/** The native cover arrays by property name (the set slots). */
 	TArray<TObjectPtr<UAnimSequenceBase>>* FindCoverArray(FName Slot);
 	/** Gathers every set clip of the JSON into the preload catalog (OutPaths) or loads this body's sets (nullptr). */

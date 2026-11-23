@@ -3,6 +3,7 @@
 // start / stop rule) + the shipped Content/Data/Animation/cover_anim_sets.json. In-game check: CodexTactics.CoverIndoorSmoke. UE-only.
 
 #include "Misc/AutomationTest.h"
+#include "Animation/AnimSequence.h"
 #include "Characters/CoverAnimSetRules.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -114,6 +115,47 @@ bool FCoverAnimSetFireSetTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("high cover: side peek"), CoverAnimSetRules::DecideFireSet(true, ECoverHeight::HighCover, false, true) == ECoverFireSet::Side);
 	TestTrue(TEXT("standing: side peek"), CoverAnimSetRules::DecideFireSet(false, ECoverHeight::LowCover, false, true) == ECoverFireSet::Side);
 	TestTrue(TEXT("no over clips: side"), CoverAnimSetRules::DecideFireSet(true, ECoverHeight::LowCover, false, false) == ECoverFireSet::Side);
+	return true;
+}
+
+COVERSET_TEST(FCoverAnimSetOverTopStagesTest, "OverTopStages")
+bool FCoverAnimSetOverTopStagesTest::RunTest(const FString& Parameters)
+{
+	using EPhase = ECoverOverTopPhase;
+	using EEvent = ECoverOverTopEvent;
+	using CoverAnimSetRules::AdvanceOverTopPhase;
+	const EPhase Entry = AdvanceOverTopPhase(EPhase::Idle, EEvent::SwitchInStarted);
+	TestTrue(TEXT("right-side aim begins with the left switch"), Entry == EPhase::SwitchingIn);
+	TestTrue(TEXT("another shot does not start a second switch"), AdvanceOverTopPhase(Entry, EEvent::SwitchInStarted) == EPhase::SwitchingIn);
+	TestTrue(TEXT("the switch back cannot play before the pose starts"), AdvanceOverTopPhase(Entry, EEvent::FireEnded) == EPhase::SwitchingIn);
+	const EPhase Fire = AdvanceOverTopPhase(Entry, EEvent::FireStarted);
+	TestTrue(TEXT("fire takes over after switch-in"), Fire == EPhase::Firing);
+	TestTrue(TEXT("sustained fire keeps the phase"), AdvanceOverTopPhase(Fire, EEvent::FireStarted) == EPhase::Firing);
+	const EPhase Return = AdvanceOverTopPhase(Fire, EEvent::FireEnded);
+	TestTrue(TEXT("switch out only after fire ends"), Return == EPhase::SwitchingOut);
+	TestTrue(TEXT("new aim cannot cut the switch back"), AdvanceOverTopPhase(Return, EEvent::SwitchInStarted) == EPhase::SwitchingOut);
+	TestTrue(TEXT("switch-out completion returns to idle"), AdvanceOverTopPhase(Return, EEvent::SwitchOutFinished) == EPhase::Idle);
+	for (const EPhase Phase : { Entry, Fire, Return })
+	{
+		TestTrue(TEXT("leaving, death, or a new order clears every active phase"), AdvanceOverTopPhase(Phase, EEvent::Cancelled) == EPhase::Idle);
+	}
+	return true;
+}
+
+COVERSET_TEST(FCoverAnimSetMissingClipsTest, "MissingClips")
+bool FCoverAnimSetMissingClipsTest::RunTest(const FString& Parameters)
+{
+	TestFalse(TEXT("no loaded core clip leaves native cover active"), CoverAnimSetRules::CanActivateSet(0));
+	TestTrue(TEXT("a partially loaded set can use native clips in its missing slots"), CoverAnimSetRules::CanActivateSet(1));
+	UAnimSequence* Native = NewObject<UAnimSequence>();
+	UAnimSequence* Side = NewObject<UAnimSequence>();
+	UAnimSequence* Over = NewObject<UAnimSequence>();
+	using CoverAnimSetRules::ResolveFireClip;
+	TestTrue(TEXT("Aim/2 uses its own clip"), ResolveFireClip(ECoverFireSet::Over, Over, Side, Native) == Over);
+	TestTrue(TEXT("a missing Aim/2 clip uses the side clip"), ResolveFireClip(ECoverFireSet::Over, nullptr, Side, Native) == Side);
+	TestTrue(TEXT("leaving Aim/2 restores the set's side clip"), ResolveFireClip(ECoverFireSet::Side, Over, Side, Native) == Side);
+	TestTrue(TEXT("a missing side clip restores the original native clip"), ResolveFireClip(ECoverFireSet::Side, Over, nullptr, Native) == Native);
+	TestNull(TEXT("without a side or native clip, the Aim/2 clip is cleared"), ResolveFireClip(ECoverFireSet::Side, Over, nullptr, nullptr));
 	return true;
 }
 
