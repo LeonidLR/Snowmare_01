@@ -19,7 +19,7 @@
 //     Commander (3) and the Medic-Sapper (2) have unspent points, the Engineer none -> the stat-points screen with exactly those two
 //     (title "0.0 FROZEN DAM", the next level named, the character image / role letter follows the sheet, "Continue >"), one point
 //     spent on the Commander's accuracy through the sheet, the Medic's left; the "Continue >" button -> the next campaign level
-//     /Game/Maps/Generated/L_Gen_Depot_1 opens (2026-11-02 / 2026-11-08: the Depot replaced Frozen Factory as campaign level 0.1; its own
+//     /Game/Maps/Generated/L_Gen_Depot_1_X6 opens (2026-11-02 / 2026-11-08: the Depot replaced Frozen Factory as campaign level 0.1; its own
 //     level JSON, not the run's -LevelJson); the squad stands at the Depot's PlayerStart (the leader facing its way), with the carried
 //     level / EXP / points / stats / kit and full health; the start fades in from black with "0.1 Depot". The Depot's own start in
 //     detail (a staged carry, no lake run): CodexTactics.DepotCampaignStartSmoke.
@@ -319,7 +319,7 @@ namespace GateExitLakeSmoke
 		const UCampaignSubsystem* Campaign = UCampaignSubsystem::Get(World);
 		const FCampaignSquadCarry* Carry = Campaign ? &Campaign->GetCarry() : nullptr;
 		const int32 Fallen = Carry ? Carry->Members.FilterByPredicate([](const FCarriedOperative& Member) { return Member.bKilledInAction; }).Num() : -1;
-		Check(State, Carry && Carry->ToMap == TEXT("L_Gen_Depot_1") && Carry->FromMap == TEXT("L_Demo01_A_FrozenLake") && Carry->Members.Num() == 3
+		Check(State, Carry && Carry->ToMap == TEXT("L_Gen_Depot_1_X6") && Carry->FromMap == TEXT("L_Demo01_A_FrozenLake") && Carry->Members.Num() == 3
 			&& Fallen == 3 - State.Living,
 			FString::Printf(TEXT("the squad handed over: %s -> %s, %d operatives (%d killed in action)"), Carry ? *Carry->FromMap : TEXT("-"), Carry ? *Carry->ToMap : TEXT("-"),
 				Carry ? Carry->Members.Num() : 0, Fallen));
@@ -336,14 +336,14 @@ namespace GateExitLakeSmoke
 			return Finish(State, false);
 		}
 		UWorld* World = FrontendSmokeUtils::FindGameWorld();
-		const bool bDepot = World && World != State.World.Get() && World->GetMapName().Contains(TEXT("L_Gen_Depot_1"));
+		const bool bDepot = World && World != State.World.Get() && World->GetMapName().Contains(TEXT("L_Gen_Depot_1_X6"));
 		USquadSubsystem* Squad = bDepot ? World->GetSubsystem<USquadSubsystem>() : nullptr;
 		ULevelExitSubsystem* Exit = bDepot ? World->GetSubsystem<ULevelExitSubsystem>() : nullptr;
 		if (State.Stage == EStage::Travel)
 		{
 			if (State.StageTime > 120.f)
 			{
-				Check(State, false, TEXT("the next level (L_Gen_Depot_1) opened"));
+				Check(State, false, TEXT("the next level (L_Gen_Depot_1_X6) opened"));
 				return Finish(State, false);
 			}
 			if (!Squad || !Exit || Squad->GetMembers().Num() < State.Living || !Exit->IsStartFadeResolved())
@@ -391,7 +391,7 @@ namespace GateExitLakeSmoke
 				*Exit->GetStartTitle(), State.FirstArrivalFade, State.FirstArrivalRealTime));
 		const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 		// The Depot's wave count is designer-editable (Training Ground, 2026-11-10): the flow must run the Depot's own list, whatever its length.
-		Check(State, Level && Level->Config.LevelId == TEXT("L_Gen_Depot_1") && Flow && Flow->GetConfig().TotalWaves == Level->Config.Waves.Num(),
+		Check(State, Level && Level->Config.LevelId == TEXT("L_Gen_Depot_1_X6") && Flow && Flow->GetConfig().TotalWaves == Level->Config.Waves.Num(),
 			FString::Printf(TEXT("the Depot's own level JSON (%s, %d waves; the run's -LevelJson is the lake's): %d"), Level ? *Level->Config.LevelId : TEXT("none"),
 				Level ? Level->Config.Waves.Num() : -1, Flow ? Flow->GetConfig().TotalWaves : -1));
 		const AActor* Start = UGameplayStatics::GetActorOfClass(World, APlayerStart::StaticClass());
@@ -479,7 +479,7 @@ namespace GateExitLakeSmoke
 		{
 			// No points: the exit opened the next level within the same frames (no screen waits for a click) - the lake is gone already.
 			const UCampaignSubsystem* Campaign = State.GameInstance.IsValid() ? State.GameInstance->GetSubsystem<UCampaignSubsystem>() : nullptr;
-			Check(State, Campaign && Campaign->GetCarry().ToMap == TEXT("L_Gen_Depot_1")
+			Check(State, Campaign && Campaign->GetCarry().ToMap == TEXT("L_Gen_Depot_1_X6")
 				&& !Campaign->GetCarry().Members.ContainsByPredicate([](const FCarriedOperative& Member) { return Member.UnspentStatPoints > 0; }),
 				TEXT("no unspent points: no points screen, the next level opened at once (squad handed over)"));
 			Next(State, EStage::Travel);
@@ -855,7 +855,7 @@ namespace GateExitLakeSmoke
 			Check(State, Exit->GetTitleAlpha() >= 1.f && Exit->GetFadeAlpha() >= 1.f, TEXT("black screen, \"MISSION COMPLETE\" shown"));
 			Check(State, Mission->IsAutomatedRun() && World->GetName().Contains(TEXT("FrozenLake")) && !Exit->HasLeaveDecision(),
 				TEXT("a headless check (an automated run) stays on the black screen (no menu travel)"));
-			Check(State, Exit->GetNextLevelMap().EndsWith(TEXT("L_Gen_Depot_1")), FString::Printf(TEXT("the campaign's next level: %s"),
+			Check(State, Exit->GetNextLevelMap().EndsWith(TEXT("L_Gen_Depot_1_X6")), FString::Printf(TEXT("the campaign's next level: %s"),
 				*Exit->GetNextLevelMap()));
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
@@ -952,14 +952,14 @@ namespace GateExitLakeSmoke
 	static FAutoConsoleCommandWithWorldAndArgs NoPointsCommand(
 		TEXT("CodexTactics.GateExitLakeNoPointsSmoke"),
 		TEXT("Dev check (2026-10-22 b): GateExitLakeSmoke with no unspent points - after the black screen no points screen, the next campaign level "
-			"(L_Gen_Depot_1) opens at once with the carried squad."),
+			"(L_Gen_Depot_1_X6) opens at once with the carried squad."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunNoPoints));
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.GateExitLakeSmoke"),
 		TEXT("Dev check (2026-10-22): the Demo 01 lake ends through the fully opened blast door - waves cleared (no end-of-fight button), the door opens, "
 			"two of three out = no fade, the third out = fade to black + mission complete; then the stat-points screen -> Continue -> the next campaign level "
-			"(L_Gen_Depot_1) with the carried squad at its start. 'Clip' = rendered frames into Saved/Screenshots/GateExit/frames, "
+			"(L_Gen_Depot_1_X6) with the carried squad at its start. 'Clip' = rendered frames into Saved/Screenshots/GateExit/frames, "
 			"'Shot' = one frame of the points screen into Saved/Screenshots/GateExit/points_screen.png."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }

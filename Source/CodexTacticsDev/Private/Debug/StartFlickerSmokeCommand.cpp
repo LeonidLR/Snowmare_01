@@ -217,8 +217,7 @@ namespace StartFlickerSmoke
 		Runner->Maps = Args;
 		if (Runner->Maps.IsEmpty())
 		{
-			Runner->Maps = { TEXT("/Game/Maps/L_Demo01_A_FrozenLake"), TEXT("/Game/Maps/L_Demo01_B_FrozenFactory"), TEXT("/Game/Maps/L_MovementTest"),
-				TEXT("/Game/Environment/Weather/Test/L_WeatherRainTest") };
+			Runner->Maps = { TEXT("/Game/Maps/L_Demo01_A_FrozenLake"), TEXT("/Game/Maps/Generated/L_Gen_Depot_1_X6") };
 		}
 		if (IConsoleVariable* Lightning = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Env.Lightning")))
 		{

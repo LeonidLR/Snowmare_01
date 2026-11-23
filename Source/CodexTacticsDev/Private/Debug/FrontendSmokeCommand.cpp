@@ -119,11 +119,10 @@ namespace FrontendSmoke
 			Frontend->SaveDirectoryOverride = State.SaveDir;
 			Frontend->bQuitDisabled = true;
 			// User decision 2026-10-22: NEW GAME starts the campaign at "0.0 Frozen Dam"; this check walks the frontend through the
-			// MovementTest level (its intro briefing, save in exploration, a wave fight), so it points NEW GAME there.
+			// The Lake is the real campaign start and supports the save, pause and combat loop.
 			Frontend->NewGameLevelOverride.Reset();
 			Check(State, Frontend->GetNewGameLevel().GetLongPackageName() == TEXT("/Game/Maps/L_Demo01_A_FrozenLake"),
 				FString::Printf(TEXT("NEW GAME starts the campaign at 0.0 Frozen Dam (%s)"), *Frontend->GetNewGameLevel().ToString()));
-			Frontend->NewGameLevelOverride = FSoftObjectPath(TEXT("/Game/Maps/L_MovementTest.L_MovementTest"));
 			if (FrontendSmokeUtils::EnsureFrontend(World))
 			{
 				Next(State);
@@ -222,11 +221,7 @@ namespace FrontendSmoke
 			UDialogueSubsystem* Dialogue = World->GetSubsystem<UDialogueSubsystem>();
 			Check(State, Mission->GetStartMode() == EMissionStartMode::Game && !UGameplayStatics::IsGamePaused(World),
 				TEXT("NEW GAME: the level starts in Game mode at once (no in-level menu)"));
-			Check(State, Dialogue && Dialogue->IsDialogueOpen(), TEXT("NEW GAME plays the intro briefing"));
-			if (Dialogue && Dialogue->IsDialogueOpen())
-			{
-				Dialogue->SkipDialogue();
-			}
+			Check(State, Dialogue && !Dialogue->IsDialogueOpen(), TEXT("the Lake's configured campaign start has no intro briefing"));
 			Next(State);
 			return true;
 		}
