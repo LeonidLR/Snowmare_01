@@ -54,6 +54,10 @@ struct CODEXTACTICS_API FPmcTeamStats
 	int32 TacticalFallBacks = 0;
 	/** R1 (FallBackCover=1): FallBack orders that went through the zone defender's cover-only rule (taken or not). */
 	int32 DefenceFallBackCover = 0;
+	/** R2 (ReloadCover=1): Reload orders through the rule / turned into a walk to cover / held back while a mate reloads. */
+	int32 DefenceReloadRule = 0;
+	int32 DefenceReloadToCover = 0;
+	int32 DefenceReloadWaits = 0;
 };
 
 /**
@@ -144,6 +148,11 @@ public:
 	 */
 	void SetDefenceFallBackCover(bool bOn) { bDefenceFallBackCover = bOn; }
 	bool IsDefenceFallBackCover() const { return bDefenceFallBackCover; }
+	/**
+	 * R2 (loss autopsy 2026-11-23, the arena's ReloadCover=1; default off): a defending team's Reload in contact goes to a near cover
+	 * slot first and waits while a mate reloads (PmcCommanderRules::DecideDefenceReload).
+	 */
+	void SetDefenceReloadCover(bool bOn) { bDefenceReloadCover = bOn; }
 	/**
 	 * G008: where the attackers come from. The defender arc is centred on the yaw from the objective toward this point.
 	 * Unset: yaw 0, and the sectors are still deterministic. Call it before SetTeamObjective, or after (the posts are split again).
@@ -239,6 +248,8 @@ public:
 private:
 	/** R1: SetDefenceFallBackCover. */
 	bool bDefenceFallBackCover = false;
+	/** R2: SetDefenceReloadCover. */
+	bool bDefenceReloadCover = false;
 	struct FKnownTarget
 	{
 		TWeakObjectPtr<AActor> Actor;

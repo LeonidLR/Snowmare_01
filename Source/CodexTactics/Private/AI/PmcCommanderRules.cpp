@@ -639,6 +639,19 @@ namespace PmcCommanderRules
 		return FVector::Dist2D(Slot, Objective) <= Limit;
 	}
 
+	EPmcDefenceReload DecideDefenceReload(bool bInCover, float ClipFrac, int32 MatesReloading, bool bCoverNear)
+	{
+		if (!bInCover && bCoverNear)
+		{
+			return EPmcDefenceReload::TakeCoverFirst;
+		}
+		if (ClipFrac > 0.f && MatesReloading > 0)
+		{
+			return EPmcDefenceReload::Wait;
+		}
+		return EPmcDefenceReload::Reload;
+	}
+
 	float CoverQualityAgainst(const FVector& SlotLocation, const FVector& WallNormal, const FVector& Threat)
 	{
 		const FVector ToThreat = (Threat - SlotLocation).GetSafeNormal2D();

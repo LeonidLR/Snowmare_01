@@ -72,6 +72,14 @@ enum class EPmcPostKind : uint8
 	Drop
 };
 
+/** R2 (PmcCommanderRules::DecideDefenceReload): what a zone defender's Reload order does in contact. */
+enum class EPmcDefenceReload : uint8
+{
+	Reload,
+	TakeCoverFirst,
+	Wait
+};
+
 /** A side's role in an objective round (the arena, task #53): the attackers take the point, the defenders hold it. */
 enum class EPmcRole : uint8
 {
@@ -696,6 +704,13 @@ namespace PmcCommanderRules
 	 */
 	CODEXTACTICS_API bool IsDefenceFallBackSlotAllowed(const FVector& FighterFeet, const FVector& Slot, const FVector& Objective, float ZoneRadiusCm,
 		float MaxRunCm = DefenceFallBackRunCm);
+
+	/**
+	 * R2 (loss autopsy 2026-11-23: Reload = 9 % of the defenders' contact time but 21 % of their deaths), with the option on, a zone
+	 * defender's Reload in contact: in the open with a near cover slot (IsDefenceFallBackSlotAllowed) -> TakeCoverFirst; rounds left in
+	 * the clip and a mate reloading -> Wait (keep firing); else Reload. An empty clip never waits.
+	 */
+	CODEXTACTICS_API EPmcDefenceReload DecideDefenceReload(bool bInCover, float ClipFrac, int32 MatesReloading, bool bCoverNear);
 
 	/**
 	 * How well a cover slot shields from Threat: the slot's wall is BEHIND the man facing along WallNormal, so it covers threats on

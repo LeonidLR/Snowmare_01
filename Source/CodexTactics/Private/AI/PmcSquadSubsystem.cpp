@@ -2390,6 +2390,43 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		}
 		break;
 	case EPmcOrder::Reload:
+		if (bDefenceReloadCover && View.bHasThreat && Team.Objective.IsSet() && Team.Objective->Role == EPmcRole::Defender)
+		{
+			// R2 (loss autopsy 2026-11-23, ReloadCover=1): Reload = 9 % of the defenders' contact time but 21 % of their deaths. A zone
+			// defender in contact reloads from cover (a near slot inside the zone first) and not while a mate reloads, unless his clip is empty.
+			int32 MatesReloading = 0;
+			for (const AOperativeCharacter* Mate : Mates)
+			{
+				MatesReloading += (Mate && Mate != &Fighter && Mate->bIsReloading) ? 1 : 0;
+			}
+			FCoverSlot NearCover;
+			float NearQuality = 0.f;
+			const bool bCoverNear = !Fighter.bInCover
+				&& FindCoverNear(Fighter, View.Threat.Location, PmcCommanderRules::DefenceFallBackRunCm, nullptr, Team.Weights, NearCover, NearQuality, View.Band, nullptr,
+					TConstArrayView<FVector>(), TConstArrayView<FString>(), bPostLevelOnly ? &PostLevelZ : nullptr)
+				&& PmcCommanderRules::IsDefenceFallBackSlotAllowed(PmcSquadLocal::FeetOf(Fighter), NearCover.WorldLocation, Team.Objective->Location, Team.Objective->RadiusCm);
+			++Team.Stats.DefenceReloadRule;
+			switch (PmcCommanderRules::DecideDefenceReload(Fighter.bInCover, View.ClipFrac, MatesReloading, bCoverNear))
+			{
+			case EPmcDefenceReload::TakeCoverFirst:
+				Context.Cover = NearCover;
+				Context.bSprint = true;
+				bTaken = SquadOrderCatalog::Execute(ESquadOrder::TakeCover, Context);
+				Goal = NearCover.WorldLocation;
+				State.Slot = NearCover;
+				Order = EPmcOrder::TakeCover;
+				++Team.Stats.DefenceReloadToCover;
+				break;
+			case EPmcDefenceReload::Wait:
+				bTaken = false; // the order fails and cools down; he keeps firing his last rounds
+				++Team.Stats.DefenceReloadWaits;
+				break;
+			default:
+				bTaken = SquadOrderCatalog::Execute(ESquadOrder::Reload, Context);
+				break;
+			}
+			break;
+		}
 		bTaken = SquadOrderCatalog::Execute(ESquadOrder::Reload, Context);
 		break;
 	case EPmcOrder::Objective:

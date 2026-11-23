@@ -466,6 +466,17 @@ bool FPmcCommanderGeometryTest::RunTest(const FString&)
 		TestFalse(TEXT("R1: outside the zone, a slot farther away"), IsDefenceFallBackSlotAllowed(FVector(1000.f, 0.f, 0.f), FVector(1300.f, 0.f, 0.f), Point, 600.f));
 		TestTrue(TEXT("R1: planar - a roof slot over the point counts"), IsDefenceFallBackSlotAllowed(FVector(100.f, 0.f, 300.f), FVector(300.f, 0.f, 300.f), Point, 600.f));
 	}
+	{
+		// R2: DecideDefenceReload(in cover, clip frac, mates reloading, cover near).
+		using PmcCommanderRules::DecideDefenceReload;
+		TestTrue(TEXT("R2: in the open with cover near -> cover first"), DecideDefenceReload(false, 0.2f, 0, true) == EPmcDefenceReload::TakeCoverFirst);
+		TestTrue(TEXT("R2: empty clip in the open with cover near -> cover first"), DecideDefenceReload(false, 0.f, 1, true) == EPmcDefenceReload::TakeCoverFirst);
+		TestTrue(TEXT("R2: in cover, a mate reloading, rounds left -> wait"), DecideDefenceReload(true, 0.2f, 1, false) == EPmcDefenceReload::Wait);
+		TestTrue(TEXT("R2: in cover, a mate reloading, clip empty -> reload"), DecideDefenceReload(true, 0.f, 1, false) == EPmcDefenceReload::Reload);
+		TestTrue(TEXT("R2: in cover, nobody reloading -> reload"), DecideDefenceReload(true, 0.2f, 0, false) == EPmcDefenceReload::Reload);
+		TestTrue(TEXT("R2: in the open, no cover near, nobody reloading -> reload"), DecideDefenceReload(false, 0.2f, 0, false) == EPmcDefenceReload::Reload);
+		TestTrue(TEXT("R2: in the open, no cover near, a mate reloading -> wait"), DecideDefenceReload(false, 0.2f, 2, false) == EPmcDefenceReload::Wait);
+	}
 	// Cover quality: the wall behind the man (he faces along the normal) shields threats on the -normal side.
 	TestEqual(TEXT("Threat behind the wall: full cover"), PmcCommanderRules::CoverQualityAgainst(FVector::ZeroVector, FVector(1.f, 0.f, 0.f), FVector(-1000.f, 0.f, 0.f)), 1.f, 0.001f);
 	TestEqual(TEXT("Threat in front of the man: no cover"), PmcCommanderRules::CoverQualityAgainst(FVector::ZeroVector, FVector(1.f, 0.f, 0.f), FVector(1000.f, 0.f, 0.f)), 0.f, 0.001f);
