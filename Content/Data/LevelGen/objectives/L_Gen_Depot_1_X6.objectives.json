@@ -8,57 +8,69 @@
   "goals": [
     {
       "id": "GOAL_1",
-      "kind": "room",
+      "kind": "street",
       "layer": "ground",
       "pos": [
-        -11874,
-        19498,
+        13177,
+        18942,
         0
       ],
       "radius_cm": 300,
-      "building": "B_x2_31_t8_office",
+      "zone": "Z_ST_x2_25"
+    },
+    {
+      "id": "GOAL_2",
+      "kind": "street",
+      "layer": "ground",
+      "pos": [
+        -13800,
+        14213,
+        0
+      ],
+      "radius_cm": 300,
+      "zone": "Z_ST_x2_10"
+    },
+    {
+      "id": "GOAL_3",
+      "kind": "room",
+      "layer": "ground",
+      "pos": [
+        -14046,
+        -15375,
+        0
+      ],
+      "radius_cm": 300,
+      "building": "B_x2_12_t8_block",
       "area": [
         [
-          -12150,
-          19054
+          -14287.6,
+          -15903.7
         ],
         [
-          -11598,
-          19054
+          -13697.1,
+          -15839.6
         ],
         [
-          -11598,
-          19941
+          -13805.1,
+          -14845.4
         ],
         [
-          -12150,
-          19941
+          -14395.6,
+          -14909.6
         ]
       ]
     },
     {
-      "id": "GOAL_2",
-      "kind": "yard",
+      "id": "GOAL_4",
+      "kind": "street",
       "layer": "ground",
       "pos": [
-        14343,
-        10255,
+        13800,
+        349,
         0
       ],
       "radius_cm": 300,
-      "zone": "Z_x2_8_1_t1003"
-    },
-    {
-      "id": "GOAL_3",
-      "kind": "yard",
-      "layer": "ground",
-      "pos": [
-        -14250,
-        -2316,
-        0
-      ],
-      "radius_cm": 300,
-      "zone": "Z_x2_15_t8"
+      "zone": "Z_ST_x2_16"
     }
   ]
 }
