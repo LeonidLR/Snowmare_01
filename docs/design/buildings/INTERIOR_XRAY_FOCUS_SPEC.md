@@ -415,3 +415,10 @@ worth it; X-ray for a squad standing outside behind a building.
    Alternative: fully transparent walls (`inner_opacity` 0, `base_band_cm` 0).
 5. **Outside, behind a building.** Default: no X-ray outdoors in v1. Frames on every door / window / stair inside the bubble: yes, dimmer
    than the hover frame, after 054 is merged.
+
+## Designer decisions (2026-11-23)
+- All five open questions: the recommended defaults are ACCEPTED (auto inside buildings + CapsLock toggle; clicks pass the ghosted wall;
+  one sphere per man beyond 9 m, none for a man on another storey; 12 % ghost + 40 cm floor band, furniture / cover stay; no outdoor x-ray in v1,
+  dim persistent frames inside the sphere after 054).
+- CHANGE: no teal anywhere in the x-ray look - the rim is a NEUTRAL faint grey fresnel glow (designer: "teal would confuse and distract").
+  Every teal colour above (rim, frames inside the sphere) reads as neutral light grey, low intensity.
