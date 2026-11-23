@@ -96,9 +96,9 @@ class TestPmcRoundTrace(unittest.TestCase):
         # Round 1 log parsing
         parsed_r1 = prt.parse_log_for_round(None, 1, 0, lines_override=lines)
         self.assertTrue(parsed_r1["round_found"])
-        self.assertIn("Lind", parsed_r1["spawned"])
-        self.assertIn("Lind", parsed_r1["posts"])
-        self.assertNotIn("Cross", parsed_r1["spawned"])  # Cross belongs to round 2!
+        self.assertIn((2, "Lind"), parsed_r1["spawned"])
+        self.assertIn((2, "Lind"), parsed_r1["posts"])
+        self.assertNotIn((2, "Cross"), parsed_r1["spawned"])  # Cross belongs to round 2!
         self.assertEqual(len(parsed_r1["fire_events"]), 2)
         self.assertEqual(parsed_r1["fire_events"][0]["action"], "holds his fire")
         self.assertEqual(parsed_r1["fire_events"][0]["dist_m"], 45.0)
@@ -107,9 +107,9 @@ class TestPmcRoundTrace(unittest.TestCase):
         # Round 2 log parsing
         parsed_r2 = prt.parse_log_for_round(None, 2, 1, lines_override=lines)
         self.assertTrue(parsed_r2["round_found"])
-        self.assertIn("Cross", parsed_r2["spawned"])
-        self.assertIn("Cross", parsed_r2["posts"])
-        self.assertNotIn("Lind", parsed_r2["spawned"])
+        self.assertIn((2, "Cross"), parsed_r2["spawned"])
+        self.assertIn((2, "Cross"), parsed_r2["posts"])
+        self.assertNotIn((2, "Lind"), parsed_r2["spawned"])
 
     def test_coherent_fixture_metrics_and_value_asserts(self):
         arena_data = json.loads(self.arena_file.read_text(encoding="utf-8"))
@@ -134,7 +134,7 @@ class TestPmcRoundTrace(unittest.TestCase):
         self.assertEqual(obj["level"], 3)
 
         # Exposure stats: from arena.json open_idle_s ground truth (defender Lind gets 12.4s, NOT attacker Lind's 99.0s!)
-        st_lind = metrics["exposure_stats"]["Operator Lind"]
+        st_lind = metrics["exposure_stats"][("B", "Operator Lind")]
         self.assertEqual(st_lind["total_stand_s"], 12.4)
         self.assertEqual(st_lind["pre_contact_stand_s"], 8.2)
         self.assertEqual(st_lind["source"], "arena.defence.open_idle_s")
@@ -142,21 +142,21 @@ class TestPmcRoundTrace(unittest.TestCase):
         self.assertEqual(st_lind["shots_fired"], 1)
 
         # Post assignment: range_cm extracted from post line
-        self.assertIn("Operator Lind", metrics["posts_assigned"])
-        self.assertEqual(metrics["posts_assigned"]["Operator Lind"]["range_cm"], 3200.0)
+        self.assertIn(("B", "Operator Lind"), metrics["posts_assigned"])
+        self.assertEqual(metrics["posts_assigned"][("B", "Operator Lind")]["range_cm"], 3200.0)
 
-        st_cross = metrics["exposure_stats"]["Operator Cross"]
+        st_cross = metrics["exposure_stats"][("B", "Operator Cross")]
         self.assertEqual(st_cross["total_stand_s"], 15.0)
         self.assertEqual(st_cross["pre_contact_stand_s"], 10.5)
 
         # Tactic decisions: defenders only
-        self.assertIn("Operator Lind", metrics["decisions_by_fighter"])
-        lind_decisions = metrics["decisions_by_fighter"]["Operator Lind"]
+        self.assertIn(("B", "Operator Lind"), metrics["decisions_by_fighter"])
+        lind_decisions = metrics["decisions_by_fighter"][("B", "Operator Lind")]
         self.assertEqual(len(lind_decisions), 2)
         self.assertEqual(lind_decisions[0]["decision"], "Ambush")
         self.assertEqual(lind_decisions[1]["decision"], "FallBack")
         # Attacker decision (Operator Vance -> Advance) must NOT be attributed to defenders!
-        self.assertNotIn("Operator Vance", metrics["decisions_by_fighter"])
+        self.assertNotIn(("A", "Operator Vance"), metrics["decisions_by_fighter"])
 
         # Log fire events passed through to metrics with relative time t
         self.assertEqual(len(metrics["log_fire_events"]), 2)
@@ -177,6 +177,44 @@ class TestPmcRoundTrace(unittest.TestCase):
 
         self.assertEqual(hyp["H4"]["verdict"], "HOLDS")
         self.assertIn("holds his fire", hyp["H4"]["evidence"])
+
+    def test_interleaved_fighters_with_same_id(self):
+        fighter_id = "Operator Lind"
+        track = {
+            "fighters": [{"id": fighter_id, "side": side} for side in "AB"],
+            "dt": 1,
+            "states": [[[0, "stand", 100, "Hold"], [0, "crouch", 100, "Hold"]]],
+            "events": [
+                {"t": 0.1, "type": "shot", "side": "A", "from": fighter_id, "to": fighter_id},
+                {"t": 0.2, "type": "tactic", "side": "B", "who": "Lind", "decision": "Hold"},
+                {"t": 0.3, "type": "shot", "from": fighter_id, "to": fighter_id},
+                {"t": 0.4, "type": "tactic", "side": "A", "who": fighter_id, "decision": "Advance"},
+                {"t": 0.5, "type": "tactic", "who": fighter_id, "decision": "Ambush"},
+                {"t": 0.6, "type": "shot", "side": "B", "from": fighter_id, "to": fighter_id},
+            ],
+        }
+        log = prt.parse_log_for_round(None, 1, 0, lines_override=[
+            "[PmcAI] team 1: spawned Operator Lind (look dark, ak) at V(X=0)",
+            "[PmcAI] team 1: Operator Lind placed on a post V(X=0) (A_Post)",
+            "[PmcAI] team 1: Operator Lind holds his fire (threat at 4500 cm, attention off 0.84)",
+        ])
+        for side, attacker, decision, shot_t, stand_s in (
+            ("A", "B", "Advance", 0.1, 1.0), ("B", "A", "Hold", 0.6, 0.0),
+        ):
+            with self.subTest(side=side):
+                rnd = {"attacker": attacker, "defence": {"open_idle_s": [{"id": fighter_id, "total_s": 99}]}}
+                metrics = prt.compute_trace_metrics(rnd, {}, track, log)
+                key = (side, fighter_id)
+                self.assertEqual(set(metrics["decisions_by_fighter"]), {key})
+                self.assertEqual([d["decision"] for d in metrics["decisions_by_fighter"][key]], [decision])
+                stats = metrics["exposure_stats"][key]
+                self.assertEqual((stats["shots_fired"], stats["first_shot_t"]), (1, shot_t))
+                self.assertEqual(stats["total_stand_s"], stand_s)
+                self.assertEqual(stats["first_shot_target"], f"{attacker}:{fighter_id}")
+                self.assertEqual(set(metrics["posts_assigned"]), {key} if side == "A" else set())
+                report = prt.format_markdown_report(metrics, Path("round.track.json"), 1)
+                self.assertIn(f"**{side}:{fighter_id}** | {'ak' if side == 'A' else 'n/a'}", report)
+                self.assertEqual(metrics["hypotheses"]["H4"]["verdict"], "HOLDS" if side == "A" else "DOES NOT HOLD")
 
     def test_markdown_report_formatting(self):
         arena_data = json.loads(self.arena_file.read_text(encoding="utf-8"))

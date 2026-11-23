@@ -32,31 +32,34 @@ def side_stats(track: dict, side: str, close_range_m: float = 10.0, shotgun_exem
     dt = float(track.get("dt") or 0.2) or 0.2
     scale = UNIT_TO_M.get(str(track.get("units", "m")).lower(), 1.0)
     # Fighter ids are NOT unique across sides in real tracks (both squads have an "Operator Kessler"), so a fighter is
-    # keyed by (side, id). A shot event names its shooter in `from` + `side` (side falls back to the id's fighter).
+    # keyed by (side, id). A legacy shot without a side can identify only a unique shooter.
     fighters = [dict(f, id=str(f.get("id")), side=str(f.get("side"))) for f in fighters]
     by_key = {(f["side"], f["id"]): i for i, f in enumerate(fighters)}
-    by_id = {}
-    for i, f in enumerate(fighters):
-        by_id.setdefault(f["id"], []).append(i)
+    keys_by_id = {}
+    for key in by_key:
+        keys_by_id.setdefault(key[1], []).append(key)
     shots = close = taken = 0
     for ev in track.get("events") or []:
         if ev.get("type") != "shot":
             continue
         src = str(ev.get("from"))
         sside = str(ev["side"]) if ev.get("side") is not None else None
-        si = by_key.get((sside, src)) if sside else (by_id.get(src) or [None])[0]
-        if si is None:
+        source_keys = [(sside, src)] if sside is not None else keys_by_id.get(src, [])
+        if len(source_keys) != 1 or source_keys[0] not in by_key:
             continue
-        sside = fighters[si]["side"]
+        source_key = source_keys[0]
+        si = by_key[source_key]
+        sside = source_key[0]
         tick = int(round(float(ev.get("t", 0.0)) / dt))
         a = _pos(frames, tick, si)
         if a is None:
             continue
         # Target: `to` when it names an enemy fighter unambiguously; otherwise (real tracks give actor names such as
         # "BP_Operative_C_6" or "?") the NEAREST living enemy fighter at that tick - the shooter's engagement distance.
-        cand = [i for i in by_id.get(str(ev.get("to")), []) if fighters[i]["side"] != sside]
-        if len(cand) != 1:
-            cand = [i for i, f in enumerate(fighters) if f["side"] != sside]
+        target_keys = [key for key in keys_by_id.get(str(ev.get("to")), []) if key[0] != sside]
+        if len(target_keys) != 1:
+            target_keys = [key for key in by_key if key[0] != sside]
+        cand = [by_key[key] for key in target_keys]
         dists = []
         for i in cand:
             pos = frames[min(tick, len(frames) - 1)][i] if i < len(frames[min(tick, len(frames) - 1)]) else None
