@@ -28,8 +28,8 @@ stand-in `IExternalTrainer` - six episodes / 17 steps in the replay buffer, ever
 files).
 
 Modules: `CodexTactics` links `LearningAgents` + `Learning` (inference); `CodexTacticsDev` (DeveloperTool, never in Shipping) adds
-`LearningAgentsTraining` + `LearningTraining`. Plugin `LearningAgents` is enabled in `CodexTactics.uproject` (it enables `LearningCore`,
-`NNERuntimeBasicCpu`, `PythonMLPackages`).
+`LearningAgentsTraining` + `LearningTraining`. Plugins `LearningAgents` and `LearningCore` (the `Learning*` modules' plugin) are enabled
+in `CodexTactics.uproject`; they pull in `NNERuntimeBasicCpu` and `PythonMLPackages`.
 
 ## The hook (and why the default path is unchanged)
 

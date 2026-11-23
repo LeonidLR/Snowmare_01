@@ -63,6 +63,10 @@
                         "Enabled":  true
                     },
                     {
+                        "Name":  "LearningCore",
+                        "Enabled":  true
+                    },
+                    {
                         "Name":  "ModelingToolsEditorMode",
                         "Enabled":  true,
                         "TargetAllowList":  [
