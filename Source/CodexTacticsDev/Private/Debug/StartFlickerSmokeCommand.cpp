@@ -236,7 +236,7 @@ namespace StartFlickerSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.StartFlickerSmoke"),
-		TEXT("Dev check (section 19, rendered): opens each map (default the lake, the factory, L_MovementTest, L_WeatherRainTest) and measures its first 180 frames: no mean-luma jump between frames, no lightning outside a temperate Storm (also an arctic Blizzard with Codex.Env.Lightning 1); logs PASS/FAIL, then exits."),
+		TEXT("Dev check (section 19, rendered): opens each map (default FrozenLake and Depot X6) and measures its first 180 frames: no mean-luma jump between frames, no lightning outside a temperate Storm (also an arctic Blizzard with Codex.Env.Lightning 1); logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

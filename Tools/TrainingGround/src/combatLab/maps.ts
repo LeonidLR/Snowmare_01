@@ -1,4 +1,4 @@
-// Training Ground «Боевая лаборатория»: the maps the department works on. The lab map L_FormationLabCombat (the default) plus every GENERATED
+// Training Ground «Боевая лаборатория»: the maps the department works on. The optional legacy lab plus every supplied GENERATED
 // map (Content/Maps/Generated/<leaf>.umap) whose level JSON (Content/Data/LevelJson/<leaf>.json) has a "bot_route" object. Pure: no fs, no
 // DOM - the server (server/combatLabApi.ts) passes directory listings and parsed JSON in. Tests: maps.test.ts.
 //

@@ -1,5 +1,5 @@
 // Training Ground department «Боевая лаборатория» (game designer 2026-11-01, docs/design/COMBAT_LAB.md section 7): dev-server endpoints
-// (vite.config.ts). NOT lab-only any more: it works per MAP - the lab L_FormationLabCombat (the default when no map is given) and every
+// (vite.config.ts). The active map selector uses Depot X6 and keeps historical lab batch metadata readable. It reads the
 // generated map (Content/Maps/Generated/<leaf>.umap) whose level JSON has a "bot_route" (src/combatLab/maps.ts). Per map: its level JSON blocks
 // "pressure" / "cheats" (part A), the bot batches in Unreal (part C: Scripts/bot_run.ps1 -ReportDir, the bot's route mode) and their reports.
 // The named presets are ONE shared file (presets saved from a generated map carry no ambush.points).
