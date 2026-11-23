@@ -2756,7 +2756,7 @@ private:
 	float MantleOrderSeconds = 0.f;
 	/** A mantle link reached inside the crowd update: taken on the next tick. */
 	int32 PendingMantleLink = INDEX_NONE;
-	/** The running path's own order may take the mantle links (Solo, the player's order). */
+	/** The running path's own order may take the mantle links (the player's Solo order / leader R17-1; a PMC commander order always; OperativeMovementRules::IsMantlePathAllowed). */
 	bool bMantlePathAllowed = false;
 	int32 MantleCount = 0;
 	int32 MantleRestoreCount = 0;

@@ -61,6 +61,19 @@ namespace OperativeMovementRules
 		return MoveHoldSeconds > MoveHoldThreshold;
 	}
 
+	bool IsMantlePathAllowed(bool bAutonomousOrder, bool bPlayerTeam, bool bPlayerSquadSolo, bool bSquadMantleEnabled, bool bIsFormationLeader)
+	{
+		if (bAutonomousOrder)
+		{
+			return false;
+		}
+		if (!bPlayerTeam)
+		{
+			return true;
+		}
+		return bPlayerSquadSolo || (bSquadMantleEnabled && bIsFormationLeader);
+	}
+
 	bool AllowsCrowdOvershootFinish(float DistanceToPathEndCm)
 	{
 		return DistanceToPathEndCm <= CrowdOvershootTestRangeCm;

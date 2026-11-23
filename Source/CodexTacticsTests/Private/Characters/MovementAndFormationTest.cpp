@@ -229,6 +229,24 @@ bool FStanceMoveHoldRuleTest::RunTest(const FString&)
 	return true;
 }
 
+MOVEMENT_TEST(FMantlePathPermissionTest, "Movement.MantlePathPermission")
+bool FMantlePathPermissionTest::RunTest(const FString&)
+{
+	using namespace OperativeMovementRules;
+	// IsMantlePathAllowed(autonomous, player team, player squad solo, squad mantle on, formation leader).
+	// 095 PmcTraversalSmoke 2026-11-23: a PMC fighter (TeamId != 0) climbs on its commander's order whatever the player's squad mode.
+	TestTrue(TEXT("PMC, player squad in formation: climbs"), IsMantlePathAllowed(false, false, false, false, false));
+	TestTrue(TEXT("PMC, player squad solo: climbs"), IsMantlePathAllowed(false, false, true, false, false));
+	TestFalse(TEXT("PMC autonomous order: no"), IsMantlePathAllowed(true, false, true, true, true));
+	// The player's side keeps the mantling slice 1 / R17-1 rule.
+	TestTrue(TEXT("player, solo: climbs"), IsMantlePathAllowed(false, true, true, false, false));
+	TestFalse(TEXT("player follower in formation: no"), IsMantlePathAllowed(false, true, false, true, false));
+	TestTrue(TEXT("player formation leader, squad mantle on: climbs"), IsMantlePathAllowed(false, true, false, true, true));
+	TestFalse(TEXT("player formation leader, squad mantle off: no"), IsMantlePathAllowed(false, true, false, false, true));
+	TestFalse(TEXT("player autonomous order: no"), IsMantlePathAllowed(true, true, true, true, true));
+	return true;
+}
+
 MOVEMENT_TEST(FMovementProneDiveTest, "Movement.ProneDiveThresholds")
 bool FMovementProneDiveTest::RunTest(const FString& Parameters)
 {
