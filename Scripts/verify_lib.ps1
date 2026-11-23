@@ -97,6 +97,12 @@ function Resolve-Impact([string[]]$Files, $Map, [int]$QuickCount = 0) {
     }
 }
 
+function Get-ArchivedMapSmokeNames($Map) {
+    if ($Map.archivedMapSmokes) {
+        foreach ($entry in $Map.archivedMapSmokes.PSObject.Properties) { $entry.Value }
+    }
+}
+
 # Every Debug/*SmokeCommand.cpp smoke must be in the registry (or the non-smoke list) and every registry smoke must be reachable from a rule.
 function Test-MapCoverage($Map) {
     $problems = @()
@@ -104,8 +110,14 @@ function Test-MapCoverage($Map) {
     Get-ChildItem (Join-Path $script:VerifyProjectDir "Source\CodexTacticsDev\Private\Debug") -Filter *.cpp | ForEach-Object {
         [regex]::Matches((Get-Content $_.FullName -Raw -Encoding UTF8), 'TEXT\("CodexTactics\.(\w+)"\)') | ForEach-Object { $declared += $_.Groups[1].Value }
     }
+    $archived = @(Get-ArchivedMapSmokeNames $Map)
+    $impacted = @($Map.rules | ForEach-Object { $_.smokes }) + @($Map.fallback.smokes)
+    foreach ($name in $archived) {
+        if ($declared -notcontains $name) { $problems += "Archived map smoke '$name' is not declared" }
+        if ($Map.smokeRegistry -contains $name -or $impacted -contains $name) { $problems += "Archived map smoke '$name' is still active" }
+    }
     foreach ($name in ($declared | Sort-Object -Unique)) {
-        if (($Map.smokeRegistry -notcontains $name) -and ($Map.nonSmokeDebugCommands -notcontains $name)) { $problems += "Debug command '$name' is in neither smokeRegistry nor nonSmokeDebugCommands" }
+        if (($Map.smokeRegistry -notcontains $name) -and ($Map.nonSmokeDebugCommands -notcontains $name) -and ($archived -notcontains $name)) { $problems += "Debug command '$name' has no active, archived or manual registration" }
     }
     foreach ($name in $Map.smokeRegistry) {
         if ($declared -notcontains $name) { $problems += "smokeRegistry '$name' has no console command in Source/CodexTacticsDev/Private/Debug" }

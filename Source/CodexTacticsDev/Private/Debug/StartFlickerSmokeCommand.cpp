@@ -217,8 +217,7 @@ namespace StartFlickerSmoke
 		Runner->Maps = Args;
 		if (Runner->Maps.IsEmpty())
 		{
-			Runner->Maps = { TEXT("/Game/Maps/L_Demo01_A_FrozenLake"), TEXT("/Game/Maps/L_Demo01_B_FrozenFactory"), TEXT("/Game/Maps/L_MovementTest"),
-				TEXT("/Game/Environment/Weather/Test/L_WeatherRainTest") };
+			Runner->Maps = { TEXT("/Game/Maps/L_Demo01_A_FrozenLake"), TEXT("/Game/Maps/Generated/L_Gen_Depot_1_X6") };
 		}
 		if (IConsoleVariable* Lightning = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Env.Lightning")))
 		{
@@ -237,7 +236,7 @@ namespace StartFlickerSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.StartFlickerSmoke"),
-		TEXT("Dev check (section 19, rendered): opens each map (default the lake, the factory, L_MovementTest, L_WeatherRainTest) and measures its first 180 frames: no mean-luma jump between frames, no lightning outside a temperate Storm (also an arctic Blizzard with Codex.Env.Lightning 1); logs PASS/FAIL, then exits."),
+		TEXT("Dev check (section 19, rendered): opens each map (default FrozenLake and Depot X6) and measures its first 180 frames: no mean-luma jump between frames, no lightning outside a temperate Storm (also an arctic Blizzard with Codex.Env.Lightning 1); logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

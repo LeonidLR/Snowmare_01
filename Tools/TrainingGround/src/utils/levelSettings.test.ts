@@ -150,7 +150,7 @@ test('horde_after_firefights: default 10, min 1, set / validate / roundtrip', ()
 });
 
 test('horde from waves (game designer 2026-11-09): which levels feed it, horde N = wave N then the last, SPITTER -> MILITARY_ZOMBIE', () => {
-  const depot = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelJson/L_Gen_Depot_1.json'), 'utf-8'));
+  const depot = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelJson/SmokeFixtures/depot_rules_fixture.json'), 'utf-8'));
   assert.equal(getHordeWaveFeed(depot), 'waves', 'the Depot (combat_start ambush) feeds the horde from its waves');
   const lake = JSON.parse(fs.readFileSync(FROZEN_LAKE, 'utf-8'));
   assert.equal(getHordeWaveFeed(lake), 'scripted', 'the Lake (button) plays its waves as scripted fights');

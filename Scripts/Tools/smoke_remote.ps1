@@ -11,7 +11,7 @@ param(
     [ValidateSet("auto", "on")][string]$Mode = "auto",
     [string[]]$Commands = @(),
     [int]$Jobs = 0,
-    [string]$Map = "/Game/Maps/L_MovementTest",
+    [string]$Map = "/Game/Maps/Generated/L_Gen_Depot_1_X6",
     [int]$TimeoutSeconds = 300,
     [switch]$Serial,
     [switch]$NoRetry,
@@ -67,7 +67,7 @@ if (-not $sameBuild) {
 # ---- run on the worker -----------------------------------------------------------------------------------------------------
 $width = $(if ($Serial) { 1 } elseif ($Jobs -gt 0) { [Math]::Min($Jobs, $MaxJobs) } else { $MaxJobs })
 $extra = @()
-if ($Map -ne "/Game/Maps/L_MovementTest") { $extra += "-Map '$Map'" }
+if ($Map -ne "/Game/Maps/Generated/L_Gen_Depot_1_X6") { $extra += "-Map '$Map'" }
 if ($PreCmds) { $extra += "-PreCmds '$($PreCmds -replace "'", "''")'" }
 if ($RealTime) { $extra += "-RealTime" }
 if ($SmokeArgs) { $extra += "-SmokeArgs '$($SmokeArgs -replace "'", "''")'" }

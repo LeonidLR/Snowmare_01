@@ -324,7 +324,7 @@ bool FMissionGoalsCommittedFilesTest::RunTest(const FString&)
 {
 	// The three generated maps' files (Tools/TrainingGround scripts/export-mission-goals.ts) parse with every goal.
 	struct FExpected { const TCHAR* Map; int32 Goals; };
-	for (const FExpected& Expected : { FExpected{ TEXT("L_Gen_Test_X2"), 2 }, FExpected{ TEXT("L_Gen_Depot_X4"), 3 }, FExpected{ TEXT("L_Gen_Depot_1_X6"), 3 } })
+	for (const FExpected& Expected : { FExpected{ TEXT("L_Gen_Depot_1_X6"), 4 } })
 	{
 		FString Json;
 		if (!TestTrue(FString::Printf(TEXT("%s file readable"), Expected.Map), FFileHelper::LoadFileToString(Json, *MissionGoalsRules::GetDefaultPathForMap(Expected.Map))))

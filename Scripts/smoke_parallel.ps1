@@ -20,7 +20,7 @@
 param(
     [string[]]$Commands = @(),
     [int]$Jobs = 0,
-    [string]$Map = "/Game/Maps/L_MovementTest",
+    [string]$Map = "/Game/Maps/Generated/L_Gen_Depot_1_X6",
     [int]$TimeoutSeconds = 300,
     [switch]$Serial,
     [switch]$NoRetry,
@@ -47,12 +47,47 @@ param(
     [switch]$RepeatSeeds,
     # -Map wins over the smoke's own test_map.json "map" option, and a "-LevelJson=<x>.json" in its "extra" follows the map (<map leaf>.json):
     # one walk / route smoke on another generated map (2026-11-22, the entry-queue A/B on L_Gen_StoryShowcase + L_Gen_BgenPlans).
-    [switch]$ForceMap
+    [switch]$ForceMap,
+    [switch]$List
 )
 # An explicit -TimeoutSeconds longer than a smoke's own "timeout" option extends it (a walk smoke with budget=1500 under a 600 s option).
 $TimeoutGiven = $PSBoundParameters.ContainsKey('TimeoutSeconds')
 
 $ErrorActionPreference = "Stop"
+$EngineRoot = "C:\Program Files\Epic Games\UE_5.8"
+$ProjectDir = Split-Path $PSScriptRoot -Parent
+$Project = Join-Path $ProjectDir "CodexTactics.uproject"
+$LogDir = Join-Path $ProjectDir "Saved\Logs"
+. (Join-Path $PSScriptRoot "verify_lib.ps1")
+
+$TestMap = Get-TestMap
+
+function Get-Option([string]$Name, [string]$Key, $Default) {
+    $o = $TestMap.smokeOptions.PSObject.Properties[$Name]
+    if ($o -and $o.Value.PSObject.Properties[$Key]) { return $o.Value.$Key }
+    return $Default
+}
+
+function Get-SmokeMap([string]$Name) {
+    if ($ForceMap) { return $Map }
+    return Get-Option $Name "map" $Map
+}
+# -File passes "a,b,c" as ONE string: split it ourselves.
+$rawNames = @($Commands | ForEach-Object { $_ -split '[,;\s]+' } | Where-Object { $_ } | ForEach-Object { $_ -replace '^CodexTactics\.', '' })
+if ($rawNames -contains "all" -or ($List -and $rawNames.Count -eq 0)) { $rawNames = @($TestMap.smokeRegistry) }
+if ($rawNames.Count -eq 0) { Write-Host "No smokes given (-Commands a,b,c | all)."; exit 0 }
+if (-not $ForceMap) {
+    $archived = @(Get-ArchivedMapSmokeNames $TestMap)
+    $retired = @($rawNames | Where-Object { $_ -in $archived })
+    if ($retired.Count) {
+        Write-Error "Archived map smoke(s): $($retired -join ', '). Use -Map with -ForceMap for an explicit compatible fixture."
+        exit 1
+    }
+}
+if ($List) {
+    foreach ($name in $rawNames) { Write-Output ("{0} | {1}" -f $name, (Get-SmokeMap $name)) }
+    exit 0
+}
 if (-not $Remote) { $Remote = $(if ($env:CODEX_SMOKE_REMOTE) { $env:CODEX_SMOKE_REMOTE } else { "auto" }) }
 if ($Remote -ne "off" -and @($Commands | Where-Object { $_ }).Count) {
     & (Join-Path $PSScriptRoot "Tools\smoke_remote.ps1") -Mode $Remote -Commands $Commands -Jobs $Jobs -Map $Map -TimeoutSeconds $TimeoutSeconds `
@@ -60,18 +95,18 @@ if ($Remote -ne "off" -and @($Commands | Where-Object { $_ }).Count) {
         -Repeat $Repeat -RepeatSeeds:$RepeatSeeds -SmokeArgs $SmokeArgs -ForceMap:$ForceMap
     if ($LASTEXITCODE -ne 99) { exit $LASTEXITCODE }
 }
-$EngineRoot = "C:\Program Files\Epic Games\UE_5.8"
-$ProjectDir = Split-Path $PSScriptRoot -Parent
-$Project = Join-Path $ProjectDir "CodexTactics.uproject"
-$LogDir = Join-Path $ProjectDir "Saved\Logs"
-. (Join-Path $PSScriptRoot "verify_lib.ps1")
-. (Join-Path $PSScriptRoot "agent_lock.ps1")
 
-$TestMap = Get-TestMap
-# -File passes "a,b,c" as ONE string: split it ourselves.
-$rawNames = @($Commands | ForEach-Object { $_ -split '[,;\s]+' } | Where-Object { $_ } | ForEach-Object { $_ -replace '^CodexTactics\.', '' })
-if ($rawNames -contains "all") { $rawNames = @($TestMap.smokeRegistry) }
-if ($rawNames.Count -eq 0) { Write-Host "No smokes given (-Commands a,b,c | all)."; exit 0 }
+foreach ($name in ($rawNames | Sort-Object -Unique)) {
+    $smokeMap = Get-SmokeMap $name
+    if ($smokeMap -match '^/Game/(.+)$') {
+        $mapFile = Join-Path $ProjectDir ("Content/" + $Matches[1] + ".umap")
+        if (-not (Test-Path -LiteralPath $mapFile -PathType Leaf)) {
+            Write-Error "Smoke ${name}: map missing: $smokeMap ($mapFile)"
+            exit 1
+        }
+    }
+}
+. (Join-Path $PSScriptRoot "agent_lock.ps1")
 if ($Repeat -lt 1) { $Repeat = 1 }
 
 # Expand by -Repeat and preserve duplicates (-Commands A,A,A)
@@ -109,12 +144,6 @@ $Names = $allNames
 if ($Serial) { $Jobs = 1 }
 elseif ($Jobs -le 0) { $Jobs = [Math]::Max(1, [Math]::Min(4, [int]([Environment]::ProcessorCount / 4))) }
 
-function Get-Option([string]$Name, [string]$Key, $Default) {
-    $o = $TestMap.smokeOptions.PSObject.Properties[$Name]
-    if ($o -and $o.Value.PSObject.Properties[$Key]) { return $o.Value.$Key }
-    return $Default
-}
-
 # Fixed game step arguments for a smoke ("" on the wall clock: -RealTime, the smoke's realTime option, or no smokeDefaults).
 function Get-ClockArgs([string]$Name, [int]$RepeatIndex = 0) {
     $defaults = $TestMap.PSObject.Properties["smokeDefaults"]
@@ -141,7 +170,7 @@ function Start-SmokeProcess($Task) {
     $startDefault = $(if ($TestMap.PSObject.Properties["smokeDefaults"] -and $TestMap.smokeDefaults.PSObject.Properties["squadStart"]) { $TestMap.smokeDefaults.squadStart } else { "level" })
     $squadStart = Get-Option $Name "squadStart" $startDefault
     if ($squadStart -and $squadStart -ne "level") { $extra += " -SquadStart=$squadStart" }
-    $map = $(if ($ForceMap) { $Map } else { Get-Option $Name "map" $Map })
+    $map = Get-SmokeMap $Name
     # A "rendered" smoke (test_map smokeOptions, e.g. SnowTracksSmoke reads a render target back) needs a real RHI: offscreen instead of -nullrhi.
     $rhi = $(if (Get-Option $Name "rendered" $false) { "-RenderOffscreen -ResX=1280 -ResY=720" } else { "-nullrhi" })
     # Start-Process takes one argument string: quote the paths (the project path has a space).

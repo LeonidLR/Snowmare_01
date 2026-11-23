@@ -22,5 +22,5 @@ UCodexFrontendSettings::UCodexFrontendSettings()
 	ScreenClasses.Add(CodexUITags::Screen_Confirm, CodexFrontendDefaults::Wbp(TEXT("WBP_ConfirmDialog")));
 	ScreenClasses.Add(CodexUITags::Screen_Controls, CodexFrontendDefaults::Wbp(TEXT("WBP_Controls")));
 	FrontendLevel = TSoftObjectPtr<UWorld>(FSoftObjectPath(TEXT("/Game/Maps/L_MainMenu.L_MainMenu")));
-	NewGameLevel = TSoftObjectPtr<UWorld>(FSoftObjectPath(TEXT("/Game/Maps/L_MovementTest.L_MovementTest")));
+	NewGameLevel = TSoftObjectPtr<UWorld>(FSoftObjectPath(TEXT("/Game/Maps/L_Demo01_A_FrozenLake.L_Demo01_A_FrozenLake")));
 }

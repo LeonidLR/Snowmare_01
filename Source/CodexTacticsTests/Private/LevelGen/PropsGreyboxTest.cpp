@@ -176,7 +176,7 @@ bool FPropsExpandedKeepsAllTest::RunTest(const FString&)
 	{
 		FPropsLayoutView::ReadConfig(*B, Config, ConfigErrors);
 	}
-	for (const TCHAR* Map : { TEXT("L_Gen_Depot_X4"), TEXT("L_Gen_Depot_1_X6"), TEXT("L_Gen_Test_X2") })
+	for (const TCHAR* Map : { TEXT("L_Gen_Depot_1_X6") })
 	{
 		FString PropsJson;
 		if (!TestTrue(FString::Printf(TEXT("%s props readable"), Map),

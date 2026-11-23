@@ -326,7 +326,7 @@ bool FFirefightOnlyTriggerTest::RunTest(const FString&)
 		TestTrue(TEXT("Depot (fixture): the horde on"), Resolved.bEnabled);
 		TestEqual(TEXT("Depot (fixture): after 10 firefights"), Resolved.AfterFirefights, 10);
 	}
-	for (const TCHAR* File : { TEXT("L_Gen_Depot_1.json"), TEXT("L_Demo01_A_FrozenLake.json"), TEXT("L_PmcArena.json"), TEXT("L_PmcArenaDepot.json") })
+	for (const TCHAR* File : { TEXT("L_Gen_Depot_1_X6.json"), TEXT("L_Demo01_A_FrozenLake.json"), TEXT("L_PmcArena.json"), TEXT("L_PmcArenaDepot.json") })
 	{
 		FLevelCombatConfig Level;
 		if (Load(File, Level))

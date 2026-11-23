@@ -23,7 +23,7 @@ def _gap(gid, parapet, center, outward, width=90.0, sill=60.0, building="B_house
 class FiringGapBuilderTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.layout = builder.load_layout(os.path.join(ACCEPTED_DIR, "L_Gen_Train_1.json"))
+        cls.layout = builder.load_layout(os.path.join(os.path.dirname(ACCEPTED_DIR), "TestFixtures", "train_1.layout.json"))
 
     def _plan(self, gaps=None):
         layout = copy.deepcopy(self.layout)
