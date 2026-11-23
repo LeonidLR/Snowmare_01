@@ -65,6 +65,11 @@ struct CODEXTACTICS_API FPmcOperatorConfig
 	int32 Medkits = 1;
 	/** Grenades are off by default: the autonomous grenade still aims at monster clusters (follow-up: team-aware grenades). */
 	int32 Grenades = 0;
+	/**
+	 * "ammo" (designer 2026-11-23: "all their weapons, not infinite; the RPG only 1-2 rounds"): PMC-only reserve rounds per weapon id,
+	 * set after the arsenal is built (the shared weapons_tuning.json, the player's squad included, stays as it is). Missing id = untouched.
+	 */
+	TMap<FString, int32> ReserveAmmo;
 	/** Monsters (zombies, hounds, ...) attack PMC fighters too. */
 	bool bMonstersAttackPmc = true;
 	/** PMC fighters shoot a monster only in self-defence: one that hunts a mate within this distance, cm. */

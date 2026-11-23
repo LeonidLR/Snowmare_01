@@ -13,7 +13,8 @@
     { "id": "sniper_rifle", "weight": 1 }
   ],
   "rpg_gunner": { "weapon": "rpg7", "share": 0.5, "max_per_squad": 1, "slot_span": 3 },
-  "stats": { "accuracy": 85, "luck": 25, "fortitude": 20, "medkits": 1, "grenades": 0 },
+  "stats": { "accuracy": 85, "luck": 25, "fortitude": 20, "medkits": 1, "grenades": 2 },
+  "ammo": { "_comment": "PMC-only reserve rounds per weapon (designer 2026-11-23: all weapons, not infinite, the RPG 1-2 rounds; PmcOperatorRules ReserveAmmo, set after the arsenal is built - the shared weapons_tuning.json stays). rpg7 1 = 1 in the tube + 1 spare. Missing id = the weapon's own reserve.", "rpg7": 1, "pistol": 24, "m16": 90, "shotgun": 24, "sniper_rifle": 15 },
   "post_spawn": { "_comment": "Smart-enemies T-11 (PmcEncounterRules::PostSpawnConfigFromJson): how the men of a generator post (pmc_squads[].post) stand: the first ON the post, the rest in a firing line across its facing, line_spacing_cm apart (right / left alternating); a taken / off-navmesh slot tries rank_count ranks rank_spacing_cm behind it, then a ring_cm ring round the post.", "line_spacing_cm": 150, "rank_spacing_cm": 150, "rank_count": 2, "ring_cm": 140 },
   "factions": { "monsters_attack_pmc": true, "pmc_self_defence_m": 12, "cold_applies": true }
 }
