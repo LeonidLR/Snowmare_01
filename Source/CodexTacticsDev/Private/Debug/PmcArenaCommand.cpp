@@ -2652,6 +2652,8 @@ namespace PmcArena
 				Side->SetNumberField(TEXT("suppression_s"), FMath::RoundToFloat(Result.Stats[Index].SuppressionSeconds * 10.f) / 10.f);
 				Side->SetNumberField(TEXT("ambushes"), Result.Stats[Index].Ambushes);
 				Side->SetNumberField(TEXT("retreats"), Result.Stats[Index].Retreats);
+				// R1 (2026-11-23): FallBack orders through the zone defender's cover-only rule (0 with FallBackCover=0) - a no-op arm shows here.
+				Side->SetNumberField(TEXT("r1_fallback_rule"), Result.Stats[Index].DefenceFallBackCover);
 				Side->SetNumberField(TEXT("retreats_survived"), Result.RetreatsSurvived[Index]);
 				Side->SetNumberField(TEXT("heals"), Result.Stats[Index].Heals);
 				Side->SetNumberField(TEXT("friendly_fire"), Result.Stats[Index].FriendlyFireHits);
