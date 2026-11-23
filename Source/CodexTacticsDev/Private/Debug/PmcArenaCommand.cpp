@@ -216,10 +216,12 @@ namespace PmcArena
 		 */
 		bool bRocketContact = true;
 		/**
-		 * FallBackCover=1 (R1, loss autopsy 2026-11-23, default 0): the defending PMC team falls back in contact only into a near cover
-		 * slot that keeps it in the zone (UPmcSquadSubsystem::SetDefenceFallBackCover). Written to the round as "fallback_cover".
+		 * FallBackCover=1|0 (R1, loss autopsy 2026-11-23; default 1 since the paired A/B 2026-11-23 - 166 vs 146 wins, 1 vs 36 captures
+		 * on seeds 1060-1359, Lead: the arena / baseline default, the bar = det/r1-cover): the defending PMC team falls back in contact
+		 * only into a near cover slot that keeps it in the zone (UPmcSquadSubsystem::SetDefenceFallBackCover); FallBackCover=0 = the old
+		 * fall-back (the before measurement). Written to the round as "fallback_cover". The game turns it on with its mission objectives.
 		 */
-		bool bFallBackCover = false;
+		bool bFallBackCover = true;
 		/**
 		 * ObjectiveReach=on|off (fix/arena-rpg-contact-roof, default on): the objective must be reached by a full navmesh path from BOTH
 		 * sides' spawns (PmcArenaRoundRules::IsReachableFromBoth), else another point; off = the old placement (the measurement).
