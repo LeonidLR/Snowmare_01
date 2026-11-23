@@ -22,6 +22,7 @@
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
+#include "Interactables/WindowBreakage.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CoreDelegates.h"
 #include "NavigationSystem.h"
@@ -202,6 +203,15 @@ namespace FormationWindowSmoke
 					}
 					UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: sill %s at %s, %d men outside, the far side %s"), *Sill->GetName(), *Center.ToCompactString(),
 						Members.Num(), *R.FarFeet.ToCompactString());
+					// E (Fable review 2026-11-23): a click on a pawn standing at the window (an enemy by it / his own man) is no window order:
+					// a hit on that pawn at the sill's face, the ray from outside through the opening.
+					{
+						FHitResult OnPawn(Members[Members.Num() - 1], nullptr, Center + FVector(0.f, 0.f, 60.f), Across * Side);
+						OnPawn.bBlockingHit = true;
+						OnPawn.TraceStart = Center + Across * (Side * 600.f) + FVector(0.f, 0.f, 400.f);
+						Check(WindowBreakage::FindWindowSillAt(*World, OnPawn) == nullptr,
+							TEXT("E: a click on a pawn at the window is a click on him, not on the window"));
+					}
 					Go(EStep::Plain);
 					return true;
 				}

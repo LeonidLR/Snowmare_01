@@ -38,6 +38,7 @@
 #include "NavigationPath.h"
 #include "Characters/SquadSubsystem.h"
 #include "Interactables/MantleNavigation.h"
+#include "Interactables/WindowBreakage.h"
 #include "NavigationSystem.h"
 #include "NavMesh/NavMeshPath.h"
 #include "NavMesh/RecastNavMesh.h"
@@ -990,6 +991,10 @@ ADoorActor* UDoorSubsystem::FindClickedDoor(const FHitResult& Hit) const
 	if (ADoorActor* Door = Cast<ADoorActor>(Hit.GetActor()))
 	{
 		return Door;
+	}
+	if (WindowBreakage::IsOwnClickTarget(Hit.GetActor()))
+	{
+		return nullptr; // Fable review 2026-11-23: an enemy / his man / a crate by a doorway is clicked as itself
 	}
 	const bool bRay = !Hit.TraceStart.IsNearlyZero() && !Hit.TraceStart.Equals(Hit.ImpactPoint, 1.0);
 	for (ADoorActor* Door : Doors)

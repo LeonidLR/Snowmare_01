@@ -536,6 +536,10 @@ bool URoofCutawaySubsystem::FindStairUpTarget(const FHitResult& Hit, const AOper
 	{
 		return Why(FString::Printf(TEXT("he is in no indexed building (feet %.0f)"), FeetZ));
 	}
+	if (Hit.ImpactPoint.Z < FeetZ - 40.f)
+	{
+		return Why(FString::Printf(TEXT("a flight below his feet (hit %.0f, feet %.0f): a plain move down"), Hit.ImpactPoint.Z, FeetZ));
+	}
 	// A stair of another building is no way up for him; a stair piece the index does not hold (kit / proxy) is judged by its place.
 	if (const TPair<int32, int32>* Of = StoreyOfPiece.Find(TObjectKey<UPrimitiveComponent>(Piece)); Of && Of->Key != BuildingIndex)
 	{
