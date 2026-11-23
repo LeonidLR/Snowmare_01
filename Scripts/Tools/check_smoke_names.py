@@ -52,10 +52,15 @@ def _walk_smokes(node, path: str, out: list[tuple[str, str]]) -> None:
             _walk_smokes(value, f"{path}[{index}]", out)
 
 
+def archived_map_smokes(test_map: dict) -> set[str]:
+    return {_strip(name) for names in test_map.get("archivedMapSmokes", {}).values() for name in names}
+
+
 def map_smokes(test_map: dict) -> list[tuple[str, str]]:
     """(smoke name, JSON section) for every smoke referenced in the impact map."""
     out: list[tuple[str, str]] = []
     out.extend((_strip(n), "smokeRegistry") for n in test_map.get("smokeRegistry", []) if isinstance(n, str))
+    out.extend((name, "archivedMapSmokes") for name in archived_map_smokes(test_map))
     out.extend((_strip(k), "smokeOptions") for k in test_map.get("smokeOptions", {}) if not k.startswith("_"))
     for section in ("knownFlaky", "knownFail"):
         value = test_map.get(section, {})
@@ -86,6 +91,7 @@ def check_reverse(repo: Path) -> tuple[list[str], list[str]]:
     registry = {_strip(n) for n in test_map.get("smokeRegistry", []) if isinstance(n, str)}
     impact: list[tuple[str, str]] = []
     _walk_smokes(test_map, "", impact)
+    known -= archived_map_smokes(test_map)
     return sorted(known - registry), sorted(known - {name for name, _ in impact})
 
 
