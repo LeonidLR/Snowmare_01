@@ -8,6 +8,7 @@ import { LAB_MAP_ID, getAt, isJsonObject, presetSettings, setAt } from './pressu
 import type { CombatLabPreset, CombatLabSettings, JsonObject } from './pressureSettings.ts';
 
 export { LAB_MAP_ID };
+export const ACTIVE_TRAINING_MAP_ID = 'L_Gen_Depot_1_X6';
 export const LAB_MAP_PATH = `/Game/Maps/${LAB_MAP_ID}`;
 export const GENERATED_MAP_DIR = '/Game/Maps/Generated';
 export const LEVEL_JSON_DIR = 'Content/Data/LevelJson';
@@ -46,9 +47,9 @@ function info(id: string, kind: CombatLabMapInfo['kind'], level: unknown): Comba
 }
 
 /** The maps list: the lab first, then the generated maps with a bot_route (sorted by id; others are not listed). */
-export function buildMapList(labLevel: unknown, generated: GeneratedMapInput[]): CombatLabMapInfo[] {
+export function buildMapList(labLevel: unknown, generated: GeneratedMapInput[], includeLab = true): CombatLabMapInfo[] {
   const seen = new Set<string>([LAB_MAP_ID]);
-  const out: CombatLabMapInfo[] = [info(LAB_MAP_ID, 'lab', labLevel)];
+  const out: CombatLabMapInfo[] = includeLab ? [info(LAB_MAP_ID, 'lab', labLevel)] : [];
   for (const g of [...generated].sort((a, b) => a.leaf.localeCompare(b.leaf))) {
     if (!MAP_ID.test(g.leaf) || seen.has(g.leaf) || botRoute(g.level) === null) continue;
     seen.add(g.leaf);
@@ -59,7 +60,10 @@ export function buildMapList(labLevel: unknown, generated: GeneratedMapInput[]):
 
 /** The map for a requested id (missing / empty = the lab). Strict: an id outside the list is an error, nothing is joined into a path. */
 export function resolveMap(maps: CombatLabMapInfo[], requested: unknown): { map: CombatLabMapInfo; error?: undefined } | { map?: undefined; error: string } {
-  if (requested === undefined || requested === null || requested === '') return { map: maps.find((m) => m.id === LAB_MAP_ID) ?? maps[0] };
+  if (requested === undefined || requested === null || requested === '') {
+    const map = maps.find((m) => m.id === LAB_MAP_ID) ?? maps[0];
+    return map ? { map } : { error: 'No training map available; check that Depot X6 is installed.' };
+  }
   if (typeof requested !== 'string' || !MAP_ID.test(requested)) return { error: 'bad map id' };
   const map = maps.find((m) => m.id === requested);
   return map ? { map } : { error: `unknown map ${requested}` };

@@ -360,7 +360,7 @@ bool FBotRouteGeneratedDepotTest::RunTest(const FString&)
 	// the external stair onto the ruin's roof (z 600), the two hole drops (roof -> floor 1 -> ground) and the wall layout at the dead end.
 	FLevelCombatConfig Level;
 	FString Error;
-	if (!TestTrue(FString::Printf(TEXT("L_Gen_Depot_1.json loads (%s)"), *Error), LevelJsonRules::LoadLevel(TEXT("L_Gen_Depot_1.json"), Level, Error)))
+	if (!TestTrue(FString::Printf(TEXT("L_Gen_Depot_1_X6.json loads (%s)"), *Error), LevelJsonRules::LoadLevel(TEXT("L_Gen_Depot_1_X6.json"), Level, Error)))
 	{
 		return false;
 	}

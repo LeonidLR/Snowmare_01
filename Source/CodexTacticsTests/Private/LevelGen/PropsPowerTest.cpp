@@ -152,7 +152,7 @@ bool FPropsPowerMapsTest::RunTest(const FString&)
 {
 	using namespace PropsPowerTestLocal;
 	const TSharedPtr<FJsonObject> Balance = LoadPowerBalance(*this);
-	for (const TCHAR* Map : { TEXT("L_Gen_Depot_X4"), TEXT("L_Gen_Depot_1_X6"), TEXT("L_Gen_Test_X2") })
+	for (const TCHAR* Map : { TEXT("L_Gen_Depot_1_X6") })
 	{
 		FString Json;
 		FLevelPropsFile File;
@@ -204,7 +204,7 @@ bool FPropsPowerMapsTest::RunTest(const FString&)
 		TestTrue(FString::Printf(TEXT("%s: about three quarters of the turrets dark (%d of %d live)"), Map, LiveTurrets, Turrets),
 			Turrets > 0 && LiveTurrets * 2 <= Turrets);
 		TestTrue(FString::Printf(TEXT("%s: a running generator at most every other one (%d of %d)"), Map, Running, Generators), Running * 2 <= Generators);
-		TestEqual(FString::Printf(TEXT("%s: jerrycans for ~40 %% of the generators"), Map), FuelPiles, FMath::Max(1, FMath::RoundToInt(0.4 * Generators)));
+		TestEqual(FString::Printf(TEXT("%s: the designer removed loose generator fuel"), Map), FuelPiles, 0);
 	}
 	// A fuel pile holds exactly one jerrycan; a crate of the table one jerrycan per roll.
 	const TMap<FString, int32> Pile = PropsGameplayRules::RollLoot(Balance.Get(), TEXT("fuel_rare"), TEXT("loot_00000001_3"), true);

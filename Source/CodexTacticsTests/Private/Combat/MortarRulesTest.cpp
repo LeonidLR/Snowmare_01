@@ -210,7 +210,7 @@ bool FMortarPlacementTest::RunTest(const FString&)
 	TestEqual(TEXT("the combat lab: no errors"), Errors.Num(), 0);
 	TestTrue(TEXT("the combat lab: one squad nest, one unmanned PMC nest"), LabNests.Num() == 2 && LabNests[0].TeamId == 0 && LabNests[1].TeamId < 0
 		&& LabNests[1].Crew == 0);
-	const TSharedPtr<FJsonObject> Depot = MortarRulesTest::MortarFile(TEXT("Data/LevelJson/L_Gen_Depot_1.json"));
+	const TSharedPtr<FJsonObject> Depot = MortarRulesTest::MortarFile(TEXT("Data/LevelJson/L_Gen_Depot_1_X6.json"));
 	// The Depot is designer-editable in the Training Ground (2026-11-10): whatever nests it has must parse without errors.
 	Errors.Reset();
 	TestTrue(TEXT("the Depot's nests (if any) parse"), !Depot.IsValid() || (MortarRules::ParsePlacements(*Depot, &Errors), Errors.Num() == 0));

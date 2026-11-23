@@ -26,14 +26,14 @@ import {
   applySettings, diffSettings, isJsonObject, pickSettings, upsertPreset, validatePreset, validatePresetFile, validateSettings, PRESETS_SCHEMA,
 } from '../src/combatLab/pressureSettings.ts';
 import type { CombatLabPreset, CombatLabPresetFile, CombatLabSettings } from '../src/combatLab/pressureSettings.ts';
-import { LAB_MAP_ID, acceptedLayoutPath, buildMapList, layoutToPreview, presetForSave, resolveMap } from '../src/combatLab/maps.ts';
+import { ACTIVE_TRAINING_MAP_ID, LAB_MAP_ID, acceptedLayoutPath, buildMapList, layoutToPreview, presetForSave, resolveMap } from '../src/combatLab/maps.ts';
 import type { CombatLabMapInfo, GeneratedMapInput } from '../src/combatLab/maps.ts';
 import { batchId, parseRunsJsonl, realTimeoutSec, validateRunRequest } from '../src/combatLab/report.ts';
 import type { LiveRun } from '../src/combatLab/report.ts';
 
 const TOOL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = path.resolve(TOOL_DIR, '../..');
-export const COMBAT_LAB_LEVEL = LAB_MAP_ID;
+export const COMBAT_LAB_LEVEL = ACTIVE_TRAINING_MAP_ID;
 const LEVEL_JSON_DIR = path.join(ROOT, 'Content/Data/LevelJson');
 const GENERATED_MAPS_DIR = path.join(ROOT, 'Content/Maps/Generated');
 const PRESETS_FILE = path.join(ROOT, 'Content/Data/CombatLab/presets.json');
@@ -79,14 +79,13 @@ function listMaps(): CombatLabMapInfo[] {
   if (fs.existsSync(GENERATED_MAPS_DIR)) {
     for (const f of fs.readdirSync(GENERATED_MAPS_DIR).filter((n) => n.toLowerCase().endsWith('.umap'))) {
       const leaf = f.slice(0, -'.umap'.length);
+      if (leaf !== ACTIVE_TRAINING_MAP_ID) continue;
       let level: unknown = null;
       try { level = readJson(levelPath(leaf)); } catch { /* unreadable: not listed */ }
       generated.push({ leaf, level });
     }
   }
-  let lab: unknown = null;
-  try { lab = readJson(levelPath(LAB_MAP_ID)); } catch { /* the lab is listed anyway */ }
-  return buildMapList(lab, generated);
+  return buildMapList(null, generated, false);
 }
 
 /** The map of a request (query `map` / body `map`); sends a 400 and returns null for an unknown id. */
@@ -140,7 +139,7 @@ function batchLevel(meta: unknown): string {
 export function setupCombatLabApi(use: Use): void {
   use('/api/combat-lab/maps', (_req, res) => {
     try {
-      send(res, 200, { default: LAB_MAP_ID, maps: listMaps() });
+      send(res, 200, { default: ACTIVE_TRAINING_MAP_ID, maps: listMaps() });
     } catch (e) {
       send(res, 500, { error: (e as Error).message });
     }

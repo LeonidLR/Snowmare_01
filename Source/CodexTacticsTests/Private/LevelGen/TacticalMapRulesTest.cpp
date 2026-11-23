@@ -493,13 +493,16 @@ bool FTacticalMapLadderRoofsTest::RunTest(const FString&)
 TACTICAL_MAP_TEST(FTacticalMapCommittedFilesTest, "CommittedFiles")
 bool FTacticalMapCommittedFilesTest::RunTest(const FString&)
 {
-	// the exported files of the three generated maps (Tools/TrainingGround scripts/export-tactical-map.ts); x4 counts as in
+	// The retained X6 export and the archived X4's pinned parser fixture. X4 counts as in
 	// LEVELGEN_LAYERS_REPORT.md 7 (7 drop spots, 163 windows, 22 roofs, 150 hiding spots) + 7 ladder-only roofs; analysis v2 (rim spots, outward
 	// only, FIRING_GAPS_HANDOVER.md) made it 44 places (46 before: two 'sniper' places that looked across a roof slab are gone)
-	for (const TCHAR* Map : { TEXT("L_Gen_Test_X2"), TEXT("L_Gen_Depot_X4"), TEXT("L_Gen_Depot_1_X6") })
+	for (const TCHAR* Map : { TEXT("L_Gen_Depot_X4"), TEXT("L_Gen_Depot_1_X6") })
 	{
+		const FString Path = FString(Map) == TEXT("L_Gen_Depot_X4")
+			? FPaths::ProjectContentDir() / TEXT("Data/LevelGen/TestFixtures/depot_x4.tactical.json")
+			: TacticalMapRules::GetDefaultPathForMap(Map);
 		FString Json;
-		if (!TestTrue(FString::Printf(TEXT("%s readable"), Map), FFileHelper::LoadFileToString(Json, *TacticalMapRules::GetDefaultPathForMap(Map))))
+		if (!TestTrue(FString::Printf(TEXT("%s readable"), Map), FFileHelper::LoadFileToString(Json, *Path)))
 		{
 			continue;
 		}

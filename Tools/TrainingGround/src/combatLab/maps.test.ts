@@ -36,6 +36,13 @@ test('resolveMap: missing = the lab, unknown / malformed ids are errors', () => 
   for (const bad of ['L_Gen_Other', '../L_Gen_Depot_1', 'L_Gen_Depot_1/..', 'a b', 5, {}, 'x'.repeat(200)]) assert.ok(resolveMap(maps, bad).error, String(bad));
 });
 
+test('the current training selector omits the archived lab and handles missing X6', () => {
+  const maps = buildMapList(route('archived', 2), [{ leaf: 'L_Gen_Depot_1_X6', level: route('x6', 2) }], false);
+  assert.deepEqual(maps.map((m) => m.id), ['L_Gen_Depot_1_X6']);
+  assert.equal(resolveMap(maps, undefined).map?.id, 'L_Gen_Depot_1_X6');
+  assert.match(resolveMap([], undefined).error ?? '', /No training map available/);
+});
+
 test('acceptedLayoutPath: only files under the accepted folder', () => {
   assert.equal(acceptedLayoutPath({ levelgen_layout: 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1.json' }), 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1.json');
   assert.equal(acceptedLayoutPath({ levelgen_layout: 'Content/Data/LevelGen/accepted/../../../secret.json' }), null);

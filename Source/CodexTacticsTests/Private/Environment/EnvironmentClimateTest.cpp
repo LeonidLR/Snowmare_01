@@ -101,10 +101,10 @@ bool FClimateProfileParseTest::RunTest(const FString&)
 	TestTrue(TEXT("unknown climate reported"), ClimateError.Contains(TEXT("tropical")));
 	TestTrue(TEXT("its weather still parses"), Unknown.bHasWeather && Unknown.Weather == EWeatherState::Snowfall);
 
-	// The shipped test level.
+	// The pinned level JSON of the archived rain map.
 	FString Text;
-	const FString Path = FPaths::ProjectContentDir() / TEXT("Data/LevelJson/L_WeatherRainTest.json");
-	if (TestTrue(TEXT("L_WeatherRainTest.json exists"), FFileHelper::LoadFileToString(Text, *Path)))
+	const FString Path = FPaths::ProjectContentDir() / TEXT("Data/LevelJson/SmokeFixtures/temperate_level_fixture.json");
+	if (TestTrue(TEXT("the pinned temperate level JSON exists"), FFileHelper::LoadFileToString(Text, *Path)))
 	{
 		const TSharedPtr<FJsonObject> Root = ClimateJson(Text);
 		const TSharedPtr<FJsonObject>* Environment = nullptr;

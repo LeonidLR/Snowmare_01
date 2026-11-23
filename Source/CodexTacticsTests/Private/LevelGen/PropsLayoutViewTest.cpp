@@ -731,9 +731,9 @@ bool FPropsLayoutTrainBuildingsTest::RunTest(const FString&)
 {
 	using namespace PropsLayoutViewTestLocal;
 	for (const TCHAR* Path : {
-		TEXT("Data/LevelGen/accepted/L_Gen_Train_1.json"),
-		TEXT("Data/LevelGen/accepted/L_Gen_Train_2.json"),
-		TEXT("Data/LevelGen/accepted/L_Gen_Train_3.json") })
+		TEXT("Data/LevelGen/TestFixtures/train_1.layout.json"),
+		TEXT("Data/LevelGen/TestFixtures/train_2.layout.json"),
+		TEXT("Data/LevelGen/TestFixtures/train_3.layout.json") })
 	{
 		FPropsLayoutView View;
 		if (!LoadView(*this, Path, View))
@@ -744,7 +744,7 @@ bool FPropsLayoutTrainBuildingsTest::RunTest(const FString&)
 
 	// L_Gen_Train_1: GetSightBlockers("ground") splits window B_house_win_south_f0_1 at [450, -867]
 	FPropsLayoutView Train1;
-	if (!LoadView(*this, TEXT("Data/LevelGen/accepted/L_Gen_Train_1.json"), Train1))
+	if (!LoadView(*this, TEXT("Data/LevelGen/TestFixtures/train_1.layout.json"), Train1))
 	{
 		return false;
 	}
@@ -762,7 +762,7 @@ bool FPropsLayoutTrainBuildingsTest::RunTest(const FString&)
 
 	// L_Gen_Train_2: B_tower hatch [-1220, -1630] excluded on roof:B_tower
 	FPropsLayoutView Train2;
-	if (!LoadView(*this, TEXT("Data/LevelGen/accepted/L_Gen_Train_2.json"), Train2))
+	if (!LoadView(*this, TEXT("Data/LevelGen/TestFixtures/train_2.layout.json"), Train2))
 	{
 		return false;
 	}
@@ -774,7 +774,7 @@ bool FPropsLayoutTrainBuildingsTest::RunTest(const FString&)
 
 	// L_Gen_Train_3: B_catwalk floors_detail catwalk gap [1450..1800]x[2200..2550] excluded on floor:B_catwalk:1
 	FPropsLayoutView Train3;
-	if (!LoadView(*this, TEXT("Data/LevelGen/accepted/L_Gen_Train_3.json"), Train3))
+	if (!LoadView(*this, TEXT("Data/LevelGen/TestFixtures/train_3.layout.json"), Train3))
 	{
 		return false;
 	}

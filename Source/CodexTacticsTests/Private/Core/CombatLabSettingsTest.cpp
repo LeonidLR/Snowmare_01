@@ -258,8 +258,8 @@ bool FCombatLabPresetsTest::RunTest(const FString&)
 {
 	using namespace CombatLabSettingsTest;
 	const TSharedPtr<FJsonObject> File = LoadJson(FPaths::ProjectContentDir() / TEXT("Data/CombatLab/presets.json"));
-	const TSharedPtr<FJsonObject> Level = LoadJson(LevelJsonRules::GetLevelsDirectory() / TEXT("L_FormationLabCombat.json"));
-	if (!TestTrue(TEXT("presets.json and L_FormationLabCombat.json load"), File.IsValid() && Level.IsValid()))
+	const TSharedPtr<FJsonObject> Level = LoadJson(LevelJsonRules::GetLevelsDirectory() / TEXT("SmokeFixtures/lab_rules_fixture.json"));
+	if (!TestTrue(TEXT("presets.json and the pinned lab fixture load"), File.IsValid() && Level.IsValid()))
 	{
 		return false;
 	}

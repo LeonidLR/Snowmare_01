@@ -1,10 +1,10 @@
 # Runs a headless in-game check (dev console command) on a map and prints its log lines.
-# Usage: powershell -ExecutionPolicy Bypass -File Scripts\smoke.ps1 [-Command CodexTactics.MovementSmoke] [-Map /Game/Maps/L_MovementTest] [-Extra "-ForceMainMenu"] [-Log Smoke.log]
+# Usage: powershell -ExecutionPolicy Bypass -File Scripts\smoke.ps1 [-Command CodexTactics.LevelGenBuildingsSmoke] [-Map /Game/Maps/Generated/L_Gen_Depot_1_X6] [-Extra "-ForceMainMenu"] [-Log Smoke.log]
 # -Log names the log file in Saved\Logs (verify_all.ps1 gives every check its own so they can run side by side).
 # -TimeoutSeconds kills a game that never exits (e.g. the command is missing because the binaries are stale).
 param(
-    [string]$Command = "CodexTactics.MovementSmoke",
-    [string]$Map = "/Game/Maps/L_MovementTest",
+    [string]$Command = "CodexTactics.LevelGenBuildingsSmoke",
+    [string]$Map = "/Game/Maps/Generated/L_Gen_Depot_1_X6",
     [string]$Extra = "",
     [string]$Log = "Smoke.log",
     [int]$TimeoutSeconds = 300

@@ -95,19 +95,22 @@ bool FCampaignDataFileTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("0.0 = the lake, \"0.0 Frozen Dam\""), Config.Levels[0].Id == TEXT("0.0") && Config.Levels[0].Map == TEXT("/Game/Maps/L_Demo01_A_FrozenLake")
 		&& Config.Levels[0].Title == TEXT("0.0 Frozen Dam"));
-	TestTrue(TEXT("0.1 = the generated Depot, \"0.1 Depot\" (2026-11-02 / 2026-11-08: it replaces Frozen Factory)"), Config.Levels[1].Id == TEXT("0.1")
-		&& Config.Levels[1].Map == TEXT("/Game/Maps/Generated/L_Gen_Depot_1") && Config.Levels[1].Title == TEXT("0.1 Depot"));
+	TestTrue(TEXT("0.1 = Depot X6, with the campaign title 0.1 Depot"), Config.Levels[1].Id == TEXT("0.1")
+		&& Config.Levels[1].Map == TEXT("/Game/Maps/Generated/L_Gen_Depot_1_X6") && Config.Levels[1].Title == TEXT("0.1 Depot"));
 	for (const FCampaignLevel& Level : Config.Levels)
 	{
 		TestTrue(FString::Printf(TEXT("%s exists"), *Level.Map), FPackageName::DoesPackageExist(Level.Map));
 		FLevelCombatConfig Parsed;
 		TestTrue(FString::Printf(TEXT("%s has its level JSON"), *Level.Map),
 			LevelJsonRules::LoadLevel(CampaignRules::ShortMapName(Level.Map) + TEXT(".json"), Parsed, Error));
-		TestEqual(TEXT("level_name = the campaign title"), Parsed.LevelName.ToString(), Level.Title);
+		if (Level.Id == TEXT("0.0"))
+		{
+			TestEqual(TEXT("the Lake's level_name is the campaign title"), Parsed.LevelName.ToString(), Level.Title);
+		}
 	}
 	// The Depot as a campaign arrival: the start fades in (no own "start_fade_seconds" -> the arrival default), no tutorial / intro briefing,
 	// it is the last level (no gate exit to a next one), and its stage loadout never replaces the carried kit (LoadoutRules::ShouldApplyStageLoadout).
-	// The live L_Gen_Depot_1.json is designer-editable in the Training Ground (2026-11-10): it only has to load (above); the rules are
+	// The live X6 config is designer-editable and has its own tuning: it only has to load above. Legacy Depot rules are
 	// asserted on the pinned copy SmokeFixtures/depot_rules_fixture.json.
 	FLevelCombatConfig Depot;
 	TestTrue(TEXT("the Depot's fixture loads"), LevelJsonRules::LoadLevel(TEXT("SmokeFixtures/depot_rules_fixture.json"), Depot, Error));
@@ -120,12 +123,8 @@ bool FCampaignDataFileTest::RunTest(const FString&)
 		&& Depot.Environment.bHasWeather && Depot.Environment.Weather == EWeatherState::Clear && Depot.Environment.bHasStartHour
 		&& FMath::IsNearlyEqual(Depot.Environment.StartHour, 12.f));
 	TestTrue(TEXT("... cold off, infinite ammo (designer 2026-11-08: keep the Depot as it is)"), Depot.ColdRateMult == 0.f && Depot.bCheatInfiniteAmmo);
-	// Frozen Factory left the campaign but stays on disk (its map and level JSON, used by the ladder smokes).
-	FLevelCombatConfig Factory;
-	TestTrue(TEXT("Frozen Factory's level JSON stays"), LevelJsonRules::LoadLevel(TEXT("L_Demo01_B_FrozenFactory.json"), Factory, Error)
-		&& FMath::IsNearlyEqual(Factory.StartFadeSeconds, 2.f));
-	TestTrue(TEXT("... and its map"), FPackageName::DoesPackageExist(TEXT("/Game/Maps/L_Demo01_B_FrozenFactory")));
-	TestEqual(TEXT("... outside the campaign"), CampaignRules::FindLevelIndex(Config, TEXT("L_Demo01_B_FrozenFactory")), static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("the archived Frozen Factory stays outside the campaign"),
+		CampaignRules::FindLevelIndex(Config, TEXT("L_Demo01_B_FrozenFactory")), static_cast<int32>(INDEX_NONE));
 	return true;
 }
 

@@ -26,7 +26,7 @@ param(
     [string]$Loadout = "COLLECT",
     [int]$Parallel = 4,
     [int]$TimeoutSeconds = 600,
-    [string]$Map = "/Game/Maps/L_MovementTest",
+    [string]$Map = "/Game/Maps/Generated/L_Gen_Depot_1_X6",
     # Extra game command-line arguments (e.g. -dpcvars=gc.TimeBetweenPurgingPendingKillObjects=1 for GC stress runs).
     [string]$Extra = "",
     [switch]$EarlyStop = $true,

@@ -8,7 +8,7 @@ import { Bot, Cpu, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
 import type { CombatLabPresetFile, CombatLabSettings } from '../combatLab/pressureSettings';
 import { diffSettings, getAt, matchingPreset } from '../combatLab/pressureSettings';
 import type { CombatLabMapInfo } from '../combatLab/maps';
-import { LAB_MAP_ID } from '../combatLab/maps';
+import { ACTIVE_TRAINING_MAP_ID } from '../combatLab/maps';
 import type { LabLayout, LabRoutePoint } from './combatLab/CombatLabMap';
 import { CombatLabMap, MapLegend } from './combatLab/CombatLabMap';
 import { RunPanel } from './combatLab/RunPanel';
@@ -31,14 +31,14 @@ export const CombatLabDepartment: React.FC = () => {
   });
   const [maps, setMaps] = useState<CombatLabMapInfo[] | null>(null);
   const [mapId, setMapId] = useState<string>(() => {
-    try { return localStorage.getItem(MAP_KEY) || LAB_MAP_ID; } catch { return LAB_MAP_ID; }
+    try { return localStorage.getItem(MAP_KEY) || ACTIVE_TRAINING_MAP_ID; } catch { return ACTIVE_TRAINING_MAP_ID; }
   });
   const [base, setBase] = useState<CombatLabSettings | null>(null);
   const [settings, setSettings] = useState<CombatLabSettings | null>(null);
   const [presets, setPresets] = useState<CombatLabPresetFile | null>(null);
   const [layout, setLayout] = useState<LabLayout | null>(null);
   const [route, setRoute] = useState<{ name: string; loop: boolean; points: LabRoutePoint[] } | null>(null);
-  const [file, setFile] = useState(`Content/Data/LevelJson/${LAB_MAP_ID}.json`);
+  const [file, setFile] = useState(`Content/Data/LevelJson/${ACTIVE_TRAINING_MAP_ID}.json`);
   const [error, setError] = useState('');
 
   // The maps list (once) and the presets (one shared file).
@@ -47,7 +47,7 @@ export const CombatLabDepartment: React.FC = () => {
       const list: CombatLabMapInfo[] = d.maps ?? [];
       setMaps(list);
       // A remembered map that is gone (or was never valid) falls back to the default.
-      setMapId((id) => (list.some((m) => m.id === id) ? id : (d.default ?? LAB_MAP_ID)));
+      setMapId((id) => (list.some((m) => m.id === id) ? id : (d.default ?? ACTIVE_TRAINING_MAP_ID)));
     }).catch(() => { setMaps([]); setError('Нет связи с сервером Training Ground'); });
     fetch('/api/combat-lab/presets').then((r) => r.json()).then(setPresets).catch(() => {});
   }, []);
