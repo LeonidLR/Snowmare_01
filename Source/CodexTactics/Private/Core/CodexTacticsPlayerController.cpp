@@ -24,6 +24,7 @@
 #include "Tutorial/TutorialSubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/DoorSubsystem.h"
+#include "Interactables/OpeningHighlightActor.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/LootCrateActor.h"
 #include "Interactables/RelocationSubsystem.h"
@@ -104,6 +105,15 @@ void ACodexTacticsPlayerController::EndPlay(const EEndPlayReason::Type EndPlayRe
 		StealthWallHoverGhost->Destroy();
 	}
 	StealthWallHoverGhost = nullptr;
+	for (AOpeningHighlightActor* Highlight : { WindowHighlight.Get(), DoorHighlight.Get() })
+	{
+		if (IsValid(Highlight))
+		{
+			Highlight->Destroy();
+		}
+	}
+	WindowHighlight = nullptr;
+	DoorHighlight = nullptr;
 	if (SquadKeyProcessor.IsValid() && FSlateApplication::IsInitialized())
 	{
 		FSlateApplication::Get().UnregisterInputPreProcessor(SquadKeyProcessor);
@@ -414,10 +424,13 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		{
 			UpdateMantleHover(PeekTurnBased || bCornerPeekCursor ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
 		}
-		// Designer 2026-11-22: over a ground-floor window sill, the silhouette where a click sends him (past the window).
+		// Designer 2026-11-23: highlight the opening under the cursor when a click preview is not showing.
 		if (!bFreezeMantleHoverForTesting)
 		{
-			UpdateWindowHover(PeekTurnBased || bCornerPeekCursor || bClickPreview ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
+			AOperativeCharacter* HoverOperative = PeekTurnBased || bCornerPeekCursor ? nullptr : PeekOperative;
+			const FHitResult* HoverHit = bCursorHit && !PeekTurnBased ? &TrapHit : nullptr;
+			UpdateWindowHover(HoverOperative, HoverHit);
+			UpdateDoorHover(HoverOperative, HoverHit);
 			// Designer 2026-11-22: over a stair flight, the silhouette on the hidden storey's landing above.
 			UpdateStairHover(PeekTurnBased || bCornerPeekCursor || bClickPreview ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
 		}

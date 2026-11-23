@@ -18,6 +18,7 @@
 #include "Interactables/DeployableActor.h"
 #include "Interactables/DoorActor.h"
 #include "Interactables/DoorSubsystem.h"
+#include "Interactables/OpeningHighlightActor.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "CodexTactics.h"
@@ -852,6 +853,15 @@ bool ACodexTacticsPlayerController::CanOrderMantleClick(const FHitResult& Hit) c
 
 namespace WindowHoverLocal
 {
+	// Designer 2026-11-23: highlight the opening by default. The old climb pose remains available for comparison.
+	TAutoConsoleVariable<int32> CVarHoverStyle(TEXT("Codex.Window.HoverStyle"), 0,
+		TEXT("Window hover: 0 = opening highlight (default), 1 = legacy climbing silhouette"));
+	// Match the opening probe in WindowBreakage::FindWindowSillAt. All margins are in world centimetres.
+	constexpr float OpeningMarginCm = 10.f;
+	constexpr float OpeningBottomCm = 5.f;
+	constexpr float OpeningTopCm = 140.f;
+	const FLinearColor IntactColor(1.f, 0.48f, 0.08f);
+	const FLinearColor BrokenColor(0.60f, 1.f, 0.63f);
 	/** 1 (default) = the window hover silhouette in the climbing frame on the sill; 0 = standing past the window. */
 	TAutoConsoleVariable<int32> CVarClimbSilhouette(TEXT("Codex.Window.ClimbSilhouette"), 1,
 		TEXT("Window hover silhouette: 1 = the climbing frame on the sill (default), 0 = standing past the window"));
@@ -929,21 +939,59 @@ bool ACodexTacticsPlayerController::IsWindowHoverShown() const
 	return WindowGhost && WindowGhost->IsShown();
 }
 
+bool ACodexTacticsPlayerController::IsWindowHighlightShown() const
+{
+	return WindowHighlight && WindowHighlight->IsShown();
+}
+
 bool ACodexTacticsPlayerController::UpdateWindowHover(AOperativeCharacter* Operative, const FHitResult* Hit)
 {
-	AActor* Sill = Hit && Hit->bBlockingHit && Operative ? WindowBreakage::FindWindowSillAt(*GetWorld(), *Hit) : nullptr;
+	const bool bLegacySilhouette = WindowHoverLocal::CVarHoverStyle.GetValueOnGameThread() == 1;
+	AActor* Sill = Hit && Hit->bBlockingHit && Operative && !IsClickPreviewArmed() ? WindowBreakage::FindWindowSillAt(*GetWorld(), *Hit) : nullptr;
 	FVector Feet;
 	float Yaw = 0.f;
 	const bool bWanted = Operative && Sill && !IsAttackModifierDown() && !GetActiveTurnBased()
 		&& FindWindowSillTarget(*Sill, *Operative, Feet, Yaw);
-	if (!bWanted)
+	if ((!bWanted || bLegacySilhouette) && WindowHighlight)
+	{
+		WindowHighlight->Hide();
+	}
+	if (!bWanted || !bLegacySilhouette)
 	{
 		WindowHoverActor.Reset();
 		if (WindowGhost && WindowGhost->IsShown())
 		{
 			WindowGhost->Hide();
 		}
+	}
+	if (!bWanted)
+	{
 		return false;
+	}
+	if (!bLegacySilhouette)
+	{
+		if (!WindowHighlight)
+		{
+			WindowHighlight = GetWorld()->SpawnActor<AOpeningHighlightActor>();
+		}
+		if (!WindowHighlight)
+		{
+			return false;
+		}
+		const FBox Local = Sill->CalculateComponentsBoundingBoxInLocalSpace(false);
+		const FVector LocalCenter = Local.GetCenter();
+		const FTransform& SillTransform = Sill->GetActorTransform();
+		const FQuat Rotation = SillTransform.GetRotation();
+		const FVector Top = SillTransform.TransformPosition(FVector(LocalCenter.X, LocalCenter.Y, Local.Max.Z));
+		const FVector Center = Top + Rotation.GetAxisZ() * ((WindowHoverLocal::OpeningTopCm + WindowHoverLocal::OpeningBottomCm) * 0.5f);
+		FVector Extent = Local.GetExtent() * SillTransform.GetScale3D().GetAbs();
+		Extent.X += WindowHoverLocal::OpeningMarginCm;
+		Extent.Y += WindowHoverLocal::OpeningMarginCm;
+		Extent.Z = (WindowHoverLocal::OpeningTopCm - WindowHoverLocal::OpeningBottomCm) * 0.5f;
+		static const FName BrokenTag(TEXT("window_broken"));
+		WindowHighlight->ShowBox(FBox(Center - Extent, Center + Extent), Rotation,
+			Sill->ActorHasTag(BrokenTag) ? WindowHoverLocal::BrokenColor : WindowHoverLocal::IntactColor);
+		return IsWindowHighlightShown();
 	}
 	if (WindowHoverActor.Get() == Sill && WindowGhost && WindowGhost->IsShown())
 	{
@@ -991,6 +1039,40 @@ bool ACodexTacticsPlayerController::UpdateWindowHover(AOperativeCharacter* Opera
 		WindowGhost->ShowMantleFor(*Operative, Feet, Yaw, /*bCrouched*/ false, bPosed ? PoseClip : nullptr, PoseSeconds, PoseLocation, AnchorBone, AnchorTarget);
 	}
 	return WindowGhost != nullptr;
+}
+
+// Designer 2026-11-23: show the leaf under the cursor, blue when closed and red when locked.
+bool ACodexTacticsPlayerController::UpdateDoorHover(AOperativeCharacter* Operative, const FHitResult* Hit)
+{
+	const UDoorSubsystem* Doors = GetWorld()->GetSubsystem<UDoorSubsystem>();
+	const ADoorActor* Door = Operative && Hit && Hit->bBlockingHit && Doors && Doors->IsActive()
+		&& !IsAttackModifierDown() && !GetActiveTurnBased() && !IsClickPreviewArmed() ? Doors->FindClickedDoor(*Hit) : nullptr;
+	const EDoorLeafState State = Door ? Door->GetDoorState() : EDoorLeafState::Open;
+	if (!Door || Door->IsBroken() || (State != EDoorLeafState::Closed && State != EDoorLeafState::Locked))
+	{
+		if (DoorHighlight)
+		{
+			DoorHighlight->Hide();
+		}
+		return false;
+	}
+	if (!DoorHighlight)
+	{
+		DoorHighlight = GetWorld()->SpawnActor<AOpeningHighlightActor>();
+	}
+	if (!DoorHighlight)
+	{
+		return false;
+	}
+	const FBox Bounds = Door->GetComponentsBoundingBox(true);
+	const FLinearColor Color = State == EDoorLeafState::Locked ? FLinearColor(1.f, 0.08f, 0.06f) : FLinearColor(0.08f, 0.36f, 1.f);
+	DoorHighlight->ShowBox(Bounds.IsValid ? Bounds.ExpandBy(5.f) : Bounds, FQuat::Identity, Color);
+	return DoorHighlight->IsShown();
+}
+
+bool ACodexTacticsPlayerController::GetDoorHighlightColor(FLinearColor& OutColor) const
+{
+	return DoorHighlight && DoorHighlight->GetShownColor(OutColor);
 }
 
 bool ACodexTacticsPlayerController::UpdateMantleHover(AOperativeCharacter* Operative, const FHitResult* Hit)

@@ -538,13 +538,19 @@ public:
 	/** The mantle hover ghost is up (smokes). */
 	bool IsMantleHoverShown() const;
 	/**
-	 * Designer 2026-11-22: over a ground-floor window sill (tag "window_sill") the selected operative's silhouette stands where a click sends
-	 * him - on the window's far side (FindWindowSillTarget), facing through it; a click there = through the window (the formation follows).
+	 * Designer 2026-11-23: highlight the opening above a sill when the selected operative can climb through it.
+	 * Codex.Window.HoverStyle 1 restores the previous silhouette.
 	 * Null Hit = clear. True while shown.
 	 */
 	bool UpdateWindowHover(AOperativeCharacter* Operative, const FHitResult* Hit);
 	/** The window hover silhouette is up (smokes). */
 	bool IsWindowHoverShown() const;
+	/** The window opening highlight is visible (smokes). */
+	bool IsWindowHighlightShown() const;
+	/** Designer 2026-11-23: highlight a closed or locked door leaf. Null Hit = clear. True while shown. */
+	bool UpdateDoorHover(AOperativeCharacter* Operative, const FHitResult* Hit);
+	/** The visible door highlight's material colour (smokes). */
+	bool GetDoorHighlightColor(FLinearColor& OutColor) const;
 	/** Designer 2026-11-22: over a stair flight in his building, the silhouette on the hidden storey's landing above (a click walks the squad up). */
 	bool UpdateStairHover(AOperativeCharacter* Operative, const FHitResult* Hit);
 	bool IsStairHoverShown() const;
@@ -1049,6 +1055,11 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<class ACoverGhostActor> WindowGhost;
 	TWeakObjectPtr<AActor> WindowHoverActor;
+	/** Designer 2026-11-23: separate opening glows for window and door hover. */
+	UPROPERTY(Transient)
+	TObjectPtr<class AOpeningHighlightActor> WindowHighlight;
+	UPROPERTY(Transient)
+	TObjectPtr<class AOpeningHighlightActor> DoorHighlight;
 	/** The stair-up hover silhouette (UpdateStairHover) and the spot it stands on. */
 	UPROPERTY(Transient)
 	TObjectPtr<class ACoverGhostActor> StairGhost;
