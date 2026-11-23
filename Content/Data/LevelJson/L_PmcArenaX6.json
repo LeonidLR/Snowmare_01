@@ -1,6 +1,6 @@
 {
   "$schema": "../Schemas/level_config.schema.json",
-  "level_id": "L_Gen_Depot_1_X6",
+  "level_id": "L_PmcArenaX6",
   "level_name": "Generated ref_01_02_depot (seed 1)",
   "description": "PMC arena copy of L_Gen_Depot_1_X6.json (enemy-AI session 2026-11-23) + its pmc_arena block - the designer's X6 file stays untouched. Generated greybox (docs/design/levelgen/LEVEL_GENERATOR.md) from ref_01_02_depot seed 1 by Scripts/Editor/build_levelgen_map.py; the squad walks the mandatory route (LevelGenRouteSmoke); combat-lab style pressure. ONE small wave only (a valid wave list is required).",
   "combat_start": "ambush",
