@@ -183,6 +183,8 @@ namespace RoofCutawayStoreySmoke
 		TMap<int32, FCount> Counts;
 		int32 KitUntagged = 0;
 		FString UntaggedNames;
+		int32 CutBlocking = 0;
+		int32 CutChecked = 0;
 		for (const TPair<UPrimitiveComponent*, int32>& Piece : Roofs->GetStoreyPieces(Runner->BuildingId))
 		{
 			const UPrimitiveComponent* Comp = Piece.Key;
@@ -193,6 +195,12 @@ namespace RoofCutawayStoreySmoke
 			}
 			FCount& Count = Counts.FindOrAdd(Piece.Value);
 			const bool bCut = Roofs->IsCutAway(Comp);
+			// Designer bug 2026-11-23: a cut piece still blocks sight / fire (the Visibility channel) - only the view passes it.
+			if (bCut && bJudge)
+			{
+				++CutChecked;
+				CutBlocking += Comp->GetCollisionResponseToChannel(ECC_Visibility) == ECR_Block || Comp->GetCollisionEnabled() == ECollisionEnabled::NoCollision ? 1 : 0;
+			}
 			if (Comp->IsA<UInstancedStaticMeshComponent>())
 			{
 				// kit_dress per-storey components carry building=<id> / floor=<n> themselves; one without spans storeys (the old dresser)
@@ -212,6 +220,10 @@ namespace RoofCutawayStoreySmoke
 				++Count.Grey;
 				Count.GreyCut += bCut ? 1 : 0;
 			}
+		}
+		if (bJudge && CutChecked > 0)
+		{
+			Check(CutBlocking == CutChecked, FString::Printf(TEXT("%s: every cut piece still blocks sight / fire (Visibility) - %d of %d"), Phase, CutBlocking, CutChecked));
 		}
 		Counts.KeySort(TLess<int32>());
 		for (const TPair<int32, FCount>& Pair : Counts)

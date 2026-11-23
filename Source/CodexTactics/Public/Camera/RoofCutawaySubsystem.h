@@ -214,6 +214,12 @@ public:
 	/** Piece is cut away now. */
 	bool IsCutAway(const UPrimitiveComponent* Piece) const;
 
+	/**
+	 * A trace that passes the pieces cut away now (designer bug 2026-11-23: cut pieces keep blocking Visibility for sight / fire; only the view-
+	 * side traces - the see-through silhouette, drops onto the floor - look past them). False = nothing behind.
+	 */
+	bool LineTraceSkippingCut(FHitResult& OutHit, const FVector& Start, const FVector& End, ECollisionChannel Channel, FCollisionQueryParams Params) const;
+
 	/** Number of pieces cut away now. */
 	int32 GetCutAwayCount() const;
 
@@ -273,6 +279,8 @@ private:
 		TWeakObjectPtr<UPrimitiveComponent> Piece;
 		/** Its own settings, put back on restore. */
 		ECollisionResponse VisibilityResponse = ECR_Block;
+		/** Its Visibility response was switched off by the cut (Codex.RoofCutaway.CutIgnoresVisibility 1). */
+		bool bVisibilityChanged = false;
 		bool bRenderInMainPass = true;
 		bool bRenderInDepthPass = true;
 		bool bCastShadow = true;
