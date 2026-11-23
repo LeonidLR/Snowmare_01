@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -78,6 +79,13 @@ class TestPmcRoundTrace(unittest.TestCase):
         # Out of range must raise ValueError (no silent fallback to round 1)
         with self.assertRaises(ValueError):
             prt.parse_arena_round(arena_data, 99)
+
+    def test_arena_uses_round_index_when_rounds_are_shuffled(self):
+        for first_index in (0, 1):
+            with self.subTest(first_index=first_index):
+                rounds = [{"index": first_index + 1, "seed": 102}, {"index": first_index, "seed": 101}]
+                self.assertEqual(prt.parse_arena_round({"rounds": rounds}, "1")[0]["seed"], 101)
+                self.assertEqual(prt.parse_arena_round({"rounds": rounds}, "r1")[0]["seed"], 102)
 
     def test_log_partitioning_and_holds_fire(self):
         lines = [
@@ -183,6 +191,7 @@ class TestPmcRoundTrace(unittest.TestCase):
         track = {
             "fighters": [{"id": fighter_id, "side": side} for side in "AB"],
             "dt": 1,
+            "frames": [[[0, 0], [5, 0]]],
             "states": [[[0, "stand", 100, "Hold"], [0, "crouch", 100, "Hold"]]],
             "events": [
                 {"t": 0.1, "type": "shot", "side": "A", "from": fighter_id, "to": fighter_id},
@@ -213,7 +222,8 @@ class TestPmcRoundTrace(unittest.TestCase):
                 self.assertEqual(stats["first_shot_target"], f"{attacker}:{fighter_id}")
                 self.assertEqual(set(metrics["posts_assigned"]), {key} if side == "A" else set())
                 report = prt.format_markdown_report(metrics, Path("round.track.json"), 1)
-                self.assertIn(f"**{side}:{fighter_id}** | {'ak' if side == 'A' else 'n/a'}", report)
+                expected_location = "ak | Spawn: X=0 (cm)" if side == "A" else " | First frame: (5, 0) m"
+                self.assertIn(f"**{side}:{fighter_id}** | {expected_location}", report)
                 self.assertEqual(metrics["hypotheses"]["H4"]["verdict"], "HOLDS" if side == "A" else "DOES NOT HOLD")
 
     def test_markdown_report_formatting(self):
@@ -234,6 +244,95 @@ class TestPmcRoundTrace(unittest.TestCase):
         self.assertIn("Opens Fire", md)
         self.assertIn("H1 (Ground Objective Pull)", md)
         self.assertIn("H4 (Hold Fire / Attention Delay)", md)
+
+    def test_shuffled_events_keep_first_shot_and_report(self):
+        track = json.loads(self.track_file.read_text(encoding="utf-8"))
+        rnd, meta, idx1, idx0 = prt.parse_arena_round(
+            json.loads(self.arena_file.read_text(encoding="utf-8")), 1
+        )
+        log = prt.parse_log_for_round(self.log_file, idx1, idx0)
+        track["events"].append(
+            {"type": "shot", "side": "B", "from": "Operator Lind", "to": "Operator Vance", "t": 8.1}
+        )
+        metrics = prt.compute_trace_metrics(rnd, meta, track, log)
+        key = ("B", "Operator Lind")
+        self.assertEqual(metrics["exposure_stats"][key]["first_shot_t"], 8.1)
+        self.assertEqual(metrics["exposure_stats"][key]["first_shot_target"], "A:Operator Vance")
+        track["events"].reverse()
+        self.assertEqual(prt.compute_trace_metrics(rnd, meta, track, log), metrics)
+
+    def test_directory_round_lookup_is_independent_of_creation_order(self):
+        script = TOOLS_DIR / "pmc_round_trace.py"
+        with tempfile.TemporaryDirectory() as folder:
+            track_dir = Path(folder)
+            # Round 2 is created first, with a distinct seed so a wrong selection is observable.
+            for index, seed in ((2, 99102), (1, 99101)):
+                (track_dir / f"round_{index}.track.json").write_text(
+                    json.dumps({"seed": seed, "round": index}), encoding="utf-8"
+                )
+            for index, seed in ((1, 99101), (2, 99102)):
+                result = subprocess.run(
+                    [sys.executable, str(script), str(track_dir), "--round", str(index)],
+                    capture_output=True, text=True, check=True,
+                )
+                self.assertIn(f"**Seed**: `{seed}`", result.stdout)
+
+    def test_objective_radius_uses_round_track_and_arena_config(self):
+        log = prt.parse_log_for_round(None, 1, 0)
+        rnd = {"objective": {"enabled": True, "radius_m": 8.25}}
+        arena = {"config": {"objective_radius_m": 12}}
+        track = {"units": "cm", "objective": {"radius": 475}}
+        self.assertEqual(prt.compute_trace_metrics(rnd, arena, track, log)["objective"]["radius_m"], 8.25)
+        del rnd["objective"]["radius_m"]
+        self.assertEqual(prt.compute_trace_metrics(rnd, arena, track, log)["objective"]["radius_m"], 4.75)
+        track["units"] = "m"
+        track["objective"]["radius"] = 3.5
+        self.assertEqual(prt.compute_trace_metrics(rnd, arena, track, log)["objective"]["radius_m"], 3.5)
+        track["objective"]["radius_m"] = 6.25
+        self.assertEqual(prt.compute_trace_metrics(rnd, arena, track, log)["objective"]["radius_m"], 6.25)
+        direct_rnd, direct_meta = prt.synthesize_round_from_track(track, 1)
+        direct_metrics = prt.compute_trace_metrics(direct_rnd, direct_meta, track, log)
+        self.assertIn("Radius **6.25 m**", prt.format_markdown_report(direct_metrics, self.track_file, 1))
+        self.assertEqual(prt.compute_trace_metrics(rnd, arena, None, log)["objective"]["radius_m"], 12)
+        self.assertIsNone(prt.compute_trace_metrics(rnd, {}, None, log)["objective"]["radius_m"])
+
+    def test_defender_positions_with_track_data_or_no_section(self):
+        log = prt.parse_log_for_round(None, 1, 0)
+        track = {
+            "fighters": [{"side": "A", "id": "Roux"}, {"side": "B", "id": "Roux"}],
+            "frames": [[[12, 34, 56], [70, 80, 90]]],
+            "units": "cm",
+        }
+        metrics = prt.compute_trace_metrics({}, {}, track, log)
+        report = prt.format_markdown_report(metrics, self.track_file, 1)
+        self.assertIn("## 2. Defender Positions & Initial Posts", report)
+        self.assertIn("**A:Roux** |  | First frame: (12, 34, 56) cm |  |  |", report)
+        self.assertNotIn("Spawn ring", report)
+        self.assertNotIn("Ground / Objective", report)
+
+        del track["frames"]
+        report = prt.format_markdown_report(prt.compute_trace_metrics({}, {}, track, log), self.track_file, 1)
+        self.assertNotIn("## 2. Defender Positions & Initial Posts", report)
+
+    def test_h3_uses_defender_track_state_before_contact(self):
+        log = prt.parse_log_for_round(None, 1, 0)
+        open_state, cover_state = [0, "stand", 100, "Hold"], [0, "stand", 100, "Hold/cover"]
+        track = {
+            "dt": 1,
+            "fighters": [{"id": "Lind", "side": side} for side in "AB"],
+            "states": [[open_state, cover_state] for _ in range(12)] + [[cover_state, cover_state]],
+            "events": [{"type": "shot", "t": 11, "from": "Lind", "side": "B"}],
+        }
+        metrics = prt.compute_trace_metrics({}, {}, track, log)
+        self.assertEqual(metrics["hypotheses"]["H3"]["verdict"], "HOLDS")
+        self.assertIn("12.0s", metrics["hypotheses"]["H3"]["evidence"])
+        self.assertEqual(metrics["exposure_stats"][("A", "Lind")]["total_stand_s"], 12.0)
+
+        track["states"][0][0] = cover_state
+        metrics = prt.compute_trace_metrics({}, {}, track, log)
+        self.assertEqual(metrics["hypotheses"]["H3"]["verdict"], "DOES NOT HOLD")
+        self.assertIn("1 fighter samples", metrics["hypotheses"]["H3"]["evidence"])
+        self.assertEqual(metrics["exposure_stats"][("A", "Lind")]["pre_contact_cover_samples"], 1)
 
     def test_cli_execution_on_coherent_fixture(self):
         script_path = TOOLS_DIR / "pmc_round_trace.py"

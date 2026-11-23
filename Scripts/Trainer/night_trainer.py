@@ -103,11 +103,6 @@ def main(argv=None) -> int:
 
 
 def _check_gate(args, cfg) -> int:
-    probe_data = None
-    if args.gate_probe and os.path.isfile(args.gate_probe):
-        with open(args.gate_probe, "r", encoding="utf-8-sig") as f:
-            probe_data = json.load(f)
-
     baseline_data = None
     baseline_path = args.gate_baseline or os.path.join(args.repo_root, "Saved", "Trainer", "baseline.json")
     if os.path.isfile(baseline_path):
@@ -120,7 +115,9 @@ def _check_gate(args, cfg) -> int:
         with open(sweep_path, "r", encoding="utf-8-sig") as f:
             sweep_data = json.load(f)
 
-    gate_res = evaluate_training_gate(cfg, probe_data=probe_data, baseline_data=baseline_data, sweep_data=sweep_data)
+    gate_res = evaluate_training_gate(
+        cfg, baseline_data=baseline_data, sweep_data=sweep_data, probe_path=args.gate_probe,
+    )
 
     trainer_saved = os.path.join(args.repo_root, "Saved", "Trainer")
     os.makedirs(trainer_saved, exist_ok=True)
