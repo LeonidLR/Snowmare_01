@@ -233,6 +233,8 @@ void UOperativeAnimInstance::ResolveNativeAnimationDefaults(TArray<FSoftObjectPa
 			}
 		}
 	}
+	// Cover animation sets (designer 2026-11-22, cover_anim_sets.json): every set clip into the preload catalog / this body's sets loaded.
+	ResolveCoverAnimSets(OutPaths);
 }
 
 void UOperativeAnimInstance::NativeUninitializeAnimation()
@@ -551,6 +553,10 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 				{
 					return; // the transition is playing and a shot is queued behind it
 				}
+				if (!bCoverInFirePose && TryCoverSetOverSideSwitch())
+				{
+					return; // over the top on his right: he moves to his left side first; the next shots come from the stance
+				}
 				UAnimSequenceBase* Enter = bCoverInFirePose ? nullptr : PickCoverClip(bIsCrouching ? CoverCrouchFireEnter : CoverStandFireEnter);
 				bCoverInFirePose = true;
 				if (Enter && PlayCoverOneShot(Enter, 0.1f, 0.05f))
@@ -865,6 +871,10 @@ void UOperativeAnimInstance::HandleGrenadeThrow()
 	{
 		return;
 	}
+	if (PlayCoverSetGrenadeThrow(*Operative))
+	{
+		return; // the cover set's own throw from the wall (full body, its measured release)
+	}
 	const EOperativeStance ThrowStance = Operative->GetStance();
 	const bool bRunning = ThrowStance == EOperativeStance::Standing && (Operative->IsSprinting() || Operative->GetVelocity().Size2D() > 300.f);
 	UAnimSequenceBase* Clip = ThrowStance == EOperativeStance::Prone ? GrenadeThrowProneAnimation
@@ -1139,7 +1149,7 @@ void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
 		bWasReloading = bIsReloading; // the D-1: intro, a shell-insertion loop per shell, outro (OperativeAnimInstanceShotgun.cpp)
 		return;
 	}
-	if (bIsReloading && !bWasReloading && Reload && Operative && !IsPlayingStanceTransition() && !bKnockedDown && !bIsClimbing)
+	if (bIsReloading && !bWasReloading && Reload && Operative && !IsPlayingStanceTransition() && !bKnockedDown && !bIsClimbing && !WantsCoverSetReload())
 	{
 		const float Duration = FMath::Max(0.1f, Operative->ReloadTimer);
 		PlaySlotAnimationAsDynamicMontage(Reload, ReloadSlot, 0.2f, 0.2f, Reload->GetPlayLength() / Duration);
@@ -1251,6 +1261,7 @@ void UOperativeAnimInstance::UpdateState()
 	UpdateBlizzardWalkLayer(*Operative); // before the weather idle: it applies the storm pose's weapon hiding too
 	UpdateWarmIdleLayer(*Operative); // before the sniper layer: a weather pose keeps the sniper idle off
 	UpdateSniperLayer(*Operative);
+	UpdateCoverSetAimOffset(); // a cover set's own aim offset in its fire stance (after the sniper layer sets ActiveAimOffset)
 	UpdateLeftHandIK(*Operative, StateDeltaSeconds);
 	UpdateAimOffset(*Operative, StateDeltaSeconds);
 }
@@ -2004,6 +2015,15 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	const bool bLeft = !bInCover && bWasInCover;
 	bWasInCover = bInCover;
 	bCoverEnteredThisFrame = bEntered;
+	// The cover set for this wall (indoor / outdoor, JSON), judged before anything else (also under the stealth wall pose, which returns below).
+	if (bEntered && bUseNativeCoverClips)
+	{
+		ChooseCoverAnimSet(Operative); // the cover set for this wall (indoor / outdoor, JSON) before any clip is picked
+	}
+	else if (bInCover && !bShimmying && FVector::Dist2D(Operative.GetCoverSlot().WallPoint, CoverSetSlotPoint) > CoverSetRechooseCm)
+	{
+		ChooseCoverAnimSet(Operative); // cover to cover without leaving it (another wall, maybe the other side of a door): judged again
+	}
 	if (bLeft || bIsDead)
 	{
 		ReleasePeekStanceYawLock(); // off the wall (another order) / dead: the peek stance's held facing lets go
@@ -2039,6 +2059,10 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	if (!bUseNativeCoverClips || bIsDead)
 	{
 		return;
+	}
+	if (bInCover)
+	{
+		TrackCoverSetChanges(Operative);
 	}
 	const double LayerNow = Operative.GetWorld() ? Operative.GetWorld()->GetTimeSeconds() : 0.0;
 	if (bLeft)
@@ -2180,7 +2204,7 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 			}
 			bCoverEnterPlaying = false;
 		}
-		if (bShimmying && bOneShotPlaying)
+		if (bShimmying && bOneShotPlaying && !IsCoverSetWalkOneShotPlaying())
 		{
 			// A shimmy cuts any cover one-shot (the fire -> idle exit, a transition): the side-step walk shows at once
 			// instead of the body sliding along the wall in the exit pose (user request 2026-10-07, seen crouched). Right after the fire
@@ -2224,6 +2248,10 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	{
 		return; // stand <-> crouch at the wall: the stance clip plays, the loop follows
 	}
+	if (UpdateCoverSetStates(Operative))
+	{
+		return; // a cover set's walk start / stop / turn or side switch started (OperativeAnimInstanceCoverSet.cpp)
+	}
 	// Fire-ready pose (user rule 2026-10-06): a threat is known and he stands at the exposed edge on its side -> the
 	// idle -> fire transition, then the fire-ready idle; the exit transition when the threat is gone for the hold time,
 	// he shimmies off the edge or leaves the cover. Without the clips the look-around corner pose stands in.
@@ -2241,6 +2269,10 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		CoverFirePoseFacing = CoverFacing;
 		bCoverPeekStanceEntry = false;
 		bPeekStanceBlend = true;
+	}
+	else if (bWantFirePose && !bCoverInFirePose && TryCoverSetOverSideSwitch())
+	{
+		return; // over the top on his right: the move to his left side first (the set's over clips are left-only), the stance follows it
 	}
 	else if (bWantFirePose && !bCoverInFirePose)
 	{
@@ -2267,6 +2299,10 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	}
 	// Reload behind the corner (user request 2026-10-07; the pack has no cover reload clip): after the fire -> idle exit
 	// the cover loop steps aside so the normal reload (UpperBodySlot over the graph's idle) shows; the loop resumes after.
+	if (UpdateCoverSetReload(Operative))
+	{
+		return; // the cover set's own reload clip (fitted to the reload time)
+	}
 	if (bIsReloading && !bShimmying)
 	{
 		if (UAnimMontage* Loop = CoverLoopMontage.Get(); Loop && Montage_IsPlaying(Loop))
@@ -2285,7 +2321,7 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	{
 		Wanted = PickShimmyClip(bIsCrouching ? (bCoverShimmyForward ? CoverCrouchMoveForward : CoverCrouchMoveBackward)
 			: (bCoverShimmyForward ? CoverStandMoveForward : CoverStandMoveBackward), bCoverShimmyForward);
-		PlayRate = FMath::Clamp(Speed / FMath::Max(CoverShimmyClipSpeed, 1.f), 0.5f, 2.f);
+		PlayRate = FMath::Clamp(Speed / FMath::Max(GetCoverSetShimmyClipSpeed(), 1.f), 0.5f, 2.f);
 	}
 	if (!Wanted && bCoverInFirePose && FireIdle)
 	{

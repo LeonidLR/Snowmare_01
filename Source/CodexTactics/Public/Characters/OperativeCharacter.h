@@ -1871,6 +1871,9 @@ public:
 	/** The current shimmy goes towards the facing side (forward clip), else backwards. */
 	bool IsShimmyForward() const;
 
+	/** Ground distance left to the shimmy's target slot, cm (0 when not shimmying; the cover sets' walk start / stop, designer Q5 2026-11-22). */
+	float GetShimmyRemainingCm() const;
+
 	/** Facing he would take at Slot with what he knows now (the cover ghost preview). */
 	ECoverFacing PredictCoverFacing(const FCoverSlot& Slot) const;
 

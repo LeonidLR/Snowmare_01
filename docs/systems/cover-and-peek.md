@@ -16,6 +16,28 @@
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
 
+## Cover animation sets: the indoor Riffle set (designer 2026-11-22)
+
+- **What:** which cover clip set an operative plays is data: `Content/Data/Animation/cover_anim_sets.json` ("contexts": indoor / outdoor /
+  stealth -> set; "operatives": per-operative overrides by DisplayName; "sets": skeleton -> clip key -> asset). Today indoor = `riffle` (the
+  designer's Riffle Cover Animation pack retargeted by `Scripts/Editor/setup_indoor_cover_animation.py` into the untracked
+  `/Game/Animations/CoverIndoor/{UE4,Pmc}`), outdoor and stealth = `m4` (the native arrays). Design note + the designer's answers:
+  [INDOOR_COVER_ANIMATIONS](../design/INDOOR_COVER_ANIMATIONS.md).
+- **Indoor** = `URoofCutawaySubsystem::GetOperativeStorey` puts him in a building at the cover ENTRY (decided once per entry; a man outside
+  hugging a building's outer wall is outdoor). PMC fighters use it too (their own retargeted copies, skeleton key `SK_PmcOperator_Skeleton`).
+- **Code:** `Characters/CoverAnimSetRules` (pure; tests `CodexTactics.Animation.CoverAnimSet.*`), `OperativeAnimInstanceCoverSet.cpp`:
+  `ChooseCoverAnimSet` swaps the native cover arrays (`CoverStandIdle` ...) at the entry - a missing set clip keeps the native one, the M4-only
+  states (switch run-ins, blind fire) are cleared under a set - and adds the set-only states: cover **reload** (fitted to the reload time; the
+  upper-body reload stays off), **grenade** throw from the wall (full body, release from the JSON), **side switch** (`_To_L / _To_R` when the
+  facing turns while standing at the wall), **walk start / stop / turn** for walks of `shimmy_transition_min_cm` (150) and more (designer Q5),
+  the **over-the-top fire set** (Aim/2) crouched at a LOW cover away from its corner - a window sill (Q2; the pack has it for his LEFT only and the mirrored copies hold the rifle left-handed, so facing right he first plays the side switch to the left, rises from there and switches back after the pose - designer 2026-11-23 "switch side first") -
+  and the set's own **aim offsets** `AO_CoverIndoor_*` once the ABP's Aim Offset Player Blend Space pin is bound to `ActiveAimOffset` and
+  `bCoverSetAimOffsetWired` is ticked (Q1, the designer's ABP step). The walk loops' pace per stance is `shimmy_clip_speed`.
+- **Switches:** JSON `enabled`, ABP Class Defaults `bUseCoverAnimSets`, console `Codex.Cover.AnimSets` (-1 JSON, 0 off, 1 on),
+  `Codex.Cover.ReloadAnimSets` (re-read the JSON). **Smoke:** `CodexTactics.CoverIndoorSmoke` on `L_Gen_StoryShowcase_Kit` (`shots=1`).
+- **Known limits:** no per-shot clip in the set (a shot replays the aim idle; the recoil is the weapon's); no stance-switch clips (the target
+  stance's idle blends in); `_Exit` is not used (leaving cover blends out as before).
+
 ## Leaned out: a smaller target (user decision 2026-11-07)
 
 - While an operative leans out of cover (the corner aim, and the lean shot over a low cover, both `bIsCornerLeaning`) the cover absorbs nothing

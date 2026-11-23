@@ -1,0 +1,840 @@
+// Dev-only check of the data-driven cover animation sets (designer 2026-11-22, docs/design/INDOOR_COVER_ANIMATIONS.md): on a generated map with
+// buildings (default the dressed /Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit) the leader is put inside a building (the roof cutaway's storey
+// index; building=<id>, default the first indexed one) and runs the cover states at an inside wall: hug (stand), a long walk along the wall
+// (start / loop / stop), reload, grenade throw, corner peek-aim, crouched hug + crouched peek, and at a LOW inside cover (a window sill) the
+// over-the-top fire set; each must play the indoor set's clips (AS_Cover_*, set "riffle", context "indoor"). Control: the same man at a wall
+// OUTSIDE the buildings keeps the native M4 set. shots=1 (needs rendering) writes <dir>/<NN>_<pose>.png per pose. PASS / FAIL, then exits.
+//   UnrealEditor.exe <uproject> /Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit -game -RenderOffscreen -ResX=1600 -ResY=900 -nosound
+//     -LevelJson=L_Gen_StoryShowcase_Kit.json -ExecCmds="CodexTactics.CoverIndoorSmoke shots=1 dir=<abs>"
+// Godot reference: none (UE-only).
+
+#include "CoreMinimal.h"
+
+#if !UE_BUILD_SHIPPING
+
+#include "AIController.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
+#include "Camera/CameraActor.h"
+#include "Camera/CameraComponent.h"
+#include "Camera/RoofCutawaySubsystem.h"
+#include "Characters/OperativeAnimInstance.h"
+#include "Characters/OperativeCharacter.h"
+#include "Characters/SquadSubsystem.h"
+#include "CodexTactics.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Debug/FrontendSmokeUtils.h"
+#include "Engine/Engine.h"
+#include "Engine/TargetPoint.h"
+#include "Engine/World.h"
+#include "Environment/EnvironmentRules.h"
+#include "Environment/EnvironmentSubsystem.h"
+#include "HAL/FileManager.h"
+#include "HAL/IConsoleManager.h"
+#include "HAL/PlatformMisc.h"
+#include "Kismet/GameplayStatics.h"
+#include "Misc/CoreDelegates.h"
+#include "Misc/Paths.h"
+#include "NavigationSystem.h"
+#include "Tactics/CoverTraceRules.h"
+#include "UnrealClient.h"
+
+namespace CoverIndoorSmoke
+{
+	constexpr int32 WarmupFrames = 150;
+	constexpr int32 MaxFrames = 60 * 300;
+
+	enum class EStep : uint8
+	{
+		Warmup, Place, Hug, Walk, Reload, Grenade, Peek, Crouch, CrouchPeek, Window, WindowBack, Outdoor, Done
+	};
+
+	struct FRunner
+	{
+		EStep Step = EStep::Warmup;
+		int32 Frame = 0;
+		double StepStart = 0.0;
+		int32 Failures = 0;
+		FString BuildingArg;
+		FString BuildingId;
+		int32 BuildingIndex = 0;
+		bool bShots = false;
+		FString Dir;
+		int32 ShotIndex = 0;
+		TArray<FString> PendingShots;
+		FDelegateHandle EndFrameHandle;
+		FCoverSlot High;
+		FCoverSlot Low;
+		bool bHaveLow = false;
+		FVector Spot = FVector::ZeroVector;
+		/** Where the leader stood at the start (outdoors on a generated map): the outdoor control goes back there. */
+		FVector StartSpot = FVector::ZeroVector;
+		bool bOrdered = false;
+		bool bShotTaken = false;
+		bool bOutdoorOrdered = false;
+		float WalkCm = 0.f;
+		double InCoverSince = 0.0;
+		TSet<FString> KindsSeen;
+		TSet<FString> ClipsSeen;
+		TWeakObjectPtr<ACameraActor> Camera;
+		TWeakObjectPtr<ATargetPoint> Target;
+	};
+
+	TSharedPtr<FRunner> Runner;
+
+	void Check(bool bOk, const FString& What)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: %s"), bOk ? TEXT("ok  ") : TEXT("FAIL"), *What);
+		Runner->Failures += bOk ? 0 : 1;
+	}
+
+	void Finish()
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), Runner->Failures == 0 ? TEXT("PASS") : TEXT("FAIL"));
+		FCoreDelegates::OnEndFrame.Remove(Runner->EndFrameHandle);
+		Runner->Step = EStep::Done;
+		FPlatformMisc::RequestExit(false, TEXT("CoverIndoorSmoke"));
+	}
+
+	UOperativeAnimInstance* AnimOf(const AOperativeCharacter& Op)
+	{
+		return Op.GetMesh() ? Cast<UOperativeAnimInstance>(Op.GetMesh()->GetAnimInstance()) : nullptr;
+	}
+
+	FString LastClip(const UOperativeAnimInstance& Anim)
+	{
+		const TArray<FString>& Log = Anim.GetCoverClipLog();
+		return Log.IsEmpty() ? FString(TEXT("none")) : Log.Last();
+	}
+
+	void Put(AOperativeCharacter& Member, const FVector& Spot)
+	{
+		Member.TeleportTo(Spot + FVector(0.f, 0.f, Member.GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 5.f), Member.GetActorRotation(), false, true);
+		Member.GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+		if (AAIController* AI = Cast<AAIController>(Member.GetController()))
+		{
+			AI->StopMovement();
+		}
+	}
+
+	/** A navmesh spot on the building's ground storey: inside its largest slab, the first that lands on that floor. */
+	bool FindInsideSpot(UWorld* World, const URoofCutawaySubsystem& Roofs, const FString& Building, FVector& OutSpot)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		TArray<FBox> Slabs = Roofs.GetStoreySlabs(Building);
+		Slabs.Sort([](const FBox& A, const FBox& B) { return A.Min.Z < B.Min.Z; });
+		const float Fractions[] = { 0.5f, 0.3f, 0.7f, 0.2f, 0.8f };
+		for (const FBox& Slab : Slabs)
+		{
+			for (const float FX : Fractions)
+			{
+				for (const float FY : Fractions)
+				{
+					const FVector Try(FMath::Lerp(Slab.Min.X, Slab.Max.X, FX), FMath::Lerp(Slab.Min.Y, Slab.Max.Y, FY), Slab.Max.Z + 40.f);
+					FNavLocation OnNav;
+					if (Nav && Nav->ProjectPointToNavigation(Try, OnNav, FVector(60.f, 60.f, 90.f)) && FMath::Abs(OnNav.Location.Z - Slab.Max.Z) < 60.f)
+					{
+						OutSpot = OnNav.Location;
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	/** Walls round Spot (16 rays at chest height): a high cover slot with an exposed edge first, and a low one (a window sill). */
+	void FindWalls(UWorld* World, const AOperativeCharacter& Op, const FVector& Spot, FRunner& R, float MaxCm)
+	{
+		R.High = FCoverSlot();
+		float BestHigh = TNumericLimits<float>::Max();
+		float BestLow = R.bHaveLow ? (R.Low.HasExposedEdge() ? 1000.f : 0.f) + static_cast<float>(FVector::Dist2D(Spot, R.Low.WorldLocation)) : TNumericLimits<float>::Max();
+		FCollisionQueryParams Params(TEXT("CoverIndoorSmoke"), false, &Op);
+		for (int32 Ray = 0; Ray < 16; ++Ray)
+		{
+			const FVector Dir = FRotator(0.f, Ray * 22.5f, 0.f).Vector();
+			for (const float Height : { 100.f, 60.f })
+			{
+				const FVector From = Spot + FVector(0.f, 0.f, Height);
+				FHitResult Hit;
+				if (!World->LineTraceSingleByChannel(Hit, From, From + Dir * MaxCm, ECC_Visibility, Params))
+				{
+					continue;
+				}
+				FCoverSlot Slot;
+				if (!CoverTraceRules::FindCoverSlotAt(World, Hit.ImpactPoint, Dir, Slot, FCoverTraceConfig(), { &Op }))
+				{
+					continue;
+				}
+				const float Dist = static_cast<float>(FVector::Dist2D(Spot, Slot.WorldLocation));
+				const float Room = FMath::Max(Slot.LeftEdgeDistanceCm, Slot.RightEdgeDistanceCm);
+				// Rooms are small (4 x 4 m): any high wall with 1.5 m of walk; an exposed edge (a doorway beside it) and more room score better.
+				const float Score = Dist - (Slot.HasExposedEdge() ? 400.f : 0.f) - FMath::Min(Room, 400.f);
+				if (Slot.Height == ECoverHeight::HighCover && Room > 150.f && Score < BestHigh)
+				{
+					BestHigh = Score;
+					R.High = Slot;
+				}
+				else if (Slot.Height == ECoverHeight::LowCover && Dist + (Slot.HasExposedEdge() ? 1000.f : 0.f) < BestLow)
+				{
+					BestLow = Dist + (Slot.HasExposedEdge() ? 1000.f : 0.f); // a window: high jambs, no exposed edge -> over the top
+					R.Low = Slot;
+					R.bHaveLow = true;
+				}
+			}
+		}
+	}
+
+	/** A low inside cover (a window sill) anywhere on the building's ground storey: FindWalls from a grid of navmesh spots over its slabs. */
+	void FindWindow(UWorld* World, const AOperativeCharacter& Op, const URoofCutawaySubsystem& Roofs, FRunner& R)
+	{
+		if (R.bHaveLow)
+		{
+			return;
+		}
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		const FCoverSlot KeepHigh = R.High;
+		TArray<FBox> AllSlabs;
+		for (const TPair<FString, int32>& Building : Roofs.GetStoreyBuildings())
+		{
+			AllSlabs.Append(Roofs.GetStoreySlabs(Building.Key)); // every storey of every building: a window anywhere inside
+		}
+		for (const FBox& Slab : AllSlabs)
+		{
+			if (R.bHaveLow && !R.Low.HasExposedEdge())
+			{
+				break;
+			}
+			for (float FX = 0.2f; FX < 0.9f; FX += 0.3f)
+			{
+				for (float FY = 0.2f; FY < 0.9f; FY += 0.3f)
+				{
+					FNavLocation OnNav;
+					const FVector Try(FMath::Lerp(Slab.Min.X, Slab.Max.X, FX), FMath::Lerp(Slab.Min.Y, Slab.Max.Y, FY), Slab.Max.Z + 40.f);
+					if (Nav && Nav->ProjectPointToNavigation(Try, OnNav, FVector(60.f, 60.f, 90.f)) && FMath::Abs(OnNav.Location.Z - Slab.Max.Z) < 60.f)
+					{
+						FindWalls(World, Op, OnNav.Location, R, 400.f);
+					}
+				}
+			}
+		}
+		R.High = KeepHigh;
+		UE_LOG(LogCodexTactics, Display, TEXT("CoverIndoorSmoke: window search -> %s (exposed edge %d)"), R.bHaveLow ? *R.Low.WorldLocation.ToString() : TEXT("none"),
+			R.bHaveLow && R.Low.HasExposedEdge() ? 1 : 0);
+	}
+
+	void AimCamera(UWorld* World, const AOperativeCharacter& Op, const FCoverSlot& Slot)
+	{
+		FRunner& R = *Runner;
+		if (!R.bShots)
+		{
+			return;
+		}
+		if (!R.Camera.IsValid())
+		{
+			R.Camera = World->SpawnActor<ACameraActor>(ACameraActor::StaticClass(), FTransform::Identity);
+		}
+		ACameraActor* Camera = R.Camera.Get();
+		APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+		if (!Camera || !PC)
+		{
+			return;
+		}
+		const FVector Chest = Op.GetActorLocation() + FVector(0.f, 0.f, 20.f);
+		// Into the room (the wall normal points off the wall towards him): of a fan of directions in front of him the one with the most free
+		// room (traced from his chest, his gear ignored), the camera stopped short of whatever is in the way.
+		FCollisionQueryParams Params(TEXT("CoverIndoorSmokeCamera"), false, &Op);
+		TArray<AActor*> Attached;
+		Op.GetAttachedActors(Attached, true, true);
+		Params.AddIgnoredActors(Attached);
+		FVector Eye = Chest + Slot.WallNormal * 250.f + FVector(0.f, 0.f, 180.f);
+		float BestFree = -1.f;
+		for (const float YawDeg : { 0.f, 25.f, -25.f, 50.f, -50.f, 70.f, -70.f })
+		{
+			for (const float UpDeg : { 40.f, 25.f, 55.f })
+			{
+				const FVector Flat = Slot.WallNormal.RotateAngleAxis(YawDeg, FVector::UpVector);
+				const FVector Dir = (Flat * FMath::Cos(FMath::DegreesToRadians(UpDeg)) + FVector(0.f, 0.f, FMath::Sin(FMath::DegreesToRadians(UpDeg)))).GetSafeNormal();
+				FHitResult Block;
+				const float Free = World->LineTraceSingleByChannel(Block, Chest, Chest + Dir * 320.f, ECC_Visibility, Params) ? Block.Distance : 320.f;
+				if (Free > BestFree + 20.f)
+				{
+					BestFree = Free;
+					Eye = Chest + Dir * FMath::Max(Free - 25.f, 60.f);
+				}
+			}
+		}
+		Camera->SetActorLocationAndRotation(Eye, (Chest - Eye).Rotation());
+		Camera->GetCameraComponent()->SetFieldOfView(80.f);
+		PC->SetViewTarget(Camera);
+	}
+
+	void Shot(const FString& Name)
+	{
+		FRunner& R = *Runner;
+		if (!R.bShots)
+		{
+			return;
+		}
+		const FString File = R.Dir / FString::Printf(TEXT("%02d_%s.png"), ++R.ShotIndex, *Name);
+		FScreenshotRequest::RequestScreenshot(File, /*bInShowUI*/ false, /*bAddFilenameSuffix*/ false);
+		R.PendingShots.Add(File);
+		UE_LOG(LogCodexTactics, Display, TEXT("CoverIndoorSmoke: shot %s"), *File);
+	}
+
+	void Observe(const UOperativeAnimInstance& Anim)
+	{
+		if (!Anim.GetCoverSetOneShotKind().IsEmpty())
+		{
+			Runner->KindsSeen.Add(Anim.GetCoverSetOneShotKind());
+		}
+		Runner->ClipsSeen.Add(LastClip(Anim));
+	}
+
+	bool SawClip(const TCHAR* Part)
+	{
+		for (const FString& Clip : Runner->ClipsSeen)
+		{
+			if (Clip.Contains(Part))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void Tick()
+	{
+		if (!Runner.IsValid())
+		{
+			return;
+		}
+		FRunner& R = *Runner;
+		if (R.Step == EStep::Done)
+		{
+			return;
+		}
+		if (++R.Frame > MaxFrames)
+		{
+			Check(false, FString::Printf(TEXT("timeout in step %d"), static_cast<int32>(R.Step)));
+			Finish();
+			return;
+		}
+		UWorld* World = FrontendSmokeUtils::FindGameWorld();
+		USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
+		URoofCutawaySubsystem* Roofs = World ? World->GetSubsystem<URoofCutawaySubsystem>() : nullptr;
+		AOperativeCharacter* Op = Squad ? Squad->GetLeader() : nullptr;
+		UOperativeAnimInstance* Anim = Op ? AnimOf(*Op) : nullptr;
+		if (!World || !Roofs || !Op || !Anim)
+		{
+			return;
+		}
+		if (R.bShots)
+		{
+			UWidgetLayoutLibrary::RemoveAllWidgets(World);
+		}
+		const double Now = World->GetTimeSeconds();
+		const double T = Now - R.StepStart;
+		auto Go = [&R, Now](EStep Step)
+		{
+			R.Step = Step;
+			R.StepStart = Now;
+			R.bOrdered = false;
+			R.bShotTaken = false;
+			R.KindsSeen.Reset();
+			R.ClipsSeen.Reset();
+		};
+		auto ShotOnce = [&R](double At, double TNow, const TCHAR* Name)
+		{
+			if (!R.bShotTaken && TNow >= At)
+			{
+				R.bShotTaken = true;
+				Shot(Name);
+			}
+		};
+		auto InSetCheck = [&](const TCHAR* What, const TCHAR* ClipPart)
+		{
+			Check(Anim->GetActiveCoverAnimSet() == TEXT("riffle") && Anim->GetCoverAnimContext() == TEXT("indoor"),
+				FString::Printf(TEXT("%s: set '%s', context %s"), What, *Anim->GetActiveCoverAnimSet(), *Anim->GetCoverAnimContext()));
+			Check(SawClip(ClipPart), FString::Printf(TEXT("%s: a clip with '%s' played (last %s)"), What, ClipPart, *LastClip(*Anim)));
+		};
+		if (Op->bInCover)
+		{
+			Observe(*Anim);
+		}
+		switch (R.Step)
+		{
+		case EStep::Warmup:
+		{
+			if (R.Frame < WarmupFrames || Roofs->GetStoreyBuildings().IsEmpty())
+			{
+				if (R.Frame > WarmupFrames * 4)
+				{
+					Check(false, TEXT("no building in the storey index (needs a generated map with buildings)"));
+					Finish();
+				}
+				return;
+			}
+			if (UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(World); Environment && R.bShots)
+			{
+				Environment->SetClockScale(0.f);
+				Environment->ForceWeather(EWeatherState::Clear, true);
+				Environment->SetHour(13.f);
+				GEngine->Exec(World, TEXT("DisableAllScreenMessages"));
+				if (APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0))
+				{
+					PC->ConsoleCommand(TEXT("showhud"));
+				}
+			}
+			if (!Squad->IsSoloMode())
+			{
+				Squad->EnterSoloMode();
+			}
+			Squad->SetFollowersHolding(true);
+			R.Spot = FVector::ZeroVector;
+			{
+				const TArray<TPair<FString, int32>> Buildings = Roofs->GetStoreyBuildings();
+				for (; R.BuildingIndex < Buildings.Num(); ++R.BuildingIndex)
+				{
+					const FString& Id = Buildings[R.BuildingIndex].Key;
+					if ((R.BuildingArg.IsEmpty() || Id == R.BuildingArg) && FindInsideSpot(World, *Roofs, Id, R.Spot))
+					{
+						R.BuildingId = Id;
+						++R.BuildingIndex;
+						break;
+					}
+				}
+			}
+			Check(!R.BuildingId.IsEmpty() && !R.Spot.IsZero(), FString::Printf(TEXT("a spot inside %s"), *R.BuildingId));
+			if (R.Spot.IsZero())
+			{
+				Finish();
+				return;
+			}
+			if (R.StartSpot.IsZero())
+			{
+				R.StartSpot = Op->GetActorLocation() - FVector(0.f, 0.f, Op->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+			}
+			Put(*Op, R.Spot);
+			Go(EStep::Place);
+			return;
+		}
+		case EStep::Place:
+			if (T < 1.0)
+			{
+				return;
+			}
+			FindWalls(World, *Op, Op->GetActorLocation() - FVector(0.f, 0.f, Op->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()), R, 900.f);
+			if (!R.High.IsValid() && R.BuildingArg.IsEmpty() && R.BuildingIndex < Roofs->GetStoreyBuildings().Num())
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("CoverIndoorSmoke: no usable inside wall in %s - the next building"), *R.BuildingId);
+				R.Frame = WarmupFrames; // Warmup picks the next building at once
+				Go(EStep::Warmup);
+				return;
+			}
+			Check(R.High.IsValid(), FString::Printf(TEXT("%s: an inside high wall near %s (exposed edge %d; low / window cover: %s)"), *R.BuildingId, *R.Spot.ToString(),
+				R.High.HasExposedEdge() ? 1 : 0, R.bHaveLow ? TEXT("yes") : TEXT("none")));
+			if (!R.High.IsValid())
+			{
+				Finish();
+				return;
+			}
+			{
+				FString Building;
+				int32 Storey = INDEX_NONE;
+				Check(Roofs->GetOperativeStorey(*Op, Building, Storey), FString::Printf(TEXT("the storey rule puts him in %s (storey %d)"), *Building, Storey));
+			}
+			Go(EStep::Hug);
+			return;
+		case EStep::Hug:
+			if (!R.bOrdered)
+			{
+				R.bOrdered = true;
+				Op->SetStance(EOperativeStance::Standing);
+				Check(Op->OrderTakeCover(R.High, false) == EOperativeOrderResult::Accepted, TEXT("take cover at the inside wall"));
+				return;
+			}
+			if (!Op->bInCover && T < 12.0)
+			{
+				return;
+			}
+			if (T < 3.0 || (Op->bInCover && R.ClipsSeen.IsEmpty()))
+			{
+				AimCamera(World, *Op, Op->GetCoverSlot());
+				return;
+			}
+			ShotOnce(3.0, T, TEXT("stand_hug"));
+			if (T < 3.6)
+			{
+				return;
+			}
+			Check(Op->bInCover, TEXT("in cover inside"));
+			InSetCheck(TEXT("standing hug"), TEXT("AS_Cover_Stand"));
+			Go(EStep::Walk);
+			return;
+		case EStep::Walk:
+		{
+			if (!R.bOrdered)
+			{
+				R.bOrdered = true;
+				// Towards the far end of the wall as found (the entry may have snapped him to its corner).
+				const FCoverSlot& Here = Op->GetCoverSlot();
+				const float Room = FMath::Max(R.High.RightEdgeDistanceCm, R.High.LeftEdgeDistanceCm);
+				FCoverSlot Target;
+				bool bFound = false;
+				R.WalkCm = 0.f;
+				for (const float Sign : { 1.f, -1.f })
+				{
+					FCoverSlot Try;
+					if (CoverTraceRules::FindShimmySlot(World, Here, Op->GetActorLocation() + Here.RightTangent() * Sign * 240.f, Try))
+					{
+						const float Cm = static_cast<float>(FVector::Dist2D(Op->GetActorLocation(), Try.WorldLocation));
+						if (Cm > R.WalkCm)
+						{
+							R.WalkCm = Cm;
+							Target = Try;
+							bFound = true;
+						}
+					}
+				}
+				Check(bFound && Op->OrderShimmyTo(Target) == EOperativeOrderResult::Accepted, FString::Printf(TEXT("a %.0f cm walk along the wall (room %.0f cm)"), R.WalkCm, Room));
+				return;
+			}
+			AimCamera(World, *Op, Op->GetCoverSlot());
+			ShotOnce(1.0, T, TEXT("stand_walk"));
+			if ((Op->bShimmying || T < 1.2) && T < 10.0)
+			{
+				return;
+			}
+			InSetCheck(TEXT("walk along the wall"), TEXT("Walk"));
+			if (R.WalkCm >= 160.f)
+			{
+				Check(R.KindsSeen.Contains(TEXT("walk_start")), FString::Printf(TEXT("a %.0f cm walk: the start clip played (Q5)"), R.WalkCm));
+				Check(R.KindsSeen.Contains(TEXT("walk_stop")), FString::Printf(TEXT("a %.0f cm walk: the stop clip played (Q5)"), R.WalkCm));
+			}
+			else if (R.WalkCm < 140.f)
+			{
+				Check(!R.KindsSeen.Contains(TEXT("walk_start")), FString::Printf(TEXT("a short %.0f cm side-step: the loop only (Q5)"), R.WalkCm));
+			}
+			Go(EStep::Reload);
+			return;
+		}
+		case EStep::Reload:
+			if (!R.bOrdered)
+			{
+				if (T < 1.0)
+				{
+					return;
+				}
+				R.bOrdered = true;
+				Op->CurrentClip = 0; // an empty magazine: the reload starts
+				Op->StartReload();
+				return;
+			}
+			ShotOnce(1.6, T, TEXT("stand_reload"));
+			if (T < 2.2 || (Op->bIsReloading && T < 8.0))
+			{
+				return;
+			}
+			Check(R.KindsSeen.Contains(TEXT("reload")), TEXT("the set's cover reload played"));
+			InSetCheck(TEXT("reload"), TEXT("_Reload"));
+			Go(EStep::Grenade);
+			return;
+		case EStep::Grenade:
+			if (!R.bOrdered)
+			{
+				if (T < 1.0)
+				{
+					return;
+				}
+				R.bOrdered = true;
+				Op->OnGrenadeThrowNative.Broadcast(); // the throw's animation event (no grenade is spawned by the event itself)
+				return;
+			}
+			ShotOnce(1.6, T, TEXT("stand_grenade"));
+			if (T < 3.2)
+			{
+				return;
+			}
+			Check(R.KindsSeen.Contains(TEXT("grenade")), TEXT("the set's grenade throw from cover played"));
+			InSetCheck(TEXT("grenade"), TEXT("_Grenade_Throw"));
+			Check(Op->GrenadeReleaseSeconds > 0.f && Op->GrenadeReleaseSeconds < Op->GrenadeThrowDuration,
+				FString::Printf(TEXT("release %.2f s of %.2f s"), Op->GrenadeReleaseSeconds, Op->GrenadeThrowDuration));
+			Go(EStep::Peek);
+			return;
+		case EStep::Peek:
+		case EStep::CrouchPeek:
+		{
+			const bool bCrouch = R.Step == EStep::CrouchPeek;
+			if (!R.bOrdered)
+			{
+				if (T < 1.0)
+				{
+					return;
+				}
+				R.bOrdered = true;
+				const FCoverSlot& Here = Op->GetCoverSlot();
+				if (!Here.HasExposedEdge())
+				{
+					Check(true, TEXT("peek skipped: this wall has no exposed edge"));
+					if (bCrouch)
+					{
+						FindWindow(World, *Op, *Roofs, R);
+					}
+					Go(bCrouch ? EStep::Window : EStep::Crouch);
+					return;
+				}
+				const ECoverFacing Side = Here.IsEdgeExposed(ECoverFacing::Right) ? ECoverFacing::Right : ECoverFacing::Left;
+				const float Edge = Side == ECoverFacing::Right ? Here.RightEdgeDistanceCm : -Here.LeftEdgeDistanceCm;
+				Check(Op->OrderCornerPeek(Side, Edge) == EOperativeOrderResult::Accepted, FString::Printf(TEXT("%s corner peek ordered"), bCrouch ? TEXT("crouched") : TEXT("standing")));
+				return;
+			}
+			AimCamera(World, *Op, Op->GetCoverSlot());
+			ShotOnce(5.0, T, bCrouch ? TEXT("crouch_peek") : TEXT("stand_peek"));
+			if (T < 5.6)
+			{
+				return;
+			}
+			Check(Anim->IsCoverInFirePose(), TEXT("in the fire stance at the corner"));
+			InSetCheck(bCrouch ? TEXT("crouched peek-aim") : TEXT("standing peek-aim"), TEXT("Aim"));
+			Check(!Anim->IsCoverOverTopFireSet(), TEXT("the corner uses the side peek set"));
+			if (bCrouch)
+			{
+				FindWindow(World, *Op, *Roofs, R);
+			}
+			Go(bCrouch ? EStep::Window : EStep::Crouch);
+			return;
+		}
+		case EStep::Crouch:
+			if (!R.bOrdered)
+			{
+				R.bOrdered = true;
+				Op->OrderTakeCover(Op->GetCoverSlot(), false); // ends the peek, back to the wall
+				Op->SetStance(EOperativeStance::Crouching);
+				return;
+			}
+			AimCamera(World, *Op, Op->GetCoverSlot());
+			ShotOnce(3.0, T, TEXT("crouch_hug"));
+			if (T < 3.6)
+			{
+				return;
+			}
+			InSetCheck(TEXT("crouched hug"), TEXT("AS_Cover_Crouch"));
+			Go(EStep::CrouchPeek);
+			return;
+		case EStep::Window:
+			if (!R.bOrdered)
+			{
+				R.bOrdered = true;
+				if (!R.bHaveLow)
+				{
+					Check(true, TEXT("window skipped: no low inside cover (window sill) found in this building"));
+					Go(EStep::Outdoor);
+					return;
+				}
+				Op->SetStance(EOperativeStance::Crouching);
+				Check(Op->OrderTakeCover(R.Low, false) == EOperativeOrderResult::Accepted, TEXT("take cover at the low inside cover (window sill)"));
+				// The threat beyond the sill and to his RIGHT along the wall: he faces right, so the over-the-top shot (left-only clips) starts
+				// with the move to his left side (designer 2026-11-23 "switch side first").
+				R.Target = World->SpawnActor<ATargetPoint>(ATargetPoint::StaticClass(),
+					FTransform(R.Low.WallPoint - R.Low.WallNormal * 900.f + R.Low.RightTangent() * 500.f + FVector(0.f, 0.f, 60.f)));
+				return;
+			}
+			if (!(Op->bInCover && Op->CurrentCoverHeight == ECoverHeight::LowCover) && T < 15.0)
+			{
+				R.StepStart = Now; // the clock starts in the low cover (the walk there may be long)
+				return;
+			}
+			if (Op->bInCover && R.Target.IsValid())
+			{
+				// A target point is no enemy (the facing follows enemies): the known threat is set to it, beyond the sill on his right.
+				Op->bHasCoverThreat = true;
+				Op->CoverThreatLocation = R.Target->GetActorLocation();
+			}
+			if (Op->bInCover && T > 2.0 && FMath::Fmod(T, 1.0) < 0.05 && R.Target.IsValid())
+			{
+				Op->PlayCoverShot(R.Target.Get(), false); // a threat beyond the sill: the fire stance over the top
+			}
+			AimCamera(World, *Op, Op->GetCoverSlot());
+			ShotOnce(6.0, T, TEXT("window_over_top"));
+			if (T < 6.6)
+			{
+				return;
+			}
+			Check(Op->bInCover && Op->CurrentCoverHeight == ECoverHeight::LowCover, TEXT("in low cover"));
+			Check(Anim->IsCoverOverTopFireSet() || Op->bAtCoverCorner, TEXT("away from its corner: the over-the-top set (Aim/2)"));
+			InSetCheck(TEXT("window over the top"), Op->bAtCoverCorner ? TEXT("Aim") : TEXT("Aim2"));
+			if (Op->CoverFacing == ECoverFacing::Right && Anim->IsCoverOverTopFireSet())
+			{
+				Check(R.KindsSeen.Contains(TEXT("over_switch_in")), TEXT("facing right: the move to his left side played before rising (switch side first)"));
+			}
+			else
+			{
+				Check(true, FString::Printf(TEXT("switch-side-first not exercised (facing %s)"), Op->CoverFacing == ECoverFacing::Right ? TEXT("right") : TEXT("left")));
+			}
+			if (R.Target.IsValid())
+			{
+				R.Target->Destroy(); // no threat: the stance relaxes, the switch back follows
+			}
+			Op->bHasCoverThreat = false;
+			Go(Op->CoverFacing == ECoverFacing::Right && Anim->IsCoverOverTopFireSet() ? EStep::WindowBack : EStep::Outdoor);
+			return;
+		case EStep::WindowBack:
+			if (!R.bOrdered && T > 1.0)
+			{
+				R.bOrdered = true;
+				if (Op->IsCornerAimActive())
+				{
+					Op->EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("CoverIndoorSmoke: target gone")); // the sustained aim ends (no target left)
+				}
+			}
+			if (R.Frame % 60 == 0)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("CoverIndoorSmoke: back t=%.1f fire pose %d, fire ready %d, facing %s, last %s"), T, Anim->IsCoverInFirePose() ? 1 : 0,
+					Op->IsCoverFireReady() ? 1 : 0, Op->CoverFacing == ECoverFacing::Right ? TEXT("R") : TEXT("L"), *LastClip(*Anim));
+			}
+			if (!R.KindsSeen.Contains(TEXT("over_switch_out")) && T < 14.0)
+			{
+				return;
+			}
+			ShotOnce(T - 0.01, T, TEXT("window_back_right"));
+			if (!R.bShotTaken || T < 0.0)
+			{
+				return;
+			}
+			Check(R.KindsSeen.Contains(TEXT("over_switch_out")) || SawClip(TEXT("CrouchL_To_R")),
+				FString::Printf(TEXT("after the over-the-top pose: back to his right side (last %s)"), *LastClip(*Anim)));
+			Go(EStep::Outdoor);
+			return;
+		case EStep::Outdoor:
+		{
+			if (!R.bOrdered)
+			{
+				R.bOrdered = true;
+				// Outside the building: the nearest navmesh point 6 m beyond its slabs, then a wall there.
+				FBox Box(ForceInit);
+				for (const FBox& Slab : Roofs->GetStoreySlabs(R.BuildingId))
+				{
+					Box += Slab;
+				}
+				UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+				FNavLocation Out;
+				const bool bPut = Nav && Nav->ProjectPointToNavigation(R.StartSpot, Out, FVector(100.f, 100.f, 200.f));
+				if (bPut)
+				{
+					Op->LeaveCover(TEXT("CoverIndoorSmoke outdoor control"));
+					Op->SetStance(EOperativeStance::Standing);
+					Put(*Op, Out.Location);
+				}
+				return;
+			}
+			if (T < 2.5)
+			{
+				return; // the storey index's pass sees him outside first (a teleport, not a walk out)
+			}
+			if (!R.bOutdoorOrdered)
+			{
+				R.bOutdoorOrdered = true;
+				R.bHaveLow = false;
+				R.High = FCoverSlot();
+				{
+					FBox Box(ForceInit);
+					for (const FBox& Slab : Roofs->GetStoreySlabs(R.BuildingId))
+					{
+						Box += Slab;
+					}
+					const FVector From = Op->GetActorLocation();
+					const FVector Dir = (FVector(Box.GetCenter().X, Box.GetCenter().Y, From.Z) - From).GetSafeNormal();
+					FHitResult Hit;
+					FCollisionQueryParams Params(TEXT("CoverIndoorSmokeOut"), false, Op);
+					if (World->LineTraceSingleByChannel(Hit, From, From + Dir * 6000.f, ECC_Visibility, Params))
+					{
+						FCoverSlot Slot;
+						if (CoverTraceRules::FindCoverSlotAt(World, Hit.ImpactPoint, Dir, Slot, FCoverTraceConfig(), { Op }))
+						{
+							R.High = Slot;
+						}
+					}
+				}
+				UE_LOG(LogCodexTactics, Display, TEXT("CoverIndoorSmoke: outdoor at %s, wall %s"), *Op->GetActorLocation().ToString(), R.High.IsValid() ? *R.High.WorldLocation.ToString() : TEXT("none"));
+				const FCoverSlot Outside = R.High.IsValid() ? R.High : R.Low;
+				if (!(R.High.IsValid() || R.bHaveLow) || Op->OrderTakeCover(Outside, false) != EOperativeOrderResult::Accepted)
+				{
+					Check(true, TEXT("outdoor control skipped: no wall outside within 15 m"));
+					Finish();
+				}
+				return;
+			}
+			// Keep him in view: an operative far off camera gets its animation throttled (no cover layer update - the set would never be judged).
+			AimCamera(World, *Op, Op->bInCover ? Op->GetCoverSlot() : R.High);
+			if (R.Frame % 120 == 0)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("CoverIndoorSmoke: outdoor t=%.1f in cover %d, anim updated %llu frames ago, set '%s' context %s, clips %d, at %s"), T,
+					Op->bInCover ? 1 : 0, GFrameCounter - Anim->GetLastAnimUpdateFrame(), *Anim->GetActiveCoverAnimSet(), *Anim->GetCoverAnimContext(),
+					Anim->GetCoverClipLog().Num(), *Op->GetActorLocation().ToCompactString());
+			}
+			if (!Op->bInCover && T < 20.0)
+			{
+				R.InCoverSince = Now;
+				return;
+			}
+			ShotOnce(R.InCoverSince - R.StepStart + 2.0, T, TEXT("outdoor_native_m4"));
+			if (Now - R.InCoverSince < 2.5)
+			{
+				return; // judged in cover, the layer has run its entry
+			}
+			FString Building;
+			int32 Storey = INDEX_NONE;
+			const bool bInside = Roofs->GetOperativeStorey(*Op, Building, Storey);
+			Check(!bInside ? Anim->GetActiveCoverAnimSet().IsEmpty() : true,
+				FString::Printf(TEXT("outdoor control: in cover %d, inside %d, set '%s' (native expected), last clip %s"), Op->bInCover ? 1 : 0, bInside ? 1 : 0,
+					*Anim->GetActiveCoverAnimSet(), *LastClip(*Anim)));
+			Finish();
+			return;
+		}
+		default:
+			return;
+		}
+	}
+
+	void Run(const TArray<FString>& Args, UWorld* /*World*/)
+	{
+		Runner = MakeShared<FRunner>();
+		Runner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("CoverIndoor"));
+		for (const FString& Arg : Args)
+		{
+			if (Arg.StartsWith(TEXT("building=")))
+			{
+				Runner->BuildingArg = Arg.Mid(9);
+			}
+			else if (Arg.StartsWith(TEXT("shots=")))
+			{
+				Runner->bShots = Arg.Mid(6) != TEXT("0");
+			}
+			else if (Arg.StartsWith(TEXT("dir=")))
+			{
+				Runner->Dir = Arg.Mid(4);
+			}
+		}
+		FPaths::CollapseRelativeDirectories(Runner->Dir);
+		if (Runner->bShots)
+		{
+			IFileManager::Get().MakeDirectory(*Runner->Dir, true);
+		}
+		if (IConsoleVariable* Pressure = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.Enabled")))
+		{
+			Pressure->Set(0, ECVF_SetByConsole);
+		}
+		Runner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddStatic(&Tick);
+		UE_LOG(LogCodexTactics, Display, TEXT("CoverIndoorSmoke: building %s, shots %d -> %s"), Runner->BuildingArg.IsEmpty() ? TEXT("(auto)") : *Runner->BuildingArg,
+			Runner->bShots ? 1 : 0, *Runner->Dir);
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs Command(
+		TEXT("CodexTactics.CoverIndoorSmoke"),
+		TEXT("Dev check (designer 2026-11-22): the indoor cover set inside a generated building - hug, walk start / stop, reload, grenade, peek-aim standing / crouched, ")
+		TEXT("window over-the-top; outside the native set. [building=<id>] [shots=1 dir=<abs>]. PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
+}
+
+#endif // !UE_BUILD_SHIPPING
