@@ -685,6 +685,18 @@ namespace PmcCommanderRules
 	/** The fall-back goal: DistanceCm straight away from the threat (planar). */
 	CODEXTACTICS_API FVector FallBackPoint(const FVector& Fighter, const FVector& Threat, float DistanceCm = 800.f);
 
+	/** R1 (loss autopsy 2026-11-23): the longest run a zone defender's FallBack may take into cover, cm. */
+	constexpr float DefenceFallBackRunCm = 600.f;
+
+	/**
+	 * R1 (smart enemies, loss autopsy 2026-11-23: FallBack = 6 % of the defenders' contact time but 20 % of their deaths, and every
+	 * capture found the living defenders 14 m outside the zone). With the option on, a zone defender in contact falls back ONLY into a
+	 * cover slot: within MaxRunCm of his feet (planar) and not farther from the objective than max(zone radius, his own distance now) -
+	 * he never leaves the zone, and one already outside does not go farther. No such slot = no fall-back walk (he fights where he is).
+	 */
+	CODEXTACTICS_API bool IsDefenceFallBackSlotAllowed(const FVector& FighterFeet, const FVector& Slot, const FVector& Objective, float ZoneRadiusCm,
+		float MaxRunCm = DefenceFallBackRunCm);
+
 	/**
 	 * How well a cover slot shields from Threat: the slot's wall is BEHIND the man facing along WallNormal, so it covers threats on
 	 * the -WallNormal side: clamp(dot(-WallNormal, dir(slot -> threat)), 0, 1).
