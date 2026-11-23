@@ -62,7 +62,10 @@ interface ElementEntry {
   is_annex?: boolean;
 }
 
-function collectElements(building: StructuredBuilding): Map<string, ElementEntry> {
+function collectElements(
+  building: StructuredBuilding,
+  failures?: ValidationFailure[],
+): Map<string, ElementEntry> {
   const map = new Map<string, ElementEntry>();
 
   if (building.walls) {
@@ -108,7 +111,23 @@ function collectElements(building: StructuredBuilding): Map<string, ElementEntry
     for (let i = 0; i < building.stairs.length; i++) {
       const s = building.stairs[i];
       const id = s.id ?? `${building.id}_stair_${i}`;
-      const needs = typeof s.needs === 'number' ? s.needs : (s.supported_by?.length ? 1 : 0);
+      let needs: number | undefined;
+      if (s.needs !== undefined) {
+        if (typeof s.needs === 'number' && Number.isFinite(s.needs)) {
+          needs = s.needs;
+        } else {
+          needs = s.needs as number;
+          if (failures) {
+            failures.push({
+              rule: 'V3_supports_count',
+              element_id: id,
+              message: `Stair '${id}' has invalid needs value '${s.needs}' (must be a finite number)`,
+            });
+          }
+        }
+      } else {
+        needs = s.supported_by?.length ? 1 : 0;
+      }
       map.set(id, {
         id,
         kind: 'stair',
@@ -150,7 +169,7 @@ export function validateBuildingStructure(
   classesConfig?: StructureClassesConfig,
 ): ValidationFailure[] {
   const failures: ValidationFailure[] = [];
-  const elements = collectElements(building);
+  const elements = collectElements(building, failures);
 
   // Build directed support graph: u -> v means "u carries/supports v"
   const adj = new Map<string, Set<string>>();
@@ -239,14 +258,24 @@ export function validateBuildingStructure(
   // Rule V3.2: Supports Count (supported_by.length >= needs)
   // -------------------------------------------------------------------------
   for (const [id, entry] of elements.entries()) {
-    if (entry.needs !== undefined && entry.needs > 0) {
-      const count = entry.supported_by?.length ?? 0;
-      if (count < entry.needs) {
-        failures.push({
-          rule: 'V3_supports_count',
-          element_id: id,
-          message: `Element '${id}' requires at least ${entry.needs} support(s), but only has ${count}`,
-        });
+    if (entry.needs !== undefined) {
+      if (!Number.isFinite(entry.needs)) {
+        if (!failures.some((f) => f.rule === 'V3_supports_count' && f.element_id === id)) {
+          failures.push({
+            rule: 'V3_supports_count',
+            element_id: id,
+            message: `Element '${id}' has invalid needs value '${entry.needs}' (must be a finite number)`,
+          });
+        }
+      } else if (entry.needs > 0) {
+        const count = entry.supported_by?.length ?? 0;
+        if (count < entry.needs) {
+          failures.push({
+            rule: 'V3_supports_count',
+            element_id: id,
+            message: `Element '${id}' requires at least ${entry.needs} support(s), but only has ${count}`,
+          });
+        }
       }
     }
   }

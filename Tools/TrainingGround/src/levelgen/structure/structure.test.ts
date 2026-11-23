@@ -501,6 +501,32 @@ test('structure/validate: stairs explicit needs validation', () => {
   assert.equal(failures[0].element_id, 'stair_0');
 });
 
+test('structure/validate: stairs reject NaN or Infinity needs as V3 failure', () => {
+  for (const badNeeds of [NaN, Infinity, -Infinity]) {
+    const stair: StructuredStair = {
+      id: 'stair_nan',
+      supported_by: ['wall_1'],
+      needs: badNeeds,
+      on_fail: 'blocked_rubble',
+    };
+    const building: StructuredBuilding = {
+      id: 'B_stair_nan_test',
+      walls: [
+        {
+          id: 'wall_1',
+          struct: { structure: 'load_bearing', material: 'concrete_panel', hp_class: 'hp_heavy_concrete' },
+        },
+      ],
+      stairs: [stair],
+    };
+    const failures = validateBuildingStructure(building);
+    assert.ok(failures.length >= 1, `Expected failure for needs=${badNeeds}`);
+    const countFail = failures.find((f) => f.rule === 'V3_supports_count' && f.element_id === 'stair_nan');
+    assert.ok(countFail, `Expected V3_supports_count failure for stair with needs=${badNeeds}`);
+    assert.ok(countFail.message.includes('invalid needs value'), `Message should indicate invalid needs: ${countFail.message}`);
+  }
+});
+
 test('structure/validate: V3 Dangling Reference rule (supports non-existent element)', () => {
   const building: StructuredBuilding = {
     id: 'B_dangling_supports',
