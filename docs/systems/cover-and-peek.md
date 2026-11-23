@@ -30,7 +30,7 @@
   states (switch run-ins, blind fire) are cleared under a set - and adds the set-only states: cover **reload** (fitted to the reload time; the
   upper-body reload stays off), **grenade** throw from the wall (full body, release from the JSON), **side switch** (`_To_L / _To_R` when the
   facing turns while standing at the wall), **walk start / stop / turn** for walks of `shimmy_transition_min_cm` (150) and more (designer Q5),
-  the **over-the-top fire set** (Aim/2) crouched at a LOW cover away from its corner - a window sill (Q2, mirrored for the right side Q3) -
+  the **over-the-top fire set** (Aim/2) crouched at a LOW cover away from its corner - a window sill (Q2; the pack has it for his LEFT only and the mirrored copies hold the rifle left-handed, so facing right he first plays the side switch to the left, rises from there and switches back after the pose - designer 2026-11-23 "switch side first") -
   and the set's own **aim offsets** `AO_CoverIndoor_*` once the ABP's Aim Offset Player Blend Space pin is bound to `ActiveAimOffset` and
   `bCoverSetAimOffsetWired` is ticked (Q1, the designer's ABP step). The walk loops' pace per stance is `shimmy_clip_speed`.
 - **Switches:** JSON `enabled`, ABP Class Defaults `bUseCoverAnimSets`, console `Codex.Cover.AnimSets` (-1 JSON, 0 off, 1 on),

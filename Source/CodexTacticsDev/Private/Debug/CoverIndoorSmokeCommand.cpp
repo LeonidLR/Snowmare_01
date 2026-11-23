@@ -46,7 +46,7 @@ namespace CoverIndoorSmoke
 
 	enum class EStep : uint8
 	{
-		Warmup, Place, Hug, Walk, Reload, Grenade, Peek, Crouch, CrouchPeek, Window, Outdoor, Done
+		Warmup, Place, Hug, Walk, Reload, Grenade, Peek, Crouch, CrouchPeek, Window, WindowBack, Outdoor, Done
 	};
 
 	struct FRunner
@@ -634,14 +634,22 @@ namespace CoverIndoorSmoke
 				}
 				Op->SetStance(EOperativeStance::Crouching);
 				Check(Op->OrderTakeCover(R.Low, false) == EOperativeOrderResult::Accepted, TEXT("take cover at the low inside cover (window sill)"));
+				// The threat beyond the sill and to his RIGHT along the wall: he faces right, so the over-the-top shot (left-only clips) starts
+				// with the move to his left side (designer 2026-11-23 "switch side first").
 				R.Target = World->SpawnActor<ATargetPoint>(ATargetPoint::StaticClass(),
-					FTransform(R.Low.WallPoint - R.Low.WallNormal * 900.f + FVector(0.f, 0.f, 60.f)));
+					FTransform(R.Low.WallPoint - R.Low.WallNormal * 900.f + R.Low.RightTangent() * 500.f + FVector(0.f, 0.f, 60.f)));
 				return;
 			}
 			if (!(Op->bInCover && Op->CurrentCoverHeight == ECoverHeight::LowCover) && T < 15.0)
 			{
 				R.StepStart = Now; // the clock starts in the low cover (the walk there may be long)
 				return;
+			}
+			if (Op->bInCover && R.Target.IsValid())
+			{
+				// A target point is no enemy (the facing follows enemies): the known threat is set to it, beyond the sill on his right.
+				Op->bHasCoverThreat = true;
+				Op->CoverThreatLocation = R.Target->GetActorLocation();
 			}
 			if (Op->bInCover && T > 2.0 && FMath::Fmod(T, 1.0) < 0.05 && R.Target.IsValid())
 			{
@@ -656,6 +664,46 @@ namespace CoverIndoorSmoke
 			Check(Op->bInCover && Op->CurrentCoverHeight == ECoverHeight::LowCover, TEXT("in low cover"));
 			Check(Anim->IsCoverOverTopFireSet() || Op->bAtCoverCorner, TEXT("away from its corner: the over-the-top set (Aim/2)"));
 			InSetCheck(TEXT("window over the top"), Op->bAtCoverCorner ? TEXT("Aim") : TEXT("Aim2"));
+			if (Op->CoverFacing == ECoverFacing::Right && Anim->IsCoverOverTopFireSet())
+			{
+				Check(R.KindsSeen.Contains(TEXT("over_switch_in")), TEXT("facing right: the move to his left side played before rising (switch side first)"));
+			}
+			else
+			{
+				Check(true, FString::Printf(TEXT("switch-side-first not exercised (facing %s)"), Op->CoverFacing == ECoverFacing::Right ? TEXT("right") : TEXT("left")));
+			}
+			if (R.Target.IsValid())
+			{
+				R.Target->Destroy(); // no threat: the stance relaxes, the switch back follows
+			}
+			Op->bHasCoverThreat = false;
+			Go(Op->CoverFacing == ECoverFacing::Right && Anim->IsCoverOverTopFireSet() ? EStep::WindowBack : EStep::Outdoor);
+			return;
+		case EStep::WindowBack:
+			if (!R.bOrdered && T > 1.0)
+			{
+				R.bOrdered = true;
+				if (Op->IsCornerAimActive())
+				{
+					Op->EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("CoverIndoorSmoke: target gone")); // the sustained aim ends (no target left)
+				}
+			}
+			if (R.Frame % 60 == 0)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("CoverIndoorSmoke: back t=%.1f fire pose %d, fire ready %d, facing %s, last %s"), T, Anim->IsCoverInFirePose() ? 1 : 0,
+					Op->IsCoverFireReady() ? 1 : 0, Op->CoverFacing == ECoverFacing::Right ? TEXT("R") : TEXT("L"), *LastClip(*Anim));
+			}
+			if (!R.KindsSeen.Contains(TEXT("over_switch_out")) && T < 14.0)
+			{
+				return;
+			}
+			ShotOnce(T - 0.01, T, TEXT("window_back_right"));
+			if (!R.bShotTaken || T < 0.0)
+			{
+				return;
+			}
+			Check(R.KindsSeen.Contains(TEXT("over_switch_out")) || SawClip(TEXT("CrouchL_To_R")),
+				FString::Printf(TEXT("after the over-the-top pose: back to his right side (last %s)"), *LastClip(*Anim)));
 			Go(EStep::Outdoor);
 			return;
 		case EStep::Outdoor:

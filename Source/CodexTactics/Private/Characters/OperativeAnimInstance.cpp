@@ -552,6 +552,10 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 				{
 					return; // the transition is playing and a shot is queued behind it
 				}
+				if (!bCoverInFirePose && TryCoverSetOverSideSwitch())
+				{
+					return; // over the top on his right: he moves to his left side first; the next shots come from the stance
+				}
 				UAnimSequenceBase* Enter = bCoverInFirePose ? nullptr : PickCoverClip(bIsCrouching ? CoverCrouchFireEnter : CoverStandFireEnter);
 				bCoverInFirePose = true;
 				if (Enter && PlayCoverOneShot(Enter, 0.1f, 0.05f))
@@ -2264,6 +2268,10 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		CoverFirePoseFacing = CoverFacing;
 		bCoverPeekStanceEntry = false;
 		bPeekStanceBlend = true;
+	}
+	else if (bWantFirePose && !bCoverInFirePose && TryCoverSetOverSideSwitch())
+	{
+		return; // over the top on his right: the move to his left side first (the set's over clips are left-only), the stance follows it
 	}
 	else if (bWantFirePose && !bCoverInFirePose)
 	{

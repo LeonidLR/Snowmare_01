@@ -276,6 +276,7 @@ void UOperativeAnimInstance::ApplyCoverAnimSet(const FString& Set)
 	}
 	ActiveCoverAnimSet = Loaded ? Set : FString();
 	bCoverOverTopFireSet = false;
+	bCoverOverSideSwitched = false;
 }
 
 const FCoverSetAssets* UOperativeAnimInstance::FindCoverSetExtra(const TCHAR* KeyBase) const
@@ -357,6 +358,7 @@ void UOperativeAnimInstance::TrackCoverSetChanges(const AOperativeCharacter& Ope
 	if (bShimmying || bCoverEnteredThisFrame)
 	{
 		bCoverSetFacingChangePending = false;
+		bCoverOverSideSwitched = bShimmying ? false : bCoverOverSideSwitched; // a walk off cancels the switch back
 	}
 	bCoverSetWasShimmying = bShimmying;
 	CoverSetLastShimmyDirection = bShimmying ? ShimmyDir : 0.f;
@@ -402,6 +404,18 @@ bool UOperativeAnimInstance::UpdateCoverSetStates(const AOperativeCharacter& Ope
 	if (IsCoverSetOneShotPlaying() || bCoverInFirePose || IsPlayingStanceTransition() || bIsReloading)
 	{
 		return false;
+	}
+	if (bCoverOverSideSwitched)
+	{
+		// Out of the over-the-top pose that started from his left: back to the right-hand side he faces (the pack's CrouchL_To_R).
+		bCoverOverSideSwitched = false;
+		if (CoverFacing == ECoverFacing::Right && bIsCrouching && !bShimmying)
+		{
+			if (UAnimSequenceBase* Back = PickCoverSetClip(TEXT("crouch_side_switch"), ECoverFacing::Right))
+			{
+				return PlayCoverSetOneShot(Back, TEXT("over_switch_out"), 0.15f, 0.2f);
+			}
+		}
 	}
 	const TCHAR* StanceKey = bIsCrouching ? TEXT("crouch") : TEXT("stand");
 	// The walk along the wall: start / turn / stop clips for walks of ShimmyTransitionMinCm and more (designer Q5).
@@ -455,6 +469,21 @@ bool UOperativeAnimInstance::UpdateCoverSetStates(const AOperativeCharacter& Ope
 		}
 	}
 	return false;
+}
+
+bool UOperativeAnimInstance::TryCoverSetOverSideSwitch()
+{
+	if (ActiveCoverAnimSet.IsEmpty() || !bCoverOverTopFireSet || !bIsCrouching || bShimmying || CoverFacing != ECoverFacing::Right || bCoverOverSideSwitched)
+	{
+		return false;
+	}
+	UAnimSequenceBase* Switch = PickCoverSetClip(TEXT("crouch_side_switch"), ECoverFacing::Left); // the pack's CrouchR_To_L
+	if (!Switch || !PlayCoverSetOneShot(Switch, TEXT("over_switch_in"), 0.15f, 0.2f))
+	{
+		return false;
+	}
+	bCoverOverSideSwitched = true;
+	return true;
 }
 
 bool UOperativeAnimInstance::IsCoverSetWalkOneShotPlaying() const

@@ -146,7 +146,7 @@
         "stand": 121,
         "crouch": 162
       },
-      "_comment_over_right": "The mirrored right-side Aim/2 copies (AS_Cover_CrouchR_Aim2_*) hold the rifle LEFT-handed (a mirror swaps the hands; the weapon sits on hand_r), so the right side plays the pack's LEFT over-the-top clips until the designer decides (2026-11-22). shimmy_clip_speed = the UE4 copies' pace (the retarget scales travel x1.09; PMC 110 / 148).",
+      "_comment_over_right": "Over the top (Aim/2) exists for his LEFT side only (the mirrored right copies hold the rifle left-handed). Designer 2026-11-23 'switch side first': facing right he first plays crouch_side_switch_left (the pack's CrouchR_To_L), rises with the left clips (the _right keys point at them), and after the pose switches back (CrouchL_To_R). shimmy_clip_speed = the UE4 copies' pace (the retarget scales travel x1.09; PMC 110 / 148).",
       "_comment_grenade": "grenade_release_s: the LEFT hand throws; release = its furthest reach from spine_03 / hands furthest apart (measured on both bodies 2026-11-22, the same frame on UE4 and PMC)."
     }
   }
