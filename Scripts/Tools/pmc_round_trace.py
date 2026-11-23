@@ -111,22 +111,13 @@ def parse_arena_round(
 
     idx_1, idx_0 = parse_round_identifier(round_arg, len(rounds), zero_based)
 
-    target_round = None
-    if 0 <= idx_0 < len(rounds):
-        candidate = rounds[idx_0]
-        if candidate.get("index") in (idx_1, idx_0):
-            target_round = candidate
-
-    if not target_round:
-        for r in rounds:
-            if r.get("index") == idx_1:
-                target_round = r
-                break
-
-    if not target_round and 0 <= idx_0 < len(rounds):
+    # Arena exports are normally 1-based; legacy files with index 0 are 0-based.
+    rounds_by_index = {r["index"]: r for r in rounds if r.get("index") is not None}
+    target_round = rounds_by_index.get(idx_0 if 0 in rounds_by_index else idx_1)
+    if target_round is None and rounds[idx_0].get("index") is None:
         target_round = rounds[idx_0]
 
-    if not target_round:
+    if target_round is None:
         available = [f"r{i} (index {r.get('index', i+1)})" for i, r in enumerate(rounds)]
         raise ValueError(f"Round '{round_arg}' not found in arena. Available: {', '.join(available)}.")
 
@@ -504,7 +495,15 @@ def compute_trace_metrics(
     obj_x = obj.get("x")
     obj_y = obj.get("y")
     obj_z = obj.get("z", 0.0) or 0.0
-    obj_r_m = obj.get("radius_m", 0.0)
+    track_obj = (track.get("objective") or {}) if track else {}
+    obj_r_m = obj.get("radius_m")
+    if obj_r_m is None:
+        obj_r_m = track_obj.get("radius_m")
+    if obj_r_m is None and track_obj.get("radius") is not None:
+        scale = UNIT_TO_M.get(str(track.get("units", "m")).lower(), 1.0)
+        obj_r_m = float(track_obj["radius"]) * scale
+    if obj_r_m is None and obj_enabled:
+        obj_r_m = (arena.get("config") or {}).get("objective_radius_m")
     obj_hold_s = obj.get("hold_s", 0.0)
     obj_result = obj.get("result", "none")
     obj_height_m = obj_z / 100.0
@@ -538,7 +537,7 @@ def compute_trace_metrics(
     # Fighters from track or arena/log
     fighters = track.get("fighters") or [] if track else []
     frames = track.get("frames") or [] if track else []
-    events = track.get("events") or [] if track else []
+    events = sorted(track.get("events") or [], key=lambda event: float(event.get("t", 0.0))) if track else []
     states = track.get("states") or [] if track else []
     dt = float(track.get("dt", 0.2)) if track else 0.2
 
@@ -583,11 +582,7 @@ def compute_trace_metrics(
     close_stats_atk = side_stats(track, atk_side) if track else None
 
     # First contact includes shots with an unknown shooter.
-    t_first_shot = min((float(e.get("t", 0.0)) for e in events if e.get("type") == "shot"), default=None)
-
-    t_first_contact = t_first_shot
-    if t_first_contact is None:
-        t_first_contact = duration_s
+    t_first_contact = next((float(e.get("t", 0.0)) for e in events if e.get("type") == "shot"), duration_s)
 
     # Tactic decisions per fighter - strictly filter by side & team
     decisions_by_fighter = {(f["side"], f["id"]): [] for f in def_fighters}
@@ -622,6 +617,7 @@ def compute_trace_metrics(
                 idle_by_side_id[key] = entry
 
     exposure_stats: Dict[Tuple[str, str], dict] = {}
+    initial_positions = {}
     for f in def_fighters:
         key = (f["side"], f["id"])
         fi = f.get("idx")
@@ -633,6 +629,9 @@ def compute_trace_metrics(
         first_shot_target = None
         shots_fired = 0
         open_idle_source = "none"
+        pre_contact_cover_samples = 0
+        if fi is not None and frames and frames[0] and fi < len(frames[0]) and frames[0][fi]:
+            initial_positions[key] = frames[0][fi]
 
         # Ground truth from arena.json if available
         matched_idle = idle_by_idx.get(fi)
@@ -646,20 +645,27 @@ def compute_trace_metrics(
             pre_contact_stand_s = float(matched_idle.get("before_contact_s", 0.0))
             idle_stand_s = pre_contact_stand_s
             open_idle_source = "arena.defence.open_idle_s"
-        elif fi is not None and states:
-            open_idle_source = "track states"
+        if fi is not None and states:
+            if matched_idle is None:
+                open_idle_source = "track states"
             for tick, state_row in enumerate(states):
-                t_cur = tick * dt
-                if fi < len(state_row) and state_row[fi]:
-                    s_entry = state_row[fi]
-                    stance = s_entry[1] if len(s_entry) > 1 else None
-                    cur_state = s_entry[3] if len(s_entry) > 3 else None
-                    if stance == "stand" and cur_state not in ("Cover", "InCover", "TakeCover"):
-                        total_stand_s += dt
-                        if t_first_contact is not None and t_cur <= t_first_contact:
-                            pre_contact_stand_s += dt
-                        if cur_state in ("Hold", "Idle", "Ambush"):
-                            idle_stand_s += dt
+                if not state_row or fi >= len(state_row) or not state_row[fi]:
+                    continue
+                s_entry = state_row[fi]
+                stance = s_entry[1] if len(s_entry) > 1 else None
+                cur_state = s_entry[3] if len(s_entry) > 3 else None
+                in_cover = isinstance(cur_state, str) and (
+                    cur_state.endswith("/cover") or cur_state in ("Cover", "InCover")
+                )
+                before_contact = tick * dt <= t_first_contact
+                if in_cover and before_contact:
+                    pre_contact_cover_samples += 1
+                if matched_idle is None and stance == "stand" and not in_cover and cur_state != "TakeCover":
+                    total_stand_s += dt
+                    if before_contact:
+                        pre_contact_stand_s += dt
+                    if cur_state in ("Hold", "Idle", "Ambush"):
+                        idle_stand_s += dt
 
         # Shots fired by this fighter
         fighter_shots = shots_by_fighter.get(key, [])
@@ -682,6 +688,7 @@ def compute_trace_metrics(
             "first_shot_target": first_shot_target,
             "shots_fired": shots_fired,
             "source": open_idle_source,
+            "pre_contact_cover_samples": pre_contact_cover_samples,
         }
 
     # Initial posts assigned to defenders
@@ -732,6 +739,8 @@ def compute_trace_metrics(
         },
         "def_fighters": def_fighters,
         "posts_assigned": posts_assigned,
+        "initial_positions": initial_positions,
+        "track_units": track.get("units", "m") if track else "m",
         "decisions_by_fighter": decisions_by_fighter,
         "exposure_stats": exposure_stats,
         "first_contact_s": round(t_first_contact, 2) if t_first_contact is not None else None,
@@ -863,6 +872,10 @@ def evaluate_h3(
     exposure_stats: dict,
 ) -> Tuple[str, str]:
     """H3: No cover slot was found near defenders (bCoverAvailable false / cover 0.00 / crates not cover)."""
+    cover_samples = sum(st["pre_contact_cover_samples"] for st in exposure_stats.values())
+    if cover_samples:
+        return "DOES NOT HOLD", f"Track states show defenders in cover in {cover_samples} fighter samples before first contact."
+
     decisions = log_data.get("decisions", [])
     zero_cover_count = sum(1 for d in decisions if d.get("cover") == 0.0)
     total_decisions_with_cover = sum(1 for d in decisions if "cover" in d)
@@ -884,7 +897,8 @@ def evaluate_h3(
         return "HOLDS", evidence
     elif total_pre_contact_stand > 10.0:
         evidence = (
-            f"Defenders spent {total_pre_contact_stand:.1f}s standing in the open before contact without taking cover."
+            f"Defenders spent {total_pre_contact_stand:.1f}s standing in the open before contact "
+            "(arena exposure metrics or the defender stance/state samples in the track)."
         )
         return "HOLDS", evidence
     else:
@@ -944,30 +958,35 @@ def format_markdown_report(metrics: dict, arena_path: Path, round_arg: Union[int
         f"- **Objective**: Position `(X={obj['x']}, Y={obj['y']}, Z={obj['z']})` | "
         f"Storey Level: **{obj['level']}** | Height: **{obj['height_m']:.1f} m** ({'Ground' if obj['height_m'] < 2.0 else 'Roof'})"
     )
-    md.append(f"- **Objective Specs**: Radius **{obj['radius_m']} m**, Hold **{obj['hold_s']} s**, Final State: `{obj['result']}`")
+    radius = f"Radius **{obj['radius_m']} m**, " if obj["radius_m"] is not None else ""
+    md.append(f"- **Objective Specs**: {radius}Hold **{obj['hold_s']} s**, Final State: `{obj['result']}`")
     md.append(f"- **First Contact**: **{metrics['first_contact_s']} s**")
     md.append("")
 
-    md.append("## 2. Defender Positions & Initial Posts")
-    md.append("| Defender | Weapon / Look | Initial Post / Role | Coordinates / Post ID | Post Score | Danger |")
-    md.append("|---|---|---|---|---|---|")
+    position_rows = []
     for f in metrics["def_fighters"]:
         key = (f["side"], f["id"])
-        post = metrics["posts_assigned"].get(key)
-        spawn_info = metrics.get("log_spawned", {}).get(log_fighter_key(f))
-        weapon = (spawn_info.get("weapon") if spawn_info else None) or f.get("weapon") or "n/a"
-        if post:
-            role = post.get("role", "custom")
-            coord = post.get("post_id") or post.get("pos", "spawn")
-            score_s = f"{post.get('score', 0.0):.2f}" if "score" in post else "n/a"
-            danger_s = f"{post.get('danger', 0.0):.2f}" if "danger" in post else "n/a"
-        else:
-            role = "Ground / Objective"
-            coord = "Spawn ring"
-            score_s = "n/a"
-            danger_s = "0.00"
-        md.append(f"| **{fighter_label(key)}** | {weapon} | `{role}` | `{coord}` | {score_s} | {danger_s} |")
-    md.append("")
+        post = metrics["posts_assigned"].get(key, {})
+        spawn = metrics["log_spawned"].get(log_fighter_key(f), {})
+        position = metrics["initial_positions"].get(key)
+        location = f"Spawn: {spawn['pos']} (cm)" if spawn.get("pos") else ""
+        if not location and position:
+            coords = ", ".join(f"{coord:g}" for coord in position)
+            location = f"First frame: ({coords}) {metrics['track_units']}"
+        weapon = spawn.get("weapon") or f.get("weapon") or ""
+        if weapon == "n/a":
+            weapon = f.get("weapon") or ""
+        post_label = " · ".join(post[field] for field in ("role", "post_id", "pos") if post.get(field))
+        score_s = f"{post['score']:.2f}" if "score" in post else ""
+        danger_s = f"{post['danger']:.2f}" if "danger" in post else ""
+        if location or weapon or post_label:
+            position_rows.append(f"| **{fighter_label(key)}** | {weapon} | {location} | {post_label} | {score_s} | {danger_s} |")
+    if position_rows:
+        md.append("## 2. Defender Positions & Initial Posts")
+        md.append("| Defender | Weapon | Location | Initial Post | Post Score | Danger |")
+        md.append("|---|---|---|---|---|---|")
+        md.extend(position_rows)
+        md.append("")
 
     md.append("## 3. Order Sequence & Decision Timeline (Spawn to Engagement)")
     md.append("| Time (s) | Fighter | Decision / Action | Score | Context / Trigger |")

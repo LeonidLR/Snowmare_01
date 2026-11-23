@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -73,6 +74,51 @@ class TestTrainingGate(unittest.TestCase):
         gate_res = evaluate_training_gate(self.config, probe_data=probe_data, baseline_data=None, sweep_data=None)
         self.assertFalse(gate_res["passed"])
         self.assertFalse(gate_res["checks"]["G2_metric_liveness"]["passed"])
+
+    def test_adapter_errors_cannot_pass_with_raw_metrics(self):
+        config = {"fitness": {"bonuses": {"kills": 1}}}
+        baseline = {"scenarios": {"test": {"rounds": 30}}}
+        sweep = {"results": {"PmcArenaSmoke": "PASS"}}
+        for probe, diagnostic in (
+            ({"schema": "broken", "rounds": [{"kills": 1}, {"kills": 2}]}, "unexpected schema"),
+            ({"schema": "codex.pmc_arena/1", "rounds": [{"kills": 1, "duration_s": "bad"}, {"kills": 2}]},
+             "could not convert string to float"),
+        ):
+            with self.subTest(diagnostic=diagnostic):
+                with self.assertLogs("nighttrainer.gate", level="ERROR") as logs:
+                    result = evaluate_training_gate(config, probe, baseline, sweep, ["PmcArenaSmoke"])
+                self.assertIn(diagnostic, logs.output[0])
+                self.assertFalse(result["passed"])
+                self.assertFalse(result["checks"]["G2_metric_liveness"]["passed"])
+                self.assertTrue(result["checks"]["G1_smoke_health"]["passed"])
+                self.assertTrue(result["checks"]["G3_baseline_sufficiency"]["passed"])
+                self.assertIn(diagnostic, result["checks"]["G2_metric_liveness"]["issues"][0])
+
+    def test_check_gate_cli_blocks_unreadable_probe_and_removes_stale_pass(self):
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Path(folder)
+            trainer = repo / "Saved" / "Trainer"
+            trainer.mkdir(parents=True)
+            probe = repo / "probe.json"
+            stale_pass = trainer / "gate_pass.json"
+            for payload, diagnostic in ((None, "No such file"), (b"{broken", "Expecting property name"), (b"\xff", "codec")):
+                with self.subTest(payload=payload):
+                    if payload is not None:
+                        probe.write_bytes(payload)
+                    stale_pass.write_text('{"passed": true}', encoding="utf-8")
+                    result = subprocess.run(
+                        [sys.executable, str(TRAINER_DIR / "night_trainer.py"),
+                         "--repo-root", str(repo), "--config", str(self.config_path),
+                         "--check-gate", "--gate-probe", str(probe)],
+                        capture_output=True, text=True, encoding="utf-8",
+                    )
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertIn("TRAINING GATE: BLOCKED", result.stdout)
+                    self.assertIn(diagnostic, result.stderr)
+                    self.assertFalse(stale_pass.exists())
+                    blocked = json.loads((trainer / "gate_blocked.json").read_text(encoding="utf-8"))
+                    self.assertFalse(blocked["checks"]["G2_metric_liveness"]["passed"])
+                    self.assertIn(diagnostic, blocked["checks"]["G2_metric_liveness"]["issues"][0])
 
     def test_gate_passes_healthy_probe(self):
         """Healthy probe matching codex.pmc_arena_behaviour/1 schema must pass all liveness checks.

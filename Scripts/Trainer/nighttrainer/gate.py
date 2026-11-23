@@ -10,6 +10,7 @@ Verifies G1-G5 training conditions before evolution is permitted:
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import sys
@@ -76,33 +77,32 @@ def _extract_node_value(node: Any) -> Optional[float]:
     return None
 
 
-def build_probe_rows(config: dict, probe_data: Optional[dict]) -> List[dict]:
+def build_probe_rows(config: dict, probe_data: dict | list[dict] | None) -> List[dict]:
     """Parse probe rounds into canonical rows using ArenaAdapter (Review 091 Point a)."""
-    if not probe_data:
+    if probe_data is None:
         return []
     if isinstance(probe_data, list):
+        if not all(isinstance(row, dict) for row in probe_data):
+            raise ValueError("probe rows must be JSON objects")
         return probe_data
-    rounds = probe_data.get("rounds")
-    if not isinstance(rounds, list):
-        return []
+    if not isinstance(probe_data, dict):
+        raise ValueError("probe must be a JSON object or an array of canonical rows")
 
-    try:
-        adapter = ArenaAdapter(
-            config.get("arena", {}),
-            repo_root=".",
-            close_range_cfg=config.get("fitness", {}).get("close_range"),
-        )
-        rows = adapter.parse_doc(probe_data)
-        # Preserve defence and raw references so defence metrics (guard_share, spread_m) are accessible
-        for idx, row in enumerate(rows):
-            if idx < len(rounds) and isinstance(rounds[idx], dict):
-                raw_r = rounds[idx]
-                if "defence" in raw_r and "defence" not in row:
-                    row["defence"] = raw_r["defence"]
-                row["_raw_round"] = raw_r
-        return rows
-    except Exception:
-        return rounds
+    rounds = probe_data.get("rounds")
+    if not isinstance(rounds, list) or not all(isinstance(row, dict) for row in rounds):
+        raise ValueError("arena probe rounds must be an array of JSON objects")
+    adapter = ArenaAdapter(
+        config.get("arena", {}),
+        repo_root=".",
+        close_range_cfg=config.get("fitness", {}).get("close_range"),
+    )
+    rows = adapter.parse_doc(probe_data)
+    # Preserve defence and raw references so defence metrics remain accessible.
+    for row, raw_r in zip(rows, rounds):
+        if "defence" in raw_r and "defence" not in row:
+            row["defence"] = raw_r["defence"]
+        row["_raw_round"] = raw_r
+    return rows
 
 
 def get_metric_value_from_round(rnd: dict, metric: str, side: str = "A") -> Any:
@@ -330,17 +330,27 @@ def check_smoke_health(sweep_data: Optional[dict], required_smokes: Optional[Lis
 
 def evaluate_training_gate(
     config: dict,
-    probe_data: Optional[dict] = None,
+    probe_data: dict | list[dict] | None = None,
     baseline_data: Optional[dict] = None,
     sweep_data: Optional[dict] = None,
     required_smokes: Optional[List[str]] = None,
+    *,
+    probe_path: Optional[str] = None,
 ) -> dict:
     """Run all training gate checks and return structured diagnostic results."""
     used_metrics = extract_used_metrics(config)
     penalty_metrics = extract_penalty_metrics(config)
-    probe_rounds = build_probe_rows(config, probe_data)
-
-    g2_pass, g2_reasons = check_metric_liveness(probe_rounds, used_metrics, penalty_metrics=penalty_metrics)
+    try:
+        if probe_path is not None:
+            with open(probe_path, "r", encoding="utf-8-sig") as probe_file:
+                probe_data = json.load(probe_file)
+        probe_rounds = build_probe_rows(config, probe_data)
+    except (OSError, ValueError, TypeError, OverflowError) as exc:
+        reason = f"Cannot read arena probe: {exc}"
+        logging.getLogger(__name__).error("%s", reason)
+        g2_pass, g2_reasons = False, [reason]
+    else:
+        g2_pass, g2_reasons = check_metric_liveness(probe_rounds, used_metrics, penalty_metrics=penalty_metrics)
     g3_pass, g3_reasons = check_baseline_sufficiency(baseline_data)
     g1_pass, g1_reasons = check_smoke_health(sweep_data, required_smokes)
 
