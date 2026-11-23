@@ -163,6 +163,15 @@ namespace OperativeMovementRules
 	/** True when a move issued now waits for the stance change (it is queued / retried after ComputeMoveHold seconds). */
 	CODEXTACTICS_API bool ShouldDeferMove(float MoveHoldSeconds);
 
+	/**
+	 * May this move order's path take the mantle links (AOperativeCharacter::OrderMoveTo, bMantlePathAllowed)? Never for an
+	 * autonomous order. A hostile (PMC, TeamId != 0) always may: its own commander gives the order, so the PLAYER squad's mode
+	 * does not apply to it (bug found by 095 PmcTraversalSmoke 2026-11-23: PMC mantle up 0/79 while the player's squad was in
+	 * formation). The player's side: only in Solo, or the formation leader's own order when squad mantling is on (R17-1).
+	 */
+	CODEXTACTICS_API bool IsMantlePathAllowed(bool bAutonomousOrder, bool bPlayerTeam, bool bPlayerSquadSolo, bool bSquadMantleEnabled,
+		bool bIsFormationLeader);
+
 	/** Detour crowd's overshoot ("moved too far") finish is allowed only this close to the path's end, cm (2026-10-18). */
 	constexpr float CrowdOvershootTestRangeCm = 120.f;
 

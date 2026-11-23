@@ -62,11 +62,13 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	// formation follow never does); a new order replaces a walk to a clicked ledge top (OrderMantleTop sets it again after this).
 	// R17-1 (designer 2026-11-17): the formation leader's own order too - when his path climbs, his followers climb in turns behind him
 	// (USquadSubsystem::BeginSquadMantleFromPath; Codex.Mantle.Squad 0 = before R17-1).
+	// A hostile's (PMC, TeamId != 0) commander order always may climb: the player squad's Solo / formation mode is not his
+	// (095 PmcTraversalSmoke 2026-11-23; OperativeMovementRules::IsMantlePathAllowed).
 	bMantleOrderPending = false;
 	{
 		const USquadSubsystem* MantleSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
-		bMantlePathAllowed = !bAutonomousOrder && MantleSquad && (MantleSquad->IsSoloMode()
-			|| (USquadSubsystem::IsSquadMantleEnabled() && MantleSquad->GetFormationLeader() == this));
+		bMantlePathAllowed = OperativeMovementRules::IsMantlePathAllowed(bAutonomousOrder, IsPlayerTeam(), MantleSquad && MantleSquad->IsSoloMode(),
+			USquadSubsystem::IsSquadMantleEnabled(), MantleSquad && MantleSquad->GetFormationLeader() == this);
 	}
 	if (IsRaging())
 	{
