@@ -1,10 +1,16 @@
 #include "Characters/SquadOrderRules.h"
+#include "Characters/OperativeCharacter.h"
 
 namespace SquadOrderRules
 {
 	bool IsOnOwnOrder(const FOwnOrderFacts& Facts)
 	{
 		return Facts.bOwnMoveOrder || Facts.bUseOrder || Facts.bObjectTask || Facts.bFireOrder;
+	}
+
+	bool ShouldRetryPlannedGroupMove(EOperativeOrderResult Result, const FVector& Destination, const TOptional<FVector>& GroupFallback)
+	{
+		return Result == EOperativeOrderResult::Unreachable && GroupFallback.IsSet() && !Destination.Equals(GroupFallback.GetValue());
 	}
 
 	bool IsBoxSelectionAllowed(bool /*bSoloMode*/, bool bTurnBasedCombat)

@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "GameFlow/GameFlowTypes.h"
 
+enum class EOperativeOrderResult : uint8;
+
 /**
  * Who owns an operative's movement: his own order or the squad formation (rev 5g, game designer play-test 2026-10-14, UE-only;
  * Godot had no rule for it - every non-leader simply followed). USquadSubsystem asks these pure rules on a leader switch, on
@@ -37,6 +39,9 @@ namespace SquadOrderRules
 
 	/** He executes an order of his own: the formation leaves him alone until it is done. */
 	CODEXTACTICS_API bool IsOnOwnOrder(const FOwnOrderFacts& Facts);
+
+	/** An unreachable offset may retry the actual paused group click once, within the member's pause radius. */
+	CODEXTACTICS_API bool ShouldRetryPlannedGroupMove(EOperativeOrderResult Result, const FVector& Destination, const TOptional<FVector>& GroupFallback);
 
 	/**
 	 * Box selection is allowed in solo mode and formation mode (outside turn-based combat).

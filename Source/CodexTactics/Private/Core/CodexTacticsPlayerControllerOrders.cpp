@@ -199,7 +199,8 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 		Group[Index]->CancelSuppressFire(TEXT("a move order")); // ... and suppressive fire (2026-10-26)
 		if (bPlan)
 		{
-			const FVector Planned = Squad->PlanMove(Group[Index], Targets[Index], bSprint, Flow ? Flow->GetPauseOrderRadius() : 1200.f);
+			const FVector Planned = Squad->PlanGroupMove(Group[Index], Targets[Index], Destination, bSprint,
+				Flow ? Flow->GetPauseOrderRadius() : 1200.f);
 			if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
 			{
 				Feedback->SpawnWaypointMarker(Planned);
