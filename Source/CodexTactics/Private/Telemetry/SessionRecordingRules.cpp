@@ -161,6 +161,21 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 		W.WriteValue(TEXT("v"), 1);
 		W.WriteValue(TEXT("session"), FileStem);
 		W.WriteValue(TEXT("map"), Session.Map);
+		if (Session.SectorBox)
+		{
+			const FBox2D& Box = *Session.SectorBox;
+			W.WriteValue(TEXT("sector_id"), Session.SectorId);
+			W.WriteObjectStart(TEXT("sector_box_cm"));
+			W.WriteArrayStart(TEXT("min"));
+			W.WriteValue(Finite(Box.Min.X));
+			W.WriteValue(Finite(Box.Min.Y));
+			W.WriteArrayEnd();
+			W.WriteArrayStart(TEXT("max"));
+			W.WriteValue(Finite(Box.Max.X));
+			W.WriteValue(Finite(Box.Max.Y));
+			W.WriteArrayEnd();
+			W.WriteObjectEnd();
+		}
 		W.WriteValue(TEXT("started_utc"), Session.StartedUtc.ToIso8601());
 		W.WriteValue(TEXT("world"), Session.bPie ? TEXT("PIE") : TEXT("Game"));
 		W.WriteValue(TEXT("units"), TEXT("cm,deg,s"));
@@ -189,10 +204,49 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 	{
 		return Finite(Session.Frames[Left].Time) < Finite(Session.Frames[Right].Time);
 	});
+	TArray<int32> RoundIndices;
+	RoundIndices.Reserve(Session.Rounds.Num());
+	for (int32 Index = 0; Index < Session.Rounds.Num(); ++Index) { RoundIndices.Add(Index); }
+	RoundIndices.StableSort([&](int32 Left, int32 Right)
+	{
+		return Finite(Session.Rounds[Left].Time) < Finite(Session.Rounds[Right].Time);
+	});
+	int32 RoundCursor = 0;
+	const auto EmitRound = [&](int32 RoundIndex)
+	{
+		const FDemoRoundEvent& Event = Session.Rounds[RoundIndex];
+		Line([&](FWriter& W)
+		{
+			const TCHAR* Results[] = { TEXT("none"), TEXT("victory"), TEXT("defeat"), TEXT("draw") };
+			W.WriteValue(TEXT("type"), Event.bStart ? TEXT("round_start") : TEXT("round_end"));
+			W.WriteValue(TEXT("t"), Finite(Event.Time));
+			W.WriteValue(TEXT("rt"), Finite(Event.RealTime));
+			W.WriteValue(TEXT("sector_id"), Event.SectorId);
+			W.WriteValue(TEXT("seed"), Event.Seed);
+			W.WriteValue(TEXT("round"), Event.Round);
+			W.WriteValue(TEXT("start"), Event.StartIndex);
+			W.WriteValue(TEXT("post"), Event.PostIndex);
+			W.WriteValue(TEXT("duration_s"), Finite(Event.DurationS));
+			W.WriteValue(TEXT("kills_player"), Event.KillsPlayer);
+			W.WriteValue(TEXT("kills_pmc"), Event.KillsPmc);
+			W.WriteValue(TEXT("score_victory"), Event.ScoreVictory);
+			W.WriteValue(TEXT("score_defeat"), Event.ScoreDefeat);
+			W.WriteValue(TEXT("score_draw"), Event.ScoreDraw);
+			if (!Event.bStart)
+			{
+				W.WriteValue(TEXT("result"), Results[FMath::Clamp(static_cast<int32>(Event.Result), 0, 3)]);
+			}
+		});
+	};
 	int32 Orders = 0;
 	int32 Snaps = 0;
 	for (int32 Index : Indices)
 	{
+		while (RoundCursor < RoundIndices.Num() && Finite(Session.Rounds[RoundIndices[RoundCursor]].Time) <= Finite(Session.Frames[Index].Time))
+		{
+			EmitRound(RoundIndices[RoundCursor]);
+			++RoundCursor;
+		}
 		const FDemoFrame& F = Session.Frames[Index];
 		if (F.Type == FDemoFrame::EType::Order && F.Facts.Kind == EDemoOrderKind::Suppress && !F.Facts.bAccepted) { continue; }
 		Line([&](FWriter& W)
@@ -300,6 +354,11 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 			W.WriteArrayEnd();
 		});
 	}
+	while (RoundCursor < RoundIndices.Num())
+	{
+		EmitRound(RoundIndices[RoundCursor]);
+		++RoundCursor;
+	}
 	Line([&](FWriter& W)
 	{
 		const TCHAR* Results[] = { TEXT("ABORTED"), TEXT("VICTORY"), TEXT("DEFEAT") };
@@ -312,6 +371,27 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 		W.WriteValue(TEXT("alive"), Session.Alive);
 		W.WriteValue(TEXT("truncated"), Session.bTruncated);
 		W.WriteValue(TEXT("mark"), Session.Mark);
+		if (Session.Rounds.Num() > 0)
+		{
+			int32 Ends = 0;
+			int32 Victory = 0;
+			int32 Defeat = 0;
+			int32 Draw = 0;
+			for (const FDemoRoundEvent& Event : Session.Rounds)
+			{
+				if (!Event.bStart)
+				{
+					++Ends;
+					Victory = Event.ScoreVictory;
+					Defeat = Event.ScoreDefeat;
+					Draw = Event.ScoreDraw;
+				}
+			}
+			W.WriteValue(TEXT("rounds"), Ends);
+			W.WriteValue(TEXT("score_victory"), Victory);
+			W.WriteValue(TEXT("score_defeat"), Defeat);
+			W.WriteValue(TEXT("score_draw"), Draw);
+		}
 	});
 	return Out;
 }

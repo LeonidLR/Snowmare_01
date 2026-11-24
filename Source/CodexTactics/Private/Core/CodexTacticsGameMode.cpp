@@ -55,6 +55,7 @@
 #include "Interactables/VaultNavigation.h"
 #include "Survival/FirstAidRules.h"
 #include "UI/CodexTacticsHUD.h"
+#include "Training/TrainingSectorSubsystem.h"
 
 #include "Characters/SquadSubsystem.h"
 #define LOCTEXT_NAMESPACE "CodexTacticsGameMode"
@@ -135,6 +136,10 @@ void ACodexTacticsGameMode::StartPlay()
 	UnderFireRules::ReloadConfig(); // the reaction / manoeuvre under fire (Content/Data/Combat/under_fire.json, #43 2026-11-07)
 	FireGateRules::ReloadConfig(); // turn -> raise -> fire on every operative fire path (Content/Data/Combat/fire_gate.json, 058c / 061 2026-11-16)
 	ApplyLevelConfig();
+	if (UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(GetWorld()))
+	{
+		Training->Prepare();
+	}
 	bPreloadSquadPending = true;
 	if (auto* Preload = GetWorld()->GetSubsystem<UGameplayPreloadSubsystem>())
 	{
@@ -454,6 +459,8 @@ void ACodexTacticsGameMode::SpawnSquad()
 	{
 		CampaignCarry::ApplySquadState(*CarrySquad, *Carry);
 	}
+	const UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(World);
+	const bool bActiveSector = Training && Training->HasActiveSector();
 	if (TActorIterator<AOperativeCharacter>(World))
 	{
 		// The level places its own squad: it never goes through SpawnOperative, so the role's medical bag is applied here.
@@ -477,11 +484,15 @@ void ACodexTacticsGameMode::SpawnSquad()
 				ApplyLevelKit(**It, ActiveLevelConfig->Config);
 			}
 		}
+		if (bActiveSector)
+		{
+			Training->MovePlayersToSector(false);
+		}
 		return;
 	}
 
 	const AActor* Start = UGameplayStatics::GetActorOfClass(World, APlayerStart::StaticClass());
-	const FTransform StartTransform = Start ? Start->GetActorTransform() : FTransform::Identity;
+	const FTransform StartTransform = bActiveSector ? Training->GetStart() : Start ? Start->GetActorTransform() : FTransform::Identity;
 	const FRotator Facing(0.f, StartTransform.Rotator().Yaw, 0.f);
 
 	int32 Spawned = 0;
@@ -496,7 +507,12 @@ void ACodexTacticsGameMode::SpawnSquad()
 		// Bug 2026-10-23: with a fallen mate the living close up on the roster's first spawn spots (the formation's slots), else a follower
 		// spawned on the fallen one's spot walks across the start to his slot while the level fades in.
 		const FVector Offset = SquadRoster[Spawned++].Offset;
-		AOperativeCharacter* Operative = SpawnOperative(Entry, Index, StartTransform.GetLocation() + Facing.RotateVector(Offset), Facing);
+		FVector Location = StartTransform.GetLocation() + Facing.RotateVector(Offset);
+		if (bActiveSector)
+		{
+			Location = Training->PlacePlayer(Location, SpawnClass->GetDefaultObject<AOperativeCharacter>()->GetSimpleCollisionHalfHeight());
+		}
+		AOperativeCharacter* Operative = SpawnOperative(Entry, Index, Location, Facing);
 		if (const FCarriedOperative* Carried = Operative && Carry ? CampaignCarry::FindFor(*Carry, Entry.Role, Index) : nullptr)
 		{
 			CampaignCarry::Apply(*Operative, *Carried);

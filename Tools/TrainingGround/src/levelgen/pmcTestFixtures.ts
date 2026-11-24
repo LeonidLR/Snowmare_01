@@ -1,4 +1,4 @@
-// Test fixtures of the PMC posts / charges tests (task 087): the accepted X4 layout + its committed tactical map, and a hand map.
+// Test fixtures of the PMC posts / charges tests (task 087): the accepted X4 layout + its archived tactical map, and a hand map.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { GenLayout } from './schema.ts';
@@ -7,10 +7,10 @@ import { findProjectRoot } from './props/autogen.ts';
 
 const readJson = <T>(rel: string): T => JSON.parse(fs.readFileSync(path.join(findProjectRoot(), rel), 'utf8').replace(/^﻿/, '')) as T;
 
-/** The accepted X4 layout and Content/Data/LevelGen/tactical/L_Gen_Depot_X4.tactical.json (the same geometry_hash). */
+/** The accepted X4 layout and its matching tactical snapshot. */
 export const loadX4 = (): { layout: GenLayout; tactical: TacticalMapFile } => ({
   layout: readJson<GenLayout>('Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1_x4.json'),
-  tactical: readJson<TacticalMapFile>('Content/Data/LevelGen/tactical/L_Gen_Depot_X4.tactical.json'),
+  tactical: JSON.parse(fs.readFileSync(new URL('./fixtures/archivedMaps/L_Gen_Depot_X4.tactical.json', import.meta.url), 'utf8')) as TacticalMapFile,
 });
 
 /** A 100 x 100 m map: the mandatory route runs west -> east along y = 0 from the start at x -45 m. */

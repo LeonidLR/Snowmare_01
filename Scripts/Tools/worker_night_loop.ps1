@@ -21,7 +21,8 @@ param([string]$Repo = 'C:\Work\CodexTactics', [string]$Until = '07:45', [int]$Jo
       [string]$TrainerFrom = '05:30', [string]$TrainerUntil = '07:30', [string]$TrainerRunId = 'pmc-v6-qd2',
       [ValidateSet('ab', 'trainer')][string]$WindowMode = 'ab',
       [string]$Py = 'C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe',
-      [switch]$SkipHealthCheck, [switch]$HealthCheckOnly)
+      [int]$HealthReserveMinutes = 45,
+      [switch]$SkipHealthCheck, [switch]$HealthCheckOnly, [switch]$DryRun)
 $ErrorActionPreference = 'Continue'
 Set-Location $Repo
 $root = Join-Path $Repo 'Saved\Worker\nightloop'; New-Item -ItemType Directory -Force $root | Out-Null
@@ -52,7 +53,32 @@ function TakeLock {
 }
 function ReleaseLock { if ((Test-Path $lock) -and ((Get-Content $lock -Raw) -match 'night-loop')) { Remove-Item $lock -Force } }
 $script:BuiltHead = ''
+function Get-FreezeState {
+    $f = Join-Path $Repo 'Saved\Worker\FROZEN'
+    if (-not (Test-Path $f)) { return @{ Active = $false; Sha = ''; Raw = '' } }
+    $now = Get-Date
+    $fromT = [datetime]::ParseExact('16:30', 'HH:mm', $null).TimeOfDay
+    $start = if ($now.TimeOfDay -ge $fromT) { $now.Date.Add($fromT) } else { $now.Date.AddDays(-1).Add($fromT) }
+    $fresh = (Get-Item $f).LastWriteTime -ge $start.Date.AddHours(8.5)
+    if (-not $fresh) { return @{ Active = $false; Sha = ''; Raw = '' } }
+    $raw = (Get-Content $f -Raw -ErrorAction SilentlyContinue).Trim()
+    $sha = ''
+    if ($raw -match 'binaries\s+([0-9a-fA-F]{7,40})') { $sha = $Matches[1] }
+    elseif ($raw -match '->\s*([0-9a-fA-F]{7,40})') { $sha = $Matches[1] }
+    return @{ Active = $true; Sha = $sha; Raw = $raw }
+}
 function UpdateAndBuild {
+    $freeze = Get-FreezeState
+    if ($freeze.Active) {
+        $head = (git rev-parse --short HEAD 2>$null).Trim()
+        if ($freeze.Sha -and $head -and -not ($head.StartsWith($freeze.Sha) -or $freeze.Sha.StartsWith($head))) {
+            L "FROZEN active ($($freeze.Sha)) but HEAD is $head - refusing checkout/rebuild"
+            return $false
+        }
+        $script:BuiltHead = $head
+        L "FROZEN active: keeping HEAD $head and frozen binaries (skipping origin/main checkout & build)"
+        return $true
+    }
     $dirty = @(git status --porcelain --untracked-files=no)
     # Leftovers of a day caller's shipped patch (worker_sync -Patch): nobody edits C:\Work\CodexTactics by hand (the stand-in lead
     # works in CodexTactics-slot1), so the night resets them instead of idling; logged.
@@ -125,50 +151,124 @@ function MaybeTrainer {
     } finally { ReleaseLock; $script:TrainerDone = $true; Beat 'after trainer' }
 }
 $script:HealthCheckDone = $false
+function Get-RegisteredSmokeCount {
+    $tm = Join-Path $Repo 'Scripts\test_map.json'
+    if (-not (Test-Path $tm)) { return 0 }
+    try { return @((Get-Content $tm -Raw -Encoding UTF8 | ConvertFrom-Json).smokeRegistry).Count } catch { return 0 }
+}
+function Get-OtherSlotActiveCount {
+    $repoNorm = $Repo.Replace('/', '\').TrimEnd('\').ToLower()
+    $others = @(Get-CimInstance Win32_Process -Filter "Name like 'UnrealEditor%'" -ErrorAction SilentlyContinue | Where-Object {
+        $cmd = "$($_.CommandLine)".Replace('/', '\').ToLower()
+        $cmd -match 'codextactics' -and -not $cmd.Contains($repoNorm + '\')
+    })
+    return $others.Count
+}
+function Invoke-HealthChild([string]$Stage, [string]$PsCommand, [datetime]$StopAt) {
+    $p = Start-Process powershell.exe -WindowStyle Hidden -PassThru -WorkingDirectory $Repo -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $PsCommand
+    )
+    $started = Get-Date
+    while (-not $p.HasExited) {
+        if ((Get-Date) -ge $StopAt) {
+            L "health ${Stage}: reached stop-at $($StopAt.ToString('s')) - killing process tree pid $($p.Id)"
+            & taskkill.exe /T /F /PID $p.Id *> $null
+            return @{ ExitCode = 124; TimedOut = $true }
+        }
+        $mins = [Math]::Round(((Get-Date) - $started).TotalMinutes, 1)
+        Beat "nightly health check: $Stage (${mins}m)"
+        Start-Sleep 30
+    }
+    return @{ ExitCode = $p.ExitCode; TimedOut = $false }
+}
 function RunNightlyHealthCheck {
-    # 080 PROJECT HEALTH: Nightly FULL run on the worker (all tests + all 41 smokes), outside the 05:30 A/B window and trainer hours.
-    # Runs once per night (early in cycle 1 before arena sweeps), updates Saved\Health\*.json and docs\port\DEBT.md.
-    if ($SkipHealthCheck -or $script:HealthCheckDone) { return }
-    if ((Get-Date) -ge (TrainerAt $TrainerFrom) -and (Get-Date) -lt (TrainerAt $TrainerUntil)) { return }
-    if (-not (TakeLock)) { L "health run: worker busy 30 min - trying again after next job"; return }
+    # 080/109 PROJECT HEALTH: Nightly FULL run on the worker, bounded by the 05:30 A/B window, freeze-aware and slot-aware.
+    if ($SkipHealthCheck -or $script:HealthCheckDone) { return 'skipped' }
+    $tFrom = TrainerAt $TrainerFrom; $tUntil = TrainerAt $TrainerUntil
+    $now = Get-Date
+    if ($now -ge $tFrom -and $now -lt $tUntil) { L 'health run: inside trainer/AB window - skipped'; return 'skipped-window' }
+    $stopAt = if ($now -lt $tFrom) { $tFrom } else { $deadline }
+    if (($stopAt - $now).TotalMinutes -lt $HealthReserveMinutes) {
+        L ("health run: only {0:N1}m before stop-at ({1}) < reserve {2}m - skipped" -f ($stopAt - $now).TotalMinutes, $stopAt.ToString('s'), $HealthReserveMinutes)
+        return 'skipped-budget'
+    }
+    if ($DryRun) {
+        $otherSlots = Get-OtherSlotActiveCount
+        $smokeCount = Get-RegisteredSmokeCount
+        $freeze = Get-FreezeState
+        L "health dry-run: stopAt=$($stopAt.ToString('s')) freeze=$($freeze.Active)($($freeze.Sha)) otherSlots=$otherSlots smokes=$smokeCount"
+        return 'dry-run'
+    }
+    if (-not (TakeLock)) { L "health run: worker busy 30 min - trying again after next job"; return 'busy' }
     try {
+        # Re-check window and remaining budget AFTER TakeLock (TakeLock may wait up to 30 min).
+        $nowAfter = Get-Date
+        if ($nowAfter -ge $tFrom -and $nowAfter -lt $tUntil) { L 'health run: entered trainer/AB window while waiting for lock - skipped'; return 'skipped-window' }
+        if (($stopAt - $nowAfter).TotalMinutes -lt 10) { L 'health run: <10m left after lock wait - skipped'; return 'skipped-budget' }
+
         $env:CODEX_AGENT = 'night-loop'; $env:CODEX_LOCK_HELD = '1'; $env:CODEX_SMOKE_REMOTE = 'off'
         Beat "nightly health check build"
-        if (-not (UpdateAndBuild)) { L "health run: build failed - skipping"; return }
+        if (-not (UpdateAndBuild)) { L "health run: build failed or freeze mismatch - skipping"; return 'build-failed' }
+
+        $otherSlots = Get-OtherSlotActiveCount
+        $healthJobs = if ($otherSlots -gt 0) {
+            L "health run: $otherSlots other slot UE process(es) active - scaling Jobs from $Jobs to 1"
+            1
+        } else { $Jobs }
+
         $d = Join-Path $root (Get-Date -Format 'yyyy-MM-dd')
         New-Item -ItemType Directory -Force $d | Out-Null
         $tlog = Join-Path $d 'health_tests.log'
         $sjson = Join-Path $d 'health_smokes.json'
+        $slog = Join-Path $d 'health_smokes.log'
+        $smokeCount = Get-RegisteredSmokeCount
 
-        Beat "nightly health check: all tests"
-        L "health run: running all CodexTactics tests"
-        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Repo 'Scripts\test.ps1') -Filter CodexTactics *> $tlog
-        $testExit = $LASTEXITCODE
+        L "health run: running all CodexTactics tests (stop-at $($stopAt.ToString('s')))"
+        $testCmd = "& '$($Repo -replace "'","''")\Scripts\test.ps1' -Filter CodexTactics *> '$($tlog -replace "'","''")'; exit `$LASTEXITCODE"
+        $tRes = Invoke-HealthChild 'all tests' $testCmd $stopAt
+        $testExit = $tRes.ExitCode
+        if ($tRes.TimedOut) {
+            Add-Content -Encoding UTF8 (Join-Path $d 'digest.log') ("{0} {1} HEAD {2}: PARTIAL (stopped at {3} during tests)" -f (Get-Date -Format s), $(if ($HealthCheckOnly) { 'HEALTH-ONLY' } else { 'HEALTH' }), $script:BuiltHead, $stopAt.ToString('s'))
+            $script:HealthCheckDone = $true
+            return 'partial'
+        }
 
-        Beat "nightly health check: 41 smokes"
-        L "health run: running 41 registered smokes"
-        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Repo 'Scripts\smoke_parallel.ps1') -Remote off -Commands all -Jobs $Jobs -ExtraArgs '-Multiprocess' -ResultJson $sjson *> (Join-Path $d 'health_smokes.log')
-        $smokeExit = $LASTEXITCODE
+        L "health run: running $smokeCount registered smokes (Jobs=$healthJobs, stop-at $($stopAt.ToString('s')))"
+        $smokeCmd = "& '$($Repo -replace "'","''")\Scripts\smoke_parallel.ps1' -Remote off -Commands all -Jobs $healthJobs -ExtraArgs '-Multiprocess' -ResultJson '$($sjson -replace "'","''")' *> '$($slog -replace "'","''")'; exit `$LASTEXITCODE"
+        $sRes = Invoke-HealthChild "$smokeCount smokes" $smokeCmd $stopAt
+        $smokeExit = $sRes.ExitCode
+        if ($sRes.TimedOut) {
+            Add-Content -Encoding UTF8 (Join-Path $d 'digest.log') ("{0} {1} HEAD {2}: PARTIAL (stopped at {3} during smokes, testExit={4})" -f (Get-Date -Format s), $(if ($HealthCheckOnly) { 'HEALTH-ONLY' } else { 'HEALTH' }), $script:BuiltHead, $stopAt.ToString('s'), $testExit)
+            $script:HealthCheckDone = $true
+            return 'partial'
+        }
 
         Beat "nightly health aggregator"
-        L "health run: updating Saved\Health and docs\port\DEBT.md"
+        L "health run: updating Saved\Health"
         $healthOut = Join-Path $Repo 'Saved\Health\health_latest.json'
-        $debtOut = Join-Path $Repo 'docs\port\DEBT.md'
+        $debtOut = Join-Path $Repo 'Saved\Health\DEBT.md'
+        $aggExit = 1
         $chatLine = if (Test-Path $Py) {
-            (& $Py -I (Join-Path $Repo 'Scripts\Tools\project_health.py') --repo $Repo --test-log $tlog --smoke-json $sjson --out-json $healthOut --debt-md $debtOut --chat-summary 2>&1 | Select-Object -Last 1)
+            $out = (& $Py -I (Join-Path $Repo 'Scripts\Tools\project_health.py') --repo $Repo --test-log $tlog --smoke-json $sjson --test-exit $testExit --smoke-exit $smokeExit --max-age-minutes 180 --strict --out-json $healthOut --debt-md $debtOut --chat-summary 2>&1)
+            $aggExit = $LASTEXITCODE
+            ($out | Select-Object -Last 1)
         } else {
             "no python at $Py"
         }
-        L "health run done: $chatLine"
-        Add-Content -Encoding UTF8 (Join-Path $d 'digest.log') ("{0} HEALTH HEAD {1}: {2}" -f (Get-Date -Format s), $script:BuiltHead, $chatLine)
+        $tag = if ($HealthCheckOnly) { 'HEALTH-ONLY' } else { 'HEALTH' }
+        L "health run done (aggExit=$aggExit testExit=$testExit smokeExit=$smokeExit): $chatLine"
+        Add-Content -Encoding UTF8 (Join-Path $d 'digest.log') ("{0} {1} HEAD {2}: {3}" -f (Get-Date -Format s), $tag, $script:BuiltHead, $chatLine)
         $script:HealthCheckDone = $true
+        if ($aggExit -ne 0 -or $testExit -ne 0 -or $smokeExit -ne 0) { return 'fail' }
+        return 'ok'
     } finally { ReleaseLock; Beat "after health run" }
 }
 if ($HealthCheckOnly) {
-    RunNightlyHealthCheck
-    L 'health-check-only mode complete - exit'
-    Beat 'health-check-only done'
-    exit 0
+    $hStatus = RunNightlyHealthCheck
+    L "health-check-only mode complete ($hStatus) - exit"
+    Beat "health-check-only $hStatus"
+    if ($hStatus -eq 'ok' -or $hStatus -eq 'dry-run') { exit 0 }
+    exit 1
 }
 while ((Get-Date) -lt $deadline) {
     MaybeTrainer

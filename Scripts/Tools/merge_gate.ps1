@@ -7,6 +7,7 @@ param(
     [switch]$FullTests,
     [switch]$Resume,
     [switch]$AcceptPreExisting,
+    [switch]$AllowNoWorkerSmokes,
     [int]$Jobs = 0
 )
 
@@ -332,6 +333,19 @@ function Show-GateSummary($Stages, $Seconds) {
     $Stages.GetEnumerator() | ForEach-Object { Write-Host ('{0}: {1} ({2:N1}s)' -f $_.Key, $_.Value, [double]$Seconds[$_.Key]) }
 }
 
+function Assert-GateWorkerSmokePlan([string[]]$Paths, $Plan, $Map, [switch]$AllowNoWorkerSmokes) {
+    $reg = @($Map.smokeRegistry)
+    foreach ($s in @($Plan.Smokes)) {
+        if ($reg -notcontains $s) {
+            throw "Mapped worker smoke '$s' is not in Scripts/test_map.json smokeRegistry (archived map?)."
+        }
+    }
+    $cppChanged = @($Paths | Where-Object { $_ -match '^Source/(?!CodexTacticsTests/)' })
+    if ($cppChanged.Count -gt 0 -and @($Plan.Smokes).Count -eq 0 -and -not $AllowNoWorkerSmokes) {
+        throw ("C++ Source/ changed ({0}) but 0 worker smokes were mapped. Update Scripts/test_map.json or pass -AllowNoWorkerSmokes." -f ($cppChanged[0..([Math]::Min(2, $cppChanged.Count - 1))] -join ', '))
+    }
+}
+
 function Show-GateSmokeReasons($Plan) {
     foreach ($name in $Plan.Smokes) {
         foreach ($row in @($Plan.Rows | Where-Object { $_.SmokeNames -contains $name })) {
@@ -341,7 +355,7 @@ function Show-GateSmokeReasons($Plan) {
     }
 }
 
-function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$RunFull, [switch]$ResumeRun, [switch]$AllowPreExisting, [int]$RequestedJobs = 0) {
+function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$RunFull, [switch]$ResumeRun, [switch]$AllowPreExisting, [switch]$AllowNoWorkerSmokes, [int]$RequestedJobs = 0) {
     $ErrorActionPreference = 'Stop'
     $toolsDir = $PSScriptRoot
     $scriptsDir = Split-Path $toolsDir -Parent
@@ -467,8 +481,10 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
             }
         }
         . (Join-Path $scriptsDir 'verify_lib.ps1')
-        $plan = Resolve-Impact $paths (Get-TestMap)
+        $testMap = Get-TestMap
+        $plan = Resolve-Impact $paths $testMap
         Show-GateSmokeReasons $plan
+        Assert-GateWorkerSmokePlan $paths $plan $testMap -AllowNoWorkerSmokes:$AllowNoWorkerSmokes
         $testLabel = if ($RunFull) { 'full automation suite' } else { "Smart (base $head, local smokes off)" }
         $smokeNames = @($plan.Smokes | ForEach-Object { "CodexTactics.$_" })
         if ($Preview) {
@@ -609,5 +625,5 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
-    exit (Invoke-MergeGate $Branches -Preview:$DryRun -RunFull:$FullTests -ResumeRun:$Resume -AllowPreExisting:$AcceptPreExisting -RequestedJobs $Jobs)
+    exit (Invoke-MergeGate $Branches -Preview:$DryRun -RunFull:$FullTests -ResumeRun:$Resume -AllowPreExisting:$AcceptPreExisting -AllowNoWorkerSmokes:$AllowNoWorkerSmokes -RequestedJobs $Jobs)
 }

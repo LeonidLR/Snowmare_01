@@ -31,6 +31,15 @@ export function blockTemplate(id?: string): BlockTemplateInfo {
 export function templateForSeries(series?: string): string | undefined {
   return series ? Object.keys(TEMPLATES).find((k) => isTemplate(k) && (TEMPLATES[k] as { series?: string | null }).series === series) : undefined;
 }
+export const BAY_SECTIONS = cfg.recipes.block.bay_sections;
+export type BaySectionTemplate = typeof cfg.recipes.block.templates.block_1_464;
+
+/** Fixed bays are requested by explicit template id; series-only selection retains the original planner. */
+export function baySectionTemplate(id: string): BaySectionTemplate | undefined {
+  const template = blockTemplate(id);
+  return template.planner === 'bay_sections' ? TEMPLATES[template.id] as BaySectionTemplate : undefined;
+}
+
 /** The khrushchevka template (series 1-464): the kit planner's default numbers. */
 export const KIT: KitTemplate = cfg.recipes.block.templates.block_khrushchevka;
 const BUILDING_PLANS = cfg; // the JSON itself, not bandPlan.ts's re-export: bandPlan.ts imports this module (no cycle at load time)
@@ -52,7 +61,7 @@ function useTemplate(id?: string): void {
 }
 
 /** What a room of a kit flat is for (GenRoom.use). The core cell is the 'landing' (it holds the floor landing and the flights). */
-export type RoomUse = 'hall' | 'corridor' | 'bath' | 'kitchen' | 'living' | 'tambour' | 'landing' | 'service';
+export type RoomUse = 'hall' | 'corridor' | 'bath' | 'kitchen' | 'living' | 'bedroom' | 'tambour' | 'landing' | 'service';
 export type KitFlat = 'A' | 'B' | 'C';
 
 /** One door the kit plan wants: the two cells it joins, its role and (optionally) the preferred centre along the shared wall. */
@@ -421,7 +430,7 @@ export function validateKitPlan(plan: BandPlan): string[] {
   return out;
 }
 
-const USE_GLYPH: Record<RoomUse, string> = { hall: 'h', corridor: 'c', bath: 'b', kitchen: 'k', living: 'L', tambour: 'T', landing: 'S', service: 'v' };
+const USE_GLYPH: Record<RoomUse, string> = { hall: 'h', corridor: 'c', bath: 'b', kitchen: 'k', living: 'L', bedroom: 'B', tambour: 'T', landing: 'S', service: 'v' };
 
 /**
  * One char per 50 cm (the kit grid), v = D on the top row (the street), v = 0 at the bottom (the court). Each cell paints its use glyph (h hall,

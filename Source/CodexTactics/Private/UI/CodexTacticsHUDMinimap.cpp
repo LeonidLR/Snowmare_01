@@ -4,6 +4,7 @@
 // the live icons projected with the capture's projection (top-down or iso).
 
 #include "UI/CodexTacticsHUD.h"
+#include "Training/TrainingSectorSubsystem.h"
 
 #include "CanvasItem.h"
 #include "Engine/Canvas.h"
@@ -174,6 +175,22 @@ void ACodexTacticsHUD::DrawMapView(UMinimapSubsystem& Minimap, const FMinimapVie
 		}
 	}
 
+	if (const UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(GetWorld()))
+	{
+		if (const FBox2D* Box = Training->GetArea())
+		{
+			const FVector2D Corners[] = { Box->Min, FVector2D(Box->Max.X, Box->Min.Y), Box->Max, FVector2D(Box->Min.X, Box->Max.Y) };
+			for (int32 Edge = 0; Edge < UE_ARRAY_COUNT(Corners); ++Edge)
+			{
+				FVector2D A = View.MapToScreen(Minimap.GetProjection().WorldToMap(FVector(Corners[Edge], 0.0)));
+				FVector2D B = View.MapToScreen(Minimap.GetProjection().WorldToMap(FVector(Corners[(Edge + 1) % UE_ARRAY_COUNT(Corners)], 0.0)));
+				if (MinimapRules::ClipSegmentToRect(A, B, Rect))
+				{
+					DrawLine(A.X, A.Y, B.X, B.Y, FLinearColor(1.f, 0.62f, 0.12f), 2.0f);
+				}
+			}
+		}
+	}
 	// The main camera's view footprint.
 	const TArray<FVector2D> Footprint = Minimap.GetCameraFootprint();
 	for (int32 Index = 0; Index < Footprint.Num(); ++Index)

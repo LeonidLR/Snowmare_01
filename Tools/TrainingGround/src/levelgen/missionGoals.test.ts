@@ -75,7 +75,7 @@ describe('mission goals runtime file (F-4)', () => {
 
   it('the committed x4 Depot file matches its accepted layout', () => {
     const want = formatMissionGoals(missionGoalsFor(x4, 'L_Gen_Depot_X4')!);
-    const have = fs.readFileSync(path.join(root, 'Content/Data/LevelGen/objectives/L_Gen_Depot_X4.objectives.json'), 'utf8').split('\r\n').join('\n'); // autocrlf checkouts
+    const have = fs.readFileSync(new URL('./fixtures/archivedMaps/L_Gen_Depot_X4.objectives.json', import.meta.url), 'utf8').split('\r\n').join('\n'); // autocrlf checkouts
     assert.equal(have, want);
     const f = JSON.parse(have);
     assert.equal(f.goals.length, 3);

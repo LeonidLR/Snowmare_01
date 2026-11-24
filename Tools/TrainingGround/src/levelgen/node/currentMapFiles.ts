@@ -6,11 +6,12 @@ import path from 'node:path';
 import { ROOT } from '../../movement/cli/paths.ts';
 import type { MapEntry } from '../currentMap.ts';
 
-export interface MapDirs { levelJson: string; props: string; accepted: string }
+export interface MapDirs { levelJson: string; props: string; accepted: string; mapAssets?: string }
 export const MAP_DIRS: MapDirs = {
   levelJson: path.join(ROOT, 'Content/Data/LevelJson'),
   props: path.join(ROOT, 'Content/Data/LevelGen/props'),
   accepted: path.join(ROOT, 'Content/Data/LevelGen/accepted'),
+  mapAssets: path.join(ROOT, 'Content/Maps'),
 };
 export const CURRENT_MAP_FILE = path.join(ROOT, 'Saved/TrainingGround/current_map.json');
 
@@ -24,7 +25,7 @@ const readJson = (file: string): Record<string, unknown> | null => {
 /** `Content/Data/LevelGen/accepted/<layout>.json` (or a bare name) -> `<layout>`. */
 const layoutLeaf = (p: unknown): string => (typeof p === 'string' && p ? path.basename(p.replace(/\\/g, '/')).replace(/\.json$/, '') : '');
 
-/** Every generated map: a level JSON with `levelgen_layout` and / or a (non-fixture) props file, newest accepted layout first is NOT applied here. */
+/** Generated maps with level data or a real map asset. Orphan props cannot create a map. */
 export function listMapEntries(dirs: MapDirs = MAP_DIRS): MapEntry[] {
   const byMap = new Map<string, MapEntry>();
   const entry = (map: string): MapEntry => {
@@ -43,13 +44,19 @@ export function listMapEntries(dirs: MapDirs = MAP_DIRS): MapEntry[] {
       e.layout = layout;
     }
   }
+  const assetNames = dirs.mapAssets && fs.existsSync(dirs.mapAssets)
+    ? new Set(fs.readdirSync(dirs.mapAssets, { recursive: true, withFileTypes: true })
+      .filter((asset) => asset.isFile() && asset.name.endsWith('.umap')).map(({ name }) => name.slice(0, -5)))
+    : new Set<string>();
   if (fs.existsSync(dirs.props)) {
     for (const f of fs.readdirSync(dirs.props)) {
       if (!f.endsWith('.props.json')) continue;
       const props = readJson(path.join(dirs.props, f));
       if (!props || typeof props.schema !== 'string' || !props.schema.startsWith('codex.levelgen_props/')) continue;
       const id = f.slice(0, -'.props.json'.length);
-      const e = entry(typeof props.map === 'string' && props.map ? props.map : id);
+      const map = typeof props.map === 'string' && props.map ? props.map : id;
+      if (!byMap.has(map) && !assetNames.has(map)) continue;
+      const e = entry(map);
       e.propsId = id;
       if (!e.layout) e.layout = layoutLeaf(props.layout);
     }

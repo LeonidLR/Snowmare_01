@@ -16,6 +16,7 @@
       "module_cm": 300,
       "depth_cm": 30,
       "solid": "Facade/SM_SH_Wall_Facade_solid_28",
+      "fixed_bay_trim": {"width_cm": 75, "material": "MI_SH_Facade_B20"},
       "windows": [
         {"id": "win", "wall": "Facade/SM_SH_Wall_Facade_win_28", "glass": "Openings/SM_SH_Win_PVC_win_28", "hole": [75, 225], "hole_z": [85, 225]},
         {"id": "wide", "wall": "Facade/SM_SH_Wall_Facade_wide_28", "glass": "Openings/SM_SH_Win_PVC_wide_28", "hole": [41, 259], "hole_z": [85, 225]}

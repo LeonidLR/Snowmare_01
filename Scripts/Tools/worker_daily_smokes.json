@@ -1,9 +1,29 @@
 {
-  "_comment": "Daily smoke subset run by Scripts/Tools/worker_loop.ps1 on codex-worker at 08:00, right after the trainer window (one smoke per core system, ~30-40 min, before agents send farm runs). Edit the list freely; names as in Scripts/test_map.json smokeRegistry. Lead decision 2026-11-17. The worker session posts the result in agent-chat topic worker-ops (--status), FAILs as a normal post to claude.",
+  "_comment": "Daily smoke subset run by Scripts/Tools/worker_loop.ps1 on codex-worker at 08:00, right after the trainer window (one smoke per core system across the 5 kept maps, ~30-40 min, before agents send farm runs). Names as in Scripts/test_map.json smokeRegistry.",
   "jobs": 2,
   "smokes": [
-    "MovementSmoke", "CoverSmoke", "FireGateSmoke", "CornerPickSmoke", "MissionGoalsSmoke", "TacticalMapSmoke",
-    "MantleSmoke", "MantleClickSmoke", "FormationJitterSmoke", "LevelGenRampSmoke", "LevelGenRouteSmoke", "StealthModeSmoke",
-    "FirstAidSmoke", "PmcStalemateSmoke", "RpgPmcSmoke", "EnemyFacingJitterSmoke", "SaveRoundTripSmoke", "InventorySmoke"
+    "LowCoverMoveLakeSmoke",
+    "CoverSwitchLakeSmoke",
+    "TutorialAmbushLakeSmoke",
+    "LakePauseOrdersSmoke",
+    "TurnArenaLakeSmoke",
+    "TurnArenaYardSmoke",
+    "GateExitLakeSmoke",
+    "PeekMinesSmoke",
+    "InteriorExitSmoke",
+    "DropLinkReachSmoke",
+    "FormationWallHugSmoke",
+    "SaveCoverageLakeSmoke",
+    "WeatherLakeSmoke",
+    "RoofCutawayStoreySmoke",
+    "CutawayClickSmoke",
+    "WindowStairHoverSmoke",
+    "FormationStairSmoke",
+    "CoverIndoorSmoke",
+    "GeneratedPropsX6Smoke",
+    "LevelGenBuildingsSmoke",
+    "ColdIndoorsSmoke",
+    "VehicleCombatSmoke",
+    "MainMenuSmoke"
   ]
 }

@@ -4,6 +4,7 @@
 // _process_leader_movement).
 
 #include "Characters/OperativeCharacter.h"
+#include "Training/TrainingSectorSubsystem.h"
 #include "Interactables/WindowOrderRules.h"
 #include "Core/CodexGameplayRandom.h"
 #include "Interactables/VaultNavigation.h"
@@ -308,8 +309,9 @@ float AOperativeCharacter::GetMoveHoldSeconds() const
 		Anim ? Anim->GetStanceTransitionTimeLeft() : 0.f);
 }
 
-EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestination, bool bFormationMove)
+EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedDestination, bool bFormationMove)
 {
+	const FVector InDestination = UTrainingSectorSubsystem::LimitGoal(GetWorld(), RequestedDestination, GetSimpleCollisionRadius() + 45.0);
 	if (VehicleQueries::IsMounted(this))
 	{
 		return EOperativeOrderResult::Refused; // APC P1: aboard he rides (Y gets him out)
@@ -553,7 +555,8 @@ bool AOperativeCharacter::SteerOwnMoveVia(const FVector& Via)
 	{
 		return false;
 	}
-	const EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(Via, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false,
+	const FVector Goal = UTrainingSectorSubsystem::LimitGoal(GetWorld(), Via, GetSimpleCollisionRadius() + 45.0);
+	const EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(Goal, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false,
 		/*bUsePathfinding*/ true, /*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false, ChooseMoveFilter(), /*bAllowPartialPath*/ false);
 	if (Result != EPathFollowingRequestResult::RequestSuccessful)
 	{

@@ -50,6 +50,8 @@ public:
 	float GetPendingDueAt(int32 Index) const { return Pending.IsValidIndex(Index) ? Pending[Index].DueAt : -1.f; }
 	/** Drops the level's squads still waiting (smokes: one encounter at a time). */
 	void CancelPending() { Pending.Reset(); }
+	/** Schedule the new sector (or the normal LevelJson) at the next tick. */
+	void RestartSchedule() { Pending.Reset(); bConfigRead = false; }
 	/** Seconds since the level data was read (the delays' clock). */
 	float GetClock() const { return Clock; }
 

@@ -228,7 +228,7 @@ describe('tactical map runtime file (TACTICAL_MAP P1)', () => {
     const x4 = readLayout('gen_ref_01_02_depot_1_x4');
     const f = tacticalMapFor(x4, 'L_Gen_Depot_X4', 'gen_ref_01_02_depot_1_x4');
     assert.equal(f.analysis_source, x4.analysis ? 'layout' : 'computed');
-    const have = fs.readFileSync(path.join(root, 'Content/Data/LevelGen/tactical/L_Gen_Depot_X4.tactical.json'), 'utf8').split('\r\n').join('\n'); // autocrlf checkouts
+    const have = fs.readFileSync(new URL('./fixtures/archivedMaps/L_Gen_Depot_X4.tactical.json', import.meta.url), 'utf8').split('\r\n').join('\n'); // autocrlf checkouts
     assert.equal(have, formatTacticalMap(f));
     // LEVELGEN_LAYERS_REPORT.md §7: Depot x4 = 46 places, 7 drop spots, 163 windows, 22 roofs, 150 hiding spots
     // analysis v2 (rim spots, outward only; firing gaps): 46 -> 44 places - the street-across-the-slab 'sniper' places are gone; the rest is unchanged

@@ -204,7 +204,11 @@ export const LevelGenDepartment: React.FC = () => {
     fetch('/api/levelgen/accepted').then((r) => r.json()).then((d) => setAccepted(d.accepted ?? [])).catch(() => {});
     fetch('/api/levelgen/maps').then((r) => r.json()).then((d: { maps?: MapEntry[]; current?: string | null }) => {
       setMaps(d.maps ?? []);
-      if (d.current) { setCurrentMapState(d.current); try { localStorage.setItem(CURRENT_MAP_CACHE, d.current); } catch { /* cache only */ } }
+      setCurrentMapState(d.current ?? null);
+      try {
+        if (d.current) localStorage.setItem(CURRENT_MAP_CACHE, d.current);
+        else localStorage.removeItem(CURRENT_MAP_CACHE);
+      } catch { /* cache only */ }
     }).catch(() => {}).finally(() => setMapsLoaded(true));
   }, []);
   const currentEntry = useMemo(() => maps.find((m) => m.map === currentMap) ?? null, [maps, currentMap]);

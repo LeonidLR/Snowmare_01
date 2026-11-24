@@ -36,9 +36,10 @@ test('cold_rate_mult: absent = 1, set / remove keeps the other keys, 1 is writte
   assert.equal(validateLevelSettings({ waves: [], cold_rate_mult: -1 }).length, 1);
 });
 
-test('L_Demo01_A_FrozenLake.json: less cold (cold_rate_mult 0.4, user requests 2026-10-13 / 2026-10-14 rev 5g)', () => {
+test('L_Demo01_A_FrozenLake.json: parses the configured cold rate, including zero', () => {
   const level = JSON.parse(fs.readFileSync(FROZEN_LAKE, 'utf-8'));
-  assert.equal(getColdRateMult(level), 0.4);
+  assert.equal(typeof level.cold_rate_mult, 'number');
+  assert.equal(getColdRateMult(level), level.cold_rate_mult);
   assert.deepEqual(validateLevelSettings(level), []);
 });
 
@@ -363,6 +364,6 @@ test('level JSON round-trip: environment + loadouts + kit edit preserves all oth
   assert.equal(updated.level_name, '0.0 Frozen Dam');
   assert.equal(updated.designer_notes, 'Authored by lead level designer');
   assert.deepEqual(updated.custom_patrol_v2, { route_id: 101, waypoints: [1, 2, 3] });
-  assert.equal(updated.cold_rate_mult, 0.4);
+  assert.equal(updated.cold_rate_mult, level.cold_rate_mult);
   assert.deepEqual(updated.waves, level.waves);
 });

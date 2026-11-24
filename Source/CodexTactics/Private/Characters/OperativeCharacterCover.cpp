@@ -5,6 +5,7 @@
 // CoverTraceRules, CoverDecisionRules, CoverFacingRules.
 
 #include "Characters/OperativeCharacter.h"
+#include "Training/TrainingSectorSubsystem.h"
 #include "TimerManager.h"
 
 #include "CodexTactics.h"
@@ -83,7 +84,7 @@ namespace
 
 EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Slot, bool bSprint)
 {
-	if (!Slot.IsValid())
+	if (!Slot.IsValid() || !UTrainingSectorSubsystem::Allows(GetWorld(), Slot.WorldLocation, GetSimpleCollisionRadius() + 10.0))
 	{
 		return EOperativeOrderResult::Unreachable;
 	}

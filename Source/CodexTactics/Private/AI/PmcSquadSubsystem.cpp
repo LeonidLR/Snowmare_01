@@ -2,6 +2,7 @@
 // UE-only, no Godot reference.
 
 #include "AI/PmcSquadSubsystem.h"
+#include "Training/TrainingSectorSubsystem.h"
 
 #include "AI/PmcArenaBehaviourRules.h"
 #include "AI/PmcDefenceRules.h"
@@ -2883,7 +2884,9 @@ bool UPmcSquadSubsystem::ProjectToNav(const FVector& Point, FVector& OutPoint) c
 {
 	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 	FNavLocation Projected;
-	if (Nav && Nav->ProjectPointToNavigation(Point, Projected, FVector(400.f, 400.f, 400.f)))
+	const FVector Goal = UTrainingSectorSubsystem::LimitGoal(GetWorld(), Point, 100.0);
+	if (Nav && Nav->ProjectPointToNavigation(Goal, Projected, FVector(400.f, 400.f, 400.f))
+		&& UTrainingSectorSubsystem::Allows(GetWorld(), Projected.Location, 70.0))
 	{
 		OutPoint = Projected.Location;
 		return true;
@@ -2895,7 +2898,9 @@ bool UPmcSquadSubsystem::ProjectToNavAtLevel(const FVector& Point, FVector& OutP
 {
 	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 	FNavLocation Projected;
-	if (Nav && Nav->ProjectPointToNavigation(Point, Projected, FVector(200.f, 200.f, 150.f)) && FMath::Abs(Projected.Location.Z - Point.Z) <= 150.f)
+	const FVector Goal = UTrainingSectorSubsystem::LimitGoal(GetWorld(), Point, 100.0);
+	if (Nav && Nav->ProjectPointToNavigation(Goal, Projected, FVector(200.f, 200.f, 150.f))
+		&& UTrainingSectorSubsystem::Allows(GetWorld(), Projected.Location, 70.0) && FMath::Abs(Projected.Location.Z - Point.Z) <= 150.f)
 	{
 		OutPoint = Projected.Location;
 		return true;
@@ -2909,7 +2914,7 @@ void UPmcSquadSubsystem::KeepCandidatesOnNav(TArray<FPmcPostCandidate>& Candidat
 	for (int32 Index = Candidates.Num() - 1; Index >= 0; --Index)
 	{
 		FVector OnNav;
-		if (ProjectToNavAtLevel(Candidates[Index].Location, OnNav))
+		if (UTrainingSectorSubsystem::Allows(GetWorld(), Candidates[Index].Location, 70.0) && ProjectToNavAtLevel(Candidates[Index].Location, OnNav))
 		{
 			Candidates[Index].Location = OnNav;
 		}

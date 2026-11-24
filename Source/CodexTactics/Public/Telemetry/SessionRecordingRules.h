@@ -5,6 +5,26 @@
 enum class EDemoOrderKind : uint8 { Move, Cover, CornerPeek, Shot, QuickFire, Suppress, Stance, Medkit, Breach, Grenade };
 enum class EDemoMode : uint8 { Solo, Autonomy, CeaseFire, Pause };
 enum class EDemoResult : uint8 { Aborted, Victory, Defeat };
+enum class EDemoRoundResult : uint8 { None, Victory, Defeat, Draw };
+
+struct FDemoRoundEvent
+{
+	double Time = 0.;
+	double RealTime = 0.;
+	int32 SectorId = 0;
+	int32 Seed = 0;
+	int32 Round = 0;
+	int32 StartIndex = INDEX_NONE;
+	int32 PostIndex = INDEX_NONE;
+	int32 KillsPlayer = 0;
+	int32 KillsPmc = 0;
+	int32 ScoreVictory = 0;
+	int32 ScoreDefeat = 0;
+	int32 ScoreDraw = 0;
+	float DurationS = 0.f;
+	EDemoRoundResult Result = EDemoRoundResult::None;
+	bool bStart = true;
+};
 
 struct FDemoGate
 {
@@ -111,8 +131,11 @@ struct FDemoSession
 	FDateTime StartedUtc;
 	FDateTime StartedLocal;
 	TOptional<FVector> InitialGoal;
+	int32 SectorId = 0;
+	TOptional<FBox2D> SectorBox;
 	TArray<FDemoUnit> Units;
 	TArray<FDemoFrame> Frames;
+	TArray<FDemoRoundEvent> Rounds;
 	TArray<FDemoOp> Ops;
 	TArray<FDemoThreat> Threats;
 	FString Mark;

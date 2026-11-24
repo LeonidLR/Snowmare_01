@@ -7,6 +7,7 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Misc/Paths.h"
+#include "Training/TrainingSectorRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -87,9 +88,23 @@ bool FLevelJsonFilesParseTest::RunTest(const FString&)
 		// Layout-only files (Gemini 096 lab layouts, 2026-11-22: only "levelgen_layout", no combat yet) are valid JSON without waves.
 		FString Text;
 		TSharedPtr<FJsonObject> Root;
-		if (FFileHelper::LoadFileToString(Text, *(LevelJsonRules::GetLevelsDirectory() / File))
-			&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) && Root.IsValid()
-			&& Root->HasField(TEXT("levelgen_layout")) && !Root->HasField(TEXT("waves")))
+		const bool bJsonObject = FFileHelper::LoadFileToString(Text, *(LevelJsonRules::GetLevelsDirectory() / File))
+			&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) && Root.IsValid();
+		if (File == TEXT("L_Gen_Depot_1_X6.sectors.json"))
+		{
+			if (TestTrue(TEXT("X6 sector file is a readable JSON object"), bJsonObject))
+			{
+				TArray<FString> Errors;
+				const TArray<FTrainingSector> Sectors = TrainingSectorRules::ParseSectors(*Root, Errors);
+				TestEqual(TEXT("X6 sector file defines all six sectors"), Sectors.Num(), 6);
+				for (const FString& Error : Errors)
+				{
+					AddError(Error);
+				}
+			}
+			continue;
+		}
+		if (bJsonObject && Root->HasField(TEXT("levelgen_layout")) && !Root->HasField(TEXT("waves")))
 		{
 			continue;
 		}

@@ -1,4 +1,5 @@
 #include "Telemetry/SessionRecordingSubsystem.h"
+#include "Training/TrainingSectorSubsystem.h"
 
 #include "AI/PmcSquadSubsystem.h"
 #include "Characters/EnemyCharacter.h"
@@ -97,6 +98,11 @@ void USessionRecordingSubsystem::Start(const FString& Directory)
 	Session.StartedLocal = FDateTime::Now();
 	Session.StartedUtc = FDateTime::UtcNow();
 	Session.Map = SessionRecordingRules::CleanMapName(FPaths::GetCleanFilename(GetWorld()->GetMapName()));
+	if (const UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(GetWorld()); Training && Training->GetArea())
+	{
+		Session.SectorId = Training->GetSectorId();
+		Session.SectorBox = *Training->GetArea();
+	}
 	Session.bPie = GetWorld()->WorldType == EWorldType::PIE;
 	GameStart = GetWorld()->GetTimeSeconds();
 	RealStart = FPlatformTime::Seconds();
@@ -116,6 +122,19 @@ USessionRecordingSubsystem* USessionRecordingSubsystem::GetIfRecording(const UOb
 	const UWorld* World = Context ? Context->GetWorld() : nullptr;
 	USessionRecordingSubsystem* Recorder = World ? World->GetSubsystem<USessionRecordingSubsystem>() : nullptr;
 	return Recorder && Recorder->bRecording && Recorder->Suppressed.IsNone() ? Recorder : nullptr;
+}
+
+void USessionRecordingSubsystem::OnTrainingSectorChanged()
+{
+	if (!bRecording || !Suppressed.IsNone())
+	{
+		return;
+	}
+	const FString Directory = OutputDirectory;
+	Flush(FPlatformTime::Seconds() - RealStart);
+	Start(Directory);
+	GetWorld()->GetTimerManager().SetTimer(SnapshotTimer, this, &USessionRecordingSubsystem::TakeSnapshot,
+		static_cast<float>(SessionRecordingRules::SnapshotIntervalSec), true);
 }
 
 void USessionRecordingSubsystem::SuppressSession(FName Why)
@@ -196,6 +215,17 @@ void USessionRecordingSubsystem::Stamp(FDemoFrame& Frame) const
 	Frame.RealTime = FMath::Max(0., FPlatformTime::Seconds() - RealStart);
 }
 
+void USessionRecordingSubsystem::RecordSectorRound(const FDemoRoundEvent& Event)
+{
+	if (!bRecording || !Suppressed.IsNone() || !GetWorld())
+	{
+		return;
+	}
+	FDemoRoundEvent& Stored = Session.Rounds.Add_GetRef(Event);
+	Stored.Time = FMath::Max(0., GetWorld()->GetTimeSeconds() - GameStart);
+	Stored.RealTime = FMath::Max(0., FPlatformTime::Seconds() - RealStart);
+}
+
 void USessionRecordingSubsystem::RecordMode(EDemoMode Mode, bool bOn)
 {
 	if (SuppressDepth > 0) { return; }
@@ -243,6 +273,11 @@ void USessionRecordingSubsystem::Capture(FDemoFrame& Frame, const AOperativeChar
 	if (bHeader)
 	{
 		Session.InitialGoal = Goal;
+		if (const UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(&World); Training && Training->GetArea())
+		{
+			Session.SectorId = Training->GetSectorId();
+			Session.SectorBox = *Training->GetArea();
+		}
 		Session.bImmortal = CombatCheats::IsImmortal(&World);
 		Session.bInfiniteAmmo = CombatCheats::IsInfiniteAmmo(&World);
 	}

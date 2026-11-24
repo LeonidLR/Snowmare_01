@@ -9,7 +9,7 @@
   "quickCount": 2,
   "fallback": {
     "tests": ["CodexTactics.Core", "CodexTactics.Text"],
-    "smokes": []
+    "smokes": ["TurnArenaLakeSmoke", "LowCoverMoveLakeSmoke"]
   },
   "smokeRegistry": [
     "VehicleCombatSmoke", "VehicleDamageSmoke", "GeneratedPropsX6Smoke", "MainMenuSmoke", "FrontendSmoke", "TutorialSaveSmoke", "InteriorExitSmoke",
@@ -17,6 +17,7 @@
     "TutorialAmbushLakeMineSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "TurnArenaLakeSmoke", "TurnArenaYardSmoke",
     "EnvironmentLakeSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "WeatherLakeSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke", "SnowIndoorSmoke",
     "StartLightingSmoke", "StartSnowSmoke", "FormationWallHugSmoke", "StartFlickerSmoke", "LevelGenBuildingsSmoke", "RoofCutawayStoreySmoke", "CutawayClickSmoke",
+    "SectorBoundarySmoke", "SectorRoundsSmoke",
     "DropLinkReachSmoke", "ColdIndoorsSmoke", "WindowStairHoverSmoke", "FormationStairSmoke", "FormationWindowSmoke", "CoverIndoorSmoke", "WindowCoverFireSmoke"
   ],
   "smokeDefaults": {
@@ -72,6 +73,8 @@
     "TutorialAmbushLakeLureSpottedSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-21: part 2 fails: spotted at the wall -> pause + posture card, a skirmish, back to exploring" },
     "TutorialAmbushLakeMineSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-23: part 1 by a mine - zombie #1 dormant until the squad is in cover, wakes hidden, the Engineer's mine kills it" },
     "TutorialAmbushLakeEarlyKillSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-22: the first PMC wire -> the tripwire card; both A4 zombies killed early -> every bound step closes (no stale target); A7 -> PREPARE THE GROUND" },
+    "SectorBoundarySmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-Sector=1 -SectorSeed=91", "timeout": 300, "_why": "Task 106: one active training sector constrains a squad move and its PMC squad"},
+    "SectorRoundsSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-Sector=5 -SectorSeed=91", "timeout": 300, "_why": "G019: a wiped side starts the next round on a different start and post; an empty reserve refills only after the quiet delay"},
     "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" }
   },
   "archivedMapSmokes": {
@@ -164,6 +167,12 @@
   "nonSmokeDebugCommands": ["PmcArena", "LevelGenIslandsProbe", "GiveWeapon", "MortarList", "MortarMan", "MortarFire", "MortarCease", "MortarCrewPmc", "ShotgunD1Shots", "ShotgunLoopShots", "RpgShots", "RecoilProbe", "CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots", "StoryShowcaseFixShots"],
   "rules": [
     {
+      "name": "training-sector",
+      "globs": ["Source/**/Training/TrainingSector*", "Source/**/Debug/SectorBoundarySmokeCommand.cpp", "Source/**/Debug/SectorRoundsSmokeCommand.cpp", "Source/**/Telemetry/SessionRecordingRules.*", "Source/**/Telemetry/SessionRecordingSubsystem.*", "Source/**/Characters/OperativeCharacterHealth.cpp", "Source/**/UI/CodexTacticsHUD.*", "Content/Data/LevelJson/L_Gen_Depot_1_X6.sectors.json"],
+      "tests": ["CodexTactics.Training.Sector", "CodexTactics.Telemetry.SessionRecording"],
+      "smokes": ["SectorBoundarySmoke", "SectorRoundsSmoke"]
+    },
+    {
       "name": "kit-showcase",
       "globs": ["Source/**/Debug/CoverIndoorSmoke*", "Source/**/Characters/CoverAnimSetRules*", "Source/**/Characters/OperativeAnimInstanceCoverSet*", "Source/**/Debug/WindowStairHoverSmoke*", "Source/**/Debug/FormationStairSmoke*", "Source/**/Debug/FormationWindowSmoke*", "Content/Data/LevelJson/L_Gen_StoryShowcase_Kit.json", "Content/Data/Animation/cover_anim_sets.json"],
       "tests": ["CodexTactics.Animation.CoverAnimSet"],
@@ -180,13 +189,13 @@
       "_comment": "The game designer 2026-11-16: first aid by wound tier (Survival/FirstAidRules, UFirstAidSubsystem, Content/Data/Survival/first_aid.json, the clips Scripts/Editor/setup_first_aid_animation.py); the medkit / bag inventory paths.",
       "globs": ["Source/**/Survival/FirstAid*", "Source/**/Characters/OperativeAnimInstanceFirstAid*", "Source/**/Debug/FirstAidSmoke*", "Content/Data/Survival/first_aid.json", "Scripts/Editor/setup_first_aid_animation.py", "Source/**/UI/InventoryDrawerWidget*", "Source/**/Core/CodexTacticsPlayerControllerItems*"],
       "tests": ["CodexTactics.Survival.FirstAid", "CodexTactics.Characters.CriticalWound", "CodexTactics.Characters.Transfer", "CodexTactics.Loot"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "hitch-probe-2026-11-12",
       "globs": ["Source/**/Core/GameplayPreload*", "Source/**/Debug/HitchProbeSmoke*", "Source/**/Core/CodexTacticsGameMode*", "Source/**/Characters/OperativeAnimInstance*", "Source/**/Ladders/LadderClimbComponent*", "Source/**/Combat/WaveSubsystem*", "Source/**/AI/PmcSquadSubsystem*"],
       "tests": ["CodexTactics.Core.GameplayPreload"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "look-hold-solo-2026-11-15",
@@ -197,7 +206,7 @@
       "tests": [
         "CodexTactics.Tactics.LookHold"
       ],
-      "smokes": []
+      "smokes": ["CoverIndoorSmoke", "LowCoverMoveLakeSmoke"]
     },
     {
       "globs": [
@@ -223,35 +232,35 @@
       "_comment": "The game designer's bug + decision 'a' 2026-11-11: while a wounded member is in the formation the whole squad walks at his pace (SquadWoundPaceRules, USquadSubsystem::UpdateFormationWoundPace in SquadSubsystemWoundPace.cpp, the leader's pace / the follower's top in SquadSubsystemFormation.cpp, Content/Data/AI/squad_wound_pace.json; Codex.Squad.WoundPace).",
       "globs": ["Source/**/Characters/SquadWoundPaceRules*", "Source/**/Characters/SquadSubsystemWoundPace*", "Source/**/Characters/SquadSubsystemFormation*", "Source/**/Characters/OperativeCharacterMovement*", "Source/**/Debug/WoundedFollowerSmoke*", "Content/Data/AI/squad_wound_pace.json"],
       "tests": ["CodexTactics.Squad.WoundPace", "CodexTactics.Squad.Regroup", "CodexTactics.Formation.Runtime"],
-      "smokes": []
+      "smokes": ["CoverIndoorSmoke", "LowCoverMoveLakeSmoke"]
     },
     {
       "name": "fast-regroup-2026-11-10",
       "_comment": "The game designer's bug 2026-11-10: on B a member far from the formation first runs / sprints to the leader, then joins it (SquadRegroupRules, USquadSubsystem::UpdateFastRegroup in SquadSubsystemRegroup.cpp, Content/Data/AI/squad_regroup.json; Codex.Squad.FastRegroup).",
       "globs": ["Source/**/Characters/SquadRegroupRules*", "Source/**/Characters/SquadSubsystemRegroup*", "Source/**/Characters/SquadSubsystem.*", "Source/**/Debug/FastRegroupSmoke*", "Content/Data/AI/squad_regroup.json"],
       "tests": ["CodexTactics.Squad.Regroup", "CodexTactics.Squad.Orders"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "solo-start-2026-11-09",
       "_comment": "The game designer's decision 2026-11-09: the game starts in Solo (USquadSubsystem::ApplyLevelStartMode, level JSON start_mode), Solo without ties (Codex.Squad.SoloIndependent: no leash, no guard crouch, no manoeuvre under fire with the autonomy off).",
       "globs": ["Source/**/Characters/SquadSubsystem.*", "Source/**/Characters/SquadOrderRules*", "Source/**/Combat/UnderFireRules*", "Source/**/Characters/OperativeCharacterUnderFire*", "Source/**/Data/LevelJsonRules*", "Source/**/Debug/SoloStartSmoke*", "Content/Data/LevelJson/L_Demo01_A_FrozenLake.json"],
       "tests": ["CodexTactics.Squad.Orders", "CodexTactics.Combat.UnderFire"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "leader-switch-keeps-move-2026-11-08",
       "_comment": "The game designer's PIE report 2026-11-08: in formation mode a selection switch mid-order no longer re-plans the formation - USquadSubsystem::SelectLeader / PendingLeader / HandOverLeadForOrder, SquadOrderRules::ShouldDeferLeaderSwitch / StepPendingLeader / EndsOldLeaderOrder (Codex.Squad.LeaderSwitchKeepsMove), the order dispatch hand-overs in the controller.",
       "globs": ["Source/**/Characters/SquadSubsystem.*", "Source/**/Characters/SquadOrderRules*", "Source/**/Core/CodexTacticsPlayerControllerSelection*", "Source/**/Core/CodexTacticsPlayerControllerOrders*", "Source/**/Core/CodexTacticsPlayerControllerInternal*", "Source/**/Debug/LeaderSwitchMoveSmoke*"],
       "tests": ["CodexTactics.Squad.Orders"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "pmc-traversal-2026-11-22",
       "_comment": "smart enemies T-12 traversal smoke on generated map: stairs, ladders, mantles, drops",
       "globs": ["Source/**/Debug/PmcTraversalSmoke*", "Source/**/Characters/PmcTraversalRules*", "Source/CodexTacticsTests/Private/AI/PmcTraversalRulesTest*", "docs/port/gemini/pmc_traversal_config.json", "Content/Data/AI/pmc_traversal.json"],
       "tests": ["CodexTactics.AI.PmcTraversal", "CodexTactics.Falls", "CodexTactics.Ladder"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "TutorialAmbushLakeSmoke"]
     },
     {
       "name": "pmc-squad-ai-2026-11-03",
@@ -259,7 +268,7 @@
       "globs": ["Source/**/AI/Pmc*", "Source/**/AI/SquadOrderCatalog*", "Source/**/Debug/Pmc*", "Content/Data/AI/pmc_*.json", "Content/Data/LevelJson/L_PmcArena.json", "Content/Data/LevelJson/L_PmcArenaDepot.json", "Content/Data/LevelJson/L_Gen_Depot_1.json", "Source/**/UI/MinimapSubsystem*",
         "Source/**/Characters/OperativeCharacterInternal*", "Source/**/Characters/OperativeCharacterCombat*", "Source/**/Characters/OperativeCharacterHealth*", "Source/**/Combat/TacticalSightSubsystem*", "Source/**/Combat/CombatCheats*", "Source/**/Combat/WaveSubsystem*"],
       "tests": ["CodexTactics.AI.PmcCommander", "CodexTactics.AI.PmcArena", "CodexTactics.AI.PmcTactical", "CodexTactics.AI.PmcEncounter", "CodexTactics.AI.PmcOperators", "CodexTactics.AI.SquadOrderCatalog", "CodexTactics.Combat.Sight", "CodexTactics.Combat.Cheats", "CodexTactics.LevelJson"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "TutorialAmbushLakeSmoke"]
     },
     {
       "name": "fire-gate-2026-11-16",
@@ -268,28 +277,28 @@
         "Source/**/Characters/OperativeCharacterQuickFire*", "Source/**/Characters/OperativeCharacterSuppression*", "Source/**/Characters/OperativeCharacterTargetedShots*", "Source/**/Characters/OperativeCharacterAim*", "Source/**/Characters/OperativeCharacterCombat*",
         "Source/**/Characters/FireArcRules*", "Source/**/Characters/OperativeAnimInstanceInjured*"],
       "tests": ["CodexTactics.Combat.FireGate", "CodexTactics.Squad.FireArc", "CodexTactics.Combat"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "prone-crawl-2026-11-09",
       "_comment": "fix/prone-crawl-under-fire (game designer CrawlAndShoot_Bug_01, 2026-11-09): an ordered prone crawl holds the fire and faces the threat (ProneCrawlRules, AOperativeCharacter::IsCrawlFireHeld / UpdateCombatFacing); the native 8-direction prone crawl layer (OperativeAnimInstanceProneCrawl.cpp, weapon_anim_sets.json prone_crawl); docs/systems/animation-setup.md.",
       "globs": ["Source/**/Characters/ProneCrawlRules*", "Source/**/Characters/OperativeAnimInstanceProneCrawl*", "Source/**/Debug/ProneCrawlSmoke*", "Source/**/Characters/OperativeCharacterAim*", "Content/Data/Weapons/weapon_anim_sets.json", "Scripts/Editor/setup_crawl_animation.py"],
       "tests": ["CodexTactics.Characters.ProneCrawl"],
-      "smokes": []
+      "smokes": ["CoverIndoorSmoke", "LowCoverMoveLakeSmoke"]
     },
     {
       "name": "injured-locomotion-2026-11-10",
       "_comment": "feat/injured-locomotion (the game designer 2026-11-10: a wounded operative walks visibly injured): the native injured layer on the legs (OperativeAnimInstanceInjured.cpp, InjuredLocomotionRules, weapon_anim_sets.json injured; copies by Scripts/Editor/setup_injured_animation.py); wounded = the 8-direction injured walk / idle / the injured crawl via the prone crawl layer, cold walking = the injured walk (>= 0.7) / the slow injured walk (>= 0.9); docs/systems/animation-setup.md.",
       "globs": ["Source/**/Characters/InjuredLocomotionRules*", "Source/**/Characters/OperativeAnimInstanceInjured*", "Source/**/Debug/InjuredLocomotionSmoke*", "Content/Data/Weapons/weapon_anim_sets.json", "Scripts/Editor/setup_injured_animation.py"],
       "tests": ["CodexTactics.Animation.Injured"],
-      "smokes": []
+      "smokes": ["CoverIndoorSmoke", "LowCoverMoveLakeSmoke"]
     },
     {
       "name": "corner-peek-standoff-2026-11-09",
       "_comment": "fix/corner-peek-standoff (game designer play-test 2026-11-09, L_Gen_Depot_1: our man and a PMC fighter both peek round corners in each other's cones, nobody fires): the shot line ends at the part of a peeking man that shows (SquadFireRules::ChooseShotAimPoint, AOperativeCharacter::EvaluateShotLine / GetPeekExposedPoint); docs/systems/cover-and-peek.md.",
       "globs": ["Source/**/Debug/CornerStandoffSmoke*", "Source/**/Combat/SquadFireRules*", "Source/**/Characters/OperativeCharacterCombat*", "Source/**/Characters/OperativeCharacterCornerAim*"],
       "tests": ["CodexTactics.Combat.SquadFire", "CodexTactics.Combat.FireLine", "CodexTactics.Tactics.Cover"],
-      "smokes": []
+      "smokes": ["LowCoverMoveLakeSmoke", "CoverSwitchLakeSmoke"]
     },
     {
       "name": "falls-drops-2026-11-03",
@@ -305,7 +314,7 @@
         "Source/**/Formation/FormationWallRouteRules*", "Source/**/Characters/SquadSubsystemFormationRoute*",
         "Source/**/Debug/FormationFarSideSmoke*"],
       "tests": ["CodexTactics.Tactics.WallSide", "CodexTactics.Formation.WallRoute", "CodexTactics.Formation", "CodexTactics.Squad"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "combat-lab-2026-11-01",
@@ -319,7 +328,7 @@
         "Content/Data/FormationLab/formation_shapes.json", "Content/Data/FormationLab/fixtures/formation_shapes_*", "Tools/TrainingGround/golden/formation_SavedShapes.json",
         "Tools/TrainingGround/src/movement/shapes*", "Tools/TrainingGround/src/movement/cli/shapesGolden.ts"],
       "tests": ["CodexTactics.Formation.Shapes", "CodexTactics.Formation.Parity", "CodexTactics.Formation.Custom"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "formation-custom-2026-11-01",
@@ -327,40 +336,40 @@
         "Source/**/UI/FormationPlacement*", "Source/**/UI/FormationGhostActor*", "Source/**/Debug/FormationCustomSmoke*", "Source/**/GameFlow/CampaignCarry*",
         "Tools/TrainingGround/golden/formation_Custom*", "Source/**/Core/CodexTacticsPlayerControllerFormationMenu*", "Scripts/Editor/create_formation_ghost_material.py", "Content/UI/Materials/M_FormationGhost*"],
       "tests": ["CodexTactics.Formation.Custom", "CodexTactics.Formation.Parity", "CodexTactics.UI.FormationPlacement", "CodexTactics.UI.FormationMenu", "CodexTactics.Save"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "formation-radial-menu-2026-10-26",
       "globs": ["Source/**/Core/CodexTacticsPlayerControllerFormationMenu*", "Source/**/UI/FormationMenu*", "Source/**/Debug/FormationMenu*",
         "Source/**/Core/PlayerCommands*", "Scripts/Editor/import_formation_menu_icons.py", "Content/UI/FormationMenu/**"],
       "tests": ["CodexTactics.UI.FormationMenu", "CodexTactics.Formation.Menu", "CodexTactics.Core.ControllerUnits", "CodexTactics.UI.Frontend.Controls"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "formation-sectors-2026-10-25",
       "globs": ["Source/**/Formation/**", "Content/Data/FormationLab/**", "Tools/TrainingGround/golden/formation_*"],
       "tests": ["CodexTactics.Formation"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "formation-runtime-2026-10-25",
       "globs": ["Source/**/Characters/SquadSubsystemFormation*", "Source/**/Debug/FormationLabSmoke*", "Source/**/Formation/FormationRuntimeRules*", "Source/**/Formation/FormationLookFilterRules*"],
       "tests": ["CodexTactics.Formation", "CodexTactics.Squad"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "formation-v21-runtime-2026-10-26",
       "globs": ["Source/**/Characters/SquadSubsystemFormationGuard*", "Source/**/Characters/SquadSubsystemFormationBypass*", "Source/**/Formation/FormationGuardRuntimeRules*",
         "Source/**/Debug/FormationBypassSmoke*", "Source/**/Debug/FormationMenuCommand*"],
       "tests": ["CodexTactics.Formation", "CodexTactics.Squad"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "formation-v22-runtime-2026-10-25",
       "globs": ["Source/**/Characters/SquadSubsystemWallGroup*", "Source/**/Characters/SquadSubsystemFormationSlide*", "Source/**/Characters/SquadSubsystemGroupCover*",
         "Source/**/Formation/FormationWallGroupRules*", "Source/**/Debug/FormationWallGroupSmoke*", "Source/**/Debug/FormationSlideSmoke*"],
       "tests": ["CodexTactics.Formation", "CodexTactics.Squad", "CodexTactics.Tactics.GroupCover"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "formation-wall-end-2026-10-26",
@@ -383,14 +392,14 @@
       "globs": ["Source/**/Formation/FormationWallLeadershipRules*", "Source/**/Characters/SquadSubsystemWallLeadership*", "Source/**/Characters/SquadSubsystemFormationPeek*",
         "Source/**/Debug/WallLeadershipSmoke*", "Source/**/Debug/GroupCornerPeekSmoke*"],
       "tests": ["CodexTactics.Formation.WallLeadership", "CodexTactics.Formation"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "peek-next-wall-camera-2026-11-01",
       "globs": ["Source/**/Formation/FormationPeekCarryRules*", "Source/**/Core/CodexTacticsPlayerControllerPeekCarry*", "Source/**/Debug/SquadPeekNextWallSmoke*",
         "Source/**/Debug/CameraFreePanSmoke*", "Source/**/Camera/TacticalCamera*", "Source/**/UI/MinimapSubsystem.h"],
       "tests": ["CodexTactics.Formation.PeekCarry", "CodexTactics.Camera", "CodexTactics.Formation"],
-      "smokes": []
+      "smokes": ["LowCoverMoveLakeSmoke", "CoverSwitchLakeSmoke"]
     },
     {
       "name": "two-corner-hold-2026-11-07",
@@ -404,40 +413,40 @@
       "globs": ["Source/**/Tactics/ClickPreviewRules*", "Source/**/Core/CodexTacticsPlayerControllerClickPreview*", "Source/**/Core/CodexTacticsPlayerController.*",
         "Source/**/Core/CodexTacticsPlayerControllerSelection*", "Source/**/Debug/ClickPreviewSmoke*", "Source/**/Tests/**/ClickPreviewRulesTest*", "Source/**/Characters/SquadSubsystemMantleQueue*"],
       "tests": ["CodexTactics.Tactics.ClickPreview", "CodexTactics.Tactics.Cover", "CodexTactics.Formation.WallLeadership"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "openable-doors-r1-2026-11-22",
       "globs": ["Source/**/Interactables/Door*", "Source/**/Debug/DoorsSmoke*", "Source/**/Tests/**/DoorRulesTest*", "Content/Data/Interactables/doors.json"],
       "tests": ["CodexTactics.Doors"],
-      "smokes": []
+      "smokes": ["InteriorExitSmoke", "LevelGenBuildingsSmoke"]
     },
     {
       "name": "door-breach-r17-5-2026-11-17",
       "globs": ["Source/**/Tactics/DoorwayBreach*", "Source/**/Interactables/DoorwaySubsystem*", "Source/**/Core/CodexTacticsPlayerControllerBreach*", "Source/**/Debug/DoorBreachSmoke*"],
       "tests": ["CodexTactics.Tactics.DoorwayBreach"],
-      "smokes": []
+      "smokes": ["InteriorExitSmoke", "LevelGenBuildingsSmoke"]
     },
     {
       "name": "corner-pick-b17-1-2026-11-17",
       "globs": ["Source/**/Core/CodexTacticsPlayerControllerCover*", "Source/**/Core/CodexTacticsPlayerControllerRunPeek*", "Source/**/Characters/SquadSubsystemWallGroup*",
         "Source/**/Characters/SquadSubsystemGroupCover*", "Source/**/Formation/FormationLeaderCornerRules*", "Source/**/Formation/FormationWallLeadershipRules*", "Source/**/Debug/CornerPickSmoke*"],
       "tests": ["CodexTactics.Formation.LeaderCorner", "CodexTactics.Formation.WallLeadership", "CodexTactics.Formation"],
-      "smokes": []
+      "smokes": ["LowCoverMoveLakeSmoke", "CoverSwitchLakeSmoke"]
     },
     {
       "name": "run-corner-peek-2026-11-07",
       "globs": ["Source/**/Tactics/RunCornerPeekRules*", "Source/**/Core/CodexTacticsPlayerControllerRunPeek*", "Source/**/Core/CodexTacticsPlayerControllerCover*",
         "Source/**/Characters/OperativeCharacterCornerAim*", "Source/**/Characters/OperativeCharacterCover*", "Source/**/Debug/RunCornerPeekSmoke*"],
       "tests": ["CodexTactics.Tactics.Cover", "CodexTactics.Formation.WallLeadership"],
-      "smokes": []
+      "smokes": ["LowCoverMoveLakeSmoke", "CoverSwitchLakeSmoke"]
     },
     {
       "name": "squad-corner-peek-anim-2026-11-01",
       "globs": ["Source/**/Characters/SquadSubsystemFormationPeek*", "Source/**/Characters/OperativeCharacterCornerAim*", "Source/**/Characters/OperativeCharacterCover*",
         "Source/**/Characters/OperativeAnimInstance.*", "Source/**/Tactics/CoverFacingRules*", "Source/**/Debug/SquadCornerPeekSmoke*"],
       "tests": ["CodexTactics.Cover", "CodexTactics.Formation"],
-      "smokes": []
+      "smokes": ["LowCoverMoveLakeSmoke", "CoverSwitchLakeSmoke"]
     },
     {
       "name": "orders-pause-relocate-pick-2026-10-25",
@@ -477,25 +486,25 @@
       "tests": [
         "CodexTactics.Ladder"
       ],
-      "smokes": []
+      "smokes": ["LowCoverMoveLakeSmoke", "CoverSwitchLakeSmoke"]
     },
     {
       "name": "mantling-slice1-2026-11-15",
       "globs": ["Source/**/Characters/MantleRules*", "Source/**/Characters/OperativeCharacterMantle*", "Source/**/Interactables/MantleNavigation*", "Source/**/Debug/MantleSmoke*", "Source/**/Debug/MantleAlignSmoke*", "Source/**/Debug/MantleDescentSmoke*", "Source/**/Debug/MantleClickSmoke*", "Source/**/Debug/MantleFenceRouteSmoke*", "Source/**/Debug/FormationMantleSmoke*", "Source/**/Characters/SquadMantleRules*", "Source/**/Characters/SquadSubsystemMantleQueue*", "Source/**/Tactics/CoverGhostActor*", "Content/Data/Movement/mantle.json", "Content/Data/LevelGen/obstacle_heights.json", "Scripts/Tools/apply_depot_height_classes.py"],
       "tests": ["CodexTactics.Characters.Mantle", "CodexTactics.Formation.MantleQueue", "CodexTactics.Ladder.TraversalQueue", "CodexTactics.Characters.Vault", "CodexTactics.Movement.Vault"],
-      "smokes": []
+      "smokes": ["LowCoverMoveLakeSmoke", "CoverSwitchLakeSmoke"]
     },
     {
       "name": "designer-2026-10-22-vault-back",
       "globs": ["Source/**/Interactables/VaultNavigation*", "Source/**/Interactables/RelocationSubsystem*", "Source/**/Interactables/BarricadeActor*", "Source/**/Debug/BarricadeVaultBackSmoke*"],
       "tests": ["CodexTactics.Interactables"],
-      "smokes": []
+      "smokes": ["LowCoverMoveLakeSmoke", "CoverSwitchLakeSmoke"]
     },
     {
       "name": "designer-2026-10-22-heat-fear",
       "globs": ["Source/**/Characters/EnemyCharacterBehavior*", "Source/**/Characters/EnemyAIRules*", "Source/**/Interactables/HeatSourceComponent*", "Source/**/Debug/HeatFearWallSmoke*"],
       "tests": ["CodexTactics.Characters.EnemyAI"],
-      "smokes": []
+      "smokes": ["CoverIndoorSmoke", "LowCoverMoveLakeSmoke"]
     },
     {
       "name": "designer-2026-10-22-turn-arena",
@@ -507,7 +516,7 @@
       "name": "user-2026-10-22-retreat-facing",
       "globs": ["Source/**/Characters/ThreatFacingRules*", "Source/**/Characters/OperativeCharacterAim*", "Source/**/Debug/RetreatFacingSmoke*"],
       "tests": ["CodexTactics.Squad.ThreatFacing"],
-      "smokes": []
+      "smokes": ["CoverIndoorSmoke", "LowCoverMoveLakeSmoke"]
     },
     {
       "name": "designer-2026-10-22-post-fight-hold",
@@ -519,41 +528,41 @@
       "name": "optimized-character",
       "globs": ["Source/**/Debug/OptimizedCharacterSmoke*", "Content/Characters/Operatives/Optimized/**", "Content/Characters/Materials/**"],
       "tests": [],
-      "smokes": []
+      "smokes": ["CoverIndoorSmoke", "LowCoverMoveLakeSmoke"]
     },
     {
       "name": "minimap",
       "globs": ["Source/**/UI/Minimap*", "Source/**/UI/CodexTacticsHUDMinimap*", "Source/**/Core/CodexTacticsPlayerControllerMap*", "Source/**/Debug/MinimapSmoke*",
         "Source/**/Core/MissionSessionSubsystem*", "Source/**/Data/LevelJsonRules*"],
       "tests": ["CodexTactics.UI.Minimap", "CodexTactics.Core.ControllerUnits", "CodexTactics.UI.Frontend.Controls"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "stealth-lure",
       "globs": ["Source/**/AI/StealthLure*", "Source/**/AI/LureStone*", "Source/**/Debug/StealthLureSmoke*", "Content/Data/AI/enemy_perception.json",
         "Source/**/Combat/GrenadeSubsystem*", "Source/**/AI/PatrolRoute*", "Source/**/Characters/EnemyCharacter*"],
       "tests": ["CodexTactics.AI.StealthLure", "CodexTactics.AI.Perception", "CodexTactics.AI.Patrol", "CodexTactics.AI.Scent"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "hound-scent",
       "globs": ["Source/**/AI/ScentRules*", "Source/**/AI/PerceptionRules*", "Source/**/Debug/HoundScentSmoke*", "Content/Data/AI/enemy_perception.json",
         "Source/**/Data/EnemyPerception*", "Source/**/Characters/EnemyCharacter*"],
       "tests": ["CodexTactics.AI.Scent", "CodexTactics.AI.Perception", "CodexTactics.AI.Patrol"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "warm-idle",
       "globs": ["Source/**/Survival/WarmIdle*", "Source/**/Characters/OperativeAnimInstanceWarmIdle*", "Source/**/Debug/WarmIdleSmoke*",
         "Scripts/Editor/setup_operative_weather_animation.py", "Content/Characters/Operatives/Anims/Weather/**"],
       "tests": ["CodexTactics.Survival.WarmIdle", "CodexTactics.Survival.TacticalHeat", "CodexTactics.Survival.Cold"],
-      "smokes": []
+      "smokes": ["ColdIndoorsSmoke", "WeatherLakeSmoke"]
     },
     {
       "name": "gameplay-events-probe",
       "globs": ["Source/**/Debug/CoverEventSmoke*", "Source/**/Debug/EventBusProbe*", "Source/**/Subsystems/CodexEventBus*"],
       "tests": ["CodexTactics.Tutorial"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "tutorial",
@@ -568,7 +577,7 @@
         "Source/**/Data/WeaponDataAsset*", "Source/**/Core/CodexTacticsGameMode*", "Source/**/Core/SquadSpawnRules*", "Source/**/Debug/SniperSmoke*", "Content/Data/Weapons/**",
         "Content/Characters/Operatives/**", "Scripts/Editor/setup_operative_sniper_animation.py"],
       "tests": ["CodexTactics.Combat.Sniper", "CodexTactics.Core.SquadSpawn"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "projectile-explosion",
@@ -577,37 +586,37 @@
         "Source/**/Debug/ProjectileSmoke*", "Source/**/Combat/LauncherRules*", "Source/**/Characters/OperativeCharacterLauncher*", "Source/**/Debug/RpgSmoke*",
         "Source/**/Debug/GiveWeapon*", "Source/**/Combat/Mortar*", "Source/**/Debug/MortarSmoke*"],
       "tests": ["CodexTactics.Weapons.Explosion", "CodexTactics.Weapons.Projectile", "CodexTactics.Weapons.Rpg", "CodexTactics.Weapons.Mortar", "CodexTactics.Combat.Grenade", "CodexTactics.Interactables"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "cover",
       "globs": ["Source/**/Tactics/Cover*", "Source/**/Characters/Cover*"],
       "tests": ["CodexTactics.Tactics.Cover"],
-      "smokes": []
+      "smokes": ["LowCoverMoveLakeSmoke", "CoverSwitchLakeSmoke"]
     },
     {
       "name": "anim-operative",
       "globs": ["Source/**/Characters/OperativeAnimInstance*", "Source/**/Characters/LeftHandIKRules*", "Source/**/Characters/AimOffsetRules*", "Source/**/Characters/RifleLocomotionRules*", "Source/**/Characters/ColdAnimationRules*", "Content/Characters/Operatives/**"],
       "tests": ["CodexTactics.Anim", "CodexTactics.Characters.RifleLocomotion", "CodexTactics.Characters.ColdAnimation"],
-      "smokes": []
+      "smokes": ["CoverIndoorSmoke", "LowCoverMoveLakeSmoke"]
     },
     {
       "name": "anim-enemy",
       "globs": ["Source/**/Characters/EnemyAnimInstance*", "Source/**/Characters/EnemyAnimRules*", "Source/**/Characters/MarksmanAnimInstance*", "Content/Characters/Enemies/**", "Source/**/Debug/MilitaryZombieSmoke*", "Scripts/Editor/create_frozen_pmc_fighter.py", "Scripts/Editor/create_military_zombie.py"],
       "tests": ["CodexTactics.Characters.EnemyAI", "CodexTactics.Characters.EnemyAssets", "CodexTactics.Characters.EnemyAnim"],
-      "smokes": []
+      "smokes": ["CoverIndoorSmoke", "LowCoverMoveLakeSmoke"]
     },
     {
       "name": "transfer-inventory",
       "globs": ["Source/**/Characters/Transfer*", "Source/**/Characters/SquadTransferSubsystem*", "Source/**/Characters/PersonalItemRules*", "Source/**/UI/Inventory*", "Source/**/UI/QuantitySplit*", "Source/**/Interactables/ItemStash*", "Source/**/Interactables/DroppedItem*"],
       "tests": ["CodexTactics.Transfer", "CodexTactics.Characters.Transfer", "CodexTactics.Characters.PersonalItems"],
-      "smokes": []
+      "smokes": ["SaveCoverageLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "loot",
       "globs": ["Source/**/Interactables/Loot*", "Source/**/UI/LootDialog*", "Source/**/Interactables/CorpseLoot*", "Source/**/Debug/FallenGearSmoke*"],
       "tests": ["CodexTactics.Loot", "CodexTactics.Transfer"],
-      "smokes": []
+      "smokes": ["SaveCoverageLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "shotgun-d1",
@@ -615,7 +624,7 @@
         "Source/**/Combat/WeaponBallisticsRules*", "Source/**/Combat/ArmorRules*", "Source/**/Debug/ShotgunSmoke*", "Source/**/Debug/ShotgunCoverSmoke*", "Source/**/Debug/FormationJitterSmoke*", "Source/**/Characters/WeaponLayerHandoffRules*", "Source/**/Debug/ShotgunD1Shots*", "Source/**/Debug/ShotgunLoopShots*", "Content/Characters/Animations/Shotgun/**",
         "Content/Data/Weapons/weapon_anim_sets.json", "Content/Characters/Enemies/PMC/Operator/**", "Source/**/Combat/SidearmRules*", "Source/**/Debug/PistolSmoke*", "Source/**/Tactics/TurnBasedRules*"],
       "tests": ["CodexTactics.Weapons", "CodexTactics.Animation.WeaponLayer"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "rpg7-launcher-pack",
@@ -624,7 +633,7 @@
         "Source/**/Combat/ProjectileActor*", "Source/**/Data/WeaponTuning*", "Source/**/Data/WeaponDataAsset*", "Source/**/Debug/RpgAnimSmoke*", "Source/**/Debug/RpgShots*",
         "Content/Data/Weapons/weapon_anim_sets.json", "Content/Data/Weapons/weapons_tuning.json", "Content/Weapons/RPG7/**", "Content/Characters/Animations/Launcher/**"],
       "tests": ["CodexTactics.Weapons.Rpg", "CodexTactics.Animation.WeaponLayer", "CodexTactics.Weapons.Loadout"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "rpg-ai-pmc",
@@ -632,25 +641,25 @@
       "globs": ["Source/**/Combat/LauncherTactics*", "Source/**/Characters/OperativeCharacterLauncherAI*", "Source/**/Debug/RpgAiSmoke*", "Source/**/Debug/RpgPmcSmoke*",
         "Content/Data/Combat/launcher_tactics.json", "Content/Characters/Animations/Launcher/Pmc/**", "Scripts/Editor/setup_launcher_animation.py", "Scripts/Editor/calibrate_launcher_grip.py"],
       "tests": ["CodexTactics.Weapons.RpgAI", "CodexTactics.Weapons.Rpg", "CodexTactics.Combat.Suppression", "CodexTactics.AI.PmcCommander", "CodexTactics.AI.PmcOperators", "CodexTactics.AI.SquadOrderCatalog"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "TutorialAmbushLakeSmoke"]
     },
     {
       "name": "weapons-arsenal",
       "globs": ["Source/**/Characters/OperativeBalance*", "Source/**/Data/Weapon*", "Source/**/UI/ActionBar*"],
       "tests": ["CodexTactics.Characters.Arsenal", "CodexTactics.Characters.BalanceApply", "CodexTactics.Data.Weapon"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "barrel-heat-relocation",
       "globs": ["Source/**/Interactables/Barrel*", "Source/**/Interactables/HeatSource*", "Source/**/Interactables/Relocation*", "Source/**/Interactables/RadiusRing*", "Source/**/Interactables/UseOrder*", "Source/**/Interactables/InteractionSubsystem*"],
       "tests": ["CodexTactics.Barrel", "CodexTactics.Relocation", "CodexTactics.Interactables.RelocationRules", "CodexTactics.Interactables.UseOrder"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "deployables",
       "globs": ["Source/**/Interactables/Deployable*", "Source/**/Interactables/Barricade*", "Source/**/Interactables/Turret*", "Source/**/Interactables/ProximityMine*"],
       "tests": ["CodexTactics.Deployable"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "interaction-clips",
@@ -671,7 +680,7 @@
       "name": "tripwire",
       "globs": ["Source/**/Interactables/Tripwire*", "Source/**/Debug/PMCTripwireSmoke*", "Source/**/Debug/TripwireSmoke*"],
       "tests": ["CodexTactics.Interactables.Tripwire"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "trap-spotting",
@@ -690,7 +699,7 @@
       "name": "narrative-dialogue",
       "globs": ["Source/**/Interactables/Narrative*", "Source/**/Quests/DialogueTrigger*", "Source/**/UI/Dialogue*", "Source/**/Data/DialogueSequence*", "Source/**/Data/NarrativeManifest*", "Content/Data/Narrative/**", "Scripts/Narrative/**"],
       "tests": ["CodexTactics.Dialogue"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "level-exit",
@@ -711,7 +720,7 @@
       "_comment": "2026-10-22: headless navmesh bake (-run=CodexTacticsEditor.CodexBuildNav, Scripts/bake_navmesh.ps1) releases the editor AsyncLoadLock 0x20 that blocks every commandlet build. The tool changes no map by itself: bake a map, then run that map's smokes.",
       "globs": ["Source/CodexTacticsEditor/Private/NavBake*", "Source/CodexTacticsEditor/Private/CodexBuildNavCommandlet*", "Source/CodexTacticsEditor/Private/CodexTacticsEditorModule.cpp", "Scripts/bake_navmesh.ps1"],
       "tests": ["CodexTactics.Editor.Navigation", "CodexTactics.Editor.BlueprintTools"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "lake-quest",
@@ -736,7 +745,7 @@
       "name": "grenades",
       "globs": ["Source/**/Combat/Grenade*", "Source/**/Combat/AIGrenade*"],
       "tests": ["CodexTactics.Combat.Grenade"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "horde",
@@ -754,13 +763,13 @@
       "name": "death-ragdoll",
       "globs": ["Source/**/Combat/DeathRagdoll*", "Content/Data/Combat/death_ragdoll.json", "Source/**/Debug/DeathRagdollSmoke*"],
       "tests": ["CodexTactics.Combat.DeathRagdoll"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "corpses",
       "globs": ["Source/**/Characters/Corpse*", "Source/**/Debug/CorpsePersistSmoke*", "Source/**/Debug/CorpseCostSmoke*", "Source/**/Characters/EnemyAnimInstance*"],
       "tests": ["CodexTactics.Characters.Corpse"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "horde-arrows",
@@ -778,51 +787,51 @@
       "name": "sight",
       "globs": ["Source/**/Combat/SightRules*", "Source/**/Combat/SightConditions*", "Source/**/Debug/SightConditionsSmoke*", "Source/**/Combat/TacticalSight*", "Source/**/Tactics/GorkyLineOfSight*", "Source/**/Combat/EncounterQueries*", "Source/**/Combat/PeekSight*", "Source/**/Debug/PeekSightSmoke*"],
       "tests": ["CodexTactics.Combat.Sight", "CodexTactics.Tactics.LineOfSight"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "quick-fire",
       "globs": ["Source/**/Combat/QuickFireRules*", "Source/**/Characters/OperativeCharacterQuickFire*", "Source/**/Debug/QuickFireSmoke*"],
       "tests": ["CodexTactics.Combat.QuickFire"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "suppression-2026-10-26",
       "globs": ["Source/**/Combat/SuppressionRules*", "Source/**/Combat/SuppressionSubsystem*", "Source/**/Characters/OperativeCharacterSuppression*",
         "Source/**/Debug/SuppressionSmoke*", "Content/Data/Combat/**", "Source/**/Vehicles/VehicleTurretComponent*", "Source/**/Interactables/TurretActor*"],
       "tests": ["CodexTactics.Combat.Suppression", "CodexTactics.Combat.QuickFire", "CodexTactics.UI.Frontend.Controls"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "real-time-fire",
       "globs": ["Source/**/Combat/SquadFire*", "Source/**/Combat/WeaponRange*", "Source/**/Debug/WeaponReachSmoke*", "Source/**/Combat/TargetedShot*", "Source/**/Combat/SpaceInput*", "Source/**/Combat/CombatTimeMode*", "Source/**/Combat/HoldSphere*", "Source/**/Combat/CombatFeedback*"],
       "tests": ["CodexTactics.Combat.SquadFire", "CodexTactics.Combat.WeaponRange", "CodexTactics.Combat.TargetedShot", "CodexTactics.Combat.TimeMode", "CodexTactics.Combat.Squad"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "waves-victory",
       "globs": ["Source/**/Combat/Wave*", "Source/**/Combat/EnemySpawn*", "Source/**/Combat/SpawnLane*", "Source/**/Combat/FallbackWave*", "Source/**/Combat/KillStats*", "Source/**/UI/VictoryPanel*", "Source/**/GameFlow/LevelEncounter*", "Source/**/Data/LevelJson*", "Source/**/Data/WaveConfig*", "Source/**/Data/EnemyArchetype*", "Content/Data/LevelJson/**"],
       "tests": ["CodexTactics.Combat.Enemy", "CodexTactics.Combat.FallbackWave", "CodexTactics.Combat.SpawnLanes", "CodexTactics.Combat.KillStats", "CodexTactics.LevelJson", "CodexTactics.Core.LevelFlow", "CodexTactics.Combat.AmbushStartsCombat", "CodexTactics.Combat.LevelEnemyContactStartsCombat"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "health-damage",
       "globs": ["Source/**/Combat/HealthComponent*", "Source/**/Combat/EnemyGhost*", "Source/**/UI/FloatingText*", "Source/**/UI/OverheadLabel*",
         "Source/**/Characters/OperativeHitRules*"],
       "tests": ["CodexTactics.Combat.Health", "CodexTactics.Tactics.TurnBased.DamageOnce"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "knockdown",
       "globs": ["Source/**/Combat/Knockdown*", "Content/Animations_KnockDown/**", "Scripts/Editor/import_knockdown_animations.py", "Source/**/Debug/KnockdownCoverSmoke*"],
       "tests": ["CodexTactics.Combat.Knockdown"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "enemy",
       "globs": ["Source/**/Characters/EnemyCharacter*", "Source/**/Characters/EnemyAI*", "Source/**/Debug/EnemyArchetypeSmoke*", "Source/**/AI/RepathRules*", "Source/**/Debug/RepathProbe*", "Source/**/Data/AITuning*", "Source/**/Data/EnemyPerception*"],
       "tests": ["CodexTactics.Characters.EnemyAI", "CodexTactics.Characters.EnemyUnits", "CodexTactics.Combat.Enemy", "CodexTactics.AI"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "enemy-combat-units",
@@ -840,7 +849,7 @@
       "name": "enemy-perception-units",
       "globs": ["Source/**/Characters/EnemyCharacterPerception*", "Source/**/Characters/EnemyCharacterScent*", "Source/**/Characters/EnemyCharacterSearch*"],
       "tests": ["CodexTactics.Characters.EnemyUnits", "CodexTactics.AI.Perception", "CodexTactics.AI.Scent", "CodexTactics.AI.StealthLure", "CodexTactics.Combat.VisionCone"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "hud-canvas",
@@ -852,31 +861,31 @@
       "name": "enemy-registry",
       "globs": ["Source/**/Combat/EnemyRegistry*", "Source/**/Combat/EncounterQueries*", "Source/**/Debug/EnemyPerfProbe*"],
       "tests": ["CodexTactics.Combat.EnemyRegistry"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "enemy-tactics",
       "globs": ["Source/**/Characters/EnemyTactics*"],
       "tests": ["CodexTactics.Characters.EnemyTactics"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "marksman",
       "globs": ["Source/**/Characters/Marksman*", "Source/**/Debug/MarksmanStealthSmoke*", "Source/**/Combat/TacticalSightSubsystem*"],
       "tests": ["CodexTactics.Marksman"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "operative-movement-squad",
       "globs": ["Source/**/Characters/OperativeCharacter*", "Source/**/Characters/OperativeAIController*", "Source/**/Characters/OperativeCrowdFollowing*", "Source/**/Characters/OperativeMovement*", "Source/**/Characters/SquadFormation*", "Source/**/Characters/SquadSubsystem*", "Source/**/Characters/SquadOrderRules*", "Source/**/Characters/FacingRules*", "Source/**/Characters/Vault*", "Source/**/Characters/RecruitSubsystem*"],
       "tests": ["CodexTactics.Squad", "CodexTactics.Formation", "CodexTactics.Characters.Vault", "CodexTactics.Characters.OperativeUnits", "CodexTactics.Movement", "CodexTactics.Characters.SquadAutonomy.SoloGuardCrouchDelay", "CodexTactics.Characters.SquadAutonomy.SoloOwnStance"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "combat-formation-2026-10-26",
       "globs": ["Source/**/Debug/CombatFormationSmoke*"],
       "tests": ["CodexTactics.Squad.Orders"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "operative-cover-units",
@@ -888,73 +897,73 @@
       "name": "operative-combat-units",
       "globs": ["Source/**/Characters/OperativeCharacterCombat*", "Source/**/Characters/OperativeCharacterAim*", "Source/**/Characters/OperativeCharacterTargetedShots*", "Source/**/Characters/OperativeCharacterWeapons*"],
       "tests": ["CodexTactics.Combat", "CodexTactics.Characters.Arsenal", "CodexTactics.Characters.OperativeUnits", "CodexTactics.Squad.Posture"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "operative-health-units",
       "globs": ["Source/**/Characters/OperativeCharacterHealth*"],
       "tests": ["CodexTactics.Combat.Health", "CodexTactics.Combat.Knockdown", "CodexTactics.Combat.DeathCinematic", "CodexTactics.Characters.OperativeUnits"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "operative-inventory-units",
       "globs": ["Source/**/Characters/OperativeCharacterInventory*", "Source/**/Characters/OperativeCharacterProgression*"],
       "tests": ["CodexTactics.Characters.PersonalItems", "CodexTactics.Characters.Progression", "CodexTactics.Transfer", "CodexTactics.Characters.OperativeUnits"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "operative-overlay-units",
       "globs": ["Source/**/Characters/OperativeCharacterOverlays*"],
       "tests": ["CodexTactics.Combat.VisionCone", "CodexTactics.Characters.OperativeUnits"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "panic",
       "globs": ["Source/**/Characters/Panic*"],
       "tests": ["CodexTactics.Panic"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "rage",
       "globs": ["Source/**/Characters/Rage*"],
       "tests": ["CodexTactics.Characters.Rage"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "progression",
       "globs": ["Source/**/Characters/Progression*", "Source/**/UI/ProfileDialog*"],
       "tests": ["CodexTactics.Characters.Progression"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "autonomy-postures",
       "globs": ["Source/**/Characters/SquadAutonomy*", "Source/**/Characters/FirePosture*", "Source/**/Data/SquadROE*", "Content/Data/AI/squad_roe.json", "Source/**/Debug/SquadHaltStanceSmoke*"],
       "tests": ["CodexTactics.Characters.SquadAutonomy", "CodexTactics.Squad.Posture", "CodexTactics.Data.SquadROE"],
-      "smokes": []
+      "smokes": ["FormationWallHugSmoke", "FormationStairSmoke"]
     },
     {
       "name": "defense-marker",
       "globs": ["Source/**/Characters/DefenseMarker*"],
       "tests": ["CodexTactics.Characters.SquadAutonomy"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "patrol-perception",
       "globs": ["Source/**/AI/**"],
       "tests": ["CodexTactics.AI"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "vision-cone",
       "globs": ["Source/**/Combat/VisionCone*", "Source/**/Debug/VisionConeSmoke*", "Source/**/Debug/ConePerfSmoke*", "Source/**/UI/Frontend/CodexPauseMenuScreen*", "Source/**/Debug/TowerVisionSmoke*", "Source/**/Debug/VisionHeightSmoke*"],
       "tests": ["CodexTactics.Combat.VisionCone", "CodexTactics.AI.Perception", "CodexTactics.UI.Frontend.Controls"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "level-obstacles",
       "globs": ["Source/**/Level/**", "Source/**/Debug/BridgeFenceSmoke*", "Source/**/Interactables/VaultNavigation*"],
       "tests": ["CodexTactics.Level", "CodexTactics.Tutorial"],
-      "smokes": []
+      "smokes": ["InteriorExitSmoke", "LevelGenBuildingsSmoke"]
     },
     {
       "name": "cold-survival",
@@ -966,25 +975,25 @@
       "name": "tactical-heat",
       "globs": ["Source/**/Survival/TacticalHeat*", "Source/**/Interactables/Campfire*", "Source/**/Interactables/PortableStove*", "Source/**/Combat/SignalFlare*", "Source/**/Combat/FirePuddle*", "Source/**/Data/TacticalHeatTuning*", "Source/**/Debug/TacticalHeatSmoke*", "Content/Data/Survival/**"],
       "tests": ["CodexTactics.Survival.TacticalHeat", "CodexTactics.Cold", "CodexTactics.Loot", "CodexTactics.Transfer"],
-      "smokes": []
+      "smokes": ["ColdIndoorsSmoke", "WeatherLakeSmoke"]
     },
     {
       "name": "turn-based",
       "globs": ["Source/**/Tactics/Gorky*", "Source/**/Tactics/Turn*", "Source/**/Tactics/EnemyTurn*", "Source/**/Tactics/TacticalEncounter*", "Source/**/Tactics/Gorky17Types*", "Source/**/UI/TurnBasedHud*"],
       "tests": ["CodexTactics.Tactics", "CodexTactics.Combat.TurnBasedFlatGround"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "ramp-file-2026-11-02",
       "globs": ["Source/**/Formation/RampFileRules*", "Source/**/Characters/SquadSubsystemRampFile*", "Source/**/Debug/LevelGenRampSmoke*", "Source/**/Debug/RampRoofShots*", "Source/**/Debug/RoofCutawayFocusSmoke*"],
       "tests": ["CodexTactics.Formation.RampFile", "CodexTactics.Formation.Runtime.Yield", "CodexTactics.Camera.RoofCutaway"],
-      "smokes": []
+      "smokes": ["InteriorExitSmoke", "LevelGenBuildingsSmoke"]
     },
     {
       "name": "exposed-zones",
       "globs": ["Source/**/Tactics/ExposedZones*"],
       "tests": ["CodexTactics.Tactics.ExposedZones"],
-      "smokes": []
+      "smokes": ["ColdIndoorsSmoke", "WeatherLakeSmoke"]
     },
     {
       "name": "camera",
@@ -996,7 +1005,7 @@
       "name": "death-cinematic",
       "globs": ["Source/**/Combat/DeathCinematic*", "Source/**/UI/DeathCinematicOverlay*", "Source/**/Characters/HitReactionRules*", "Scripts/Editor/setup_operative_hit_animation.py"],
       "tests": ["CodexTactics.Combat.DeathCinematic", "CodexTactics.Anim.HitReaction", "CodexTactics.Mission.DefeatRule"],
-      "smokes": []
+      "smokes": ["CoverIndoorSmoke", "LowCoverMoveLakeSmoke"]
     },
     {
       "name": "save-load",
@@ -1014,13 +1023,13 @@
       "name": "game-framework",
       "globs": ["Source/**/Core/CodexTacticsGameMode*", "Source/**/Core/CodexTacticsGameState*", "Source/**/Core/CodexTacticsPlayerController*", "Source/**/UI/CodexTacticsHUD*", "Source/**/UI/CodexButtonFocus*"],
       "tests": ["CodexTactics.Core", "CodexTactics.Combat.TimeMode"],
-      "smokes": []
+      "smokes": ["SaveCoverageLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "controller-selection",
       "globs": ["Source/**/Core/CodexTacticsPlayerControllerSelection*"],
       "tests": ["CodexTactics.Core.ControllerUnits"],
-      "smokes": []
+      "smokes": ["SaveCoverageLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "controller-orders",
@@ -1032,25 +1041,25 @@
       "name": "controller-stance",
       "globs": ["Source/**/Core/CodexTacticsPlayerControllerStance*"],
       "tests": ["CodexTactics.Core.ControllerUnits", "CodexTactics.Characters.SquadAutonomy.SoloOwnStance"],
-      "smokes": []
+      "smokes": ["SaveCoverageLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "controller-items",
       "globs": ["Source/**/Core/CodexTacticsPlayerControllerItems*"],
       "tests": ["CodexTactics.Core.ControllerUnits"],
-      "smokes": []
+      "smokes": ["SaveCoverageLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "controller-time",
       "globs": ["Source/**/Core/CodexTacticsPlayerControllerTime*"],
       "tests": ["CodexTactics.Core.ControllerUnits"],
-      "smokes": []
+      "smokes": ["SaveCoverageLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "controller-menus",
       "globs": ["Source/**/Core/CodexTacticsPlayerControllerMenus*"],
       "tests": ["CodexTactics.Core.ControllerUnits"],
-      "smokes": []
+      "smokes": ["SaveCoverageLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "controller-camera",
@@ -1062,7 +1071,7 @@
       "name": "group-cover",
       "globs": ["Source/**/Tactics/GroupCover*", "Source/**/Characters/SquadSubsystemGroupCover*", "Source/**/Debug/GroupCoverSmoke*", "Source/**/Debug/GroupCoverPrioritySmoke*"],
       "tests": ["CodexTactics.Tactics.GroupCover", "CodexTactics.Squad.Orders"],
-      "smokes": []
+      "smokes": ["LowCoverMoveLakeSmoke", "CoverSwitchLakeSmoke"]
     },
     {
       "name": "cover-switch",
@@ -1074,7 +1083,7 @@
       "name": "cover-wrap",
       "globs": ["Source/**/Tactics/CoverWrap*", "Source/**/Debug/CoverWrapSmoke*", "Source/**/Characters/OperativeCharacterCoverWrap*", "Source/**/Tactics/CoverGhostActor*"],
       "tests": ["CodexTactics.Tactics.CoverWrap", "CodexTactics.Tactics.CoverSwitch", "CodexTactics.Tactics.Cover"],
-      "smokes": []
+      "smokes": ["LowCoverMoveLakeSmoke", "CoverSwitchLakeSmoke"]
     },
     {
       "name": "controller-cover",
@@ -1086,25 +1095,25 @@
       "name": "event-bus",
       "globs": ["Source/**/Subsystems/**"],
       "tests": ["CodexTactics.Core"],
-      "smokes": []
+      "smokes": ["SaveCoverageLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "balance-data",
       "globs": ["Source/**/Data/GameBalanceConfig*", "Source/**/Data/GodotBalance*", "Source/**/Data/CombatTypes*", "Content/Data/Balance/**"],
       "tests": ["CodexTactics.Data", "CodexTactics.Characters.BalanceApply", "CodexTactics.Combat.Enemy"],
-      "smokes": []
+      "smokes": ["SaveCoverageLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "bot-telemetry",
       "globs": ["Source/**/Bot/**", "Source/**/Telemetry/**", "Scripts/bot_run.ps1", "Content/Data/CombatLab/**", "Tools/TrainingGround/golden/combatlab_*"],
       "tests": ["CodexTactics.Bot", "CodexTactics.Telemetry", "CodexTactics.LevelJson"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "player-text",
       "globs": ["Source/**/UI/*", "Source/CodexTacticsTests/Private/Text/**"],
       "tests": ["CodexTactics.Text"],
-      "smokes": []
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
     },
     {
       "name": "build-config",
@@ -1147,34 +1156,34 @@
       "name": "environment-tuning",
       "globs": ["Source/**/Data/EnvironmentTuning*", "Content/Data/Environment/**"],
       "tests": ["CodexTactics.Environment"],
-      "smokes": []
+      "smokes": ["ColdIndoorsSmoke", "WeatherLakeSmoke"]
     },
     {
       "name": "environment-rules",
       "globs": ["Source/**/Environment/EnvironmentRules*", "Source/**/Environment/EnvironmentTypes*", "Source/CodexTacticsTests/Private/Environment/**"],
       "tests": ["CodexTactics.Environment"],
-      "smokes": []
+      "smokes": ["ColdIndoorsSmoke", "WeatherLakeSmoke"]
     },
     {
       "name": "environment-cold",
       "_comment": "2026-10-22 environment phase 2a: weather / time-of-day cold multipliers (ColdRules::CombineZoneWeather, ColdSurvivalComponent::GatherEnvironment).",
       "globs": ["Source/**/Survival/ColdRules*", "Source/**/Survival/ColdSurvivalComponent*", "Source/**/Debug/ColdSmoke*", "Source/CodexTacticsTests/Private/Environment/EnvironmentColdTest*"],
       "tests": ["CodexTactics.Environment.Cold", "CodexTactics.Cold", "CodexTactics.Survival"],
-      "smokes": []
+      "smokes": ["ColdIndoorsSmoke", "WeatherLakeSmoke"]
     },
     {
       "name": "environment-roster",
       "_comment": "2026-10-22 environment phase 2b: the enemy roster by time of day + weather (EnvironmentRosterRules, resolved once in UWaveSubsystem::StartWave; spawn entry environment_lock).",
       "globs": ["Source/**/Environment/EnvironmentRosterRules*", "Source/**/Debug/EnvironmentRosterSmoke*", "Source/**/Combat/WaveSubsystem*", "Source/CodexTacticsTests/Private/Environment/EnvironmentRosterTest*"],
       "tests": ["CodexTactics.Environment.Roster", "CodexTactics.LevelJson"],
-      "smokes": []
+      "smokes": ["ColdIndoorsSmoke", "WeatherLakeSmoke"]
     },
     {
       "name": "interactive-snow",
       "_comment": "2026-10-23 interactive snow phase 1 (docs/systems/environment-weather.md section 14): USnowInteractionSubsystem (window / fade / shift / stamps into RT_SnowInteraction, MPC_Environment.SnowTrackWindow / SnowRefill / FreshSnow), SnowInteractionRules, the walkers (registry polling), DA_SnowStamps. Visual only, inert under -nullrhi: the wave / horde smokes must keep their timing.",
       "globs": ["Source/**/Environment/SnowInteraction*", "Source/**/Environment/SnowStampSet*", "Source/**/Debug/SnowTracksSmoke*", "Source/CodexTacticsTests/Private/Environment/EnvironmentSnowInteractionTest*", "Content/Environment/Weather/Snow/Tracks/**", "Content/Environment/Weather/MPC/**", "Scripts/Editor/create_snow_interaction_assets.py", "Scripts/Editor/create_environment_mpc.py"],
       "tests": ["CodexTactics.Environment.SnowInteraction", "CodexTactics.Combat.EnemyRegistry"],
-      "smokes": []
+      "smokes": ["ColdIndoorsSmoke", "WeatherLakeSmoke"]
     },
     {
       "name": "start-lighting",
@@ -1195,7 +1204,7 @@
       "_comment": "2026-10-23 environment section 13: M_Landscape_Master fix + MF_SnowPowder / MF_SnowSurface / MF_SnowInteraction (Scripts/Editor/landscape_snow_patch.py), the landscape test map (create_snow_terrain_test_map.py, ULandscapeAuthoringLibrary) and EnvironmentShots terrain.",
       "globs": ["Source/CodexTacticsEditor/Private/LandscapeAuthoringLibrary*", "Source/CodexTacticsEditor/Private/LandscapeMaterialTest*", "Source/**/Debug/EnvironmentTerrainShots*", "Scripts/Editor/landscape_snow_patch.py", "Scripts/Editor/create_snow_terrain_test_map.py", "Content/VFX/Materials/M_Landscape_Master*", "Content/VFX/Materials/MI_Landscape_Master*", "Content/Environment/Weather/Snow/Materials/MF_Snow*", "Content/Environment/Weather/Test/**"],
       "tests": ["CodexTactics.Environment.LandscapeMaterial", "CodexTactics.Editor.Materials"],
-      "smokes": []
+      "smokes": ["ColdIndoorsSmoke", "WeatherLakeSmoke"]
     },
     {
       "name": "environment-visuals",
@@ -1225,7 +1234,7 @@
         "Source/CodexTacticsTests/Private/Characters/BlizzardWalkRulesTest*", "Scripts/Editor/setup_operative_storm_animation.py", "Scripts/Editor/measure_storm_clips.py",
         "Content/Characters/Operatives/Anims/Weather/Storm/**", "Source/**/Camera/CameraZoneVolume*", "Source/**/Interactables/CampfireActor*"],
       "tests": ["CodexTactics.Characters.BlizzardWalk", "CodexTactics.Survival.WarmIdle", "CodexTactics.Survival.TacticalHeat"],
-      "smokes": []
+      "smokes": ["ColdIndoorsSmoke", "WeatherLakeSmoke"]
     },
     {
       "name": "level-generator-2026-11-01",
@@ -1243,7 +1252,7 @@
       "globs": ["Scripts/Editor/levelgen_bot_route.py", "Scripts/levelgen_record_run.ps1", "Scripts/levelgen_route_smoke.ps1", "Scripts/job_status.ps1", "Scripts/Tools/clip_assemble.py",
         "Source/**/Bot/BotRouteRules*", "Source/**/Bot/PlaytestBotRouteMode*", "Source/**/Bot/CombatLabRunCollector*", "Source/**/Debug/ClipRecorderCommand*", "Tools/TrainingGround/src/combatLab/maps*"],
       "tests": ["CodexTactics.Bot.Route", "CodexTactics.Bot.CombatLab", "CodexTactics.LevelJson"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "TutorialAmbushLakeSmoke"]
     },
     {
       "name": "mission-goals-2026-11-17",
@@ -1257,14 +1266,14 @@
       "_comment": "TACTICAL_MAP P1 (designer 2026-11-17): the level generator's danger analysis as the in-game tactical map - Content/Data/LevelGen/tactical/<Map>.tactical.json (Tools/TrainingGround src/levelgen/tacticalMap.ts, scripts/export-tactical-map.ts, the accept / build hook src/levelgen/node/runtimeFiles.ts), Content/Data/LevelGen/tactical_runtime.json, UTacticalMapSubsystem + TacticalMapRules, the debug draw / dump.",
       "globs": ["Source/**/LevelGen/TacticalMap*", "Source/**/Debug/TacticalMapSmoke*", "Content/Data/LevelGen/tactical/**", "Content/Data/LevelGen/tactical_runtime.json", "Tools/TrainingGround/src/levelgen/tacticalMap*", "Tools/TrainingGround/src/levelgen/node/runtimeFiles*", "Tools/TrainingGround/scripts/export-tactical-map.ts"],
       "tests": ["CodexTactics.LevelGen.TacticalMap", "CodexTactics.LevelGen.MissionGoals", "CodexTactics.AI.PmcTactical"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "TutorialAmbushLakeSmoke"]
     },
     {
       "name": "tactical-pmc-2026-11-17",
       "_comment": "TACTICAL_MAP P2 / P3 (designer 2026-11-17: the dangerous places affect gameplay and feed the trainer): the PMC commander's terrain terms + the squad's placement on the tactical map's spots (AI/PmcTacticalRules, UPmcSquadSubsystem::SpawnSquadTactical / AssignTacticalPosts, pmc_commander.json terrain_danger / ambush_exit / overwatch_roof / window_position / route_cover / chokepoint_avoid), the arena's tactical scenario and the round's behaviour metrics (AI/PmcArenaBehaviourRules, G002 codex.pmc_arena_behaviour/1).",
       "globs": ["Source/**/AI/PmcTactical*", "Source/**/AI/PmcArenaBehaviour*", "Source/**/Debug/TacticalPmcSmoke*", "Source/**/Debug/PmcArenaCommand.cpp", "Source/CodexTacticsTests/Private/AI/PmcTacticalRulesTest*", "Source/CodexTacticsTests/Private/AI/PmcArenaBehaviourRulesTest*", "Content/Data/LevelJson/L_Gen_Depot_X4.json", "Content/Data/LevelJson/L_Gen_Test_X2.json"],
       "tests": ["CodexTactics.AI.PmcTactical", "CodexTactics.AI.PmcArena", "CodexTactics.AI.PmcArenaBehaviour", "CodexTactics.AI.PmcCommander", "CodexTactics.LevelGen.TacticalMap"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "TutorialAmbushLakeSmoke"]
     },
     {
       "name": "turret-power-2026-11-17",
@@ -1285,7 +1294,7 @@
       "_comment": "G007 / B17-6: a fight on STAIR_ext_7. Sight, the shot line and the Frostbitten melee reach. The smoke limit (damage within 1.5 s of sight, melee inside CanMelee) is the gate. API follow-up: CombatGroundRules / CombatGroundQuery (the floor probe, the dead zone edge, the melee shared ground; real time + turn-based).",
       "globs": ["Source/**/Debug/RampFightSmoke*", "Source/**/Combat/SightRules*", "Source/**/Combat/TacticalSight*", "Source/**/Combat/SquadFireRules*", "Source/**/Characters/EnemyAIRules*", "Source/**/Characters/MeleeLineRules*", "Source/**/Combat/CombatGround*"],
       "tests": ["CodexTactics.Combat.Sight", "CodexTactics.Combat.SquadFire", "CodexTactics.Combat.FireGate", "CodexTactics.Characters.EnemyAI"],
-      "smokes": []
+      "smokes": ["TurnArenaLakeSmoke", "TutorialAmbushLakeSmoke"]
     }
   ]
 }

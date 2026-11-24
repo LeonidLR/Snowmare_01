@@ -5,7 +5,7 @@
 // (building_stories.json loud_front_states), so S09 carries the generator's F2 pair 3 + 9 (its last story is 9); every other building one story.
 // After the stories: key route / fast / quiet entries per building (computeBuildingRoutes, as applyStoriesToLayout), schema /2 + cost_hash
 // (as withBuildingStories), mantle-edge sync, room anchors (as gen-bgen-plans-check.ts). Fails (exit 1) when a story rolls back.
-//   node scripts/gen-story-showcase.ts <out.json> [--plans] [--ascii]
+//   node scripts/gen-story-showcase.ts <out.json> [--plans] [--fixed-bays] [--ascii]
 // The out file is the accepted layout (Content/Data/LevelGen/accepted/gen_story_showcase.json); the builder writes the level JSON.
 import fs from 'node:fs';
 import { buildingToAscii } from '../src/levelgen/buildings/planAscii.ts';
@@ -21,8 +21,9 @@ import type { GenLayout } from '../src/levelgen/schema.ts';
 import { DEFAULT_PARAMS, LEVEL_HEIGHT, LEVELGEN_SCHEMA_V2, validateGenLayout } from '../src/levelgen/schema.ts';
 
 const out = process.argv[2];
-if (!out || out.startsWith('--')) { console.error('usage: node scripts/gen-story-showcase.ts <out.json> [--plans] [--ascii]'); process.exit(2); }
-const plans = process.argv.includes('--plans');
+if (!out || out.startsWith('--')) { console.error('usage: node scripts/gen-story-showcase.ts <out.json> [--plans] [--fixed-bays] [--ascii]'); process.exit(2); }
+const fixedBays = process.argv.includes('--fixed-bays');
+const plans = fixedBays || process.argv.includes('--plans');
 
 const SIZE: [number, number] = [150, 110];
 /** The street between the rows (metres, profile frame: x east, y south). */
@@ -63,7 +64,7 @@ interface Spec {
 //  - S10 snow drift: two sections (37 m) at right angles to the street; the gable door on the FAR gable (the near one would be the front).
 // Top row (y 30..42), bottom row (y 68..80); the mandatory street at y 55.
 const N: Side = 'north', S: Side = 'south';
-const specs: Spec[] = [
+const legacySpecs: Spec[] = [
   { id: 'S01_open', stories: ['open'], archetype: 'block', x: 8, y: 30, w: 20.0, h: 12.0, floors: 2, seed: 11, doorSides: [S], windowSides: [S, N], roof_walkable: true, gable_door: 'west' },
   { id: 'S03_locked_door', stories: ['locked_door'], archetype: 'block', x: 46, y: 30, w: 20.2, h: 12.2, floors: 2, seed: 13, doorSides: [N], windowSides: [N, S], roof_walkable: true, gable_door: 'east' },
   { id: 'S04_rubble_escape', stories: ['rubble_escape'], archetype: 'block', x: 101, y: 30, w: 20.2, h: 12.2, floors: 3, seed: 2, doorSides: [S], windowSides: [S, N], roof_walkable: true, gable_door: 'west' },
@@ -71,6 +72,13 @@ const specs: Spec[] = [
   { id: 'S09_broken_back_windows', stories: ['locked_door', 'broken_back_windows'], archetype: 'block', x: 46, y: 68, w: 20.2, h: 12.2, floors: 2, seed: 2, doorSides: [S], windowSides: [S, N], roof_walkable: true, gable_door: 'east' },
   { id: 'S10_snow_drift', stories: ['snow_drift'], archetype: 'block', x: 101, y: 65, w: 12.0, h: 37.0, floors: 2, seed: 1, doorSides: ['west'], windowSides: ['west', 'east'], roof_walkable: true, gable_door: 'south' },
 ];
+
+const specs = fixedBays ? legacySpecs.map((spec): Spec => {
+  if (spec.id === 'S10_snow_drift') {
+    return { ...spec, y: 71, w: 14, h: 22.5, plan_template: 'block_1_464_short' };
+  }
+  return { ...spec, y: spec.y < 55 ? 26 : 71, w: 26, h: 14, plan_template: 'block_1_464' };
+}) : legacySpecs;
 
 const d: Draft = { walls: [], buildings: [], ladders: [], covers: [], zones: [], routes: [], spawn_points: [], ambush_points: [], patrol_routes: [], mantle_edges: [], keepFree: [], ...(plans ? { building_plans: true } : {}) };
 for (const s of specs) {
@@ -133,7 +141,7 @@ for (const s of specs) {
   const errors = v.issues.filter((i) => i.severity === 'error');
   console.log(`${s.id}: story ${got} ${got === want ? 'KEPT' : `EXPECTED ${want}`} role=${b.role ?? '-'} plan=${b.plan?.kind ?? '-'}/${b.plan?.template ?? '-'}${b.plan?.fallback ? ` fallback=${b.plan.fallback}` : ''} floors=${b.floors}`
     + ` fast=${b.fast_entry ?? '-'} quiet=${b.quiet_entry ?? '-'} bricks=[${(b.stories ?? []).flatMap((x) => x.bricks).join(' ')}] errors=${errors.length}${errors.length ? ` (${errors.map((i) => i.code).join(',')})` : ''}`);
-  if (got !== want) failed = true;
+  if (got !== want || (fixedBays && (errors.length || b.plan?.template !== s.plan_template))) failed = true;
 }
 if (process.argv.includes('--ascii')) for (const b of o.buildings) { console.log(`\n== ${b.id}`); for (let f = 0; f < b.floors; ++f) console.log(buildingToAscii(b, f)); }
 if (failed) { console.error('story showcase: a story did not hold - change the building choice (size / doors / floors), not the validator'); process.exit(1); }

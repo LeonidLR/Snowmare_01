@@ -1,4 +1,5 @@
 #include "Camera/TacticalCameraPawn.h"
+#include "Training/TrainingSectorSubsystem.h"
 #include "Ladders/LadderClimbComponent.h"
 #include "Core/PlayerCommands.h"
 #include "Camera/CameraComponent.h"
@@ -469,6 +470,13 @@ bool ATacticalCameraPawn::IsFreePanView() const
 
 FVector ATacticalCameraPawn::LimitPan(const FVector& Pan, float LeashCm) const
 {
+	if (const UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(GetWorld()))
+	{
+		if (const FBox2D* SectorArea = Training->GetArea())
+		{
+			return TacticalCameraRules::ClampFreePan(Focus, Pan, *SectorArea, Config.FreePanLevelMarginCm);
+		}
+	}
 	if (!IsFreePanView() || TacticalCameraPawnLocal::CVarFreePanBounds.GetValueOnGameThread() == 0)
 	{
 		return TacticalCameraRules::ClampPan(Pan, LeashCm); // the exploration leash (bFreeExplorationPan off) / the A/B

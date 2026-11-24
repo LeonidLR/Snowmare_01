@@ -42,11 +42,11 @@ describe('autogen props placement (task 076)', () => {
   });
 
   it('map-name rule: resolves exact LevelJson target names, falls back to mapNameFor', () => {
-    // Existing maps configured in Content/Data/LevelJson
-    assert.equal(targetMapNameForLayout('gen_ref_01_02_depot_1_x4', root), 'L_Gen_Depot_X4');
-    assert.equal(targetMapNameForLayout('gen_ref_01_02_depot_1_x2', root), 'L_Gen_Test_X2');
     assert.equal(targetMapNameForLayout('gen_ref_01_02_depot_1_x6', root), 'L_Gen_Depot_1_X6');
 
+    // The retired X4 and X2 no longer have LevelJson aliases.
+    assert.equal(targetMapNameForLayout('gen_ref_01_02_depot_1_x4', root), 'L_Gen_Depot_1_X4');
+    assert.equal(targetMapNameForLayout('gen_ref_01_02_depot_1_x2', root), 'L_Gen_Depot_1_X2');
     // Arbitrary layout name falls back to mapNameFor
     assert.equal(targetMapNameForLayout('gen_ref_99_99_warehouse_a', root), 'L_Gen_Warehouse_A');
   });
