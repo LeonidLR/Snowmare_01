@@ -99,7 +99,10 @@ bool FLevelJsonFilesParseTest::RunTest(const FString&)
 		{
 			continue;
 		}
-		TestTrue(FString::Printf(TEXT("%s has waves"), *File), Config.Waves.Num() > 0);
+		// PMC-only levels (designer 2026-11-24: showcase Kit and X6 fight only PMC squads) have no monster waves but pmc_squads.
+		const TArray<TSharedPtr<FJsonValue>>* PmcSquads = nullptr;
+		const bool bPmcOnly = Root.IsValid() && Root->TryGetArrayField(TEXT("pmc_squads"), PmcSquads) && PmcSquads && PmcSquads->Num() > 0;
+		TestTrue(FString::Printf(TEXT("%s has waves or PMC squads"), *File), Config.Waves.Num() > 0 || bPmcOnly);
 		for (const FWaveDefinition& Wave : Config.Waves)
 		{
 			TestTrue(FString::Printf(TEXT("%s wave %d has enemies"), *File, Wave.WaveIndex), Wave.GetTotalEnemyCount() > 0);
