@@ -208,6 +208,13 @@ bool FCombatCheatsResolveTest::RunTest(const FString&)
 	TestFalse(TEXT("Console 0 forces it off"), CombatCheats::Resolve(0, true, false));
 	TestFalse(TEXT("Shipping: always off (level flag)"), CombatCheats::Resolve(-1, true, true));
 	TestFalse(TEXT("Shipping: always off (console)"), CombatCheats::Resolve(1, true, true));
+	TestTrue(TEXT("Squad flag gives player infinite ammo"), CombatCheats::ResolveInfiniteAmmo(-1, false, true, true, false));
+	TestFalse(TEXT("Squad flag leaves PMC ammo finite"), CombatCheats::ResolveInfiniteAmmo(-1, false, true, false, false));
+	TestTrue(TEXT("Legacy flag still gives PMC infinite ammo"), CombatCheats::ResolveInfiniteAmmo(-1, true, false, false, false));
+	TestTrue(TEXT("Legacy flag still gives player infinite ammo"), CombatCheats::ResolveInfiniteAmmo(-1, true, false, true, false));
+	TestTrue(TEXT("Console on stays global"), CombatCheats::ResolveInfiniteAmmo(1, false, false, false, false));
+	TestFalse(TEXT("Console off overrides both flags"), CombatCheats::ResolveInfiniteAmmo(0, true, true, true, false));
+	TestFalse(TEXT("Squad flag is off in Shipping"), CombatCheats::ResolveInfiniteAmmo(-1, false, true, true, true));
 	TestFalse(TEXT("No world: no cheat"), CombatCheats::IsImmortal(nullptr) || CombatCheats::IsInfiniteAmmo(nullptr) || CombatCheats::IsImmortalActor(nullptr));
 	return true;
 }

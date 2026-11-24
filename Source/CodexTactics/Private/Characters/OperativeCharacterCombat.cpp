@@ -1051,7 +1051,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 
 	const bool bRagingShot = IsRaging();
 	RoundsSpent += UsesAmmo() ? 1 : 0; // the bot report's rounds, the free ones included
-	if (UsesAmmo() && !(bRagingShot && RageComponent->Config.bInfiniteAmmo) && !CombatCheats::IsInfiniteAmmo(GetWorld())) // combat lab cheat
+	if (UsesAmmo() && !(bRagingShot && RageComponent->Config.bInfiniteAmmo) && !CombatCheats::IsInfiniteAmmo(GetWorld(), IsPlayerTeam())) // combat lab cheat
 	{
 		CurrentClip--;
 	}

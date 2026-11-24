@@ -637,6 +637,8 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 		Config.bCheatImmortal = Cheats->TryGetBoolField(TEXT("immortal"), bFlag) && bFlag;
 		bFlag = false;
 		Config.bCheatInfiniteAmmo = Cheats->TryGetBoolField(TEXT("infinite_ammo"), bFlag) && bFlag;
+		bFlag = false;
+		Config.bCheatInfiniteAmmoSquad = Cheats->TryGetBoolField(TEXT("infinite_ammo_squad"), bFlag) && bFlag;
 	}
 	if (const TSharedPtr<FJsonObject> Pressure = LevelJsonObject(Root, TEXT("pressure")))
 	{

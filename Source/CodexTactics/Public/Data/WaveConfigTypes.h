@@ -451,6 +451,9 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	bool bCheatImmortal = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	bool bCheatInfiniteAmmo = false;
+	/** Player-team-only infinite ammo, separate from the legacy world flag. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	bool bCheatInfiniteAmmoSquad = false;
 	/**
 	 * "pressure": the endless patrols / ambushers of the combat lab (LevelJsonRules::ParsePressureSettings, UCombatPressureSubsystem);
 	 * bEnabled false without the block. Runtime data from the JSON only (not a UPROPERTY: the level assets never carry it).
