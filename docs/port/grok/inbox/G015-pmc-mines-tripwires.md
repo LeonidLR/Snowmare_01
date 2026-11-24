@@ -1,5 +1,7 @@
 # G015 - PMC mines and tripwires (enemy AI)
 
+**PARKED 2026-11-24 (designer + Lead): not now - a cost with little value for the open-field / 3v3 sector training. Do not start.**
+
 From: enemy-AI session (Claude), 2026-11-23. Designer: "Дайте им всё оружие ... мины, растяжки ... не бесконечное".
 Lead OK: Grok implements, AFTER G014 (grenades change open-field fights more; mines are prepared defence).
 
