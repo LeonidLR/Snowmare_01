@@ -330,8 +330,9 @@ namespace GeneratedPropsSmoke
 		{
 			Classes += FString::Printf(TEXT("%s %d, "), *Pair.Key, Pair.Value);
 		}
+		const bool bExpectLoot = Expected.FindRef(TEXT("loot")) > 0;
 		Check(State, Real.FindRef(TEXT("BarrelActor")) > 0 && Real.FindRef(TEXT("LootCrateActor")) > 0 && Real.FindRef(TEXT("TurretActor")) > 0
-			&& Real.FindRef(TEXT("DroppedItemActor")) > 0 && (Real.FindRef(TEXT("ProximityMineActor")) + Real.FindRef(TEXT("PMCTripwireActor"))) > 0,
+			&& (!bExpectLoot || Real.FindRef(TEXT("DroppedItemActor")) > 0) && (Real.FindRef(TEXT("ProximityMineActor")) + Real.FindRef(TEXT("PMCTripwireActor"))) > 0,
 			FString::Printf(TEXT("the props are the game's real objects: %s"), *Classes));
 		// Level turrets (TURRET_POWER.md phase 1): every turret of an autogen map hangs on a power layer generator; it is powered exactly
 		// while its generator runs, its side is the generator owner's, and about three quarters of them start dark.
