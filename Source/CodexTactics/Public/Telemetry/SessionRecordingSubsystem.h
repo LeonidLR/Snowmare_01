@@ -25,6 +25,7 @@ public:
 	/** A recording belongs to one sector. End this segment before a new sector starts. */
 	void OnTrainingSectorChanged();
 	void RecordMode(EDemoMode Mode, bool bOn);
+	void RecordSectorRound(const FDemoRoundEvent& Event);
 	void MarkSession(const FString& Mark) { Session.Mark = Mark; }
 
 #if WITH_DEV_AUTOMATION_TESTS

@@ -4,6 +4,9 @@
 #include "AI/PmcSquadSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
+#include "Combat/HealthComponent.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Data/WeaponDataAsset.h"
 #include "Components/BoxComponent.h"
 #include "Components/LineBatchComponent.h"
 #include "Components/SceneComponent.h"
@@ -201,8 +204,18 @@ bool UTrainingSectorSubsystem::DoesSupportWorldType(EWorldType::Type WorldType) 
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
 }
 
+void UTrainingSectorSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+	if (Active)
+	{
+		EnsureFightTick();
+	}
+}
+
 void UTrainingSectorSubsystem::Deinitialize()
 {
+	StopFightTick();
 	ClearBoundary(BoundaryActors);
 	Super::Deinitialize();
 }
@@ -268,6 +281,7 @@ bool UTrainingSectorSubsystem::SelectSector(int32 Id)
 	{
 		ClearBoundary(BoundaryActors);
 		Active.Reset();
+		EndFight();
 	}
 	else
 	{
@@ -300,6 +314,8 @@ bool UTrainingSectorSubsystem::SelectSector(int32 Id)
 			Seed = FMath::Rand();
 		}
 		TrainingSectorRules::Pick(*Active, Seed, Start, Encounter);
+		Fight = TrainingSectorRules::FightConfig(*Json, Id);
+		BeginFight(Seed);
 		UE_LOG(LogCodexTactics, Display, TEXT("[TrainingSector] Sector %d: %.1f x %.1f m, seed %d, start %s, post %s"), Id,
 			Active->Area.GetSize().X / 100.0, Active->Area.GetSize().Y / 100.0, Seed, *Start.Position.ToCompactString(), *Encounter.Post.Id);
 	}
@@ -401,4 +417,387 @@ bool UTrainingSectorSubsystem::BuildBoundary(const FTrainingSector& Sector, TArr
 		&& AddPawnWall(World, FVector(Centre.X, Area.Min.Y - WallHalfWidth, CentreZ), FVector(HalfSize.X + WallHalfWidth, WallHalfWidth, HalfHeight), Out)
 		&& AddPawnWall(World, FVector(Centre.X, Area.Max.Y + WallHalfWidth, CentreZ), FVector(HalfSize.X + WallHalfWidth, WallHalfWidth, HalfHeight), Out)
 		&& AddGroundOutline(World, Sector, Out);
+}
+
+namespace TrainingSectorFightRuntime
+{
+	bool IsUp(const AOperativeCharacter& Op)
+	{
+		const bool bAlive = Op.HealthComponent && Op.HealthComponent->IsAlive() && !Op.IsKilledInAction();
+		return !TrainingSectorRules::IsFighterDown(bAlive, Op.IsKnockedDown());
+	}
+
+	void CountSide(const AOperativeCharacter& Op, FSectorSideCount& Side)
+	{
+		if (Op.IsActorBeingDestroyed())
+		{
+			return;
+		}
+		++Side.Members;
+		Side.Fighting += IsUp(Op) ? 1 : 0;
+	}
+}
+
+void UTrainingSectorSubsystem::BeginFight(int32 Seed)
+{
+	FightSeed = Seed;
+	RoundNumber = 0;
+	ScoreVictory = 0;
+	ScoreDefeat = 0;
+	ScoreDraw = 0;
+	RoundKillsPlayer = 0;
+	RoundKillsPmc = 0;
+	Banner.Empty();
+	BannerUntil = -1.0;
+	RoundStartedAt = 0.0;
+	IntermissionUntil = 0.0;
+	LastResult = ESectorRoundEnd::None;
+	Phase = ESectorRoundPhase::Waiting;
+	bRespawnApplied = false;
+	Watched.Reset();
+	CurrentPair = Active ? TrainingSectorRules::PairOf(Active.GetValue(), Start, Encounter) : FSectorPair();
+	if (const UWorld* World = GetWorld(); World && World->HasBegunPlay())
+	{
+		EnsureFightTick();
+	}
+}
+
+void UTrainingSectorSubsystem::EndFight()
+{
+	Phase = ESectorRoundPhase::Idle;
+	Banner.Empty();
+	BannerUntil = -1.0;
+	Watched.Reset();
+	RoundNumber = 0;
+	StopFightTick();
+}
+
+void UTrainingSectorSubsystem::EnsureFightTick()
+{
+	UWorld* World = GetWorld();
+	if (!World || !World->HasBegunPlay() || !Active || FightTicker.IsValid())
+	{
+		return;
+	}
+	FightTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &UTrainingSectorSubsystem::TickFight), 0.f);
+}
+
+void UTrainingSectorSubsystem::StopFightTick()
+{
+	if (FightTicker.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(FightTicker);
+		FightTicker.Reset();
+	}
+}
+
+bool UTrainingSectorSubsystem::TickFight(float)
+{
+	if (!Active)
+	{
+		FightTicker.Reset();
+		return false;
+	}
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		FightTicker.Reset();
+		return false;
+	}
+	const double Now = World->GetTimeSeconds();
+	switch (Phase)
+	{
+	case ESectorRoundPhase::Waiting: TryStartRound(Now); break;
+	case ESectorRoundPhase::Fighting: TickFighting(Now); break;
+	case ESectorRoundPhase::Intermission: TickIntermission(Now); break;
+	default: break;
+	}
+	return Active.IsSet();
+}
+
+FSectorRoundView UTrainingSectorSubsystem::GetRoundView() const
+{
+	FSectorRoundView View;
+	View.Phase = Phase;
+	View.LastResult = LastResult;
+	View.Number = RoundNumber;
+	View.Seed = FightSeed;
+	View.ScoreVictory = ScoreVictory;
+	View.ScoreDefeat = ScoreDefeat;
+	View.ScoreDraw = ScoreDraw;
+	View.KillsPlayer = RoundKillsPlayer;
+	View.KillsPmc = RoundKillsPmc;
+	View.Pair = CurrentPair;
+	return View;
+}
+
+FString UTrainingSectorSubsystem::GetRoundBanner() const
+{
+	const UWorld* World = GetWorld();
+	return Banner.IsEmpty() || !World || World->GetTimeSeconds() > BannerUntil ? FString() : Banner;
+}
+
+void UTrainingSectorSubsystem::TryStartRound(double Now)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	FSectorSideCount Players;
+	FSectorSideCount Pmc;
+	for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+	{
+		TrainingSectorFightRuntime::CountSide(**It, It->IsPlayerTeam() ? Players : Pmc);
+	}
+	if (Players.Members < 1 || Pmc.Members < 1)
+	{
+		return;
+	}
+	++RoundNumber;
+	RoundStartedAt = Now;
+	RoundKillsPlayer = 0;
+	RoundKillsPmc = 0;
+	Watched.Reset();
+	Phase = ESectorRoundPhase::Fighting;
+	NoteKills();
+	RecordRound(true, ESectorRoundEnd::None, 0.0);
+	UE_LOG(LogCodexTactics, Display, TEXT("[TrainingSector] Round %d start sector %d seed %d start %d post %s"), RoundNumber,
+		GetSectorId(), FightSeed, CurrentPair.StartIndex, *Encounter.Post.Id);
+}
+
+void UTrainingSectorSubsystem::TickFighting(double Now)
+{
+	RefillReserves(Now);
+	NoteKills();
+	UWorld* World = GetWorld();
+	if (!World || !Active)
+	{
+		return;
+	}
+	FSectorSideCount Players;
+	FSectorSideCount Pmc;
+	for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+	{
+		TrainingSectorFightRuntime::CountSide(**It, It->IsPlayerTeam() ? Players : Pmc);
+	}
+	const ESectorRoundEnd Result = TrainingSectorRules::EvaluateRound(Players, Pmc, Now - RoundStartedAt, Fight.RoundTimeLimitS);
+	if (Result == ESectorRoundEnd::None)
+	{
+		return;
+	}
+	switch (Result)
+	{
+	case ESectorRoundEnd::Victory: ++ScoreVictory; break;
+	case ESectorRoundEnd::Defeat: ++ScoreDefeat; break;
+	case ESectorRoundEnd::Draw: ++ScoreDraw; break;
+	default: break;
+	}
+	LastResult = Result;
+	Banner = TrainingSectorRules::RoundBanner(RoundNumber, Result);
+	BannerUntil = Now + TrainingSectorRules::BannerSeconds;
+	for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+	{
+		It->bTacticalCeaseFire = true;
+	}
+	NextPair = TrainingSectorRules::PickRoundPair(Active->Starts.Num(), Active->Posts.Num(), FightSeed, RoundNumber + 1, CurrentPair);
+	bRespawnApplied = false;
+	Phase = ESectorRoundPhase::Intermission;
+	IntermissionUntil = Now + Fight.RoundRestartDelayS;
+	RecordRound(false, Result, Now - RoundStartedAt);
+	UE_LOG(LogCodexTactics, Display, TEXT("[TrainingSector] Round %d end %s kills %d/%d restart in %.1f s"), RoundNumber,
+		TrainingSectorRules::RoundEndName(Result), RoundKillsPlayer, RoundKillsPmc, Fight.RoundRestartDelayS);
+}
+
+void UTrainingSectorSubsystem::TickIntermission(double Now)
+{
+	if (Now < IntermissionUntil)
+	{
+		return;
+	}
+	if (RespawnRound())
+	{
+		Phase = ESectorRoundPhase::Waiting;
+	}
+}
+
+bool UTrainingSectorSubsystem::RespawnRound()
+{
+	UWorld* World = GetWorld();
+	ACodexTacticsGameMode* GameMode = World ? World->GetAuthGameMode<ACodexTacticsGameMode>() : nullptr;
+	UPmcEncounterSubsystem* Encounters = World ? UPmcEncounterSubsystem::Get(World) : nullptr;
+	UPmcSquadSubsystem* Pmc = World ? UPmcSquadSubsystem::Get(World) : nullptr;
+	if (!World || !GameMode || !Encounters || !Pmc || !Active || GameMode->SquadRoster.IsEmpty() || !NextPair.IsValid())
+	{
+		return false;
+	}
+	if (!bRespawnApplied)
+	{
+		TrainingSectorRules::ApplyPair(Active.GetValue(), NextPair, FightSeed, Start, Encounter);
+		CurrentPair = NextPair;
+		for (const int32 Team : Pmc->GetTeamIds())
+		{
+			if (Team > 0)
+			{
+				Pmc->DestroyTeam(Team);
+			}
+		}
+		TArray<AOperativeCharacter*> Existing;
+		for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+		{
+			Existing.Add(*It);
+		}
+		for (AOperativeCharacter* Op : Existing)
+		{
+			if (Op && !Op->IsActorBeingDestroyed())
+			{
+				Op->Destroy();
+			}
+		}
+		Encounters->RestartSchedule();
+		bRespawnApplied = true;
+		Watched.Reset();
+	}
+	int32 Spawned = 0;
+	const FRotator Facing = Start.Transform().Rotator();
+	for (int32 Index = 0; Index < GameMode->SquadRoster.Num(); ++Index)
+	{
+		const FSquadMemberSpawn& Member = GameMode->SquadRoster[Index];
+		bool bApplyBody = false;
+		const TSubclassOf<AOperativeCharacter> Class = GameMode->ResolveMemberClass(Member, bApplyBody);
+		const AOperativeCharacter* Defaults = Class ? Class->GetDefaultObject<AOperativeCharacter>() : nullptr;
+		const double Half = Defaults ? Defaults->GetSimpleCollisionHalfHeight() : 88.0;
+		const FVector Feet = Start.Position + Facing.RotateVector(Member.Offset);
+		if (GameMode->SpawnOperative(Member, Index, PlacePlayer(Feet, Half), Facing))
+		{
+			++Spawned;
+		}
+	}
+	if (Spawned <= 0)
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("[TrainingSector] Respawn spawned nobody; retrying."));
+		return false;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[TrainingSector] Respawn start %d post %s players %d"), CurrentPair.StartIndex, *Encounter.Post.Id, Spawned);
+	return true;
+}
+
+void UTrainingSectorSubsystem::NoteKills()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+	{
+		AOperativeCharacter* Op = *It;
+		if (!Op || Op->IsActorBeingDestroyed())
+		{
+			continue;
+		}
+		const bool bOut = !TrainingSectorFightRuntime::IsUp(*Op);
+		FSectorFighterWatch& Watch = Watched.FindOrAdd(Op);
+		if (!Watch.bSeen)
+		{
+			Watch.bSeen = true;
+			Watch.bOut = bOut;
+			continue;
+		}
+		if (!Watch.bOut && bOut)
+		{
+			Watch.bOut = true;
+			if (Op->IsPlayerTeam())
+			{
+				++RoundKillsPmc;
+			}
+			else
+			{
+				++RoundKillsPlayer;
+			}
+		}
+	}
+}
+
+void UTrainingSectorSubsystem::RefillReserves(double Now)
+{
+	if (Fight.AmmoMode != ESectorAmmoMode::Resupply)
+	{
+		return;
+	}
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+	{
+		AOperativeCharacter* Op = *It;
+		if (!Op || Op->IsActorBeingDestroyed())
+		{
+			continue;
+		}
+		FSectorFighterWatch& Watch = Watched.FindOrAdd(Op);
+		const UWeaponDataAsset* Weapon = Op->CurrentWeapon;
+		const bool bReady = TrainingSectorFightRuntime::IsUp(*Op) && Op->UsesAmmo() && Weapon && !Op->IsLauncherEquipped() && Op->ReserveAmmo <= 0;
+		const int32 Magazine = Weapon ? FMath::Max(1, Weapon->Stats.Ammo.MagazineSize) : 1;
+		if (!bReady || Op->CurrentClip * 3 > Magazine)
+		{
+			Watch.EmptySince = -1.0;
+			continue;
+		}
+		if (Watch.EmptySince < 0.0)
+		{
+			Watch.EmptySince = Now;
+		}
+		FSectorResupplyQuery Query;
+		Query.bUsesAmmo = true;
+		Query.bHasWeapon = true;
+		Query.Reserve = Op->ReserveAmmo;
+		Query.Clip = Op->CurrentClip;
+		Query.Magazine = Magazine;
+		Query.WeaponReserve = Weapon->Stats.Ammo.ReserveAmmo;
+		Query.SecondsQuiet = TrainingSectorRules::QuietSeconds(Now, Watch.EmptySince, Op->GetLastShotTime());
+		if (!TrainingSectorRules::ShouldRefillReserve(Query, Fight.AmmoMode, Fight.ResupplyDelayS) || TrainingSectorRules::ResupplyTouchesGrenades())
+		{
+			continue;
+		}
+		const int32 Filled = TrainingSectorRules::RefilledReserve(Magazine, Weapon->Stats.Ammo.ReserveAmmo);
+		Op->ReserveAmmo = Filled;
+		FWeaponAmmoState& Stored = Op->AmmoInventory.FindOrAdd(Weapon->WeaponId);
+		Stored.Reserve = Filled;
+		Stored.Clip = Op->CurrentClip;
+		Watch.EmptySince = -1.0;
+		UE_LOG(LogCodexTactics, Display, TEXT("[TrainingSector] Resupply %s %s reserve %d"), *Op->GetName(), *Weapon->WeaponId, Filled);
+	}
+}
+
+void UTrainingSectorSubsystem::RecordRound(bool bStart, ESectorRoundEnd Result, double Duration) const
+{
+	USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this);
+	if (!Recorder)
+	{
+		return;
+	}
+	FDemoRoundEvent Event;
+	Event.bStart = bStart;
+	Event.SectorId = GetSectorId();
+	Event.Seed = FightSeed;
+	Event.Round = RoundNumber;
+	Event.StartIndex = CurrentPair.StartIndex;
+	Event.PostIndex = CurrentPair.PostIndex;
+	Event.KillsPlayer = RoundKillsPlayer;
+	Event.KillsPmc = RoundKillsPmc;
+	Event.ScoreVictory = ScoreVictory;
+	Event.ScoreDefeat = ScoreDefeat;
+	Event.ScoreDraw = ScoreDraw;
+	Event.DurationS = static_cast<float>(Duration);
+	switch (Result)
+	{
+	case ESectorRoundEnd::Victory: Event.Result = EDemoRoundResult::Victory; break;
+	case ESectorRoundEnd::Defeat: Event.Result = EDemoRoundResult::Defeat; break;
+	case ESectorRoundEnd::Draw: Event.Result = EDemoRoundResult::Draw; break;
+	default: Event.Result = EDemoRoundResult::None; break;
+	}
+	Recorder->RecordSectorRound(Event);
 }
