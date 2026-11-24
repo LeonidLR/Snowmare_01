@@ -161,6 +161,21 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 		W.WriteValue(TEXT("v"), 1);
 		W.WriteValue(TEXT("session"), FileStem);
 		W.WriteValue(TEXT("map"), Session.Map);
+		if (Session.SectorBox)
+		{
+			const FBox2D& Box = *Session.SectorBox;
+			W.WriteValue(TEXT("sector_id"), Session.SectorId);
+			W.WriteObjectStart(TEXT("sector_box_cm"));
+			W.WriteArrayStart(TEXT("min"));
+			W.WriteValue(Finite(Box.Min.X));
+			W.WriteValue(Finite(Box.Min.Y));
+			W.WriteArrayEnd();
+			W.WriteArrayStart(TEXT("max"));
+			W.WriteValue(Finite(Box.Max.X));
+			W.WriteValue(Finite(Box.Max.Y));
+			W.WriteArrayEnd();
+			W.WriteObjectEnd();
+		}
 		W.WriteValue(TEXT("started_utc"), Session.StartedUtc.ToIso8601());
 		W.WriteValue(TEXT("world"), Session.bPie ? TEXT("PIE") : TEXT("Game"));
 		W.WriteValue(TEXT("units"), TEXT("cm,deg,s"));

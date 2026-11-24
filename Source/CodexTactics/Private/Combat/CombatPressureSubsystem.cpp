@@ -5,6 +5,7 @@
 // (CodexTactics.Combat.Pressure.*, CodexTactics.AI.AmbushWatch.*, CodexTactics.Combat.AmbushSpots.*, .AmbushPlan.*, .AmbushRelocate.*).
 
 #include "Combat/CombatPressureSubsystem.h"
+#include "Training/TrainingSectorSubsystem.h"
 #include "Core/GameplayPreloadSubsystem.h"
 
 #include "AI/PatrolRouteActor.h"
@@ -172,6 +173,10 @@ void UCombatPressureSubsystem::ReadConfig()
 
 bool UCombatPressureSubsystem::IsActive() const
 {
+	if (const UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(GetWorld()); Training && Training->HasActiveSector())
+	{
+		return false;
+	}
 	const int32 Override = CombatPressureLocal::CVarPressureEnabled.GetValueOnGameThread();
 	return Override >= 0 ? Override > 0 : Config.bEnabled;
 }

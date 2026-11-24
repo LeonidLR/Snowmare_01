@@ -2,6 +2,7 @@
 // (game designer items 6 / 10 / 11a, 2026-11-03). UE-only system (no Godot reference).
 
 #include "Falls/LedgeFallComponent.h"
+#include "Training/TrainingSectorSubsystem.h"
 
 #include "AIController.h"
 #include "Animation/AnimInstance.h"
@@ -275,7 +276,8 @@ bool ULedgeFallComponent::NotifyDropLinkReached(int32 Index)
 		return true;
 	}
 	const UDropLinkSubsystem* Links = GetLinks();
-	if (!Links || !Links->GetLink(Index))
+	const FDropLink* Link = Links ? Links->GetLink(Index) : nullptr;
+	if (!Link || !UTrainingSectorSubsystem::Allows(GetWorld(), Link->End, 70.0))
 	{
 		return false;
 	}
