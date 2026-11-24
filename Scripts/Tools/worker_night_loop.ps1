@@ -1,4 +1,4 @@
-# codex-worker continuous night loop (designer 2026-11-19: "the process must work constantly, no jams tonight").
+﻿# codex-worker continuous night loop (designer 2026-11-19: "the process must work constantly, no jams tonight").
 # Replaces the single 16:35 sweep run that ended at 16:51 and left the worker idle all night. Runs ON the worker, started and
 # kept alive by Scripts\Tools\worker_night_guard.ps1 (task "CodexTactics Night Guard", every 10 min). Until -Until it cycles:
 #   cycle k: A-00A crossroads x30 seeds -> A-00B alley x30 seeds -> X4 tactical arena x10 seeds -> PmcRoofDefence x10 ->
@@ -20,7 +20,8 @@
 param([string]$Repo = 'C:\Work\CodexTactics', [string]$Until = '07:45', [int]$Jobs = 4, [switch]$Once,
       [string]$TrainerFrom = '05:30', [string]$TrainerUntil = '07:30', [string]$TrainerRunId = 'pmc-v6-qd2',
       [ValidateSet('ab', 'trainer')][string]$WindowMode = 'ab',
-      [string]$Py = 'C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe')
+      [string]$Py = 'C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe',
+      [switch]$SkipHealthCheck, [switch]$HealthCheckOnly)
 $ErrorActionPreference = 'Continue'
 Set-Location $Repo
 $root = Join-Path $Repo 'Saved\Worker\nightloop'; New-Item -ItemType Directory -Force $root | Out-Null
@@ -123,8 +124,55 @@ function MaybeTrainer {
         L "trainer end: $($job.State)"; Remove-Job $job -Force
     } finally { ReleaseLock; $script:TrainerDone = $true; Beat 'after trainer' }
 }
+$script:HealthCheckDone = $false
+function RunNightlyHealthCheck {
+    # 080 PROJECT HEALTH: Nightly FULL run on the worker (all tests + all 41 smokes), outside the 05:30 A/B window and trainer hours.
+    # Runs once per night (early in cycle 1 before arena sweeps), updates Saved\Health\*.json and docs\port\DEBT.md.
+    if ($SkipHealthCheck -or $script:HealthCheckDone) { return }
+    if ((Get-Date) -ge (TrainerAt $TrainerFrom) -and (Get-Date) -lt (TrainerAt $TrainerUntil)) { return }
+    if (-not (TakeLock)) { L "health run: worker busy 30 min - trying again after next job"; return }
+    try {
+        $env:CODEX_AGENT = 'night-loop'; $env:CODEX_LOCK_HELD = '1'; $env:CODEX_SMOKE_REMOTE = 'off'
+        Beat "nightly health check build"
+        if (-not (UpdateAndBuild)) { L "health run: build failed - skipping"; return }
+        $d = Join-Path $root (Get-Date -Format 'yyyy-MM-dd')
+        New-Item -ItemType Directory -Force $d | Out-Null
+        $tlog = Join-Path $d 'health_tests.log'
+        $sjson = Join-Path $d 'health_smokes.json'
+
+        Beat "nightly health check: all tests"
+        L "health run: running all CodexTactics tests"
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Repo 'Scripts\test.ps1') -Filter CodexTactics *> $tlog
+        $testExit = $LASTEXITCODE
+
+        Beat "nightly health check: 41 smokes"
+        L "health run: running 41 registered smokes"
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Repo 'Scripts\smoke_parallel.ps1') -Remote off -Commands all -Jobs $Jobs -ExtraArgs '-Multiprocess' -ResultJson $sjson *> (Join-Path $d 'health_smokes.log')
+        $smokeExit = $LASTEXITCODE
+
+        Beat "nightly health aggregator"
+        L "health run: updating Saved\Health and docs\port\DEBT.md"
+        $healthOut = Join-Path $Repo 'Saved\Health\health_latest.json'
+        $debtOut = Join-Path $Repo 'docs\port\DEBT.md'
+        $chatLine = if (Test-Path $Py) {
+            (& $Py -I (Join-Path $Repo 'Scripts\Tools\project_health.py') --repo $Repo --test-log $tlog --smoke-json $sjson --out-json $healthOut --debt-md $debtOut --chat-summary 2>&1 | Select-Object -Last 1)
+        } else {
+            "no python at $Py"
+        }
+        L "health run done: $chatLine"
+        Add-Content -Encoding UTF8 (Join-Path $d 'digest.log') ("{0} HEALTH HEAD {1}: {2}" -f (Get-Date -Format s), $script:BuiltHead, $chatLine)
+        $script:HealthCheckDone = $true
+    } finally { ReleaseLock; Beat "after health run" }
+}
+if ($HealthCheckOnly) {
+    RunNightlyHealthCheck
+    L 'health-check-only mode complete - exit'
+    Beat 'health-check-only done'
+    exit 0
+}
 while ((Get-Date) -lt $deadline) {
     MaybeTrainer
+    RunNightlyHealthCheck
     $k++
     $base = 1000 + 30 * $k
     $jobsList = @(
