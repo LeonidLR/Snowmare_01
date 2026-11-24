@@ -18,6 +18,7 @@ param(
     [string]$RemoteRoot = "C:/Work/CodexTactics",
     [string]$Ref = "origin/main",
     [switch]$ShipHead,                                      # Ref = HEAD of -BinariesFrom; unpushed commits are bundled over SSH
+    [string]$ShipRef = "",                                  # ship a pinned source ref or SHA (for baseline verification)
     # Folder whose Binaries\Win64 is copied; default = the checkout this script lives in. Build it from the same commit as -Ref.
     [string]$BinariesFrom = "",
     [string[]]$Commands = @("MovementSmoke"),
@@ -63,12 +64,28 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($ShipHead -and $ShipRef) { throw "Use either -ShipHead or -ShipRef." }
 $RepoDir = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 if (-not $BinariesFrom) { $BinariesFrom = $RepoDir }
 $LocalBin = Join-Path $BinariesFrom "Binaries\Win64"
 $Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $OutDir = $(if ($ResultDir) { $ResultDir } else { Join-Path $RepoDir "Saved\Logs\Worker\$Stamp" })
 $Token = "{0}-{1}-{2}" -f $env:COMPUTERNAME, $PID, $Stamp     # this run's id in the worker's SYNC.<token> / agent.lock
+
+function New-WorkerCommitBundle([string]$Repository, [string]$Commit, [string]$Bundle, [string]$BundleToken) {
+    # An advertised ref pins the bundle to the requested commit even if HEAD moves.
+    $bundleRef = "refs/worker-sync/$BundleToken"
+    & git -C $Repository update-ref $bundleRef $Commit ('0' * $Commit.Length)
+    if ($LASTEXITCODE -ne 0) { throw "Could not create temporary bundle ref $bundleRef." }
+    try {
+        & git -C $Repository bundle create $Bundle $bundleRef "^origin/main" 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "git bundle failed for $Commit" }
+    } finally {
+        & git -C $Repository update-ref -d $bundleRef $Commit
+        if ($LASTEXITCODE -ne 0) { throw "Could not remove temporary bundle ref $bundleRef." }
+    }
+    return $bundleRef
+}
 
 function Say([string]$m, [string]$c = "Gray") { Write-Host ("[worker_sync {0:HH:mm:ss}] {1}" -f (Get-Date), $m) -ForegroundColor $c }
 
@@ -230,21 +247,24 @@ try {
     # ---- 1. code -------------------------------------------------------------------------------------------------------
     if (-not $SkipSync) {
         $fetchExtra = ""
-        if ($ShipHead) {
-            $Ref = (& git -C $BinariesFrom rev-parse HEAD).Trim()
+        if ($ShipHead -or $ShipRef) {
+            $sourceRef = if ($ShipRef) { $ShipRef } else { 'HEAD' }
+            $Ref = & git -C $BinariesFrom rev-parse --verify --end-of-options "$sourceRef^{commit}"
+            if ($LASTEXITCODE -ne 0 -or $Ref -notmatch '^[0-9a-f]{40,64}$') { throw "Cannot resolve source ref $sourceRef." }
             & git -C $BinariesFrom fetch --quiet origin 2>$null
             $onRemote = @(& git -C $BinariesFrom branch -r --contains $Ref 2>$null).Count -gt 0
             if (-not $onRemote) {
-                # Unpushed commits: bundle HEAD minus origin/main, fetch it on the worker from the bundle file.
                 $bundle = Join-Path ([IO.Path]::GetTempPath()) "worker_sync-$Token.bundle"
-                & git -C $BinariesFrom bundle create $bundle HEAD "^origin/main" 2>&1 | Out-Null
-                if ($LASTEXITCODE -ne 0) { throw "git bundle failed for $Ref" }
-                & scp -q $bundle "${Worker}:$RemoteRoot/Saved/Worker/ship.bundle"
-                if ($LASTEXITCODE -ne 0) { throw "scp of the bundle failed" }
-                Remove-Item $bundle -ErrorAction SilentlyContinue
-                $fetchExtra = "git fetch --quiet '$RemoteRoot/Saved/Worker/ship.bundle' HEAD 2>&1 | Out-Null; if (`$LASTEXITCODE -ne 0) { 'BUNDLE-FAILED'; exit 2 }"
-                Say "ship HEAD $($Ref.Substring(0,8)) (unpushed: bundled)"
-            } else { Say "ship HEAD $($Ref.Substring(0,8)) (on origin)" }
+                try {
+                    $bundleRef = New-WorkerCommitBundle $BinariesFrom $Ref $bundle $Token
+                    & scp -q $bundle "${Worker}:$RemoteRoot/Saved/Worker/ship.bundle"
+                    if ($LASTEXITCODE -ne 0) { throw "scp of the bundle failed" }
+                } finally {
+                    Remove-Item -LiteralPath $bundle -ErrorAction SilentlyContinue
+                }
+                $fetchExtra = "git fetch --quiet '$RemoteRoot/Saved/Worker/ship.bundle' $bundleRef 2>&1 | Out-Null; if (`$LASTEXITCODE -ne 0) { 'BUNDLE-FAILED'; exit 2 }"
+                Say "ship $sourceRef $($Ref.Substring(0,8)) (unpushed: bundled)"
+            } else { Say "ship $sourceRef $($Ref.Substring(0,8)) (on origin)" }
         }
         Say "git: fetch + reset to $Ref + lfs pull"
         $git = Invoke-Worker @"

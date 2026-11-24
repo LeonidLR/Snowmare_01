@@ -86,7 +86,7 @@ function Resolve-Impact([string[]]$Files, $Map, [int]$QuickCount = 0) {
         }
         $fileTests | Where-Object { $_ } | ForEach-Object { $tests.Add($_) }
         $fileSmokes | Where-Object { $_ } | ForEach-Object { $smokes.Add($_) }
-        $rows += [pscustomobject]@{ File = $file; Rules = (($hit | ForEach-Object { $_.Rule.name }) -join ","); Tests = @($fileTests).Count; Smokes = @($fileSmokes | Select-Object -Unique).Count }
+        $rows += [pscustomobject]@{ File = $file; Rules = (($hit | ForEach-Object { $_.Rule.name }) -join ","); Tests = @($fileTests).Count; Smokes = @($fileSmokes | Select-Object -Unique).Count; SmokeNames = @($fileSmokes | Where-Object { $_ } | Select-Object -Unique) }
     }
     return [pscustomobject]@{
         Tests = @(Compress-Filters $tests)
