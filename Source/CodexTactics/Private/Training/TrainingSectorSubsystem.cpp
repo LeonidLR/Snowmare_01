@@ -456,10 +456,10 @@ void UTrainingSectorSubsystem::BeginFight(int32 Seed)
 	bRespawnApplied = false;
 	Watched.Reset();
 	CurrentPair = Active ? TrainingSectorRules::PairOf(Active.GetValue(), Start, Encounter) : FSectorPair();
-	if (const UWorld* World = GetWorld(); World && World->HasBegunPlay())
-	{
-		EnsureFightTick();
-	}
+	// UWorld::BeginPlay calls subsystem OnWorldBeginPlay before GameMode::StartPlay, and Prepare
+	// selects the sector before Super::StartPlay, so HasBegunPlay is still false here. The ticker
+	// has to start now: OnWorldBeginPlay will not run again.
+	EnsureFightTick();
 }
 
 void UTrainingSectorSubsystem::EndFight()
@@ -475,7 +475,7 @@ void UTrainingSectorSubsystem::EndFight()
 void UTrainingSectorSubsystem::EnsureFightTick()
 {
 	UWorld* World = GetWorld();
-	if (!World || !World->HasBegunPlay() || !Active || FightTicker.IsValid())
+	if (!World || !Active || FightTicker.IsValid())
 	{
 		return;
 	}
