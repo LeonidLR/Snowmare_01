@@ -26,7 +26,8 @@
 //   O  (kit-dressed maps) an initially OPEN door (made from the kit's open leaves): the click through its open leaf shuts it, the click on
 //      the shut leaf opens it again - never a cover hug; every kick attempt faced the leaf (< 15 deg at its start and impact);
 //   G  the switch OFF at runtime: every door released, the builder leaves back (visible, blocking sight, walk-through) - as before R1.
-// Enemies are parked far away; no pressure / PMC encounters.
+// Enemies are parked far away; no pressure. The kit showcase is PMC-only (076): StopLevelPmc removes that squad until stage P spawns
+// its own fighter. Leaving them up killed the commander (GameOver froze time) and the later door orders never finished.
 
 #include "CoreMinimal.h"
 
@@ -313,6 +314,11 @@ namespace DoorsSmoke
 		if (!World)
 		{
 			return false;
+		}
+		// Until stage P's own fighter exists. After that his team must stay (DestroyTeam would remove him mid-breach).
+		if (State->FighterName.IsEmpty())
+		{
+			SmokeUtils::StopLevelPmc(World);
 		}
 		switch (State->PreloadGate.Poll(World))
 		{

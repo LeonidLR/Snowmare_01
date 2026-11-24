@@ -9,7 +9,8 @@
 //                                                         back from the threshold;
 //   c  a click inside the room                         -> the entry: the jamb men and the centre man end up inside, past the threshold;
 //   d  Solo, first + second click on a doorway         -> one silhouette; he goes to the nearest jamb and peeks in.
-// Enemies are parked far away.
+// Enemies are parked far away. The kit showcase is in doors.json enabled_maps and is PMC-only (076): this smoke checks the doorway
+// ghost, so openable doors stay off (a shut leaf would take the click) and the kit PMC squad is removed.
 
 #include "CoreMinimal.h"
 
@@ -157,6 +158,11 @@ namespace DoorBreachSmoke
 		{
 			return false;
 		}
+		if (IConsoleVariable* Openable = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Doors.Openable")))
+		{
+			Openable->Set(0, ECVF_SetByConsole);
+		}
+		SmokeUtils::StopLevelPmc(World);
 		switch (State->PreloadGate.Poll(World))
 		{
 		case SmokeUtils::EPreloadGate::Waiting:
