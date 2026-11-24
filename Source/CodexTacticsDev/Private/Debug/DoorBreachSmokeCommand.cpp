@@ -144,6 +144,13 @@ namespace DoorBreachSmoke
 			FHitResult Hit;
 			if (MantleSmokeSites::CameraRayHit(World, Point, Hit) && PC.ClassifyClickPreview(Hit) == EClickPreviewKind::Breach)
 			{
+				// A dense layout: the same ray can sit in a neighbour's portal. Only the doorway under test counts.
+				if (PC.GetBreachPreviewDoorwayId() != Door.Id)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[DoorBreachSmoke] the ray at %s arms %s, not %s"), *Point.ToCompactString(),
+						*PC.GetBreachPreviewDoorwayId(), *Door.Id);
+					continue;
+				}
 				OutHit = Hit;
 				return true;
 			}
@@ -209,6 +216,21 @@ namespace DoorBreachSmoke
 					State->Doors.Add(Door);
 				}
 			}
+			// Street entries (schema v2 role). An interior door's ray often arms the neighbouring opening (S07 d9 armed d20).
+			// A schema v1 layout has no role: every ground doorway stays, as on the depot.
+			TArray<FRuntimeDoorway> Entries;
+			for (const FRuntimeDoorway& Door : State->Doors)
+			{
+				if (Door.Role.Equals(TEXT("entry")))
+				{
+					Entries.Add(Door);
+				}
+			}
+			if (Entries.Num() > 0)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[DoorBreachSmoke] street entries %d of %d ground doorways"), Entries.Num(), State->Doors.Num());
+				State->Doors = MoveTemp(Entries);
+			}
 			const FVector Near = Leader->GetActorLocation();
 			State->Doors.Sort([&Near](const FRuntimeDoorway& A, const FRuntimeDoorway& B) { return FVector::DistSquared2D(A.Center, Near) < FVector::DistSquared2D(B.Center, Near); });
 			Check(*State, State->Doors.Num() > 0, FString::Printf(TEXT("the map's ground-floor building doorways: %d of %d registered"), State->Doors.Num(), Doors->GetDoorwayCount()));
@@ -265,7 +287,7 @@ namespace DoorBreachSmoke
 			if (!AimIntoOpening(World, *PC, *State, State->ClickHit))
 			{
 				UE_LOG(LogCodexTactics, Display, TEXT("[DoorBreachSmoke] the camera does not see into doorway %s - the next one"), *State->Door.Id);
-				Next(*State, ++State->Retries > 8 ? 99 : 1);
+				Next(*State, ++State->Retries > 16 ? 99 : 1);
 				return true;
 			}
 			// Review 2026-11-17 (finding 2): a click THROUGH the opening onto the room's floor is a plain move through the doorway, no breach ghost.

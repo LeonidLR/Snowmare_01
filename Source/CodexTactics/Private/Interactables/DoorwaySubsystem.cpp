@@ -68,6 +68,7 @@ bool UDoorwaySubsystem::LoadFromLayoutJson(const FString& JsonString)
 		TArray<DoorRules::FLayoutPlace> Places;
 		TMap<FString, FBox2D> Footprints;
 		DoorRules::ParseLayoutPlaces(*Root, Places, Footprints);
+		const TMap<FString, DoorRules::FLayoutDoor> LayoutDoors = DoorRules::ParseLayoutDoors(*Root);
 		int32 Added = 0;
 		for (const DoorRules::FLayoutPlace& Place : Places)
 		{
@@ -83,6 +84,10 @@ bool UDoorwaySubsystem::LoadFromLayoutJson(const FString& JsonString)
 			const FVector2D Normal = Place.Normal.GetSafeNormal();
 			Door.OutwardNormal = FVector(Normal.X, Normal.Y, 0.f);
 			Door.WallTangent = FVector(-Normal.Y, Normal.X, 0.f);
+			if (const DoorRules::FLayoutDoor* Layout = LayoutDoors.Find(Place.Id))
+			{
+				Door.Role = Layout->Role;
+			}
 			Door.WalkLayer = FMath::Abs(Place.Center.Z) < 80.f ? TEXT("ground") : TEXT("upper");
 			RegisterDoorway(Door);
 			++Added;

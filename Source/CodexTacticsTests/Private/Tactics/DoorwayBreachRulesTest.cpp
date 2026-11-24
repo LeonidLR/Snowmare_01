@@ -247,8 +247,8 @@ bool FDoorwaySubsystemStoryLayoutDoorsTest::RunTest(const FString&)
 	// G018: the kept showcase layout is schema v2. The props view refuses it, so the doorway smoke registered 0 of 0. Building doors
 	// (not windows, not stair mouths) register, and yaw is the outward normal (S01 east door yaw 0, south door yaw 270).
 	const FString Json = TEXT("{\"schema\":\"codex.levelgen_layout/2\",\"ground_z\":0,\"buildings\":[{\"id\":\"S01\",\"openings\":[")
-		TEXT("{\"id\":\"S01_d0\",\"kind\":\"door\",\"pos\":[2500,-5550],\"floor\":0,\"width\":150,\"yaw\":0},")
-		TEXT("{\"id\":\"S01_d1\",\"kind\":\"door\",\"pos\":[2350,-6700],\"floor\":0,\"width\":150,\"yaw\":270},")
+		TEXT("{\"id\":\"S01_d0\",\"kind\":\"door\",\"pos\":[2500,-5550],\"floor\":0,\"width\":150,\"yaw\":0,\"role\":\"entry\"},")
+		TEXT("{\"id\":\"S01_d1\",\"kind\":\"door\",\"pos\":[2350,-6700],\"floor\":0,\"width\":150,\"yaw\":270,\"role\":\"room\"},")
 		TEXT("{\"id\":\"S01_w0\",\"kind\":\"window\",\"pos\":[1,2],\"floor\":0,\"width\":120,\"yaw\":0}],")
 		TEXT("\"stairs\":[{\"id\":\"S01_stair\",\"pos\":[10,20],\"top\":[10,80],\"from\":0,\"to\":1,\"width\":150}]}]}");
 
@@ -264,6 +264,7 @@ bool FDoorwaySubsystemStoryLayoutDoorsTest::RunTest(const FString&)
 		TestEqual(TEXT("width"), East->WidthCm, 150.f);
 		TestEqual(TEXT("on the ground"), East->Center, FVector(2500.f, -5550.f, 0.f));
 		TestEqual(TEXT("yaw 0 looks +X"), East->OutwardNormal, FVector(1.f, 0.f, 0.f));
+		TestEqual(TEXT("street entry"), East->Role, FString(TEXT("entry")));
 		TestEqual(TEXT("wall runs along Y"), East->WallTangent, FVector(0.f, 1.f, 0.f));
 	}
 	const FRuntimeDoorway* South = Subsystem->FindDoorwayById(TEXT("S01_d1"));
