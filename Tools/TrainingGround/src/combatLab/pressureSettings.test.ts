@@ -12,7 +12,7 @@ import {
 import type { CombatLabPresetFile, JsonObject } from './pressureSettings.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
-const LEVEL = path.join(ROOT, 'Content/Data/LevelJson/L_FormationLabCombat.json');
+const readLevel = (id: string): JsonObject => JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelJson', id + '.json'), 'utf8'));
 const PRESETS = path.join(ROOT, 'Content/Data/CombatLab/presets.json');
 const GOLDEN = path.join(ROOT, 'Tools/TrainingGround/golden', FIELDS_GOLDEN_FILE);
 
@@ -109,21 +109,25 @@ test('get / set / pick / apply keep every other key and never mutate', () => {
   assert.deepEqual(validateSettings({ pressure: {}, cheats: { immortal: 'y' } }).length, 1);
 });
 
-test('L_FormationLabCombat.json: its blocks are valid', () => {
-  const level = JSON.parse(fs.readFileSync(LEVEL, 'utf8'));
-  const settings = pickSettings(level);
-  assert.deepEqual(validateSettings(settings), []);
-  assert.equal(settings.cheats.immortal, true);
-  assert.equal(fieldValue(settings.pressure, fieldByPath('first_event_sec')!), 30);
+test('kept training levels: actual pressure and cheats parse and validate', () => {
+  for (const id of ['L_Gen_Depot_1_X6', 'L_Gen_StoryShowcase_Kit', 'L_Demo01_A_FrozenLake']) {
+    const level = readLevel(id);
+    assert.equal(level.level_id, id);
+    assert.deepEqual(validateSettings(pickSettings(level)), [], id);
+  }
 });
 
-test('presets.json: valid, the designer\'s four, "Default" = the level as shipped', () => {
+test('presets.json: the designer\'s four validate and Default round-trips on X6', () => {
   const file = JSON.parse(fs.readFileSync(PRESETS, 'utf8')) as CombatLabPresetFile;
   assert.deepEqual(validatePresetFile(file), []);
   const ids = file.presets.map((p) => p.id);
   for (const id of ['default', 'patrols_only', 'ambush_heavy', 'coordinated_only']) assert.ok(ids.includes(id), id);
-  const level = JSON.parse(fs.readFileSync(LEVEL, 'utf8'));
-  assert.equal(matchingPreset(file, pickSettings(level)), 'default');
+  const level = readLevel('L_Gen_Depot_1_X6');
+  const defaultPreset = file.presets.find((p) => p.id === 'default')!;
+  const applied = applySettings(level, presetSettings(defaultPreset));
+  assert.equal(applied.level_id, level.level_id);
+  assert.equal(fieldValue(pickSettings(applied).pressure, fieldByPath('first_event_sec')!), 30);
+  assert.equal(matchingPreset(file, pickSettings(applied)), 'default');
   const patrols = presetSettings(file.presets.find((p) => p.id === 'patrols_only')!);
   assert.equal(eventShares(patrols.pressure).patrol, 1);
   const coordinated = presetSettings(file.presets.find((p) => p.id === 'coordinated_only')!);

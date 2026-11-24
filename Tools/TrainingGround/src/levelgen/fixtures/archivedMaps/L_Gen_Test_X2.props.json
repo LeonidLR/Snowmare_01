@@ -1,0 +1,1848 @@
+{
+	"schema": "codex.levelgen_props/1",
+	"map": "L_Gen_Test_X2",
+	"layout": "gen_ref_01_02_depot_1_x2",
+	"layout_hash": "0000000000000000000000000000000000000000",
+	"revision": 1,
+	"frozen": false,
+	"source": "auto",
+	"layers": [
+		{
+			"id": "crates",
+			"kind": "crates",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "crates_default",
+			"rules": {
+				"count": {
+					"max": 159,
+					"mode": "density",
+					"per_100m2": 0.25
+				},
+				"route_corridor_m": 2,
+				"where": {
+					"near": [
+						{
+							"max_cm": 150,
+							"weight": 3,
+							"what": "wall"
+						},
+						{
+							"max_cm": 200,
+							"weight": 2,
+							"what": "cover"
+						}
+					],
+					"walk_layers": ["ground", "floor:*"]
+				}
+			},
+			"objects": [
+				{
+					"id": "crates_00000001_0",
+					"variant": "crate_s",
+					"pos": [-1600, -1550],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": true
+				},
+				{
+					"id": "crates_00000001_2",
+					"variant": "crate_s",
+					"pos": [-4450, -5400],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": true
+				},
+				{
+					"id": "crates_00000001_3",
+					"variant": "crate_l",
+					"pos": [2800, -4900],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_4",
+					"variant": "crate_s",
+					"pos": [4400, 8850],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": true
+				},
+				{
+					"id": "crates_00000001_6",
+					"variant": "crate_s",
+					"pos": [5450, -1300],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_7",
+					"variant": "crate_s",
+					"pos": [5900, 7000],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_8",
+					"variant": "crate_s",
+					"pos": [4550, 7650],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_9",
+					"variant": "crate_s",
+					"pos": [-3050, 3550],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_10",
+					"variant": "crate_s",
+					"pos": [1300, 3350],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_11",
+					"variant": "crate_s",
+					"pos": [-4400, 7550],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_12",
+					"variant": "crate_s",
+					"pos": [5650, 7800],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_13",
+					"variant": "crate_s",
+					"pos": [-1550, 6900],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_14",
+					"variant": "crate_s",
+					"pos": [-5700, -1600],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_15",
+					"variant": "crate_s",
+					"pos": [4600, -2300],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_16",
+					"variant": "crate_s",
+					"pos": [3050, -5950],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_17",
+					"variant": "crate_s",
+					"pos": [-5400, 6050],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_18",
+					"variant": "crate_s",
+					"pos": [-3700, -4400],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_19",
+					"variant": "crate_s",
+					"pos": [-2600, 6300],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_20",
+					"variant": "crate_s",
+					"pos": [-3750, -8150],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_21",
+					"variant": "crate_l",
+					"pos": [1400, 2750],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_22",
+					"variant": "crate_s",
+					"pos": [4150, 4000],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_23",
+					"variant": "crate_s",
+					"pos": [6150, 4750],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_24",
+					"variant": "crate_s",
+					"pos": [1250, 5150],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_25",
+					"variant": "crate_s",
+					"pos": [-1550, -6500],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_26",
+					"variant": "crate_s",
+					"pos": [-4350, 6600],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_27",
+					"variant": "crate_s",
+					"pos": [-4000, -5700],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_28",
+					"variant": "crate_s",
+					"pos": [-6150, 6600],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_29",
+					"variant": "crate_l",
+					"pos": [1300, 7050],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_30",
+					"variant": "crate_s",
+					"pos": [-6200, 5850],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_31",
+					"variant": "crate_s",
+					"pos": [-5000, -5650],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_32",
+					"variant": "crate_l",
+					"pos": [3750, -2300],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_33",
+					"variant": "crate_s",
+					"pos": [-4450, 4050],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_34",
+					"variant": "crate_s",
+					"pos": [-2050, -4150],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_35",
+					"variant": "crate_s",
+					"pos": [-3550, 7000],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_36",
+					"variant": "crate_l",
+					"pos": [5700, 3450],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_37",
+					"variant": "crate_s",
+					"pos": [2350, 8500],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_38",
+					"variant": "crate_l",
+					"pos": [4700, -5250],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_39",
+					"variant": "crate_s",
+					"pos": [-5300, 1300],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_40",
+					"variant": "crate_s",
+					"pos": [-3400, 8650],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_41",
+					"variant": "crate_s",
+					"pos": [3500, -7350],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_42",
+					"variant": "crate_s",
+					"pos": [-850, 7500],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_43",
+					"variant": "crate_s",
+					"pos": [-2700, -4150],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_44",
+					"variant": "crate_s",
+					"pos": [-2200, 650],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_45",
+					"variant": "crate_s",
+					"pos": [1300, -4850],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_46",
+					"variant": "crate_s",
+					"pos": [-3250, -7500],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_47",
+					"variant": "crate_l",
+					"pos": [-1850, 8700],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_48",
+					"variant": "crate_s",
+					"pos": [-2300, -300],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_49",
+					"variant": "crate_s",
+					"pos": [-4200, 7000],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_50",
+					"variant": "crate_s",
+					"pos": [3400, -5700],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_51",
+					"variant": "crate_l",
+					"pos": [5050, -2750],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_52",
+					"variant": "crate_s",
+					"pos": [-600, 5400],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_53",
+					"variant": "crate_s",
+					"pos": [-1150, -2850],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "hand_crates_0",
+					"variant": "crate_s",
+					"pos": [-4500, -6350],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false,
+					"origin": "hand"
+				},
+				{
+					"id": "crates_00000001_1",
+					"variant": "crate_s",
+					"pos": [7400, -2700],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_5",
+					"variant": "crate_l",
+					"pos": [2800, 9700],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_54",
+					"variant": "crate_l",
+					"pos": [-8150, 1900],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_55",
+					"variant": "crate_l",
+					"pos": [8450, -7950],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_56",
+					"variant": "crate_s",
+					"pos": [-3050, 9550],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_57",
+					"variant": "crate_s",
+					"pos": [-4300, -10250],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_58",
+					"variant": "crate_s",
+					"pos": [-1900, -2250],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_59",
+					"variant": "crate_s",
+					"pos": [-4400, -6800],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_60",
+					"variant": "crate_s",
+					"pos": [-4150, 10900],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_61",
+					"variant": "crate_s",
+					"pos": [6500, 5200],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_62",
+					"variant": "crate_s",
+					"pos": [-3250, 4700],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_63",
+					"variant": "crate_s",
+					"pos": [2500, 8850],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_64",
+					"variant": "crate_s",
+					"pos": [-2050, 11050],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_65",
+					"variant": "crate_s",
+					"pos": [-3650, -300],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_66",
+					"variant": "crate_s",
+					"pos": [-8200, 7400],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_67",
+					"variant": "crate_s",
+					"pos": [-6100, 9550],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_68",
+					"variant": "crate_l",
+					"pos": [2450, 7300],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_69",
+					"variant": "crate_s",
+					"pos": [-6150, 7450],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_70",
+					"variant": "crate_s",
+					"pos": [-5050, 4800],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_71",
+					"variant": "crate_s",
+					"pos": [-1650, -450],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_72",
+					"variant": "crate_s",
+					"pos": [-4650, 9000],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_73",
+					"variant": "crate_s",
+					"pos": [-1100, -11950],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_74",
+					"variant": "crate_l",
+					"pos": [6150, 3650],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_75",
+					"variant": "crate_s",
+					"pos": [-2900, 6150],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_76",
+					"variant": "crate_s",
+					"pos": [-5350, 7300],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_77",
+					"variant": "crate_l",
+					"pos": [-1400, 11200],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_78",
+					"variant": "crate_s",
+					"pos": [8150, -250],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_79",
+					"variant": "crate_s",
+					"pos": [-2950, -9450],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_80",
+					"variant": "crate_s",
+					"pos": [3550, 9600],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_81",
+					"variant": "crate_s",
+					"pos": [-6150, -8000],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_82",
+					"variant": "crate_s",
+					"pos": [7750, -9400],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_83",
+					"variant": "crate_l",
+					"pos": [-8500, -3800],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_84",
+					"variant": "crate_s",
+					"pos": [1250, 6250],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_85",
+					"variant": "crate_s",
+					"pos": [1500, -6500],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_86",
+					"variant": "crate_s",
+					"pos": [-6700, 10000],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_87",
+					"variant": "crate_l",
+					"pos": [-7150, 5250],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_88",
+					"variant": "crate_s",
+					"pos": [-1700, 11800],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_89",
+					"variant": "crate_l",
+					"pos": [-4050, -8700],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_90",
+					"variant": "crate_s",
+					"pos": [4800, 1750],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_91",
+					"variant": "crate_s",
+					"pos": [-1600, 6100],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_92",
+					"variant": "crate_l",
+					"pos": [7800, 6700],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_93",
+					"variant": "crate_l",
+					"pos": [-2450, 11600],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_94",
+					"variant": "crate_l",
+					"pos": [1500, -4700],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_95",
+					"variant": "crate_s",
+					"pos": [-7800, -6100],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_96",
+					"variant": "crate_l",
+					"pos": [8650, 11200],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_97",
+					"variant": "crate_s",
+					"pos": [-1050, -7850],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_98",
+					"variant": "crate_s",
+					"pos": [-7150, 7850],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_99",
+					"variant": "crate_l",
+					"pos": [-4050, 12350],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_100",
+					"variant": "crate_s",
+					"pos": [-2900, -650],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_101",
+					"variant": "crate_s",
+					"pos": [-600, 10100],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_102",
+					"variant": "crate_l",
+					"pos": [-2300, -9800],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_103",
+					"variant": "crate_s",
+					"pos": [8300, 7300],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_104",
+					"variant": "crate_s",
+					"pos": [-5600, 8500],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_105",
+					"variant": "crate_s",
+					"pos": [8350, -1850],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_106",
+					"variant": "crate_s",
+					"pos": [-4400, 8500],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_107",
+					"variant": "crate_l",
+					"pos": [1900, 8750],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				}
+			],
+			"report": {
+				"eligible": 173954,
+				"gate": "pass",
+				"kept": 53,
+				"placed": 56,
+				"rejected": {
+					"blocked": 49599,
+					"door": 1915,
+					"keepout": 0,
+					"ladder": 2608,
+					"other": 91,
+					"other_layer": 230,
+					"route": 9855,
+					"spacing": 2606,
+					"spawn": 2703
+				},
+				"requested": 109,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": []
+			}
+		},
+		{
+			"id": "barrels",
+			"kind": "barrels",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "barrels_default",
+			"rules": {
+				"count": {
+					"mode": "count",
+					"value": 16
+				},
+				"route_corridor_m": 2,
+				"where": {
+					"near": [
+						{
+							"max_cm": 120,
+							"weight": 2,
+							"what": "wall"
+						}
+					]
+				}
+			},
+			"objects": [
+				{
+					"id": "barrels_00000001_0",
+					"variant": "barrel_explosive",
+					"pos": [-5000, 5300],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_0"
+				},
+				{
+					"id": "barrels_00000001_1",
+					"variant": "barrel_explosive",
+					"pos": [4550, 8500],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_1"
+				},
+				{
+					"id": "barrels_00000001_2",
+					"variant": "barrel_explosive",
+					"pos": [4600, 8400],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_1"
+				},
+				{
+					"id": "barrels_00000001_3",
+					"variant": "barrel_explosive",
+					"pos": [4450, 8450],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_1"
+				},
+				{
+					"id": "barrels_00000001_4",
+					"variant": "barrel_explosive",
+					"pos": [-1250, 6700],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_4"
+				},
+				{
+					"id": "barrels_00000001_5",
+					"variant": "barrel_explosive",
+					"pos": [-1200, 6600],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_4"
+				},
+				{
+					"id": "barrels_00000001_6",
+					"variant": "barrel_explosive",
+					"pos": [-1150, 6650],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_4"
+				},
+				{
+					"id": "barrels_00000001_7",
+					"variant": "barrel_explosive",
+					"pos": [3350, 0],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_7"
+				},
+				{
+					"id": "barrels_00000001_8",
+					"variant": "barrel_explosive",
+					"pos": [7050, 9050],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_8"
+				},
+				{
+					"id": "barrels_00000001_9",
+					"variant": "barrel_explosive",
+					"pos": [1050, 12250],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_9"
+				},
+				{
+					"id": "barrels_00000001_10",
+					"variant": "barrel_explosive",
+					"pos": [950, 12200],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_9"
+				},
+				{
+					"id": "barrels_00000001_11",
+					"variant": "barrel_explosive",
+					"pos": [1100, 12150],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_9"
+				},
+				{
+					"id": "barrels_00000001_12",
+					"variant": "barrel_explosive",
+					"pos": [2100, 10750],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_12"
+				},
+				{
+					"id": "barrels_00000001_13",
+					"variant": "barrel_explosive",
+					"pos": [2100, 10650],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_12"
+				},
+				{
+					"id": "barrels_00000001_14",
+					"variant": "barrel_explosive",
+					"pos": [2050, 10700],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_12"
+				},
+				{
+					"id": "barrels_00000001_15",
+					"variant": "barrel_explosive",
+					"pos": [6550, 200],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_15"
+				}
+			],
+			"report": {
+				"eligible": 170307,
+				"gate": "pass",
+				"kept": 8,
+				"placed": 8,
+				"rejected": {
+					"blocked": 63682,
+					"door": 1277,
+					"keepout": 0,
+					"ladder": 1787,
+					"other": 0,
+					"other_layer": 3241,
+					"route": 8675,
+					"spacing": 1030,
+					"spawn": 2565
+				},
+				"requested": 16,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": []
+			}
+		},
+		{
+			"id": "turrets",
+			"kind": "turrets",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "turrets_default",
+			"rules": {
+				"count": {
+					"mode": "count",
+					"value": 4
+				}
+			},
+			"objects": [
+				{
+					"id": "turrets_00000001_0",
+					"variant": "turret_mg",
+					"pos": [2000, 3150],
+					"walk_layer": "roof:B_warehouse",
+					"yaw": 210,
+					"locked": false,
+					"arc": 90,
+					"covered_m": 42,
+					"faction": "neutral",
+					"generator": "power_00000001_4",
+					"powered": false
+				},
+				{
+					"id": "turrets_00000001_1",
+					"variant": "turret_mg",
+					"pos": [-3350, 7150],
+					"walk_layer": "roof:B_steelworks",
+					"yaw": 195,
+					"locked": false,
+					"arc": 90,
+					"covered_m": 51,
+					"faction": "neutral",
+					"generator": "power_00000001_3",
+					"powered": false
+				},
+				{
+					"id": "turrets_00000001_2",
+					"variant": "turret_mg",
+					"pos": [-8500, -6600],
+					"walk_layer": "roof:B_x1_8_t7_block",
+					"yaw": 15,
+					"locked": false,
+					"arc": 90,
+					"covered_m": 52,
+					"faction": "hostile",
+					"generator": "power_00000001_2",
+					"powered": true
+				},
+				{
+					"id": "turrets_00000001_3",
+					"variant": "turret_mg",
+					"pos": [-3700, 2950],
+					"walk_layer": "roof:B_ruin",
+					"yaw": 270,
+					"locked": false,
+					"arc": 90,
+					"covered_m": 79,
+					"faction": "neutral",
+					"generator": "power_00000001_1",
+					"powered": false
+				}
+			],
+			"report": {
+				"eligible": 1701,
+				"gate": "pass",
+				"kept": 0,
+				"placed": 4,
+				"rejected": {
+					"blocked": 282,
+					"coverage": 264,
+					"door": 0,
+					"keepout": 0,
+					"ladder": 357,
+					"other": 0,
+					"other_layer": 57,
+					"route": 0,
+					"spacing": 0,
+					"spawn": 69
+				},
+				"requested": 4,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": []
+			}
+		},
+		{
+			"id": "mines",
+			"kind": "mines",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "mines_default",
+			"rules": {
+				"crates": {
+					"percent": 10
+				},
+				"doorways": {
+					"mode": "percent",
+					"value": 25
+				},
+				"field": {
+					"count": {
+						"mode": "count",
+						"value": 8
+					}
+				},
+				"route_clear_m": 6
+			},
+			"objects": [
+				{
+					"id": "mines_00000001_0",
+					"variant": "mine_tripwire",
+					"pos": [-8193, 4796],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false,
+					"door": "F_x1_11_t7_W#g0",
+					"trigger": "tripwire",
+					"width_cm": 300
+				},
+				{
+					"id": "mines_00000001_1",
+					"variant": "mine_tripwire",
+					"pos": [-4420, 5397],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"door": "B_steelworks#0",
+					"trigger": "tripwire",
+					"width_cm": 180
+				},
+				{
+					"id": "mines_00000001_2",
+					"variant": "mine_tripwire",
+					"pos": [7300, -5917],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"door": "F_x1_2_t7_S#g1",
+					"trigger": "tripwire",
+					"width_cm": 300
+				},
+				{
+					"id": "mines_00000001_3",
+					"variant": "mine_tripwire",
+					"pos": [-7606, 4796],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false,
+					"door": "F_x1_11_t7_W#g1",
+					"trigger": "tripwire",
+					"width_cm": 300
+				},
+				{
+					"id": "mines_00000001_4",
+					"variant": "mine_tripwire",
+					"pos": [7300, -7699],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"door": "F_x1_2_t7_S#g0",
+					"trigger": "tripwire",
+					"width_cm": 300
+				},
+				{
+					"id": "mines_00000001_5",
+					"variant": "mine_tripwire",
+					"pos": [3196, -10998],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"door": "F_x1_13_t7_S#g0",
+					"trigger": "tripwire",
+					"width_cm": 300
+				},
+				{
+					"id": "mines_00000001_6",
+					"variant": "mine_tripwire",
+					"pos": [7971, 487],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false,
+					"door": "F_x1_4_t7_W#g0",
+					"trigger": "tripwire",
+					"width_cm": 300
+				},
+				{
+					"id": "mines_00000001_8",
+					"variant": "mine_tripwire",
+					"pos": [-1904, 11279],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"door": "F_x1_18_t7_S#g0",
+					"trigger": "tripwire",
+					"width_cm": 300
+				},
+				{
+					"id": "mines_00000001_9",
+					"variant": "mine_tripwire",
+					"pos": [-5880, 11129],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"door": "B_x1_19_t7_hall#0",
+					"trigger": "tripwire",
+					"width_cm": 180
+				},
+				{
+					"id": "mines_00000001_10",
+					"variant": "mine_tripwire",
+					"pos": [-5880, 11184],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"door": "B_x1_19_t7_hall#1",
+					"trigger": "tripwire",
+					"width_cm": 180
+				},
+				{
+					"id": "mines_00000001_11",
+					"variant": "mine_crate",
+					"pos": [8650, 11200],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_96",
+					"trigger": "crate_open"
+				},
+				{
+					"id": "mines_00000001_12",
+					"variant": "mine_crate",
+					"pos": [-2900, 6150],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_75",
+					"trigger": "crate_open"
+				},
+				{
+					"id": "mines_00000001_13",
+					"variant": "mine_crate",
+					"pos": [8350, -1850],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_105",
+					"trigger": "crate_open"
+				},
+				{
+					"id": "mines_00000001_14",
+					"variant": "mine_crate",
+					"pos": [6500, 5200],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_61",
+					"trigger": "crate_open"
+				},
+				{
+					"id": "mines_00000001_16",
+					"variant": "mine_crate",
+					"pos": [2450, 7300],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_68",
+					"trigger": "crate_open"
+				},
+				{
+					"id": "mines_00000001_17",
+					"variant": "mine_proximity",
+					"pos": [50, 11900],
+					"walk_layer": "cut",
+					"yaw": 0,
+					"locked": false,
+					"trigger": "proximity"
+				},
+				{
+					"id": "mines_00000001_18",
+					"variant": "mine_proximity",
+					"pos": [-100, -11600],
+					"walk_layer": "cut",
+					"yaw": 0,
+					"locked": false,
+					"trigger": "proximity"
+				},
+				{
+					"id": "mines_00000001_19",
+					"variant": "mine_proximity",
+					"pos": [150, 1150],
+					"walk_layer": "cut",
+					"yaw": 0,
+					"locked": false,
+					"trigger": "proximity"
+				},
+				{
+					"id": "mines_00000001_20",
+					"variant": "mine_proximity",
+					"pos": [50, -10950],
+					"walk_layer": "cut",
+					"yaw": 0,
+					"locked": false,
+					"trigger": "proximity"
+				},
+				{
+					"id": "mines_00000001_21",
+					"variant": "mine_proximity",
+					"pos": [100, -2350],
+					"walk_layer": "cut",
+					"yaw": 0,
+					"locked": false,
+					"trigger": "proximity"
+				},
+				{
+					"id": "mines_00000001_22",
+					"variant": "mine_proximity",
+					"pos": [50, 5650],
+					"walk_layer": "cut",
+					"yaw": 0,
+					"locked": false,
+					"trigger": "proximity"
+				},
+				{
+					"id": "mines_00000001_23",
+					"variant": "mine_proximity",
+					"pos": [150, -12100],
+					"walk_layer": "cut",
+					"yaw": 0,
+					"locked": false,
+					"trigger": "proximity"
+				},
+				{
+					"id": "mines_00000001_24",
+					"variant": "mine_proximity",
+					"pos": [0, -500],
+					"walk_layer": "cut",
+					"yaw": 0,
+					"locked": false,
+					"trigger": "proximity"
+				}
+			],
+			"report": {
+				"crates": {
+					"dropped": 0,
+					"eligible": 56,
+					"forbidden": 0,
+					"kept": 0,
+					"placed": 6,
+					"requested": 6
+				},
+				"doorways": {
+					"dropped": 0,
+					"eligible": 44,
+					"forbidden": 3,
+					"kept": 0,
+					"placed": 11,
+					"requested": 11
+				},
+				"eligible": 0,
+				"field": {
+					"dropped": 0,
+					"eligible": 6000,
+					"forbidden": 0,
+					"kept": 0,
+					"placed": 8,
+					"requested": 8
+				},
+				"gate": "pass",
+				"kept": 0,
+				"placed": 25,
+				"rejected": {
+					"blocked": 2040,
+					"door": 0,
+					"keepout": 0,
+					"ladder": 182,
+					"other": 0,
+					"other_layer": 0,
+					"route": 320,
+					"spacing": 0,
+					"spawn": 0
+				},
+				"requested": 25,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": []
+			}
+		},
+		{
+			"id": "loot",
+			"kind": "loot",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "loot_default",
+			"rules": {
+				"budget_value": 1194
+			},
+			"objects": [
+				{
+					"id": "loot_00000001_0",
+					"variant": "loot_crate",
+					"pos": [-1650, -450],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_71",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_1",
+					"variant": "loot_crate",
+					"pos": [7400, -2700],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_1",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_2",
+					"variant": "loot_crate",
+					"pos": [-6700, 10000],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_86",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_3",
+					"variant": "loot_crate",
+					"pos": [-2900, -650],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_100",
+					"loot_table": "med_common"
+				},
+				{
+					"id": "loot_00000001_4",
+					"variant": "loot_crate",
+					"pos": [-4150, 10900],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_60",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_5",
+					"variant": "loot_crate",
+					"pos": [-1900, -2250],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_58",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_6",
+					"variant": "loot_crate",
+					"pos": [-2300, -9800],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_102",
+					"loot_table": "med_common"
+				},
+				{
+					"id": "loot_00000001_7",
+					"variant": "loot_crate",
+					"pos": [-6150, 7450],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_69",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_8",
+					"variant": "loot_crate",
+					"pos": [-4400, -6800],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_59",
+					"loot_table": "med_common"
+				},
+				{
+					"id": "loot_00000001_9",
+					"variant": "loot_crate",
+					"pos": [-8150, 1900],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_54",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_10",
+					"variant": "loot_crate",
+					"pos": [-1600, 6100],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_91",
+					"loot_table": "med_common"
+				},
+				{
+					"id": "loot_00000001_11",
+					"variant": "loot_crate",
+					"pos": [2800, 9700],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_5",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_12",
+					"variant": "loot_pile",
+					"pos": [-2950, 5750],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "med_common"
+				},
+				{
+					"id": "loot_00000001_13",
+					"variant": "loot_pile",
+					"pos": [-8000, -6350],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_14",
+					"variant": "loot_pile",
+					"pos": [-8100, -1400],
+					"walk_layer": "roof:B_x1_9_t7_gallery",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "rare_roof"
+				},
+				{
+					"id": "loot_00000001_15",
+					"variant": "loot_pile",
+					"pos": [4450, -1350],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "med_common"
+				},
+				{
+					"id": "loot_00000001_16",
+					"variant": "loot_pile",
+					"pos": [3357, 5850],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_17",
+					"variant": "loot_pile",
+					"pos": [-1540, -3342],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "med_common"
+				},
+				{
+					"id": "loot_00000001_18",
+					"variant": "loot_pile",
+					"pos": [-1240, 4090],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_19",
+					"variant": "loot_pile",
+					"pos": [4902, -5929],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "med_common"
+				},
+				{
+					"id": "loot_00000001_20",
+					"variant": "loot_pile",
+					"pos": [-7453, -2025],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "fuel_rare"
+				},
+				{
+					"id": "loot_00000001_21",
+					"variant": "loot_pile",
+					"pos": [-2132, 3990],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "fuel_rare"
+				}
+			],
+			"report": {
+				"budget": {
+					"left": 4,
+					"spent": 1190,
+					"value": 1194
+				},
+				"containers": {
+					"dropped": 0,
+					"eligible": 50,
+					"forbidden": 0,
+					"kept": 0,
+					"placed": 12,
+					"requested": 15
+				},
+				"eligible": 0,
+				"gate": "pass",
+				"kept": 0,
+				"loose": {
+					"dropped": 0,
+					"eligible": 319,
+					"forbidden": 0,
+					"kept": 0,
+					"placed": 10,
+					"requested": 0
+				},
+				"placed": 22,
+				"rejected": {
+					"blocked": 96,
+					"door": 1,
+					"keepout": 0,
+					"ladder": 1,
+					"other": 0,
+					"other_layer": 0,
+					"route": 99,
+					"spacing": 5,
+					"spawn": 80
+				},
+				"requested": 22,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": []
+			}
+		},
+		{
+			"id": "power",
+			"kind": "power",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "power_default",
+			"rules": {},
+			"objects": [
+				{
+					"id": "power_00000001_1",
+					"variant": "generator_diesel",
+					"pos": [-3134, 2384],
+					"walk_layer": "ground",
+					"yaw": 135,
+					"locked": false,
+					"cable_cm": [800],
+					"fuel_l": 0,
+					"links": ["turrets_00000001_3"],
+					"start": "broken"
+				},
+				{
+					"id": "power_00000001_2",
+					"variant": "generator_diesel",
+					"pos": [-7727, -6393],
+					"walk_layer": "ground",
+					"yaw": 195,
+					"locked": false,
+					"cable_cm": [800],
+					"fuel_l": 15,
+					"links": ["turrets_00000001_2"],
+					"owner": "hostile",
+					"start": "running_hostile"
+				},
+				{
+					"id": "power_00000001_3",
+					"variant": "generator_diesel",
+					"pos": [-4043, 7550],
+					"walk_layer": "ground",
+					"yaw": 330,
+					"locked": false,
+					"cable_cm": [800],
+					"fuel_l": 0,
+					"links": ["turrets_00000001_1"],
+					"start": "dry"
+				},
+				{
+					"id": "power_00000001_4",
+					"variant": "generator_diesel",
+					"pos": [2800, 3150],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false,
+					"cable_cm": [800],
+					"fuel_l": 0,
+					"links": ["turrets_00000001_0"],
+					"start": "dry"
+				}
+			]
+		}
+	],
+	"overrides": []
+}

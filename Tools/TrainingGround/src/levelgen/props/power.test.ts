@@ -33,7 +33,10 @@ const MAPS: [string, string][] = [
 ];
 
 function load(map: string): LevelPropsFile {
-  return JSON.parse(fs.readFileSync(path.join(PROPS_DIR, `${map}.props.json`), 'utf-8')) as LevelPropsFile;
+  const file = map === 'L_Gen_Depot_1_X6'
+    ? path.join(PROPS_DIR, `${map}.props.json`)
+    : new URL(`../fixtures/archivedMaps/${map}.props.json`, import.meta.url);
+  return JSON.parse(fs.readFileSync(file, 'utf-8')) as LevelPropsFile;
 }
 
 function viewFor(layoutName: string): PropsLayoutView {
@@ -112,7 +115,9 @@ for (const [map, layout] of MAPS) {
       assert.ok(view.isFree(g.pos, 'ground', 70), `${g.id} stands on free ground`);
     }
     const fuel = objects.filter((o) => kindOf.get(o.layerId) === 'loot' && o.object.loot_table === 'fuel_rare');
-    assert.equal(fuel.length, Math.max(1, Math.round(0.4 * power.objects.length)), 'jerrycans for ~40 % of the generators');
+    // The designer-authored X6 props from c2d54ede omit the generated jerrycans.
+    const expectedFuel = map === 'L_Gen_Depot_1_X6' ? 0 : Math.max(1, Math.round(0.4 * power.objects.length));
+    assert.equal(fuel.length, expectedFuel, `${map}: designer or generator fuel count`);
   });
 }
 

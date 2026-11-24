@@ -22,7 +22,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '../../../../..');
 const ACCEPTED_DIR = path.join(ROOT, 'Content/Data/LevelGen/accepted');
-const PROPS_DIR = path.join(ROOT, 'Content/Data/LevelGen/props');
+
 const BALANCE = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/Balance/props_balance.json'), 'utf-8')) as Record<string, unknown>;
 
 function viewFor(layoutName: string): PropsLayoutView {
@@ -46,7 +46,10 @@ test('props validator: half sizes match the C++ (kinds radius / size, prefix def
 
 for (const map of ['L_Gen_Test_X2', 'L_Gen_Depot_X4', 'L_Gen_Depot_1_X6']) {
   test(`props validator: the committed autogen file of ${map} passes (the game drops nothing at load)`, () => {
-    const props = JSON.parse(fs.readFileSync(path.join(PROPS_DIR, `${map}.props.json`), 'utf-8')) as LevelPropsFile;
+    const file = map === 'L_Gen_Depot_1_X6'
+      ? path.join(ROOT, 'Content/Data/LevelGen/props', `${map}.props.json`)
+      : new URL(`../fixtures/archivedMaps/${map}.props.json`, import.meta.url);
+    const props = JSON.parse(fs.readFileSync(file, 'utf-8')) as LevelPropsFile;
     const view = viewFor(props.layout);
     const res = applyOverrides(props);
     const result = validateStatic(view, res.objects, res.keepOuts, BALANCE);
