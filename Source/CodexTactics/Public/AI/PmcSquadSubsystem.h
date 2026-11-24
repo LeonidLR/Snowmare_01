@@ -84,6 +84,7 @@ public:
 	TArray<AOperativeCharacter*> GetTeamMembers(int32 TeamId) const;
 	/** Every registered fighter of a hostile team (alive or down). */
 	TArray<AOperativeCharacter*> GetHostileOperatives() const;
+	void ForEachHostileOperative(TFunctionRef<void(AOperativeCharacter&)> Visit) const;
 	/**
 	 * A living ENGAGED hostile fighter exists (the skirmish goes on while one does): his team has met an enemy, or the player's squad
 	 * has seen him. A squad still waiting unseen in its posture (a level encounter, 2026-11-03) never holds a finished fight open.

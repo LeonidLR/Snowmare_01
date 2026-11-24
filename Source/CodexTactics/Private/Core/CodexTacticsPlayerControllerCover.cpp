@@ -3,6 +3,7 @@
 // Split out of CodexTacticsPlayerController.cpp verbatim (cleanup 2026-10-15; map: docs/port/REFACTOR_CONTROLLER_2026-10.md).
 // Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
 
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "Combat/EnemyGhostActor.h"
@@ -228,7 +229,9 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 			TArray<TPair<AOperativeCharacter*, FCoverSlot>> GroupStack;
 			const bool bGroupPeek = !TurnBased && PlanGroupCornerPeek(Operative, Hit, GroupPeeker, GroupSide, GroupEdge, &GroupStack) && GroupPeeker;
 			AOperativeCharacter* PeekOperative = bGroupPeek ? GroupPeeker : Operative;
+			FDemoOrderScope Demo(this, EDemoOrderKind::CornerPeek, PeekOperative, Hit.ImpactPoint, false, false, &PeekOperative->GetCoverSlot());
 			const EOperativeOrderResult Result = PeekOperative->OrderCornerPeek(bGroupPeek ? GroupSide : PeekSide, bGroupPeek ? GroupEdge : PeekEdge);
+			Demo.SetResult(Result == EOperativeOrderResult::Accepted);
 			if (bGroupPeek && Result == EOperativeOrderResult::Accepted)
 			{
 				FString Line;
@@ -272,7 +275,9 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 			HideCoverPreview();
 			UpdateCornerPeekHover(Operative, nullptr);
 			AOperativeCharacter* Peeker = Target.Peeker.Get();
+			FDemoOrderScope Demo(this, EDemoOrderKind::CornerPeek, Peeker, Target.CornerSlot.WorldLocation, false, false, &Target.CornerSlot);
 			const bool bOrdered = Squad && Squad->OrderFormationCornerPeek(Peeker, Target.CornerSlot, Target.EdgeOnFace);
+			Demo.SetResult(bOrdered);
 			UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
 			if (bOrdered)
 			{
@@ -886,6 +891,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 	const bool bPreviewSwitchable = bCoverPreviewSwitchable;
 	const FCoverSlot Target = bPreviewSwitchable ? CoverPreviewResolvedSlot : Slot;
 	const ECoverFacing Arrival = CoverPreviewArrivalFacing;
+	FDemoOrderScope Demo(this, EDemoOrderKind::Cover, Operative, Target.WorldLocation, bDoubleClick, false, &Target);
 	HideCoverPreview();
 	bLastCoverConfirmSwitch = false;
 	if (!Operative || !Slot.IsValid())
@@ -899,7 +905,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 		// The grid walk; the operative enters the slot when the walk stops on the cell (AOperativeCharacter::UpdateCover).
 		const FIntPoint Cell = TurnBased->GetGrid()->WorldToGrid(Slot.WorldLocation);
 		Operative->SetPendingCover(Slot);
-		if (!TurnBased->MoveActiveUnitTo(Cell))
+		if (!Demo.SetResult(TurnBased->MoveActiveUnitTo(Cell)))
 		{
 			Operative->ClearPendingCover();
 			if (Messages)
@@ -927,6 +933,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 	LastCoverSwitchVerdict = Operative->EvaluateCoverSwitch(Slot);
 	// Wall leadership (2026-11-01): the leader holds the corner of the SQUAD's peek - his double-click on another cover is the squad's wall
 	// order there (the formation wall layout; the peek carried over, bug_04 A), not his own dash with the others' legacy group cover.
+	Demo.SetPlan(Dispatch == ECombatOrderDispatch::Queue);
 	const USquadSubsystem* SwitchSquad = GetSquad();
 	const bool bSquadPeekLeader = SwitchSquad && SwitchSquad->IsWallLeadershipPeeker(Operative) && !SwitchSquad->HasMultiSelection();
 	const bool bSwitch = !bSquadPeekLeader && bPreviewSwitchable && CoverSwitchRules::IsSwitchConfirm(bDoubleClick, LastCoverSwitchVerdict,
@@ -979,6 +986,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 		Vehicles->CancelBoarding(Operative);
 	}
 	const EOperativeOrderResult Result = bSwitch ? Operative->OrderCoverSwitchResolved(Target, Arrival) : Operative->OrderTakeCover(Target, bCoverFast);
+	Demo.SetResult(Result == EOperativeOrderResult::Accepted);
 	if (Result == EOperativeOrderResult::Accepted && !bSwitch && bPreviewSwitchable)
 	{
 		Operative->SetCoverArrivalFacing(Arrival); // the slow confirm of a switch target: the ordinary run, the previewed pose

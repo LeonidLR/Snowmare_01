@@ -220,6 +220,7 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	TArray<AOperativeCharacter*> GetMembers() const;
+	TConstArrayView<TWeakObjectPtr<AOperativeCharacter>> GetMemberRefs() const { return Members; }
 
 	/** Sets the stance of every squad member (Alt + stance key). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")

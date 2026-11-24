@@ -2,6 +2,7 @@
 // Split out of CodexTacticsPlayerController.cpp verbatim (cleanup 2026-10-15; map: docs/port/REFACTOR_CONTROLLER_2026-10.md).
 // Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
 
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "Combat/HoldSphereActor.h"
@@ -75,6 +76,10 @@ void ACodexTacticsPlayerController::HandleSpaceTap()
 	const EGameFlowResult Result = Flow->ToggleTacticalPause();
 	if (Result == EGameFlowResult::Ok)
 	{
+		if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+		{
+			Recorder->RecordMode(EDemoMode::Pause, !bWasPaused);
+		}
 		ControllerCommands::Report(this, bWasPaused ? PlayerCommands::PauseRelease : PlayerCommands::TacticalPause);
 	}
 	switch (Result)

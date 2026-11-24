@@ -3,6 +3,7 @@
 // Split out of CodexTacticsPlayerController.cpp verbatim (cleanup 2026-10-15; map: docs/port/REFACTOR_CONTROLLER_2026-10.md).
 // Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
 
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Interactables/WindowOrderRules.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
@@ -113,7 +114,11 @@ void ACodexTacticsPlayerController::ToggleAutonomy()
 	}
 	if (USquadSubsystem* Squad = GetSquad())
 	{
-		Squad->ToggleAutonomousSquadCombat();
+		const bool bAutonomy = Squad->ToggleAutonomousSquadCombat();
+		if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+		{
+			Recorder->RecordMode(EDemoMode::Autonomy, bAutonomy);
+		}
 		ControllerCommands::Report(this, PlayerCommands::Autonomy);
 	}
 }
@@ -142,6 +147,7 @@ void ACodexTacticsPlayerController::GuardKey()
 
 void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, bool bSprint, bool bPlan)
 {
+	FDemoOrderScope Demo(this, EDemoOrderKind::Move, nullptr, Destination, bSprint, bPlan);
 	USquadSubsystem* Squad = GetSquad();
 	// Bug 2026-11-08: the next order after a selection switch mid-move - the selected member takes the lead, the old leader's walk ends.
 	if (Squad)
@@ -1169,6 +1175,7 @@ void ACodexTacticsPlayerController::AssignDefenseUnderCursor()
 
 void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
 {
+	FDemoOrderScope Demo(this, EDemoOrderKind::Shot, nullptr, {}, false, false, nullptr, HitActor);
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
@@ -1323,6 +1330,7 @@ void ACodexTacticsPlayerController::IssueCtrlClick(const FHitResult& Hit)
 
 void ACodexTacticsPlayerController::IssueQuickFire(const FHitResult& Hit)
 {
+	FDemoOrderScope Demo(this, EDemoOrderKind::QuickFire, nullptr, Hit.ImpactPoint, false, false, nullptr, Hit.GetActor());
 	UWorld* World = GetWorld();
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
@@ -1434,6 +1442,8 @@ void ACodexTacticsPlayerController::IssueQuickFire(const FHitResult& Hit)
 
 bool ACodexTacticsPlayerController::IssueSuppress(const FHitResult& Hit)
 {
+	FDemoOrderScope Demo(this, EDemoOrderKind::Suppress, nullptr, Hit.ImpactPoint, false, false, nullptr, Hit.GetActor());
+	Demo.SetResult(false);
 	UWorld* World = GetWorld();
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
@@ -1471,6 +1481,8 @@ bool ACodexTacticsPlayerController::IssueSuppress(const FHitResult& Hit)
 		{
 			return true;
 		}
+		Demo.SetCease();
+		Demo.SetResult(true);
 		for (AOperativeCharacter* Shooter : Ceased)
 		{
 			Shooter->CancelSuppressFire(TEXT("ceased by the player (Shift + click on its marker)"));
@@ -1567,6 +1579,8 @@ bool ACodexTacticsPlayerController::IssueSuppress(const FHitResult& Hit)
 			? FText::Format(LOCTEXT("SuppressPlanned", "[PLAN] Suppressive fire planned ({0})! [SPACE - fire]"), Accepted)
 			: LOCTEXT("SuppressGo", "Suppressive fire! Keep their heads down!"));
 	}
+	Demo.SetPlan(bPlan);
+	Demo.SetResult(true);
 	ControllerCommands::Report(this, PlayerCommands::Suppress, Enemy, bPlan, Accepted > 1, Leader, Spot);
 	return true;
 }
@@ -1578,6 +1592,10 @@ void ACodexTacticsPlayerController::SetSquadCeaseFire(bool bCease)
 		return;
 	}
 	bCeaseFireSet = bCease;
+	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+	{
+		Recorder->RecordMode(EDemoMode::CeaseFire, bCease);
+	}
 	if (USquadSubsystem* Squad = GetSquad())
 	{
 		for (AOperativeCharacter* Member : Squad->GetMembers())

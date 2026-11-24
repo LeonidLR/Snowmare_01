@@ -63,6 +63,7 @@
 //   RED on purpose until the squad plays (T-08): registered knownFail in Scripts/test_map.json. Failed preconditions are logged as
 //   "precondition", failed criteria as "A-00A.n" / "A-00B.n" so a red run says which of the two it is.
 
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
@@ -4056,6 +4057,10 @@ namespace PmcArena
 		if (!World)
 		{
 			return;
+		}
+		if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(World))
+		{
+			Recorder->SuppressSession(FName(TEXT("arena")));
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->Options = Parse(Args);

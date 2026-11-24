@@ -53,6 +53,7 @@ public:
 	static FActorList GetTaggedEnemies(const UWorld* World);
 	/** Every enemy character in the world (TActorIterator<AEnemyCharacter> without the scan). */
 	static FEnemyList GetEnemyCharacters(const UWorld* World);
+	static void ForEachEnemyCharacter(const UWorld* World, TFunctionRef<void(AEnemyCharacter&)> Visit);
 	/** True when the queries above read the registry; false: they scan the world (not begun play / no subsystem / off). */
 	static bool IsServing(const UWorld* World);
 	/** Console variable Codex.EnemyRegistry (default 1); 0 = the old world scans, for A / B measurements. */
