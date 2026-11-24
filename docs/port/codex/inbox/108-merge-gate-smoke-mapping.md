@@ -9,3 +9,7 @@ Also: smokes whose test_map.json map is ARCHIVED (DepotVaultSmoke on L_Gen_Depot
 L_MovementTest) are refused by smoke_parallel; the gate must either retarget them (-Map X6 -ForceMap where valid) or say so loudly.
 Fix: find why the worker list comes out empty, make the gate fail (or warn red) when Source/ changed and no worker smoke ran, and
 update Scripts/Tools/worker_daily_smokes.json to smokes on the 5 kept maps. Tests for the selection logic. Branch codex/108-gate-smokes.
+
+Also (Lead 2026-11-24 19:35): worker_sync -ShipHead bundles unpushed commits but NOT their LFS objects - the worker reset failed
+("smudge filter lfs failed" on docs/port/codex/outbox/107-ai-training.png). Fix: run `git lfs push origin <ref>` for the shipped ref before
+the worker reset (objects only, refs stay unpushed), and print LFS-FAILED instead of RESET-FAILED when the smudge is the cause.
