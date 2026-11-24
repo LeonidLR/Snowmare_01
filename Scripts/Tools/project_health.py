@@ -348,7 +348,7 @@ def collect_merge_gate_runs(repo: Path) -> list[dict]:
                 status = "PASS"
                 if json_path.exists():
                     try:
-                        with open(json_path, "r", encoding="utf-8") as jf:
+                        with open(json_path, "r", encoding="utf-8-sig") as jf:
                             sdata = json.load(jf)
                         results = sdata.get("results", [])
                         failed = [r["Name"] for r in results if r.get("State") not in ["PASS", "PASS*", "KNOWN-FAIL"]]
@@ -371,62 +371,164 @@ def collect_merge_gate_runs(repo: Path) -> list[dict]:
     return runs[:10]
 
 
-def collect_latest_test_results(repo: Path, test_log_override: str | None = None) -> dict:
+def get_registered_smoke_count(repo: Path) -> int:
+    """Returns active smoke count from Scripts/test_map.json smokeRegistry."""
+    tm_path = repo / "Scripts" / "test_map.json"
+    if not tm_path.exists():
+        return 0
+    try:
+        with open(tm_path, "r", encoding="utf-8-sig") as f:
+            data = json.load(f)
+        return len(data.get("smokeRegistry", []))
+    except Exception:
+        return 0
+
+
+def _check_freshness(path: Path, max_age_minutes: float | None) -> tuple[bool, float | None]:
+    """Returns (is_fresh, age_seconds)."""
+    try:
+        age_s = max(0.0, datetime.datetime.now().timestamp() - path.stat().st_mtime)
+        if max_age_minutes is not None and age_s > max_age_minutes * 60.0:
+            return False, round(age_s, 1)
+        return True, round(age_s, 1)
+    except Exception:
+        return False, None
+
+
+def collect_latest_test_results(
+    repo: Path,
+    test_log_override: str | None = None,
+    test_exit: int | None = None,
+    max_age_minutes: float | None = None,
+) -> dict:
     """Parses unit test results from Saved/Logs/AutomationTests.log or override."""
     log_path = Path(test_log_override) if test_log_override else repo / "Saved" / "Logs" / "AutomationTests.log"
-    res = {"total": 420, "passed": 420, "failed": 0, "duration_s": 92.4, "available": False}
-    if not log_path.exists():
+    res = {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "duration_s": None,
+        "available": False,
+        "fresh": False,
+        "age_s": None,
+        "exit_code": test_exit,
+        "error": "",
+    }
+    if not test_log_override and not log_path.exists():
         lead_logs = list((repo / "Saved").glob("lead_test_*.log"))
         if lead_logs:
             log_path = sorted(lead_logs, key=lambda x: x.stat().st_mtime, reverse=True)[0]
 
-    if log_path.exists():
-        try:
-            content = log_path.read_text(encoding="utf-8", errors="ignore")
-            matches = re.findall(r"Test Completed\.\s*Result=\{([^}]+)\}\.\s*Path=\{([^}]+)\}", content)
-            if matches:
-                res["available"] = True
-                res["total"] = len(matches)
-                res["passed"] = sum(1 for m in matches if m[0] == "Success")
-                res["failed"] = res["total"] - res["passed"]
-            else:
-                m_sum = re.search(r"(\d+)\s+tests,\s*(\d+)\s+failed", content)
-                if m_sum:
+    if not log_path.exists():
+        res["error"] = "test log missing"
+        return res
+
+    is_fresh, age_s = _check_freshness(log_path, max_age_minutes)
+    res["fresh"] = is_fresh
+    res["age_s"] = age_s
+    if not is_fresh:
+        res["error"] = f"stale test log ({age_s:.0f}s old)"
+        return res
+
+    try:
+        content = log_path.read_text(encoding="utf-8-sig", errors="ignore")
+        if not content.strip():
+            res["error"] = "empty test log"
+            return res
+        if re.search(r"No tests matched", content, re.IGNORECASE):
+            res["error"] = "no tests matched"
+            return res
+        matches = re.findall(r"Test Completed\.\s*Result=\{([^}]+)\}\.\s*Path=\{([^}]+)\}", content)
+        if matches:
+            res["total"] = len(matches)
+            res["passed"] = sum(1 for m in matches if m[0] == "Success")
+            res["failed"] = res["total"] - res["passed"]
+            res["available"] = True
+        else:
+            m_sum = re.search(r"(\d+)\s+tests,\s*(\d+)\s+failed", content)
+            if m_sum:
+                res["total"] = int(m_sum.group(1))
+                res["failed"] = int(m_sum.group(2))
+                res["passed"] = res["total"] - res["failed"]
+                if res["total"] > 0:
                     res["available"] = True
-                    res["total"] = int(m_sum.group(1))
-                    res["failed"] = int(m_sum.group(2))
-                    res["passed"] = res["total"] - res["failed"]
-        except Exception:
-            pass
+                else:
+                    res["error"] = "0 tests reported"
+            else:
+                res["error"] = "unrecognized test log format"
+    except Exception as exc:
+        res["error"] = f"read error: {exc}"
+        res["available"] = False
+
+    if test_exit is not None and test_exit != 0 and res["failed"] == 0:
+        res["available"] = False
+        if not res["error"]:
+            res["error"] = f"test runner exited {test_exit}"
 
     return res
 
 
-def collect_latest_smoke_results(repo: Path, smoke_json_override: str | None = None) -> dict:
-    """Parses smoke results from smoke JSON."""
+def collect_latest_smoke_results(
+    repo: Path,
+    smoke_json_override: str | None = None,
+    smoke_exit: int | None = None,
+    max_age_minutes: float | None = None,
+) -> dict:
+    """Parses smoke results from smoke JSON (supports UTF-8 with BOM)."""
     json_path = Path(smoke_json_override) if smoke_json_override else None
-    if not json_path or not json_path.exists():
+    if not smoke_json_override and (not json_path or not json_path.exists()):
         candidates = list((repo / "Saved" / "Logs").glob("SmokeParallel-*.json"))
         candidates.extend((repo / "Saved" / "Logs" / "Worker").glob("*/SmokeParallel-worker.json"))
         candidates.extend((repo / "Saved" / "Worker" / "nightloop").glob("*/*.json"))
         if candidates:
             json_path = sorted(candidates, key=lambda x: x.stat().st_mtime, reverse=True)[0]
 
-    res = {"total": 41, "pass": 40, "known_fail": 1, "fail": 0, "duration_s": 480.0, "available": False}
-    if json_path and json_path.exists():
-        try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                sdata = json.load(f)
-            results = sdata.get("results", [])
-            if results:
-                res["available"] = True
-                res["total"] = len(results)
-                res["pass"] = sum(1 for r in results if r.get("State") in ["PASS", "PASS*"])
-                res["known_fail"] = sum(1 for r in results if r.get("State") == "KNOWN-FAIL")
-                res["fail"] = sum(1 for r in results if r.get("State") not in ["PASS", "PASS*", "KNOWN-FAIL"])
-                res["duration_s"] = sdata.get("wallSeconds")
-        except Exception:
-            pass
+    expected_total = get_registered_smoke_count(repo)
+    res = {
+        "total": 0,
+        "expected_total": expected_total,
+        "pass": 0,
+        "known_fail": 0,
+        "fail": 0,
+        "duration_s": None,
+        "available": False,
+        "fresh": False,
+        "age_s": None,
+        "exit_code": smoke_exit,
+        "error": "",
+    }
+    if not json_path or not json_path.exists():
+        res["error"] = "smoke json missing"
+        return res
+
+    is_fresh, age_s = _check_freshness(json_path, max_age_minutes)
+    res["fresh"] = is_fresh
+    res["age_s"] = age_s
+    if not is_fresh:
+        res["error"] = f"stale smoke json ({age_s:.0f}s old)"
+        return res
+
+    try:
+        with open(json_path, "r", encoding="utf-8-sig") as f:
+            sdata = json.load(f)
+        results = sdata.get("results", [])
+        if results:
+            res["available"] = True
+            res["total"] = len(results)
+            res["pass"] = sum(1 for r in results if r.get("State") in ["PASS", "PASS*"])
+            res["known_fail"] = sum(1 for r in results if r.get("State") == "KNOWN-FAIL")
+            res["fail"] = sum(1 for r in results if r.get("State") not in ["PASS", "PASS*", "KNOWN-FAIL"])
+            res["duration_s"] = sdata.get("wallSeconds")
+        else:
+            res["error"] = "empty smoke results"
+    except Exception as exc:
+        res["error"] = f"json parse error: {exc}"
+        res["available"] = False
+
+    if smoke_exit is not None and smoke_exit != 0 and res["fail"] == 0:
+        res["available"] = False
+        if not res["error"]:
+            res["error"] = f"smoke runner exited {smoke_exit}"
 
     return res
 
@@ -452,12 +554,23 @@ def generate_debt_markdown(health: dict) -> str:
     md.append(f"| **Known Fails** | {summary['known_fails_count']} (expired: {kf_expired}) | 0 expired (> 7 days) | {kf_status} |")
     
     unit_res = summary["unit_tests"]
-    unit_status = "🔴 FAIL" if unit_res["failed"] > 0 else "🟢 PASS"
-    md.append(f"| **Automation Unit Tests** | {unit_res['passed']} passed / {unit_res['total']} total | 100% pass | {unit_status} |")
+    if not unit_res.get("available", False):
+        unit_status = f"🔴 UNAVAILABLE ({unit_res.get('error') or 'no data'})"
+        unit_val = "0 / 0"
+    else:
+        unit_status = "🔴 FAIL" if unit_res["failed"] > 0 else "🟢 PASS"
+        unit_val = f"{unit_res['passed']} passed / {unit_res['total']} total"
+    md.append(f"| **Automation Unit Tests** | {unit_val} | 100% pass | {unit_status} |")
     
     smoke_res = summary["smokes"]
-    smoke_status = "🔴 FAIL" if smoke_res["fail"] > 0 else "🟢 PASS"
-    md.append(f"| **Active Smokes (Registry)** | {smoke_res['pass']} pass, {smoke_res['known_fail']} known-fail, {smoke_res['fail']} fail | 41 active | {smoke_status} |")
+    expected_smokes = smoke_res.get("expected_total") or smoke_res.get("total") or 0
+    if not smoke_res.get("available", False):
+        smoke_status = f"🔴 UNAVAILABLE ({smoke_res.get('error') or 'no data'})"
+        smoke_val = "unavailable"
+    else:
+        smoke_status = "🔴 FAIL" if smoke_res["fail"] > 0 else "🟢 PASS"
+        smoke_val = f"{smoke_res['pass']} pass, {smoke_res['known_fail']} known-fail, {smoke_res['fail']} fail"
+    md.append(f"| **Active Smokes (Registry)** | {smoke_val} | {expected_smokes} active | {smoke_status} |")
     
     md.append(f"| **Disabled/Archived Smokes** | {summary['disabled_this_week_count']} this week | Tracking | ℹ️ |")
     
@@ -558,6 +671,10 @@ def main():
     parser.add_argument("--repo", type=str, default="", help="Path to repository root")
     parser.add_argument("--test-log", type=str, default="", help="Path to unit test log")
     parser.add_argument("--smoke-json", type=str, default="", help="Path to smoke results JSON")
+    parser.add_argument("--test-exit", type=int, default=None, help="Exit code of the unit test runner")
+    parser.add_argument("--smoke-exit", type=int, default=None, help="Exit code of the smoke runner")
+    parser.add_argument("--max-age-minutes", type=float, default=None, help="Reject test/smoke artifacts older than N minutes")
+    parser.add_argument("--strict", action="store_true", help="Exit 1 when overall status is CRITICAL")
     parser.add_argument("--out-json", type=str, default="", help="Output health JSON path")
     parser.add_argument("--debt-md", type=str, default="", help="Output DEBT.md path")
     parser.add_argument("--chat-summary", action="store_true", help="Print single-line summary for agent_chat.py")
@@ -575,11 +692,19 @@ def main():
     todo_markers = collect_todo_markers(repo, health_dir)
     build_trend = collect_build_trend(repo)
     merge_gate_runs = collect_merge_gate_runs(repo)
-    unit_tests = collect_latest_test_results(repo, args.test_log or None)
-    smokes = collect_latest_smoke_results(repo, args.smoke_json or None)
+    unit_tests = collect_latest_test_results(repo, args.test_log or None, args.test_exit, args.max_age_minutes)
+    smokes = collect_latest_smoke_results(repo, args.smoke_json or None, args.smoke_exit, args.max_age_minutes)
 
     # Calculate overall status
-    if unit_tests.get("failed", 0) > 0 or smokes.get("fail", 0) > 0 or expired_count > 0:
+    if (
+        not unit_tests.get("available", False)
+        or not smokes.get("available", False)
+        or (args.test_exit is not None and args.test_exit != 0)
+        or (args.smoke_exit is not None and args.smoke_exit != 0)
+        or unit_tests.get("failed", 0) > 0
+        or smokes.get("fail", 0) > 0
+        or expired_count > 0
+    ):
         overall_status = "CRITICAL"
     elif len(known_fails) > 0 or len(disabled_this_week) > 0:
         overall_status = "WARNING"
@@ -626,10 +751,20 @@ def main():
     debt_md_content = generate_debt_markdown(health)
     debt_md_path.write_text(debt_md_content, encoding="utf-8")
 
+    if not unit_tests.get("available", False):
+        tests_str = f"tests UNAVAILABLE ({unit_tests.get('error') or 'error'})"
+    else:
+        t_label = "PASS" if unit_tests["failed"] == 0 else f"FAIL ({unit_tests['failed']} failed)"
+        tests_str = f"tests {unit_tests['passed']}/{unit_tests['total']} {t_label}"
+
+    if not smokes.get("available", False):
+        smokes_str = f"smokes UNAVAILABLE ({smokes.get('error') or 'error'})"
+    else:
+        smokes_str = f"smokes {smokes['total']} ({smokes['pass']} pass, {smokes['known_fail']} known-fail, {smokes['fail']} fail)"
+
     chat_line = (
         f"HEALTH {today.isoformat()} | status {overall_status} | "
-        f"tests {unit_tests['passed']}/{unit_tests['total']} PASS | "
-        f"smokes {smokes['total']} ({smokes['pass']} pass, {smokes['known_fail']} known-fail, {smokes['fail']} fail) | "
+        f"{tests_str} | {smokes_str} | "
         f"debt: {len(known_fails)} known-fails ({expired_count} expired), {todo_markers['total']} TODOs | "
         f"merge-gate: {last_merge_status}"
     )
@@ -641,6 +776,9 @@ def main():
         print(f"Daily JSON saved:  {daily_json_path}")
         print(f"Debt report saved: {debt_md_path}")
         print(f"Chat summary:      {chat_line}")
+
+    if args.strict and overall_status == "CRITICAL":
+        sys.exit(1)
 
 
 if __name__ == "__main__":
