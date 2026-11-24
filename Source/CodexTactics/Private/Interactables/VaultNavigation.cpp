@@ -1,4 +1,5 @@
 #include "Interactables/VaultNavigation.h"
+#include "Training/TrainingSectorSubsystem.h"
 #include "Characters/VaultRules.h"
 #include "Interactables/TripwireActor.h"
 #include "Level/CrawlGapActor.h"
@@ -141,7 +142,7 @@ namespace VaultNavigation
 					Feet.Z = FMath::Max(Feet.Z, OnNav.Location.Z);
 				}
 				const FVector Centre = Feet + FVector(0.f, 0.f, HalfHeight + 2.f);
-				if (World->OverlapAnyTestByChannel(Centre, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeCapsule(Radius, HalfHeight), Params))
+				if (!UTrainingSectorSubsystem::Allows(World, Centre, Radius + 10.0) || World->OverlapAnyTestByChannel(Centre, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeCapsule(Radius, HalfHeight), Params))
 				{
 					continue;
 				}

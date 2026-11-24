@@ -1,6 +1,7 @@
 // ULadderClimbComponent: the climb state machine (docs/design/LADDERS.md section 5). UE-only system (no Godot reference).
 
 #include "Ladders/LadderClimbComponent.h"
+#include "Training/TrainingSectorSubsystem.h"
 
 #include "AIController.h"
 #include "Misc/ScopeExit.h"
@@ -498,6 +499,12 @@ bool ULadderClimbComponent::NotifyLinkReached(ALadderActor* InLadder, bool bInGo
 	if (!InLadder || IsOnLadder() || bEntryPending)
 	{
 		return InLadder != nullptr;
+	}
+	if (!UTrainingSectorSubsystem::Allows(GetWorld(), InLadder->GetBottomLinkWorld(), 70.0)
+		|| !UTrainingSectorSubsystem::Allows(GetWorld(), InLadder->GetTopLinkWorld(), 70.0)
+		|| !UTrainingSectorSubsystem::Allows(GetWorld(), InLadder->GetTopExitWorld(), 70.0))
+	{
+		return false;
 	}
 	// The path's goal: he walks on there from the other end (7.1).
 	const ACharacter* Character = GetCharacter();

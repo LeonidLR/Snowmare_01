@@ -111,6 +111,8 @@ struct FDemoSession
 	FDateTime StartedUtc;
 	FDateTime StartedLocal;
 	TOptional<FVector> InitialGoal;
+	int32 SectorId = 0;
+	TOptional<FBox2D> SectorBox;
 	TArray<FDemoUnit> Units;
 	TArray<FDemoFrame> Frames;
 	TArray<FDemoOp> Ops;

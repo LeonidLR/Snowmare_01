@@ -41,6 +41,7 @@
 #include "Ladders/LadderActor.h"
 #include "Components/BoxComponent.h"
 #include "Interactables/MantleNavigation.h"
+#include "Training/TrainingSectorSubsystem.h"
 #include "Misc/App.h"
 #include "Tactics/CoverGhostActor.h"
 #include "UI/GameMessageSubsystem.h"
@@ -899,7 +900,7 @@ bool ACodexTacticsPlayerController::FindWindowSillTarget(const AActor& Sill, con
 		}
 		OutFeet = OnNav.Location;
 	}
-	return true;
+	return UTrainingSectorSubsystem::Allows(GetWorld(), OutFeet, Operative.GetSimpleCollisionRadius() + 10.0);
 }
 
 bool ACodexTacticsPlayerController::IsStairHoverShown() const

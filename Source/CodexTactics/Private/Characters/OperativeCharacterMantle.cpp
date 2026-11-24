@@ -6,6 +6,7 @@
 // Pure rules: Characters/MantleRules. Links / probe / reservations: Interactables/MantleNavigation. UE-only (Godot had no mantling).
 
 #include "Characters/OperativeCharacter.h"
+#include "Training/TrainingSectorSubsystem.h"
 
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequenceBase.h"
@@ -307,7 +308,7 @@ bool AOperativeCharacter::StartMantle(const FMantleSite& Site, const FMantleDeci
 			Landing = FarFeet;
 		}
 	}
-	if (!Mantle->TryReserve(this, Landing))
+	if (!UTrainingSectorSubsystem::Allows(World, Landing, GetSimpleCollisionRadius() + 10.0) || !Mantle->TryReserve(this, Landing))
 	{
 		LastMantleRefusal = EMantleRefusal::NoLanding;
 		return false;
@@ -740,6 +741,11 @@ bool AOperativeCharacter::PlanMantleClick(const FHitResult& Hit, FMantleClickPla
 	Out.Obstacle = TopHit.GetActor();
 	Out.HeightCm = Height;
 	Out.Landing = TopHit.ImpactPoint;
+	if (!UTrainingSectorSubsystem::Allows(World, Out.Base, GetSimpleCollisionRadius() + 10.0)
+		|| !UTrainingSectorSubsystem::Allows(World, Out.Landing))
+	{
+		return Fail(TEXT("outside the training sector"));
+	}
 	if (!bBatch2)
 	{
 		return true; // before batch 2 the face's rules were checked on arrival only
@@ -767,6 +773,10 @@ bool AOperativeCharacter::PlanMantleClick(const FHitResult& Hit, FMantleClickPla
 	if (!Decision.IsGo())
 	{
 		return Fail(MantleRules::RefusalName(Decision.Refusal));
+	}
+	if (!UTrainingSectorSubsystem::Allows(World, Site.Landing, GetSimpleCollisionRadius() + 10.0))
+	{
+		return Fail(TEXT("outside the training sector"));
 	}
 	Out.Landing = Site.Landing;
 	Out.bTop = Site.Destination == EMantleDestination::Top;
@@ -1107,7 +1117,8 @@ bool AOperativeCharacter::TryMantleHopDownLegacy(const FVector& Destination)
 bool AOperativeCharacter::StartMantleDescent(const FVector& LandingFeet, const FVector& Goal, bool bResume, bool bResumeOwnOrder)
 {
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
-	if (!Movement || bMantling || bVaulting || IsMantleDescending() || IsKnockedDown() || IsClimbingLadder() || IsDroppingOffLedge()
+	if (!UTrainingSectorSubsystem::Allows(GetWorld(), LandingFeet, GetSimpleCollisionRadius() + 10.0)
+		|| !Movement || bMantling || bVaulting || IsMantleDescending() || IsKnockedDown() || IsClimbingLadder() || IsDroppingOffLedge()
 		|| !HealthComponent || !HealthComponent->IsAlive())
 	{
 		return false;

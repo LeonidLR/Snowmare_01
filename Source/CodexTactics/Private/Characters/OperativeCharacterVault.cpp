@@ -3,6 +3,7 @@
 // Godot reference: Scenes/movements/player.gd (try_vault_obstacle, is_vaulting). Pure rules: Characters/VaultRules.
 
 #include "Characters/OperativeCharacter.h"
+#include "Training/TrainingSectorSubsystem.h"
 #include "Core/PlayerCommands.h"
 #include "AI/StealthLureSubsystem.h"
 
@@ -144,7 +145,8 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 			continue; // the trace stops on the obstacle itself: still above it
 		}
 		const FVector Centre(LandingXY.X, LandingXY.Y, Land.ImpactPoint.Z + HalfHeight + 2.f);
-		bLandingFree = !World->OverlapAnyTestByChannel(Centre, FQuat::Identity, ECC_Pawn,
+		bLandingFree = UTrainingSectorSubsystem::Allows(World, Centre, GetSimpleCollisionRadius() + 10.0)
+			&& !World->OverlapAnyTestByChannel(Centre, FQuat::Identity, ECC_Pawn,
 			FCollisionShape::MakeCapsule(GetCapsuleComponent()->GetScaledCapsuleRadius(), HalfHeight), FitParams);
 	}
 	if (!bLandingFree || !VaultRules::CanVault(Height, bLanding, bLanding ? Land.ImpactPoint.Z - GroundZ : 0.f))

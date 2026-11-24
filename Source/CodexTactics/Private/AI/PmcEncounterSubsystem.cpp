@@ -19,6 +19,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Math/RandomStream.h"
+#include "Training/TrainingSectorSubsystem.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
 
@@ -76,6 +77,13 @@ void UPmcEncounterSubsystem::ReadConfig()
 	}
 	bConfigRead = true;
 	Clock = 0.f;
+	const UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(World);
+	if (const FPmcEncounterSpec* Encounter = Training ? Training->GetEncounter() : nullptr)
+	{
+		Pending.Add({ *Encounter, 0, Encounter->DelaySeconds, 0 });
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcEncounter] X6 sector %d: one PMC squad scheduled"), Training->GetSectorId());
+		return;
+	}
 	const TArray<FPmcEncounterSpec>& Squads = Level->Config.PmcSquads;
 	for (int32 Index = 0; Index < Squads.Num(); ++Index)
 	{
@@ -97,6 +105,11 @@ void UPmcEncounterSubsystem::Tick(float DeltaTime)
 	if (UGameplayPreloadSubsystem::IsPreparing(World))
 	{
 		return; // Keep scheduled clocks at their authored start while assets prepare, including no-PC worlds.
+	}
+	const UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(World);
+	if (Training && Training->HasActiveSector() && UNavigationSystemV1::IsNavigationBeingBuiltOrLocked(World))
+	{
+		return;
 	}
 	if (!bConfigRead)
 	{
@@ -164,6 +177,11 @@ int32 UPmcEncounterSubsystem::SpawnEncounter(const FPmcEncounterSpec& Spec, int3
 	const AActor* StartActor = UGameplayStatics::GetActorOfClass(World, APlayerStart::StaticClass());
 	const TArray<AOperativeCharacter*> Men = PmcEncounterLocal::PlayerMen(*World);
 	FVector PlayerStart = StartActor ? StartActor->GetActorLocation() : FVector::ZeroVector;
+	const UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(World);
+	if (Training && Training->HasActiveSector())
+	{
+		PlayerStart = Training->GetStart().GetLocation();
+	}
 	FVector Anchor = PlayerStart;
 	FVector PathFrom = PlayerStart;
 	if (!Men.IsEmpty())
@@ -261,7 +279,9 @@ int32 UPmcEncounterSubsystem::SpawnEncounter(const FPmcEncounterSpec& Spec, int3
 	{
 		FNavLocation OnNav;
 		const FVector Probe(Spec.FixedSpot.X, Spec.FixedSpot.Y, Spec.FixedSpot.Z != 0.0 ? Spec.FixedSpot.Z : GroundZ + 100.f);
-		if (!Nav->ProjectPointToNavigation(Probe, OnNav, FVector(300.f, 300.f, Spec.FixedSpot.Z != 0.0 ? 200.f : 1200.f)))
+		if (!Nav->ProjectPointToNavigation(UTrainingSectorSubsystem::LimitGoal(World, Probe, 100.0), OnNav,
+			FVector(300.f, 300.f, Spec.FixedSpot.Z != 0.0 ? 200.f : 1200.f))
+			|| !UTrainingSectorSubsystem::Allows(World, OnNav.Location, 70.0))
 		{
 			return Fail(FString::Printf(TEXT("the fixed spot %s is off the navmesh"), *Spec.FixedSpot.ToCompactString()));
 		}
@@ -292,11 +312,16 @@ int32 UPmcEncounterSubsystem::SpawnEncounter(const FPmcEncounterSpec& Spec, int3
 		{
 			FPmcEncounterPost OnNavPost = Spec.Post;
 			OnNavPost.Pos.Z = Spot.Z; // the navmesh height of the post (a ground post's Z 0 means "unknown")
+			if (Training && Training->HasActiveSector())
+			{
+				OnNavPost.Pos = Spot;
+			}
 			FVector Place = Spot;
 			for (const FVector& Want : PmcEncounterRules::PostSlots(OnNavPost, Index, PostConfig))
 			{
 				FNavLocation OnNav;
-				if (Nav->ProjectPointToNavigation(Want, OnNav, FVector(100.f, 100.f, 150.f)) && FMath::Abs(OnNav.Location.Z - Spot.Z) <= 150.f
+				if (Nav->ProjectPointToNavigation(UTrainingSectorSubsystem::LimitGoal(World, Want, 100.0), OnNav, FVector(100.f, 100.f, 150.f))
+					&& UTrainingSectorSubsystem::Allows(World, OnNav.Location, 70.0) && FMath::Abs(OnNav.Location.Z - Spot.Z) <= 150.f
 					&& !Used.ContainsByPredicate([&OnNav](const FVector& Taken) { return FVector::Dist2D(Taken, OnNav.Location) < 90.f; }))
 				{
 					Place = OnNav.Location;

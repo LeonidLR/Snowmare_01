@@ -22,6 +22,8 @@ public:
 
 	static USessionRecordingSubsystem* GetIfRecording(const UObject* WorldContext);
 	void SuppressSession(FName Why);
+	/** A recording belongs to one sector. End this segment before a new sector starts. */
+	void OnTrainingSectorChanged();
 	void RecordMode(EDemoMode Mode, bool bOn);
 	void MarkSession(const FString& Mark) { Session.Mark = Mark; }
 
