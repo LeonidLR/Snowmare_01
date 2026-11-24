@@ -2,22 +2,24 @@
 // editor as before; «Перемещение» the squad movement simulator, bot and tuner; «Боевая лаборатория»
 // (2026-11-01) the combat lab map's pressure settings, presets and bot runs in Unreal with their report.
 import React, { useState } from 'react';
-import { Boxes, Crosshair, Footprints, Swords } from 'lucide-react';
+import { Boxes, Crosshair, Footprints, HeartPulse, Swords } from 'lucide-react';
 import { App as WavesDepartment } from './App';
 import { MovementDepartment } from './departments/MovementDepartment';
 // «Левел-дизайн» (layout audit) tab removed 2026-11-16 (designer: obsolete); the component stays in departments/ for its checks.
 import { CombatLabDepartment } from './departments/CombatLabDepartment';
 // levelgen (tools/level-generator): the «Генератор уровней» department - registered in its own small hunk
 import { LevelGenDepartment } from './departments/LevelGenDepartment';
+import { ProjectHealthDepartment } from './departments/ProjectHealthDepartment';
 import { confirmLeave } from './utils/unsavedGuard';
 
-type DepartmentId = 'waves' | 'movement' | 'combat' | 'levelgen';
+type DepartmentId = 'waves' | 'movement' | 'combat' | 'levelgen' | 'health';
 
 const DEPARTMENTS: { id: DepartmentId; name: string; icon: React.ReactNode; hint: string }[] = [
   { id: 'waves', name: 'Волны', icon: <Swords size={15} />, hint: 'Волны, оружие, скрытность, бот боя (Unreal)' },
   { id: 'movement', name: 'Перемещение', icon: <Footprints size={15} />, hint: 'Построения, сектора взгляда, бот и обучение' },
   { id: 'combat', name: 'Боевая лаборатория', icon: <Crosshair size={15} />, hint: 'L_FormationLabCombat: давление врагов, засады, пресеты, боты по маршруту и отчёт' },
   { id: 'levelgen', name: 'Генератор уровней', icon: <Boxes size={15} />, hint: 'Серые раскладки по эталону дизайнера: генерация, проверка маршрута, критики, приёмка' },
+  { id: 'health', name: 'Состояние проекта', icon: <HeartPulse size={15} />, hint: 'Технический долг, known-fails (SLA 7 дней), результаты ночных прогонов и merge-gate' },
 ];
 
 const STORAGE_KEY = 'training_ground_department';
@@ -25,7 +27,7 @@ const STORAGE_KEY = 'training_ground_department';
 function initialDepartment(): DepartmentId {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    if (v === 'waves' || v === 'movement' || v === 'combat' || v === 'levelgen') return v;
+    if (v === 'waves' || v === 'movement' || v === 'combat' || v === 'levelgen' || v === 'health') return v;
   } catch { /* storage blocked: default */ }
   return 'waves';
 }
@@ -53,6 +55,7 @@ export const TrainingGround: React.FC = () => {
       {department === 'movement' && <MovementDepartment />}
       {department === 'combat' && <CombatLabDepartment />}
       {department === 'levelgen' && <LevelGenDepartment />}
+      {department === 'health' && <ProjectHealthDepartment />}
     </div>
   );
 };

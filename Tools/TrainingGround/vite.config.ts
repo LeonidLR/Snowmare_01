@@ -9,6 +9,7 @@ import { setupCombatLabApi } from './server/combatLabApi.ts'
 import { setupLevelgenApi } from './server/levelgenApi.ts'
 import { setupHudLabelsApi } from './server/hudLabelsApi.ts'
 import { setupAudioApi } from './server/audioApi.ts'
+import { setupProjectHealthApi } from './server/projectHealthApi.ts'
 import { buildLevelList, type RawLevelMeta, type CampaignConfig } from './src/utils/levelList.ts'
 import { sanitizeBotRunArgs } from './src/utils/botRunner.ts'
 import {
@@ -55,6 +56,8 @@ const setupApiMiddlewares = (middlewares: any) => {
   setupHudLabelsApi((route, handler) => middlewares.use(route, handler))
   // Training Ground: Audio review (Saved/Orchestrator/audio_v1)
   setupAudioApi((route, handler) => middlewares.use(route, handler))
+  // Training Ground: Project Health (Saved/Health/*.json)
+  setupProjectHealthApi((route, handler) => middlewares.use(route, handler))
 
   // 0. Health check для индикатора подключения
   middlewares.use('/api/health', (req: any, res: any) => {
