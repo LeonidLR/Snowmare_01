@@ -10,7 +10,8 @@
   "prep_phase_duration": 60,
   "wave_rest_duration": 20,
   "environment": {
-    "_comment": "kit dressing pictures: locked Clear 13:00, no snow cover",
+    "_comment": "Showcase combat: locked Clear retains the authored daylight, with procedural weather visuals off",
+    "visuals": false,
     "locked": true,
     "start_hour": 13,
     "weather": "Clear",
@@ -18,7 +19,7 @@
   },
   "intro_dialogue": false,
   "cheats": {
-    "immortal": true,
+    "immortal": false,
     "infinite_ammo": true
   },
   "levelgen_layout": "Content/Data/LevelGen/accepted/gen_story_showcase.json",
@@ -30,25 +31,22 @@
     ]
   },
   "drop_links": true,
-  "waves": [
+  "waves": [],
+  "pmc_squads": [
     {
-      "wave_index": 1,
-      "name": "Wave 1",
-      "max_simultaneous_enemies": 2,
-      "spawns": [
-        {
-          "enemy_type": "FROSTBITTEN",
-          "count": 2,
-          "spawn_lane": "ANY",
-          "spawn_delay_sec": 1,
-          "initial_delay_sec": 0
-        }
-      ],
-      "wave_modifiers": {
-        "enemy_hp_mult": 1,
-        "enemy_damage_mult": 1,
-        "enemy_speed_mult": 1,
-        "cold_drain_mult": 1
+      "count": 6,
+      "weights": "pmc_commander.json",
+      "posture": "defend",
+      "seed": 211101,
+      "post": {
+        "id": "showcase_south_street",
+        "kind": "street",
+        "pos": [
+          0,
+          -3800,
+          0
+        ],
+        "yaw": -90
       }
     }
   ],
@@ -57,6 +55,7 @@
     "preset_tier": "STANDARD"
   },
   "pressure": {
+    "enabled": false,
     "first_event_sec": 30,
     "interval_sec": 90,
     "group_min": 2,
