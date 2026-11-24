@@ -312,6 +312,8 @@ private:
 	TObjectPtr<class UFrostVignetteWidget> FrostVignette;
 	/** Draws the objective banner; returns its bottom edge (Y). */
 	float DrawObjectiveBanner();
+	/** Training sector round result, centred, for the 3 s the subsystem keeps the line. */
+	void DrawSectorRoundLine();
 	/** F-4 «а»: "GOALS: n/N" of a generated map's mission goals (UMissionGoalsSubsystem) under the banner; returns the bottom (Top without goals). */
 	float DrawMissionGoalsLine(float Top);
 	/**

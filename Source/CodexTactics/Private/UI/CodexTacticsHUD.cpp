@@ -32,6 +32,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Training/TrainingSectorSubsystem.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/Canvas.h"
 #include "Engine/Texture2D.h"
@@ -555,6 +556,7 @@ void ACodexTacticsHUD::DrawHUD()
 	}
 	DrawMinimapHeader();
 	const float ObjectiveBottom = DrawMissionGoalsLine(DrawObjectiveBanner());
+	DrawSectorRoundLine();
 	if (ShouldDrawStatus() && ShowsLabel(EHudLabel::SquadStatusPanel))
 	{
 		DrawSquadPanel(ObjectiveBottom + Margin * 0.5f);
@@ -1596,6 +1598,25 @@ FString ACodexTacticsHUD::DescribeOperative(const AOperativeCharacter& Operative
 			Operative.MinesCount);
 	}
 	return Line;
+}
+
+void ACodexTacticsHUD::DrawSectorRoundLine()
+{
+	const UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(GetWorld());
+	const FString Line = Training ? Training->GetRoundBanner() : FString();
+	UFont* Font = GEngine ? GEngine->GetLargeFont() : nullptr;
+	if (Line.IsEmpty() || !Canvas || !Font)
+	{
+		return;
+	}
+	const float Scale = 1.4f;
+	float Width = 0.f;
+	float Height = 0.f;
+	Canvas->StrLen(Font, Line, Width, Height);
+	const float X = (Canvas->SizeX - Width * Scale) * 0.5f;
+	const float Y = 72.f;
+	DrawText(Line, FLinearColor::Black, X + 2.f, Y + 2.f, Font, Scale);
+	DrawText(Line, FLinearColor(1.f, 0.82f, 0.25f), X, Y, Font, Scale);
 }
 
 float ACodexTacticsHUD::DrawObjectiveBanner()

@@ -215,6 +215,17 @@ void USessionRecordingSubsystem::Stamp(FDemoFrame& Frame) const
 	Frame.RealTime = FMath::Max(0., FPlatformTime::Seconds() - RealStart);
 }
 
+void USessionRecordingSubsystem::RecordSectorRound(const FDemoRoundEvent& Event)
+{
+	if (!bRecording || !Suppressed.IsNone() || !GetWorld())
+	{
+		return;
+	}
+	FDemoRoundEvent& Stored = Session.Rounds.Add_GetRef(Event);
+	Stored.Time = FMath::Max(0., GetWorld()->GetTimeSeconds() - GameStart);
+	Stored.RealTime = FMath::Max(0., FPlatformTime::Seconds() - RealStart);
+}
+
 void USessionRecordingSubsystem::RecordMode(EDemoMode Mode, bool bOn)
 {
 	if (SuppressDepth > 0) { return; }

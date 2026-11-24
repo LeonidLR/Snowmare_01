@@ -28,6 +28,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Core/MissionRules.h"
 #include "Core/MissionSubsystem.h"
+#include "Training/TrainingSectorSubsystem.h"
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Pawn.h"
@@ -101,7 +102,9 @@ void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSour
 	{
 		Living += Member && Member != this && Member->HealthComponent && Member->HealthComponent->IsAlive() ? 1 : 0;
 	}
-	const bool bDefeat = bSquadMember && MissionRules::ShouldFailMission(SquadRole == EOperativeRole::Commander, Living);
+	const UTrainingSectorSubsystem* SectorFight = UTrainingSectorSubsystem::Get(GetWorld());
+	const bool bSectorRound = SectorFight && SectorFight->SuppressesMissionEnd();
+	const bool bDefeat = bSquadMember && !bSectorRound && MissionRules::ShouldFailMission(SquadRole == EOperativeRole::Commander, Living);
 	UE_LOG(LogCodexTactics, Display, TEXT("%s killed in action (%s, %d squad members alive)%s"), *DisplayName.ToString(),
 		*UEnum::GetValueAsString(SquadRole), Living, bDefeat ? TEXT(" -> mission failed after the death cinematic") : TEXT(""));
 	// A hostile PMC fighter (teams, 2026-11-03): no HQ radio, no remains crate, no death cinematic - his squad and the fight's end check.
@@ -120,6 +123,10 @@ void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSour
 				Corpses->RegisterCorpse(this);
 			}
 		}
+		return;
+	}
+	if (bSectorRound)
+	{
 		return;
 	}
 	if (!bDefeat)
