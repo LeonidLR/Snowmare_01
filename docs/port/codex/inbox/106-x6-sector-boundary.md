@@ -26,3 +26,5 @@ Branch codex/106-x6-sector-boundary; build, -Smart, smoke on the worker. Report 
    clamped: cover picks, flank / retreat points, lures, ladder / window / mantle targets. Camera bounds = box + margin.
 5. Recording: the session header carries sector id + box (SessionRecordingRules); 107 item 4 reads it.
 6. 107 shows count / posture read-only (editing stays in the Wave Editor) - only the sector selection is written.
+
+DESIGNER DECISION 2026-11-24 ~16:15: WALLS + NAVIGATION (hard boundary: blocking walls on the box edges + nav excluded outside + all AI targets clamped). Not the soft boundary.
