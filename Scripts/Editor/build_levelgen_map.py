@@ -1379,7 +1379,10 @@ def plan(layout):
                    "rungs": int(ld["rungs"]), "tags": ["ladder=%s" % ld["id"], "from=%s" % ld["from"], "to=%s" % ld["to"]]}
         if extended and f["backing"] is None:
             ld_spec["wall_bracket_count"] = -1
-        if extended and (ld["id"] in hatch_ladders or (f["backing"] is None and ld.get("top"))):
+        # A facade roof ladder can have a backing wall and still need its authored
+        # landing inset to clear the eroded edge of the roof navmesh.
+        uses_layout_top = ld.get("top") and (f["backing"] is None or ld["to"].startswith("roof:"))
+        if extended and (ld["id"] in hatch_ladders or uses_layout_top):
             dist_top = math.hypot(ld["top"][0] - f["pos"][0], ld["top"][1] - f["pos"][1]) if ld.get("top") else 40.0
             ld_spec["top_exit_standoff"] = max(40.0, dist_top)
             ld_spec["top_standoff"] = max(49.1, dist_top)
