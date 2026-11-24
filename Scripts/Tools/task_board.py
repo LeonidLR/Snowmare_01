@@ -436,6 +436,10 @@ def load_mechanics_register(repo_root: str) -> list[dict[str, str]]:
     return items
 
 
+def _register_names_task_file(task: dict[str, Any], register_doc: str) -> bool:
+    return bool(register_doc) and register_doc.replace("\\", "/").lower() == task.get("task_file", "").lower()
+
+
 def match_register_for_task(task: dict[str, Any], register_items: list[dict[str, str]]) -> list[dict[str, str]]:
     slug_parts = [p for p in task["slug"].lower().split("-") if len(p) >= 4 and p not in _GENERIC_TOKENS]
     title_low = (task["title"] + " " + task.get("preview", "")).lower()
@@ -443,12 +447,11 @@ def match_register_for_task(task: dict[str, Any], register_items: list[dict[str,
     for reg in register_items:
         reg_tokens = [p for p in reg["id"].lower().split("-") if len(p) >= 4 and p not in _GENERIC_TOKENS]
         doc_base = os.path.basename(reg["doc"]).replace(".md", "").lower() if reg["doc"] else ""
-        matched = False
-        if doc_base and len(doc_base) >= 5 and doc_base in (task["slug"].lower() + " " + title_low):
-            matched = True
-        elif reg_tokens and any(tok in slug_parts for tok in reg_tokens):
-            matched = True
-        if matched:
+        if (
+            _register_names_task_file(task, reg["doc"])
+            or (len(doc_base) >= 5 and doc_base in (task["slug"].lower() + " " + title_low))
+            or any(tok in slug_parts for tok in reg_tokens)
+        ):
             matches.append(reg)
     return matches
 
@@ -518,8 +521,10 @@ def build_task_board(
         )
         # 2026-11-19: a register name replaces the task title only on a strong match (the register doc named in the task);
         # the old token match gave wrong names (T-06 "hold" -> "Удержать линию любой ценой").
-        strong = [rm for rm in reg_matches if rm.get("doc") and len(os.path.basename(rm["doc"]).replace(".md", "")) >= 5
-                  and os.path.basename(rm["doc"]).replace(".md", "").lower() in (task["slug"].lower() + " " + task["title"].lower())]
+        strong = [rm for rm in reg_matches if _register_names_task_file(task, rm["doc"])]
+        if not strong:
+            strong = [rm for rm in reg_matches if rm.get("doc") and len(os.path.basename(rm["doc"]).replace(".md", "")) >= 5
+                      and os.path.basename(rm["doc"]).replace(".md", "").lower() in (task["slug"].lower() + " " + task["title"].lower())]
         title_ru = strong[0]["name"] if strong and not re.search("[Ѐ-ӿ]", task["title"]) else ""
         area = reg_matches[0]["group_title"] if reg_matches else "Tools / Port"
         board_tasks.append(
