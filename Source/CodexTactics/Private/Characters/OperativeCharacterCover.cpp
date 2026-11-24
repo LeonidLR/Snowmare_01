@@ -469,6 +469,8 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	}
 	// Run-and-peek (#55): the entry into the ordered corner slot turns straight into the corner peek (no idle at the wall, no second click).
 	StartRunCornerPeekOnEntry(Slot);
+	RefreshWindowCover(true);
+	ApplyWindowCoverStance();
 }
 
 void AOperativeCharacter::UpdateCoverEnteredEvent(float DeltaTime)
@@ -515,6 +517,7 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 	{
 		return;
 	}
+	ClearWindowCover();
 	if (bCoverEnteredEventPending)
 	{
 		bCoverEnteredEventPending = false; // left before he settled: no entry, no leave
@@ -679,6 +682,10 @@ bool AOperativeCharacter::CanFireFromCover() const
 	{
 		return true;
 	}
+	if (IsWindowCoverConfirmed())
+	{
+		return true; // through the opening, including a high facade with no exposed corner
+	}
 	if (CurrentCoverHeight == ECoverHeight::LowCover)
 	{
 		return true; // over the top
@@ -689,6 +696,10 @@ bool AOperativeCharacter::CanFireFromCover() const
 FVector AOperativeCharacter::GetCoverFireOrigin() const
 {
 	const FVector Muzzle = GetMuzzleLocation();
+	if (IsWindowCoverConfirmed())
+	{
+		return Muzzle; // through the opening, not round a corner
+	}
 	if (!bInCover || (CurrentCoverHeight != ECoverHeight::HighCover && !(bCornerAimActive && IsManualCornerPeekSpot())))
 	{
 		return Muzzle; // low cover: over the top (a manual low-cover corner peek fires round its end, rev 5e)
@@ -845,10 +856,17 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 	{
 		TrySnapToCoverCorner();
 	}
+	RefreshWindowCover(false);
+	ApplyWindowCoverStance();
 }
 
 float AOperativeCharacter::GetCoverFacingYaw() const
 {
+	FVector Aim;
+	if (HasWindowCoverAim() && TryGetWindowCoverAimPoint(Aim))
+	{
+		return WindowCoverRules::AimYaw(GetActorLocation(), Aim);
+	}
 	return CoverFacingRules::FacingYaw(CoverSlot, CoverFacing);
 }
 
@@ -1071,9 +1089,12 @@ bool AOperativeCharacter::IsCoverFireReady() const
 	// User decision 2026-10-07: the fire-ready corner pose only for a threat behind the wall / round the corner (the same
 	// rule as the corner shot); a threat out in front keeps the plain cover idle (it gets an open shot).
 	// A low cover is fired over anywhere along it (the crouched fire stance pops the rifle over the top): no corner needed.
-	const bool bFiringSpot = CoverFacingRules::IsFiringSpot(CurrentCoverHeight, bAtCoverCorner);
+	// A confirmed window is a firing spot of its own. IsFiringSpot stays the corner / low-cover rule.
+	const bool bWindow = IsWindowCoverConfirmed() && !bShimmying;
+	const bool bFiringSpot = CoverFacingRules::IsFiringSpot(CurrentCoverHeight, bAtCoverCorner) || bWindow;
+	const bool bReach = bWindow || IsCornerShotTarget(CoverThreatLocation);
 	return CoverFacingRules::IsFireReady(bFiringSpot, bShimmying, bHasCoverThreat, static_cast<float>(Now - CoverThreatSeenTime),
-		CoverFireReadyHoldSeconds) && IsCornerShotTarget(CoverThreatLocation);
+		CoverFireReadyHoldSeconds) && bReach;
 }
 
 void AOperativeCharacter::LeaveCoverToMove(const FString& Reason)

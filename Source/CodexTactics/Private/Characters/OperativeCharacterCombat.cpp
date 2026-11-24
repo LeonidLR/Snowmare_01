@@ -183,8 +183,44 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	// blocked and two peekers in each other's cones never fired. A wall in the body's way moves the aim to the part that shows when the
 	// line to it is clear (SquadFireRules::ChooseShotAimPoint); the lean multiplier (x0.5) of ShootAtTarget makes him the smaller target.
 	Out.bExposedAim = false;
+	Out.bWindowGlass = false;
+	Out.WindowGlassPoint = FVector::ZeroVector;
+	// G016: a confirmed window uses the opening. Intact glass is a clear round that breaks the pane. The frame stays blocked.
+	bool bWindowLineDecided = false;
+	if (IsWindowCoverConfirmed() && IsWindowCoverShot(LineTo))
+	{
+		const WindowCoverRules::FWindowLineView View = WindowCoverRules::TraceThroughWindow(*World, this, GetWindowCover(), LineFrom, LineTo, Params);
+		bWindowLineDecided = true;
+		AActor* Blocker = View.Actor.Get();
+		if (View.bIntactGlass)
+		{
+			Kind = EShotLineHit::Clear;
+			HitEnemy = Enemy;
+			Out.bWindowGlass = true;
+			Out.WindowGlassPoint = View.ImpactPoint;
+		}
+		else if (!View.bBlocking || Blocker == Enemy)
+		{
+			Kind = EShotLineHit::Clear;
+			HitEnemy = Enemy;
+		}
+		else if (Blocker && Blocker->ActorHasTag(CombatQueries::EnemyTag))
+		{
+			HitEnemy = bKeepTarget ? Enemy : Blocker;
+			Kind = EShotLineHit::Clear;
+		}
+		else
+		{
+			Kind = Blocker && Blocker->IsA<ABarricadeActor>() ? EShotLineHit::Barricade : EShotLineHit::Blocked;
+		}
+		if (OutDetail)
+		{
+			*OutDetail += FString::Printf(TEXT("; window %s"), View.bIntactGlass ? TEXT("intact glass")
+				: (Kind == EShotLineHit::Clear ? TEXT("clear") : TEXT("frame")));
+		}
+	}
 	FVector Exposed = FVector::ZeroVector;
-	const AOperativeCharacter* TargetOperative = Kind == EShotLineHit::Blocked ? Cast<AOperativeCharacter>(Enemy) : nullptr;
+	const AOperativeCharacter* TargetOperative = !bWindowLineDecided && Kind == EShotLineHit::Blocked ? Cast<AOperativeCharacter>(Enemy) : nullptr;
 	const bool bHasExposed = TargetOperative && TargetOperative->GetPeekExposedPoint(Exposed);
 	EShotLineHit ExposedKind = EShotLineHit::Blocked;
 	if (bHasExposed)
@@ -905,7 +941,7 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 		// shot (lean / pop up / blind) — never a plain shot turned away from the wall.
 		CoverShotTarget = Target;
 		UpdateCoverFacing(/*bAllowSnap*/ false);
-		if (!CoverFacingRules::IsFacingAligned(GetActorRotation().Yaw, CoverSlot, CoverFacing, FCoverFacingConfig().FacingToleranceDeg))
+		if (!IsCoverBodyAligned())
 		{
 			return TEXT("cover: facing not aligned");
 		}
@@ -942,7 +978,8 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 		EFireGateBlock GateBlock = EFireGateBlock::None;
 		if (!CanFireAt(AimAt, GateReason, &GateBlock))
 		{
-			if (bInCover && GateBlock == EFireGateBlock::CoverPoseOutOfReach && bMayExpose && !IsCornerHoldSpot() && BeginOpenShotFromCover(Target))
+			if (bInCover && GateBlock == EFireGateBlock::CoverPoseOutOfReach && bMayExpose && !IsCornerHoldSpot()
+				&& !IsWindowCoverShot(AimAt) && BeginOpenShotFromCover(Target))
 			{
 				return TEXT("cover: the pose does not reach the target - steps off the wall");
 			}
@@ -967,6 +1004,8 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 	TGuardValue<bool> CoverBlind(bCoverBlindShot, bInCover && (CoverFireMode == ECoverFireMode::BlindFire || SuppressionFire.bBlind));
 	TGuardValue<bool> ExposedShot(bExposedAimShot, Shot.bExposedAim && !Shot.bBlind && !bRaging);
 	TGuardValue<FVector> ExposedAim(ExposedAimPoint, Shot.AimPoint);
+	TGuardValue<bool> WindowGlass(bWindowGlassShot, Shot.bWindowGlass);
+	TGuardValue<FVector> WindowPoint(WindowGlassImpact, Shot.bWindowGlass ? Shot.WindowGlassPoint : WindowGlassImpact);
 	ReturnFireShots += Shot.bReturnFire ? 1 : 0;
 	ShootAtTarget(Target, Shot.Cover);
 	return TEXT("fired");
@@ -1070,6 +1109,33 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 		OnWeaponMisfired.Broadcast(this);
 		OnWeaponMisfiredNative.Broadcast(this);
 		return false;
+	}
+
+	// G016: the first cartridge into the intact glass of the bound window. The clip is already spent. The target is not hit.
+	if (!IsLauncherEquipped())
+	{
+		const FVector GlassAim = bExposedAimShot ? ExposedAimPoint : Target->GetActorLocation();
+		ResolveWindowGlassRound(GlassAim);
+		if (bWindowGlassShot)
+		{
+			ShootTimer = FMath::Max(0.08f, (CurrentWeapon ? CurrentWeapon->Stats.Fire.ShotIntervalSeconds : 0.65f)
+				* (bRagingShot ? RageComponent->Config.FireRateMultiplier : 1.f));
+			if (UTacticalSightSubsystem* GlassSight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr)
+			{
+				GlassSight->NotifyFired(this);
+			}
+			AEnemyCharacter::NotifySquadNoise(GetWorld(), GetActorLocation(), ESquadNoise::Gunshot);
+			BreakWindowGlassFromShot(WindowCover.Sill.Get());
+			OnWeaponFired.Broadcast(this, Target, false);
+			OnWeaponFiredNative.Broadcast(this, Target, false);
+			if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
+			{
+				Feedback->SpawnTracer(GetWeaponMuzzleLocation(), WindowGlassImpact,
+					CurrentWeapon ? CurrentWeapon->TracerColor : UCombatFeedbackSubsystem::DefaultTracerColor(),
+					CurrentWeapon ? CurrentWeapon->Stats.Damage.DamageType : EDamageType::Kinetic);
+			}
+			return false;
+		}
 	}
 
 	ShootTimer = FMath::Max(0.08f, (CurrentWeapon ? CurrentWeapon->Stats.Fire.ShotIntervalSeconds : 0.65f) * (bRagingShot ? RageComponent->Config.FireRateMultiplier : 1.f));

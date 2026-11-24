@@ -314,6 +314,10 @@ CoverFacingRules::ECoverFireAt AOperativeCharacter::DecideCoverFireAtPoint(const
 	{
 		return CoverFacingRules::ECoverFireAt::CoverPose; // nothing to step out of: the open stance turns to it
 	}
+	if (IsWindowCoverShot(TargetLocation))
+	{
+		return CoverFacingRules::ECoverFireAt::CoverPose; // through the opening, both faces: he does not step off the wall
+	}
 	// Over the top: the same condition as GetCoverFireOrigin (a low cover, not the manual low-cover corner peek that fires round its end).
 	const bool bOverTheTop = CurrentCoverHeight != ECoverHeight::HighCover && !(bCornerAimActive && IsManualCornerPeekSpot());
 	return CoverFacingRules::DecideCoverFireAt(CoverSlot, TargetLocation, IsCornerShotTarget(TargetLocation), bOverTheTop,

@@ -20,6 +20,7 @@
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTypes.h"
 #include "Tactics/CoverWrapRules.h"
+#include "Tactics/WindowCoverRules.h"
 #include "Combat/KnockdownRules.h"
 #include "Combat/KnockdownTypes.h"
 #include "Combat/LauncherRules.h"
@@ -146,6 +147,9 @@ struct FShootCandidate
 	 * A normal aimed shot (not blind); the lean multiplier (x0.5) is the target's GetIncomingHitChanceMultiplier.
 	 */
 	bool bExposedAim = false;
+	/** G016: the round meets the intact glass of the bound window. The cartridge breaks it; the target is not hit. */
+	bool bWindowGlass = false;
+	FVector WindowGlassPoint = FVector::ZeroVector;
 };
 
 /**
@@ -1865,8 +1869,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
 	bool IsCoverFireReady() const;
 
-	/** Actor yaw wanted in cover: along the wall towards CoverFacing. */
+	/** Actor yaw wanted in cover: along the wall towards CoverFacing, or toward an aim through a confirmed window. */
 	float GetCoverFacingYaw() const;
+
+	/** G016: his own slot is a confirmed window (not the corner, not another man's slot). */
+	bool IsWindowCoverConfirmed() const { return bInCover && WindowCover.bConfirmed; }
+
+	const WindowCoverRules::FWindowCoverBinding& GetWindowCover() const { return WindowCover; }
+
+	int32 GetWindowCoverGlassRounds() const { return WindowCover.GlassRounds; }
+
+	/** The aim from the muzzle passes through the bound opening. */
+	bool IsWindowCoverShot(const FVector& AimAt) const;
 
 	/** The current shimmy goes towards the facing side (forward clip), else backwards. */
 	bool IsShimmyForward() const;
@@ -2975,8 +2989,18 @@ private:
 	/** Set around ShootAtTarget for a shot at a peeking man's exposed head and shoulder (FShootCandidate::bExposedAim): the round's end point. */
 	bool bExposedAimShot = false;
 	FVector ExposedAimPoint = FVector::ZeroVector;
+	/** Set around ShootAtTarget when the round is the window's first glass cartridge (G016). */
+	bool bWindowGlassShot = false;
+	FVector WindowGlassImpact = FVector::ZeroVector;
 	/** Cover state (Sprint 12). */
 	FCoverSlot CoverSlot;
+	/** G016: this operative's window, dropped on leave. Not copied with the slot and not moved when the leader changes. */
+	WindowCoverRules::FWindowCoverBinding WindowCover;
+	bool bWindowCoverForcedCrouch = false;
+	FVector WindowCoverSearchedAt = FVector(FLT_MAX);
+	WindowCoverRules::EWindowIntervalPlace WindowCoverLastPlace = WindowCoverRules::EWindowIntervalPlace::Outside;
+	FVector WindowCoverSegment = FVector(FLT_MAX);
+	TWeakObjectPtr<UPrimitiveComponent> WindowCoverWall;
 	FCoverSlot PendingCoverSlot;
 	bool bHasPendingCover = false;
 	/** Set while OrderTakeCover / OrderShimmyTo issue their move: the move does not leave the cover. */
@@ -3004,6 +3028,16 @@ private:
 	bool bCoverSnapPending = false;
 	/** Re-reads the threat, turns to its side (hysteresis), snaps to the corner after a turn; bAtCoverCorner. */
 	void UpdateCoverFacing(bool bAllowSnap);
+	/** G016: bind the slot's own window, or clear it. Never writes bWindowPathAllowed. */
+	void RefreshWindowCover(bool bForce);
+	void ClearWindowCover();
+	void ApplyWindowCoverStance();
+	void BreakWindowGlassFromShot(AActor* Sill);
+	bool HasWindowCoverAim() const;
+	bool TryGetWindowCoverAimPoint(FVector& OutAim) const;
+	bool IsCoverBodyAligned() const;
+	bool IsWindowCoverStopped() const;
+	void ResolveWindowGlassRound(const FVector& AimAt);
 	/** Priority target, else nearest visible enemy, else nearest heard ghost (CoverFacingRules::PickThreat). */
 	bool GatherCoverThreat(FVector& OutLocation) const;
 	/** Walks to the exposed edge on the facing side when it lies just beyond the corner reach. */

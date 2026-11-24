@@ -387,7 +387,7 @@ bool UOperativeAnimInstance::UpdateCoverSetStates(const AOperativeCharacter& Ope
 	{
 		const bool bHasOver = HasCoverSetClip(TEXT("crouch_over_fire_idle"), CoverFacing)
 			&& (CoverFacing != ECoverFacing::Right || HasCoverSetClip(TEXT("crouch_side_switch"), ECoverFacing::Left));
-		const bool bOver = CoverAnimSetRules::DecideFireSet(bIsCrouching, CoverHeight, bCoverAtCorner, bHasOver) == ECoverFireSet::Over;
+		const bool bOver = CoverAnimSetRules::DecideFireSet(bIsCrouching, CoverHeight, bCoverAtCorner, bHasOver, bCoverWindow) == ECoverFireSet::Over;
 		if (bOver != bCoverOverTopFireSet)
 		{
 			bCoverOverTopFireSet = bOver;

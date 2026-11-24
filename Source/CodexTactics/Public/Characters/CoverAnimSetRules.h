@@ -96,8 +96,12 @@ namespace CoverAnimSetRules
 	/** "<base>_right" / "<base>_left" for the side along the wall he faces. */
 	CODEXTACTICS_API FString SideKey(const FString& Base, ECoverFacing Facing);
 
-	/** Side peek at a corner / high cover / standing; the over-the-top shot crouched behind a LOW cover away from its corner (a window sill). */
-	CODEXTACTICS_API ECoverFireSet DecideFireSet(bool bCrouching, ECoverHeight Height, bool bAtCorner, bool bSetHasOverClips);
+	/**
+	 * Side peek at a corner / high cover / standing; the over-the-top shot crouched behind a LOW cover away from its corner.
+	 * bConfirmedWindow: a high facade's window is the same crouch-over pose (G016). Missing over clips stay on the side peek.
+	 */
+	CODEXTACTICS_API ECoverFireSet DecideFireSet(bool bCrouching, ECoverHeight Height, bool bAtCorner, bool bSetHasOverClips,
+		bool bConfirmedWindow = false);
 
 	/** The side switch owns the pose through entry, fire, and return, unless the cover action is cancelled. */
 	CODEXTACTICS_API ECoverOverTopPhase AdvanceOverTopPhase(ECoverOverTopPhase Phase, ECoverOverTopEvent Event);

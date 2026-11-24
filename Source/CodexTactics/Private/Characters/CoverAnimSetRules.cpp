@@ -184,9 +184,11 @@ FString CoverAnimSetRules::SideKey(const FString& Base, ECoverFacing Facing)
 	return Base + (Facing == ECoverFacing::Right ? TEXT("_right") : TEXT("_left"));
 }
 
-ECoverFireSet CoverAnimSetRules::DecideFireSet(bool bCrouching, ECoverHeight Height, bool bAtCorner, bool bSetHasOverClips)
+ECoverFireSet CoverAnimSetRules::DecideFireSet(bool bCrouching, ECoverHeight Height, bool bAtCorner, bool bSetHasOverClips,
+	bool bConfirmedWindow)
 {
-	return bSetHasOverClips && bCrouching && Height == ECoverHeight::LowCover && !bAtCorner ? ECoverFireSet::Over : ECoverFireSet::Side;
+	const bool bOverHeight = Height == ECoverHeight::LowCover || bConfirmedWindow;
+	return bSetHasOverClips && bCrouching && bOverHeight && !bAtCorner ? ECoverFireSet::Over : ECoverFireSet::Side;
 }
 
 ECoverOverTopPhase CoverAnimSetRules::AdvanceOverTopPhase(ECoverOverTopPhase Phase, ECoverOverTopEvent Event)
