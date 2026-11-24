@@ -14,7 +14,6 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Characters/VaultRules.h"
-#include "Core/CodexTacticsPlayerController.h"
 #include "CodexTactics.h"
 #include "Containers/Ticker.h"
 #include "Debug/SmokeUtils.h"
@@ -23,6 +22,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Interactables/VaultNavigation.h"
 #include "NavModifierComponent.h"
+#include "Tactics/CoverTraceRules.h"
 
 namespace DepotVaultSmoke
 {
@@ -50,7 +50,6 @@ namespace DepotVaultSmoke
 		TArray<FObstacle> Picks; // one per kind tried by hand, the first one also by the path
 		int32 Pick = 0;
 		FVector Goal = FVector::ZeroVector;
-		FHitResult CoverFaceHit;
 		bool bSawVault = false;
 		int32 HandVaults = 0;
 	};
@@ -279,54 +278,32 @@ namespace DepotVaultSmoke
 		}
 		case 6:
 		{
-			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
 			const FObstacle& First = State->Picks[0];
 			const FVector Face = First.Centre - First.Across * First.HalfDepth;
-			const FVector RayStart = Face - First.Across * 150.f + FVector(0.f, 0.f, VaultRules::ProbeHeight);
-			const FVector RayEnd = Face + First.Across * 25.f + FVector(0.f, 0.f, VaultRules::ProbeHeight);
-			FCollisionQueryParams Params(SCENE_QUERY_STAT(DepotVaultCoverClickSmoke), false, Leader);
-			const bool bHit = World->LineTraceSingleByChannel(State->CoverFaceHit, RayStart, RayEnd, ECC_Visibility, Params)
-				&& State->CoverFaceHit.GetActor() == First.Actor.Get() && FMath::Abs(State->CoverFaceHit.ImpactNormal.Z) < 0.3f;
-			Check(*State, PC && bHit, TEXT("the low obstacle's face is the cursor hit"));
-			if (!PC || !bHit)
+			FCoverSlot Slot;
+			const bool bHasSlot = CoverTraceRules::FindCoverSlotAt(World, Face + FVector(0.f, 0.f, VaultRules::ProbeHeight), First.Across, Slot)
+				&& Slot.IsValid() && Slot.WallActor == First.Actor;
+			Check(*State, bHasSlot, TEXT("the vaultable face has a cover slot on the approach side"));
+			if (!bHasSlot)
 			{
 				return Finish(*State, false);
 			}
-			const FVector Spot = SmokeUtils::FreeSpot(World, RayStart + First.Across * 45.f + FVector(0.f, 0.f, 100.f), Leader);
+			const FVector Spot = SmokeUtils::FreeSpot(World, Face - First.Across * 108.f + FVector(0.f, 0.f, 100.f), Leader);
 			Leader->StopOperative();
 			Leader->TeleportTo(FVector(Spot.X, Spot.Y, Spot.Z + 4.f), First.Across.Rotation(), false, true);
-			PC->CancelClickPreview(TEXT("DepotVaultSmoke"));
-			PC->HandlePlayerClick(State->CoverFaceHit);
-			Check(*State, PC->GetClickPreviewKind() == EClickPreviewKind::Cover && PC->HasCoverPreview(),
-				TEXT("click on a vaultable cover face shows the cover ghost"));
+			const bool bOrdered = Leader->OrderTakeCover(Slot, true) == EOperativeOrderResult::Accepted && Leader->HasPendingCover();
+			Check(*State, bOrdered, TEXT("the cover order retains the clicked face's slot"));
+			if (!bOrdered)
+			{
+				return Finish(*State, false);
+			}
+			// Force the ordinary knee probe while still in range, as a blocked approach would.
+			State->bSawVault = Leader->TryVault(First.Across, true);
+			Check(*State, !State->bSawVault, TEXT("the knee probe does not vault the destination cover"));
 			Next(*State, 7);
 			return true;
 		}
 		case 7:
-		{
-			if (State->StageTime < 1.f)
-			{
-				return true;
-			}
-			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
-			if (!PC || !Leader)
-			{
-				return Finish(*State, false);
-			}
-			PC->HandlePlayerClick(State->CoverFaceHit);
-			const bool bMatchingOrder = Leader->HasPendingCover() && Leader->GetPendingCoverSlot().WallActor == State->Picks[0].Actor;
-			Check(*State, bMatchingOrder, TEXT("confirming the face's ghost sends an order to the clicked cover"));
-			if (!bMatchingOrder)
-			{
-				return Finish(*State, false);
-			}
-			// Force the usual knee probe while still in range. A blocked approach uses this same fallback.
-			State->bSawVault = Leader->TryVault(State->Picks[0].Across, true);
-			Check(*State, !State->bSawVault, TEXT("the knee probe does not vault the destination cover"));
-			Next(*State, 8);
-			return true;
-		}
-		case 8:
 		{
 			State->bSawVault |= Leader->IsVaulting();
 			if (!Leader->bInCover && State->StageTime < 8.f)
