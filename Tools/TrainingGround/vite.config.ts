@@ -10,6 +10,7 @@ import { setupLevelgenApi } from './server/levelgenApi.ts'
 import { setupHudLabelsApi } from './server/hudLabelsApi.ts'
 import { setupAudioApi } from './server/audioApi.ts'
 import { setupProjectHealthApi } from './server/projectHealthApi.ts'
+import { setupTrainingApi } from './server/trainingApi.ts'
 import { buildLevelList, type RawLevelMeta, type CampaignConfig } from './src/utils/levelList.ts'
 import { sanitizeBotRunArgs } from './src/utils/botRunner.ts'
 import {
@@ -58,6 +59,7 @@ const setupApiMiddlewares = (middlewares: any) => {
   setupAudioApi((route, handler) => middlewares.use(route, handler))
   // Training Ground: Project Health (Saved/Health/*.json)
   setupProjectHealthApi((route, handler) => middlewares.use(route, handler))
+  setupTrainingApi((route, handler) => middlewares.use(route, handler), PROJECT_PATH)
 
   // 0. Health check для индикатора подключения
   middlewares.use('/api/health', (req: any, res: any) => {
@@ -82,7 +84,7 @@ const setupApiMiddlewares = (middlewares: any) => {
       const files = fs.readdirSync(LEVELS_DIR)
       const rawLevels: RawLevelMeta[] = []
       for (const file of files) {
-        if (file.endsWith('.json') && file !== 'stage_template.json') {
+        if (file.endsWith('.json') && !file.endsWith('.sectors.json') && file !== 'stage_template.json') {
           const p = path.join(LEVELS_DIR, file)
           try {
             const content = JSON.parse(fs.readFileSync(p, 'utf-8'))

@@ -122,10 +122,10 @@ test('Real repo data verification: campaign.json and LevelJson/*.json produce va
   const list = buildLevelList(campaign, rawLevels);
   assert.ok(list.length >= 20, `expected at least 20 levels, got ${list.length}`);
 
-  // Check L_Gen_Depot_1.json has level_name: "0.1 Depot" - campaign level 0.1 since 2026-11-08
-  const depot = list.find((i) => i.id === 'L_Gen_Depot_1');
-  assert.ok(depot, 'L_Gen_Depot_1 must be present in level list');
-  assert.equal(depot.level_name, '0.1 Depot');
+  assert.ok(!list.some((i) => i.id === 'L_Gen_Depot_1'), 'the archived Depot must be absent');
+  const depot = list.find((i) => i.id === 'L_Gen_Depot_1_X6');
+  assert.ok(depot, 'X6 must be present in the level list');
+  assert.equal(depot.level_name, rawLevels.find((level) => level.level_id === depot.id)?.level_name);
   assert.equal(depot.group, 'Campaign');
 
   // Check Campaign has Frozen Dam and the Depot, in campaign order
@@ -133,13 +133,9 @@ test('Real repo data verification: campaign.json and LevelJson/*.json produce va
   assert.equal(campaignItems.length, 2);
   assert.equal(campaignItems[0].id, 'L_Demo01_A_FrozenLake');
   assert.equal(campaignItems[0].level_name, '0.0 Frozen Dam');
-  assert.equal(campaignItems[1].id, 'L_Gen_Depot_1');
-  assert.equal(campaignItems[1].level_name, '0.1 Depot');
-
-  // Frozen Factory stays listed (its file is on disk), outside the campaign
-  const factory = list.find((i) => i.id === 'L_Demo01_B_FrozenFactory');
-  assert.ok(factory, 'L_Demo01_B_FrozenFactory must still be listed');
-  assert.equal(factory.group, 'Labs & tests');
+  assert.equal(campaignItems[1].id, depot.id);
+  assert.equal(campaign.levels[1].title, '0.1 Depot');
+  assert.ok(!list.some((i) => i.id === 'L_Demo01_B_FrozenFactory'), 'the archived Frozen Factory must be absent');
 
   // The legacy pair sharing "Battle 1: Checkpoint Skirmish" is told apart by the file name; nothing shows twice
   const stage01 = list.find((i) => i.id === 'stage_01');
@@ -150,9 +146,9 @@ test('Real repo data verification: campaign.json and LevelJson/*.json produce va
   assert.equal(outpost.display_name, `${outpost.level_name} (level_01_outpost.json)`);
   assert.equal(new Set(list.map((i) => i.display_name)).size, list.length, 'every selector entry is unique');
 
-  // Check Labs & tests contains Formation Lab
-  const lab = list.find((i) => i.id === 'L_FormationLab');
-  assert.ok(lab, 'L_FormationLab must be in Labs & tests');
+  assert.ok(!list.some((i) => i.id === 'L_FormationLab'), 'the retired Formation Lab must be absent');
+  const lab = list.find((i) => i.id === 'L_Lab_Alley');
+  assert.ok(lab, 'L_Lab_Alley must be in Labs & tests');
   assert.equal(lab.group, 'Labs & tests');
 });
 

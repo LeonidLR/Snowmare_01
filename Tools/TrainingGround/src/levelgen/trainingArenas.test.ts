@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { configValues } from '../movement/config.ts';
@@ -8,14 +9,17 @@ import { mockCritic } from './critic.ts';
 import { evaluateLayout } from './evaluate.ts';
 import type { GenLayout } from './schema.ts';
 import { validateGenLayout } from './schema.ts';
-import { buildAllTrainingArenas } from './trainingArenas.ts';
+import { buildAllTrainingArenas, writeTrainingArenas } from './trainingArenas.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
-const ACCEPTED_DIR = path.join(ROOT, 'Content/Data/LevelGen/accepted');
 const config = configValues(JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/FormationLab/formation_config.json'), 'utf8')));
 
-test('L_Gen_Train_1..3 pass schema validation, full simulation, tactical checks, and mockCritic', () => {
+test('L_Gen_Train_1..3 pass schema validation, full simulation, tactical checks, and mockCritic', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'training-arenas-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const files = writeTrainingArenas(dir);
   const arenas = buildAllTrainingArenas();
+  assert.equal(files.length, arenas.length);
   assert.equal(arenas.length, 3);
 
   for (const arena of arenas) {
@@ -42,7 +46,7 @@ test('L_Gen_Train_1..3 pass schema validation, full simulation, tactical checks,
     assert.equal(verdict.fits, true, `${arena.name} mockCritic rejected: ${verdict.reasons.join(' | ')} (fixes: ${verdict.fixes.join('; ')})`);
 
     // Accepted artifact exists on disk and matches the builder output
-    const diskPath = path.join(ACCEPTED_DIR, `${arena.name}.json`);
+    const diskPath = path.join(dir, `${arena.name}.json`);
     assert.equal(fs.existsSync(diskPath), true, `${diskPath} must exist`);
     const onDisk = JSON.parse(fs.readFileSync(diskPath, 'utf8')) as GenLayout;
     assert.deepEqual(validateGenLayout(onDisk), []);

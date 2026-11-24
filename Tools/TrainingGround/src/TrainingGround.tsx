@@ -10,15 +10,17 @@ import { CombatLabDepartment } from './departments/CombatLabDepartment';
 // levelgen (tools/level-generator): the «Генератор уровней» department - registered in its own small hunk
 import { LevelGenDepartment } from './departments/LevelGenDepartment';
 import { ProjectHealthDepartment } from './departments/ProjectHealthDepartment';
+import { AiTrainingDepartment } from './departments/AiTrainingDepartment';
 import { confirmLeave } from './utils/unsavedGuard';
 
-type DepartmentId = 'waves' | 'movement' | 'combat' | 'levelgen' | 'health';
+type DepartmentId = 'waves' | 'movement' | 'combat' | 'levelgen' | 'ai-training' | 'health';
 
 const DEPARTMENTS: { id: DepartmentId; name: string; icon: React.ReactNode; hint: string }[] = [
   { id: 'waves', name: 'Волны', icon: <Swords size={15} />, hint: 'Волны, оружие, скрытность, бот боя (Unreal)' },
   { id: 'movement', name: 'Перемещение', icon: <Footprints size={15} />, hint: 'Построения, сектора взгляда, бот и обучение' },
   { id: 'combat', name: 'Боевая лаборатория', icon: <Crosshair size={15} />, hint: 'L_FormationLabCombat: давление врагов, засады, пресеты, боты по маршруту и отчёт' },
   { id: 'levelgen', name: 'Генератор уровней', icon: <Boxes size={15} />, hint: 'Серые раскладки по эталону дизайнера: генерация, проверка маршрута, критики, приёмка' },
+  { id: 'ai-training', name: 'Тренировка ИИ', icon: <Crosshair size={15} />, hint: 'Карта, сектор и последние записи' },
   { id: 'health', name: 'Состояние проекта', icon: <HeartPulse size={15} />, hint: 'Технический долг, known-fails (SLA 7 дней), результаты ночных прогонов и merge-gate' },
 ];
 
@@ -26,8 +28,10 @@ const STORAGE_KEY = 'training_ground_department';
 
 function initialDepartment(): DepartmentId {
   try {
-    const v = localStorage.getItem(STORAGE_KEY);
-    if (v === 'waves' || v === 'movement' || v === 'combat' || v === 'levelgen' || v === 'health') return v;
+    const requested = new URLSearchParams(window.location.search).get('department');
+    const saved = localStorage.getItem(STORAGE_KEY);
+    const id = DEPARTMENTS.find((item) => item.id === requested)?.id ?? DEPARTMENTS.find((item) => item.id === saved)?.id;
+    if (id) return id;
   } catch { /* storage blocked: default */ }
   return 'waves';
 }
@@ -55,6 +59,7 @@ export const TrainingGround: React.FC = () => {
       {department === 'movement' && <MovementDepartment />}
       {department === 'combat' && <CombatLabDepartment />}
       {department === 'levelgen' && <LevelGenDepartment />}
+      {department === 'ai-training' && <AiTrainingDepartment />}
       {department === 'health' && <ProjectHealthDepartment />}
     </div>
   );

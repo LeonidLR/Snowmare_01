@@ -31,7 +31,7 @@ const layout = JSON.parse(fs.readFileSync(layoutPath, 'utf8')) as GenLayout;
 const propsPath = path.join(root, 'Content/Data/LevelGen/props/L_Gen_Depot_1.props.json');
 const baseProps = JSON.parse(fs.readFileSync(propsPath, 'utf8')) as LevelPropsFile;
 
-const tacticalPath = path.join(root, 'Content/Data/LevelGen/tactical/L_Gen_Test_X2.tactical.json');
+const tacticalPath = new URL('./fixtures/archivedMaps/L_Gen_Test_X2.tactical.json', import.meta.url);
 const baseTactical = JSON.parse(fs.readFileSync(tacticalPath, 'utf8')) as TacticalMapFile;
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
