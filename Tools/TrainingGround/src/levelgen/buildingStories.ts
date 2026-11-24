@@ -497,7 +497,8 @@ export function applyBalconyEscape(l: GenLayout, b: GenBuilding, roomId: string,
       if (realRooms.has(rm)) rm.door_ids = (rm.door_ids ?? []).filter((x) => x !== slot.id);
     }
     editableOpenings(b).push({
-      id: doorId, kind: 'door', pos, floor: f, width: planned ? O.door_cm : OPENING_DEFAULTS.door.width, ...(wall ? { wall: wall.id } : {}),
+      id: doorId, kind: 'door', pos, floor: f, width: planned && b.plan?.template && baySectionTemplate(b.plan.template)
+        ? BAY_SECTIONS.windows_cm.balcony_door : planned ? O.door_cm : OPENING_DEFAULTS.door.width, ...(wall ? { wall: wall.id } : {}),
       ...(planned ? { sill_height: 0, top_height: O.door_top_cm, links: [rm.id, `balcony:${balconyId}`] as [string, string], role: 'balcony' as const, module: 'wall_door_200' } : {}),
     });
     const r = outBox(b, side, along, half, D);
@@ -789,7 +790,16 @@ export function storyRecipe(l: GenLayout, b: GenBuilding, story: StoryId): Brick
         .filter(({ o }) => o.kind === 'window' && o.floor === 1 && openingSide(b, o) === side)
         .sort((a, c) => off(a.o) - off(c.o) || (a.ref < c.ref ? -1 : a.ref > c.ref ? 1 : 0))
         .find((c) => planSnowRamp(l, b, c.ref, front.opening));
-      return hit ? [{ kind: 'door_state', door: front.ref, state: 'sealed' }, { kind: 'snow_ramp', window: hit.ref }] : null;
+      if (!hit) return null;
+      const recipe: Brick[] = [{ kind: 'door_state', door: front.ref, state: 'sealed' }, { kind: 'snow_ramp', window: hit.ref }];
+      // The ground-storey windows of the 1-464 snow house are protected
+      // behind boards. The recorded ramp and the gable entrance stay usable.
+      if (b.plan?.template && baySectionTemplate(b.plan.template)) {
+        for (const facade of [side, OPPOSITE_SIDE[side]]) {
+          if (frontGroundWindows(l, b, facade).length) recipe.push({ kind: 'window_state', target: facade, state: 'boarded', floor: 0 });
+        }
+      }
+      return recipe;
     }
   }
 }

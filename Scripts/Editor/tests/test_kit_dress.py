@@ -282,6 +282,51 @@ class DressLayoutTest(unittest.TestCase):
         os.environ.pop("KIT_DRESS_BUILDER", None)
 
 
+class FixedBayDressTest(unittest.TestCase):
+    def setUp(self):
+        t = table()
+        series = "panel_1-464"
+        b = {"id": "B_464", "floors": 2, "footprint": [[0, 0], [450, 300]],
+             "plan": {"template": "block_1_464"}, "balconies": []}
+        self.dresser = K.Dresser({"ground_z": 0}, b, [], series, t["series"][series], t,
+                                lambda op: "closed" if op["kind"] == "door" else "glazed")
+        self.dresser.classify()
+        self.dresser.slot_balconies = set()
+        self.edge = next(e for e in K.edges_of(b) if e.L == 450)
+
+    def test_centered_module_gets_two_75_cm_trims(self):
+        d, e = self.dresser, self.edge
+        op = {"id": "win", "kind": "window", "sill_height": 90, "top_height": 210}
+        bays = d.bays_of(e, 0, [(op, 225, 150)], [])
+        self.assertEqual([(x[0], x[1], x[4]) for x in bays], [(75, 375, "win")])
+        d.emit_floor(e, 0, 0, bays, [])
+        trims = [i for i in d.out if i["part"] == "facade_trim"]
+        self.assertEqual(sorted((e.s_of(i["loc"][:2]), abs(i["scale"][0])) for i in trims),
+                         [(-7.5, 0.15), (37.5, 0.75), (412.5, 0.75), (457.5, 0.15)])
+        self.assertEqual(d.counts.get("facade_solid", 0), 0)
+
+    def test_separate_balcony_and_window_keep_their_real_holes(self):
+        d, e = self.dresser, self.edge
+        door = {"id": "balc", "kind": "door", "role": "balcony", "links": ["room", "balcony:B"],
+                "sill_height": 0, "top_height": 215}
+        window = {"id": "win", "kind": "window", "links": ["room", "street"], "sill_height": 90, "top_height": 210}
+        bays = d.bays_of(e, 1, [(window, 145, 150), (door, 330, 100)], [])
+        self.assertEqual([(x[0], x[1], x[4]) for x in bays], [(70, 220, "fixed_opening"), (280, 380, "fixed_opening")])
+        d.emit_floor(e, 1, 300, bays, [])
+        leaf, = [i for i in d.out if i["part"] == "balcony_door_leaf"]
+        self.assertAlmostEqual(abs(leaf["scale"][0]) * 80, 100)
+        self.assertEqual(d.counts["window"], 1)
+        self.assertFalse([n for n in d.notes if "bays overlap" in n])
+
+    def test_a_ground_gable_entry_keeps_150_cm_clear(self):
+        d, e = self.dresser, self.edge
+        door = {"id": "gable", "kind": "door"}
+        bay, = d.bays_of(e, 0, [(door, 225, 150)], [])
+        self.assertEqual(bay[4], "entry")
+        lo, hi = d.S["entrance"]["hole"]
+        self.assertAlmostEqual(bay[5]["sx"] * (hi - lo), 150)
+
+
 class StoryShowcaseDressTest(unittest.TestCase):
     """The dressed story showcase (gen_story_showcase, 2026-11-22: six khrushchevka blocks with a gable door each): every ground door - the
     court entrances and the gable door - gets a kit entrance (door bay + porch + canopy); the story-4 balconies get the kit balcony door bay +
