@@ -13,7 +13,7 @@ import { addBuilding, finalizeDraftToLayout } from '../generate.ts';
 import type { GenBuilding, GenLayout, WallOpening } from '../schema.ts';
 import { DEFAULT_PARAMS, LEVEL_HEIGHT, STAIR_RUN_PER_RISE, isSwitchback, stairFlights } from '../schema.ts';
 import { toBuildingFrame } from '../rotation.ts';
-import { DEFAULT_BLOCK_TEMPLATE, KIT, blockTemplate, kitPlanToAscii, kitStairGeom, planKitBlock, templateForSeries, validateKitPlan } from './kitPlan.ts';
+import { BAY_SECTIONS, baySectionTemplate, DEFAULT_BLOCK_TEMPLATE, KIT, blockTemplate, kitPlanToAscii, kitStairGeom, planKitBlock, templateForSeries, validateKitPlan } from './kitPlan.ts';
 import type { BandPlan, PlanCell } from './bandPlan.ts';
 
 const area = (c: PlanCell): number => ((c.u1 - c.u0) * (c.v1 - c.v0)) / 1e4;
@@ -222,6 +222,30 @@ test('CodexTactics.LevelGen.KitPlan.RolesFollowUnits: S2.3 ground floors - every
 export type { BandPlan };
 
 // ---- (4) the template catalog (lead addendum 2026-11-21: several house types, the khrushchevka is one) ----------------------------------
+
+test('1-464 fixed bays: standard and short templates use the designer dimensions', () => {
+  const standard = baySectionTemplate('block_1_464');
+  const short = baySectionTemplate('block_1_464_short');
+  assert.ok(standard && short);
+  assert.equal(blockTemplate('block_1_464').series, '1-464');
+  assert.equal(blockTemplate('block_1_464_short').planner, 'bay_sections');
+  assert.equal(baySectionTemplate('block_khrushchevka'), undefined);
+  assert.equal(baySectionTemplate('missing'), undefined);
+  assert.deepEqual(standard.bays_cm, [450, 450, 450, 450, 450, 350]);
+  assert.deepEqual(standard.bays_cm.slice(0, -1), short.bays_cm);
+  assert.equal(standard.bays_cm.reduce((length, bay) => length + bay, 0), 2600);
+  assert.equal(short.bays_cm.reduce((length, bay) => length + bay, 0), 2250);
+  assert.deepEqual([standard.flat_two_living_rooms, short.flat_two_living_rooms], [2, 1]);
+  assert.equal(BAY_SECTIONS.depth_cm, 1400);
+  assert.equal(BAY_SECTIONS.storey_cm, 300);
+  assert.deepEqual(BAY_SECTIONS.storeys, [2, 3]);
+  assert.equal(BAY_SECTIONS.rooms.living.clear_width_cm, 430);
+  assert.equal(BAY_SECTIONS.rooms.bedroom.clear_width_cm, 325);
+  assert.deepEqual(BAY_SECTIONS.walls_cm, { exterior: 30, bearing: 20, partition: 10 });
+  assert.deepEqual(BAY_SECTIONS.doors_cm, { entry: 150, tambour: 150, flat: 150, living: 150, kitchen: 120, bedroom: 120, bath: 120 });
+  assert.equal(BAY_SECTIONS.core.flight_clear_cm, 205);
+  assert.equal(BAY_SECTIONS.core.half_landing_side, 'court');
+});
 
 test('CodexTactics.LevelGen.KitPlan.Templates: the khrushchevka (series 1-464) is the default block template; a series or a template id picks; the building records template / series / era', () => {
   assert.equal(DEFAULT_BLOCK_TEMPLATE, 'block_khrushchevka');

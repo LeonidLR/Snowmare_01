@@ -31,6 +31,15 @@ export function blockTemplate(id?: string): BlockTemplateInfo {
 export function templateForSeries(series?: string): string | undefined {
   return series ? Object.keys(TEMPLATES).find((k) => isTemplate(k) && (TEMPLATES[k] as { series?: string | null }).series === series) : undefined;
 }
+export const BAY_SECTIONS = cfg.recipes.block.bay_sections;
+export type BaySectionTemplate = typeof cfg.recipes.block.templates.block_1_464;
+
+/** Fixed bays are requested by explicit template id; series-only selection retains the original planner. */
+export function baySectionTemplate(id: string): BaySectionTemplate | undefined {
+  const template = blockTemplate(id);
+  return template.planner === 'bay_sections' ? TEMPLATES[template.id] as BaySectionTemplate : undefined;
+}
+
 /** The khrushchevka template (series 1-464): the kit planner's default numbers. */
 export const KIT: KitTemplate = cfg.recipes.block.templates.block_khrushchevka;
 const BUILDING_PLANS = cfg; // the JSON itself, not bandPlan.ts's re-export: bandPlan.ts imports this module (no cycle at load time)
