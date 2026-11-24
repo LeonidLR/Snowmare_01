@@ -548,7 +548,7 @@ bool FPmcOperatorsDataTest::RunTest(const FString&)
 {
 	using namespace PmcCommanderTestLocal;
 	const TSharedPtr<FJsonObject> Json = PmcParseJson(TEXT("{\"display_names\":[\"A\",\"B\"],\"looks\":[{\"id\":\"x\",\"tint_srgb\":[255,0,0],\"snow\":0.5},{\"id\":\"y\"}],")
-		TEXT("\"weapon_pool\":[{\"id\":\"m16\",\"weight\":1},{\"id\":\"shotgun\",\"weight\":0}],\"stats\":{\"accuracy\":70,\"medkits\":2},\"factions\":{\"monsters_attack_pmc\":false,\"pmc_self_defence_m\":5}}"));
+		TEXT("\"weapon_pool\":[{\"id\":\"m16\",\"weight\":1},{\"id\":\"shotgun\",\"weight\":0}],\"stats\":{\"accuracy\":70,\"medkits\":2},\"ammo\":{\"_comment\":\"x\",\"rpg7\":1,\"pistol\":24.4},\"factions\":{\"monsters_attack_pmc\":false,\"pmc_self_defence_m\":5}}"));
 	TestNotNull(TEXT("parsed"), Json.Get());
 	if (!Json.IsValid())
 	{
@@ -561,6 +561,10 @@ bool FPmcOperatorsDataTest::RunTest(const FString&)
 	TestTrue(TEXT("look x tint red"), C.Looks[0].Tint.R > 0.9f && C.Looks[0].Tint.G < 0.01f);
 	TestEqual(TEXT("accuracy"), C.Accuracy, 70.f, 0.001f);
 	TestEqual(TEXT("medkits"), C.Medkits, 2);
+	// Designer 2026-11-23: PMC-only reserves ("ammo"); "_" keys are comments.
+	TestEqual(TEXT("ammo: two weapons"), C.ReserveAmmo.Num(), 2);
+	TestEqual(TEXT("ammo: rpg7 1 spare"), C.ReserveAmmo.FindRef(TEXT("rpg7")), 1);
+	TestEqual(TEXT("ammo: pistol rounded"), C.ReserveAmmo.FindRef(TEXT("pistol")), 24);
 	TestFalse(TEXT("monsters flag"), C.bMonstersAttackPmc);
 	TestEqual(TEXT("self-defence metres -> cm"), C.SelfDefenceCm, 500.f, 0.001f);
 	// Picks: seeded, a squad of two wears two different looks, a zero-weight weapon is never drawn.

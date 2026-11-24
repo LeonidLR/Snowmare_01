@@ -192,10 +192,10 @@ namespace PmcArena
 		bool bSmokeCrossroads = false;
 		bool bSmokeAlley = false;
 		/**
-		 * Ammo=resupply|real (fix/pmc-arena-stalemate, default resupply): a fighter whose reserve runs dry gets his weapon's reserve back - an
-		 * arena-only training rule (the Depot tracks: empty rifles stood on the point next to each other for 3 minutes, unable to fight).
+		 * Ammo=resupply|real (fix/pmc-arena-stalemate; default real since the designer 2026-11-23 "not infinite"): resupply = a fighter whose
+		 * reserve runs dry gets his weapon's reserve back (the Depot tracks: empty rifles stood on the point for 3 minutes, unable to fight).
 		 */
-		bool bResupply = true;
+		bool bResupply = false;
 		/**
 		 * Teams=on|off (fix/arena-clip-readability 2026-11-10, default on): a rendered run colours every live fighter with a see-through team
 		 * overlay (A red, B green, dim on the fallen; M_TargetFresnel, no depth test) instead of the operatives' red occlusion silhouette. TeamGlow=<f> = its

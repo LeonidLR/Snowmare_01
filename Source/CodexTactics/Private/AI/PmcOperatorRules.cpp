@@ -125,6 +125,19 @@ namespace PmcOperatorRules
 			if ((*Stats)->TryGetNumberField(TEXT("medkits"), Value)) { Out.Medkits = FMath::Max(0, FMath::RoundToInt(Value)); }
 			if ((*Stats)->TryGetNumberField(TEXT("grenades"), Value)) { Out.Grenades = FMath::Max(0, FMath::RoundToInt(Value)); }
 		}
+		const TSharedPtr<FJsonObject>* Ammo = nullptr;
+		if (Json.TryGetObjectField(TEXT("ammo"), Ammo) && Ammo->IsValid())
+		{
+			Out.ReserveAmmo.Reset();
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*Ammo)->Values)
+			{
+				double Rounds = 0.0;
+				if (!Pair.Key.StartsWith(TEXT("_")) && Pair.Value.IsValid() && Pair.Value->TryGetNumber(Rounds))
+				{
+					Out.ReserveAmmo.Add(Pair.Key, FMath::Max(0, FMath::RoundToInt(Rounds)));
+				}
+			}
+		}
 		const TSharedPtr<FJsonObject>* Factions = nullptr;
 		if (Json.TryGetObjectField(TEXT("factions"), Factions) && Factions->IsValid())
 		{

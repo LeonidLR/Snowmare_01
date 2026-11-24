@@ -2988,6 +2988,15 @@ AOperativeCharacter* UPmcSquadSubsystem::SpawnFighter(int32 TeamId, const FVecto
 			Fighter->SwitchToWeaponById(WeaponId); // the pool weapon stays in hands
 		}
 	}
+	// PMC-only reserves (pmc_operators.json "ammo", designer 2026-11-23: finite ammo, the RPG 1-2 rounds): set what he carries.
+	for (const TPair<FString, int32>& Reserve : Config.ReserveAmmo)
+	{
+		if (PmcSquadLocal::HasWeaponId(*Fighter, *Reserve.Key))
+		{
+			Fighter->TakeReserve(Reserve.Key, TNumericLimits<int32>::Max());
+			Fighter->AddAmmo(Reserve.Key, Reserve.Value);
+		}
+	}
 	// Hostile fighters fire at anything they see.
 	FSquadOrderContext Posture;
 	Posture.Operative = Fighter;
