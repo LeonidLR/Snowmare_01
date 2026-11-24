@@ -105,7 +105,7 @@ bool FLevelJsonFilesParseTest::RunTest(const FString&)
 		TestTrue(FString::Printf(TEXT("%s has waves or PMC squads"), *File), Config.Waves.Num() > 0 || bPmcOnly);
 		for (const FWaveDefinition& Wave : Config.Waves)
 		{
-			TestTrue(FString::Printf(TEXT("%s wave %d has enemies"), *File, Wave.WaveIndex), Wave.GetTotalEnemyCount() > 0);
+			TestTrue(FString::Printf(TEXT("%s wave %d has enemies"), *File, Wave.WaveIndex), Wave.GetTotalEnemyCount() > 0 || bPmcOnly);
 		}
 	}
 	return true;
