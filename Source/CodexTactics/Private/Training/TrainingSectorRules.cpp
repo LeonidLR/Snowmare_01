@@ -191,3 +191,171 @@ void TrainingSectorRules::Pick(const FTrainingSector& Sector, int32 Seed, FTrain
 	Squad.DelaySeconds = 0.f;
 	Squad.Seed = Seed != 0 ? Seed : 1;
 }
+
+namespace TrainingSectorFight
+{
+	void ReadFields(const FJsonObject& Json, FSectorFightConfig& Out)
+	{
+		const auto Read = [&Json](const TCHAR* Key, float Current) -> float
+		{
+			double Value = 0.0;
+			return Json.TryGetNumberField(Key, Value) && FMath::IsFinite(Value) && Value >= 0.0 ? static_cast<float>(Value) : Current;
+		};
+		Out.RoundRestartDelayS = Read(TEXT("round_restart_delay_s"), Out.RoundRestartDelayS);
+		Out.RoundTimeLimitS = Read(TEXT("round_time_limit_s"), Out.RoundTimeLimitS);
+		Out.ResupplyDelayS = Read(TEXT("resupply_delay_s"), Out.ResupplyDelayS);
+		FString Mode;
+		if (Json.TryGetStringField(TEXT("ammo_mode"), Mode))
+		{
+			Out.AmmoMode = Mode.Equals(TEXT("real"), ESearchCase::IgnoreCase) ? ESectorAmmoMode::Real : ESectorAmmoMode::Resupply;
+		}
+	}
+}
+
+FSectorFightConfig TrainingSectorRules::FightConfig(const FJsonObject& Json, int32 SectorId)
+{
+	FSectorFightConfig Out;
+	TrainingSectorFight::ReadFields(Json, Out);
+	const TArray<TSharedPtr<FJsonValue>>* List = nullptr;
+	if (!Json.TryGetArrayField(TEXT("sectors"), List) || !List)
+	{
+		return Out;
+	}
+	for (const TSharedPtr<FJsonValue>& Value : *List)
+	{
+		const TSharedPtr<FJsonObject>* Entry = nullptr;
+		double Id = 0.0;
+		if (Value && Value->TryGetObject(Entry) && Entry && Entry->IsValid() && (*Entry)->TryGetNumberField(TEXT("id"), Id)
+			&& static_cast<int32>(Id) == SectorId)
+		{
+			TrainingSectorFight::ReadFields(**Entry, Out);
+			break;
+		}
+	}
+	return Out;
+}
+
+ESectorRoundEnd TrainingSectorRules::EvaluateRound(const FSectorSideCount& Player, const FSectorSideCount& Pmc, double ElapsedS, double LimitS)
+{
+	if (Player.Members <= 0 || Pmc.Members <= 0)
+	{
+		return ESectorRoundEnd::None;
+	}
+	if (Player.Fighting <= 0 && Pmc.Fighting <= 0)
+	{
+		return ESectorRoundEnd::Draw;
+	}
+	if (Player.Fighting <= 0)
+	{
+		return ESectorRoundEnd::Defeat;
+	}
+	if (Pmc.Fighting <= 0)
+	{
+		return ESectorRoundEnd::Victory;
+	}
+	return ElapsedS >= LimitS ? ESectorRoundEnd::Draw : ESectorRoundEnd::None;
+}
+
+FSectorPair TrainingSectorRules::PickRoundPair(int32 StartCount, int32 PostCount, int32 Seed, int32 RoundIndex, const FSectorPair& Previous)
+{
+	if (StartCount <= 0 || PostCount <= 0)
+	{
+		return {};
+	}
+	const int32 Count = StartCount * PostCount;
+	const int32 StreamSeed = static_cast<int32>(static_cast<uint32>(Seed) * 17u + static_cast<uint32>(RoundIndex) * 101u + 3u);
+	FRandomStream Stream(StreamSeed);
+	int32 Index = Stream.RandRange(0, Count - 1);
+	const int32 Prev = Previous.IsValid() ? Previous.StartIndex * PostCount + Previous.PostIndex : INDEX_NONE;
+	if (Index == Prev && Count > 1)
+	{
+		Index = (Index + 1) % Count;
+	}
+	return { Index / PostCount, Index % PostCount };
+}
+
+void TrainingSectorRules::ApplyPair(const FTrainingSector& Sector, const FSectorPair& Pair, int32 Seed, FTrainingSectorStart& Start, FPmcEncounterSpec& Squad)
+{
+	if (!Pair.IsValid() || !Sector.Starts.IsValidIndex(Pair.StartIndex) || !Sector.Posts.IsValidIndex(Pair.PostIndex))
+	{
+		return;
+	}
+	Start = Sector.Starts[Pair.StartIndex];
+	Squad = Sector.Squad;
+	Squad.Post = Sector.Posts[Pair.PostIndex];
+	Squad.bHasPost = true;
+	Squad.bRandomSpawn = false;
+	Squad.FixedSpot = Squad.Post.Pos;
+	Squad.DelaySeconds = 0.f;
+	Squad.Seed = Seed != 0 ? Seed : 1;
+}
+
+FSectorPair TrainingSectorRules::PairOf(const FTrainingSector& Sector, const FTrainingSectorStart& Start, const FPmcEncounterSpec& Squad)
+{
+	FSectorPair Pair;
+	for (int32 Index = 0; Index < Sector.Starts.Num(); ++Index)
+	{
+		const FTrainingSectorStart& Candidate = Sector.Starts[Index];
+		if (Candidate.Position.Equals(Start.Position, 1.0) && FMath::IsNearlyEqual(Candidate.Yaw, Start.Yaw, 0.1))
+		{
+			Pair.StartIndex = Index;
+			break;
+		}
+	}
+	for (int32 Index = 0; Index < Sector.Posts.Num(); ++Index)
+	{
+		if (Sector.Posts[Index].Id == Squad.Post.Id)
+		{
+			Pair.PostIndex = Index;
+			break;
+		}
+	}
+	return Pair;
+}
+
+bool TrainingSectorRules::ShouldRefillReserve(const FSectorResupplyQuery& Query, ESectorAmmoMode Mode, double DelayS)
+{
+	if (Mode != ESectorAmmoMode::Resupply || !Query.bUsesAmmo || !Query.bHasWeapon || Query.bLauncher || Query.Reserve > 0)
+	{
+		return false;
+	}
+	const int32 Magazine = FMath::Max(1, Query.Magazine);
+	return Query.Clip * 3 <= Magazine && Query.SecondsQuiet >= DelayS;
+}
+
+int32 TrainingSectorRules::RefilledReserve(int32 Magazine, int32 WeaponReserve)
+{
+	return FMath::Max(FMath::Max(1, Magazine), WeaponReserve);
+}
+
+double TrainingSectorRules::QuietSeconds(double Now, double EmptySince, double LastShotTime)
+{
+	return EmptySince < 0.0 ? 0.0 : FMath::Max(0.0, Now - FMath::Max(EmptySince, LastShotTime));
+}
+
+FString TrainingSectorRules::RoundBanner(int32 Round, ESectorRoundEnd Result)
+{
+	const TCHAR* Word = Result == ESectorRoundEnd::Victory ? TEXT("победа") : Result == ESectorRoundEnd::Defeat ? TEXT("поражение") : TEXT("ничья"); // cyrillic-ok: designer 2026-11-24 training round banner
+	return FString::Printf(TEXT("Раунд %d: %s"), FMath::Max(1, Round), Word); // cyrillic-ok: designer 2026-11-24 training round banner
+}
+
+const TCHAR* TrainingSectorRules::RoundEndName(ESectorRoundEnd Result)
+{
+	switch (Result)
+	{
+	case ESectorRoundEnd::Victory: return TEXT("victory");
+	case ESectorRoundEnd::Defeat: return TEXT("defeat");
+	case ESectorRoundEnd::Draw: return TEXT("draw");
+	default: return TEXT("none");
+	}
+}
+
+bool TrainingSectorRules::IsFighterDown(bool bAlive, bool bIncapacitated)
+{
+	return !bAlive || bIncapacitated;
+}
+
+bool TrainingSectorRules::ResupplyTouchesGrenades()
+{
+	return false;
+}
