@@ -1,6 +1,6 @@
 // Dev-only console command: openable doors R1 (designer 2026-11-21; Interactables/DoorSubsystem, DoorActor, DoorRules) on the story showcase
-// /Game/Maps/Generated/L_Gen_StoryShowcase with the switch Codex.Doors.Openable ON (set by the smoke itself):
-//   Scripts/smoke.ps1 -Command CodexTactics.DoorsSmoke -Map /Game/Maps/Generated/L_Gen_StoryShowcase
+// /Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit (G018; the grey L_Gen_StoryShowcase is archived) with the switch Codex.Doors.Openable ON (set by the smoke itself):
+//   Scripts/smoke.ps1 -Command CodexTactics.DoorsSmoke -Map /Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit
 //   A  adoption: closed / locked leaves became doors (S01 front closed, S03 front locked, S03 gable closed); a closed door blocks sight
 //      (Visibility across the doorway); the navmesh: a path through the closed S01 door exists, no path runs through the locked S03 door;
 //   B  Solo, the leader's CLICK on the closed S01 door (HandlePlayerClick): he walks up and opens it; the doorway passes sight; the cold
@@ -1435,7 +1435,7 @@ namespace DoorsSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.DoorsSmoke"),
-		TEXT("Dev check (openable doors R1, L_Gen_StoryShowcase; sets Codex.Doors.Openable 1): adoption, a closed door blocks sight / is priced on the navmesh, the ")
+		TEXT("Dev check (openable doors R1, L_Gen_StoryShowcase_Kit; sets Codex.Doors.Openable 1): adoption, a closed door blocks sight / is priced on the navmesh, the ")
 		TEXT("locked door is not; the leader's click opens / closes a door; the squad passes a closed door (auto-open); story 3: the locked door sends him ")
 		TEXT("round through the gable door; the kick; the switch off restores the decorative leaves. PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));

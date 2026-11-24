@@ -1,4 +1,5 @@
-// Dev-only console command: R17-5, the doorway breach in the game (designer 2026-11-17 with R17-3; docs/design/DOORWAY_BREACH.md) on L_Gen_Depot_1
+// Dev-only console command: R17-5, the doorway breach in the game (designer 2026-11-17 with R17-3; docs/design/DOORWAY_BREACH.md). G018 runs it on
+// L_Gen_StoryShowcase_Kit (L_Gen_Depot_1 is archived).
 // (its doorways: the level generator layout, UDoorwaySubsystem):
 //   Scripts/smoke_parallel.ps1 -Commands DoorBreachSmoke -ExtraArgs -Multiprocess
 // Every click takes the real input path (the camera's ray -> ACodexTacticsPlayerController::HandlePlayerClick). Cases:
@@ -451,7 +452,7 @@ namespace DoorBreachSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.DoorBreachSmoke"),
-		TEXT("Dev check (R17-5 doorway breach, L_Gen_Depot_1): a first click into a doorway shows the squad's breach ghost, the second click stacks the squad on ")
+		TEXT("Dev check (R17-5 doorway breach, L_Gen_StoryShowcase_Kit): a first click into a doorway shows the squad's breach ghost, the second click stacks the squad on ")
 		TEXT("its slots (jamb men peeking in), a click inside the room is the entry (the men end inside); Solo: one man at the nearest jamb; PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
