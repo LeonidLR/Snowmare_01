@@ -8,8 +8,8 @@
 // the wall). The tactical pause plans it (Q3: PlanRunCornerPeekClick, run on the release). Pure rules: RunCornerPeekRules.
 // Godot reference: none (UE-only; docs/systems/cover-and-peek.md "Run-and-peek").
 
-#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/CodexTacticsPlayerController.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Characters/OperativeCharacter.h"

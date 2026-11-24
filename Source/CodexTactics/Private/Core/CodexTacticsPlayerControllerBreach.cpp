@@ -6,8 +6,8 @@
 // is the entry (DoorwayBreachEntryRules: right-hand jamb man hooks right, the left one 0.3 s later left, the centre man drives in). Solo: one man
 // at the nearest jamb; a box selection: the selected ones; formation: the squad. Godot reference: none (UE-only).
 
-#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/CodexTacticsPlayerController.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Characters/OperativeCharacter.h"

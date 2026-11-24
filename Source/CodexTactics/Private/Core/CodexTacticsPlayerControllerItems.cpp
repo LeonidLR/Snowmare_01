@@ -3,8 +3,8 @@
 // Split out of CodexTacticsPlayerController.cpp verbatim (cleanup 2026-10-15; map: docs/port/REFACTOR_CONTROLLER_2026-10.md).
 // Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
 
-#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/CodexTacticsPlayerController.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "AI/StealthLureSubsystem.h"
 #include "Combat/GrenadeSubsystem.h"
@@ -160,6 +160,7 @@ void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
 
 void ACodexTacticsPlayerController::UseFirstAidItem(EFirstAidItem Item)
 {
+	FDemoOrderScope Demo(Item == EFirstAidItem::Medkit ? this : nullptr, EDemoOrderKind::Medkit);
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	UFirstAidSubsystem* FirstAid = UFirstAidSubsystem::Get(this);
