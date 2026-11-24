@@ -17,6 +17,11 @@ X6 выбирал старт из PlayerStart (`CodexTacticsGameMode.cpp:483` д
 - `test.ps1 -Smart -SkipSmokes -DryRun` — PASS, в плане есть CodexTactics.Training.Sector и SectorBoundarySmoke. В unit-тестах подготовлены проверка схемы, детерминизм, разнообразие стартов и clamp. Смоук приказывает выйти за границу и проверяет удержание игрока и PMC внутри.
 - TypeSafe PASS для `5480fdae` и `aaa81d4d`, `git diff --check` PASS.
 
-Вердикт FAIL для приёмки UE. Ветка содержит код и тесты, а C++ сборка, -Smart с UE и смоук ожидают дневное окно slot1 после 16:30 и набор данных Gemini 105. Контур, физика стены и отключение внешнего navmesh пока проверены по API UE 5.8 и путям вызова. Дизайнерский LevelJson, файл секторов Gemini, карты и настройки холода остались в ведении их владельцев.
+## Проверка на worker slot1
 
-Следующий worker-прогон после объединения 105/106: `Scripts/Tools/worker_sync.ps1 -RemoteRoot C:/Work/CodexTactics-slot1 -ShipHead -ShareMachine -Build -SkipBinaries -Commands CodexTactics.SectorBoundarySmoke -Jobs 1`, затем `test.ps1 -Smart -Base <база> -SkipSmokes` на Worker на том же SHA.
+- В `9359e504` добавил одобренный Lead файл `Content/Data/LevelJson/L_Gen_Depot_1_X6.sectors.json` из `d39d33aa` без изменений байтов. Шесть секторов, по три старта и поста в каждом. Размеры сторон составляют 152×170 м, 152×143 м и 152×121 м для остальных четырёх.
+- Первый `SectorBoundarySmoke` увидел PMC из трёх бойцов, но учёл и команду игрока с ID 0. В `ca30ba22` ограничил выбор и подсчёт положительными идентификаторами команд. Смоук затем прошёл.
+- Первый `-Smart` дал 988/989. `LevelJson.AllFilesParse` пытался читать файл секторов как файл волн. В `44115b39` подключил проверку по его схеме с требованием шести валидных записей (`Source/CodexTacticsTests/Private/Core/LevelJsonRulesTest.cpp:93`). Проверки обычных LevelJson сохранились.
+- На `44115b39` сборка PASS за 30,30 с, `SectorBoundarySmoke` PASS за 80,5 с, `test.ps1 -Smart -Base 31a65744 -SkipSmokes` PASS 989/989 за 123 с. Смоук проверил остановку движения у границы и удержание трёх оперативников и одного отряда PMC внутри. Логи в `Saved/Logs/Worker/106-sector-final/`. TypeSafe PASS.
+
+Итог PASS для указанных проверок. Смоук прошёл на секторе 1. Остальные пять проверены по схеме и геометрии файла данных. Ручную проверку контура, камеры и смены сектора дизайнером не проводил.
