@@ -1,6 +1,6 @@
 // CodexTactics.Doors.* - openable doors R1 (designer 2026-11-21; opening-states.md 1 + F1, ADR-0003 "after R1"): DoorRules (state
 // machine, navmesh rule, sight rule, leaf split, swing side, "on his way", auto-open timer, tags) + DoorTuning (doors.json, the switch).
-// In-game check: CodexTactics.DoorsSmoke on L_Gen_StoryShowcase. UE-only (no Godot reference).
+// In-game check: CodexTactics.DoorsSmoke on L_Gen_StoryShowcase_Kit. UE-only (no Godot reference).
 
 #include "Misc/AutomationTest.h"
 #include "Dom/JsonObject.h"
@@ -792,6 +792,42 @@ bool FDoorsSwingSideTest::RunTest(const FString& Parameters)
 	// The jamb the leaf rests against is no obstacle (the wall the doorway is cut in, shrunk 2 cm by the runtime).
 	TArray<FDoorSwingObstacle> Jamb = { Box(-200.f, -8.f, -52.f, 8.f, 0), Box(52.f, -8.f, 200.f, 8.f, 0) };
 	TestEqual(TEXT("the doorway's own wall does not stop the swing"), FreeSwingDeg(100.f, 1, 1.f, Jamb, 90.f), 90.f);
+	return true;
+}
+
+DOORS_TEST(FDoorsQuietInnerLockTest, "Interior.QuietRouteStaysUnlocked")
+bool FDoorsQuietInnerLockTest::RunTest(const FString& Parameters)
+{
+	// G018: the walk between two street entries (S03 d20 -> c16 -> c7) must not be a random-locked inner door. A roll under the share
+	// still locks the storey above and a building with one entry.
+	using namespace DoorRules;
+	TestTrue(TEXT("two entries on the quiet floor"), IsQuietInnerFloor(0, 2, 0, 2));
+	TestFalse(TEXT("the storey above is not the quiet floor"), IsQuietInnerFloor(1, 2, 0, 2));
+	TestFalse(TEXT("one entry is not a quiet building"), IsQuietInnerFloor(0, 1, 0, 2));
+	TestFalse(TEXT("quiet entries 0 turns the skip off"), IsQuietInnerFloor(0, 4, 0, 0));
+	TestFalse(TEXT("two entries, ground floor, a locking roll: stays unlocked"), MayRandomLockInner(0, 2, 0.1f, 0.25f, 0, 2));
+	TestFalse(TEXT("even a roll of 0 on the quiet floor stays unlocked"), MayRandomLockInner(0, 2, 0.f, 1.f, 0, 2));
+	TestTrue(TEXT("the storey above still locks"), MayRandomLockInner(1, 2, 0.1f, 0.25f, 0, 2));
+	TestTrue(TEXT("one street entry: the ground floor still locks"), MayRandomLockInner(0, 1, 0.1f, 0.25f, 0, 2));
+	TestFalse(TEXT("a roll above the share never locks"), MayRandomLockInner(1, 2, 0.9f, 0.25f, 0, 2));
+	TestTrue(TEXT("quiet entries 0: the ground floor locks again"), MayRandomLockInner(0, 2, 0.1f, 0.25f, 0, 0));
+	TestFalse(TEXT("share 0 locks nothing"), MayRandomLockInner(1, 1, 0.f, 0.f, 0, 2));
+
+	FString Text;
+	TestTrue(TEXT("doors.json exists"), FFileHelper::LoadFileToString(Text, *DoorTuning::GetDefaultPath()));
+	TSharedPtr<FJsonObject> Json;
+	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid())
+	{
+		AddError(TEXT("doors.json does not parse"));
+		return false;
+	}
+	const FDoorTuning File = DoorTuning::FromJson(*Json);
+	TestFalse(TEXT("the global switch stays off"), File.bEnabled);
+	TestEqual(TEXT("quiet floor from doors.json"), File.StartInteriorLockedQuietFloor, 0);
+	TestEqual(TEXT("quiet entries from doors.json"), File.StartInteriorLockedQuietEntries, 2);
+	TestEqual(TEXT("the random share stays 0.25"), File.StartInteriorLockedShare, 0.25f);
+	TestTrue(TEXT("the kit showcase stays listed"), File.EnabledMaps.Contains(TEXT("L_Gen_StoryShowcase_Kit")));
+	TestFalse(TEXT("X6 is not listed"), File.EnabledMaps.Contains(TEXT("L_Gen_Depot_1_X6")));
 	return true;
 }
 
