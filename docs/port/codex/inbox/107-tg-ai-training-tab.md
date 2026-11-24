@@ -8,5 +8,5 @@ Designer 2026-11-24: a new Training Ground tab "Тренировка ИИ" (AI t
 3. "Set active" writes active_sector into the map's LevelJson (0 = whole map); per sector show its contents (buildings,
    covers, fences, ladders) and its PMC squad (count, posture), editable count / posture.
 4. Show which sector the last recorded sessions / arena runs used (Saved/Demos summary via Codex 075 demo_summary.py if cheap).
-Weather is PAUSED (designer) - the tab must not write environment fields.
+Cold is OFF on X6 / Showcase / Lake (cold_rate_mult 0, designer: fights only) - the tab must not change cold_rate_mult.
 Branch codex/107-tg-ai-training-tab, TG tests + build of the TG; screenshot of the tab in outbox for the designer.
