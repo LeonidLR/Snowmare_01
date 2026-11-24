@@ -23,7 +23,7 @@ public:
 	static USessionRecordingSubsystem* GetIfRecording(const UObject* WorldContext);
 	void SuppressSession(FName Why);
 	void RecordMode(EDemoMode Mode, bool bOn);
-	void MarkSession(const FString& Mark) { Session.Mark = Mark.Left(128); }
+	void MarkSession(const FString& Mark) { Session.Mark = Mark; }
 
 #if WITH_DEV_AUTOMATION_TESTS
 	void StartForTest(const FString& Directory);

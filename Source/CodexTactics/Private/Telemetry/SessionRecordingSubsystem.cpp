@@ -96,7 +96,7 @@ void USessionRecordingSubsystem::Start(const FString& Directory)
 	Session = FDemoSession{};
 	Session.StartedLocal = FDateTime::Now();
 	Session.StartedUtc = FDateTime::UtcNow();
-	Session.Map = SessionRecordingRules::CleanMapName(GetWorld()->GetMapName());
+	Session.Map = SessionRecordingRules::CleanMapName(FPaths::GetCleanFilename(GetWorld()->GetMapName()));
 	Session.bPie = GetWorld()->WorldType == EWorldType::PIE;
 	GameStart = GetWorld()->GetTimeSeconds();
 	RealStart = FPlatformTime::Seconds();
@@ -169,10 +169,6 @@ void USessionRecordingSubsystem::Flush(double Duration)
 		if (!bDirectory && FStringView(File).EndsWith(FStringView(TEXT(".jsonl")))) { ExistingBytes += FMath::Max(int64(0), Files.FileSize(File)); }
 		return true;
 	});
-	if (ExistingBytes >= 300LL * 1024 * 1024)
-	{
-		UE_LOG(LogCodexTactics, Warning, TEXT("[DemoRecord] recordings exceed 300 MB"));
-	}
 	do
 	{
 		Path = OutputDirectory / SessionRecordingRules::MakeDemoFileName(StampTime, Session.Map);
@@ -186,6 +182,10 @@ void USessionRecordingSubsystem::Flush(double Duration)
 		Files.Delete(*Temp, false, true, true);
 		UE_LOG(LogCodexTactics, Warning, TEXT("[DemoRecord] could not save %s"), *FPaths::GetCleanFilename(Path));
 		return;
+	}
+	if (ExistingBytes + Files.FileSize(*Path) >= 300LL * 1024 * 1024)
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("[DemoRecord] recordings exceed 300 MB"));
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[DemoRecord] saved %s"), *FPaths::GetCleanFilename(Path));
 }
@@ -248,7 +248,7 @@ void USessionRecordingSubsystem::Capture(FDemoFrame& Frame, const AOperativeChar
 	}
 	Frame.bSolo = Squad->IsSoloMode();
 	Frame.Formation = FName(FormationNames::ToString(Squad->GetFormationKind()));
-	Frame.bAutonomy = Flow && Flow->IsSquadAutonomyActive();
+	Frame.bAutonomy = Flow && Flow->IsAutonomousSquadCombat();
 	Frame.bPaused = World.IsPaused() || (Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause);
 	Frame.FirstOp = Session.Ops.Num();
 	Frame.FirstThreat = Session.Threats.Num();
