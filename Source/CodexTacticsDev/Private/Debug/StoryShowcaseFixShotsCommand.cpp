@@ -10,6 +10,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "SmokeUtils.h"
 #include "AIController.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Camera/CameraActor.h"
@@ -262,7 +263,7 @@ namespace StoryShowcaseFixShots
 		}
 	}
 
-	void Run(const TArray<FString>& Args, UWorld* /*World*/)
+	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		Runner = MakeShared<FRunner>();
 		Runner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("StoryShowcase") / TEXT("fixes"));
@@ -274,12 +275,10 @@ namespace StoryShowcaseFixShots
 			}
 		}
 		IFileManager::Get().MakeDirectory(*Runner->Dir, true);
-		for (const TCHAR* Name : { TEXT("Codex.Pressure.Enabled"), TEXT("Codex.Pmc.Encounters") })
+		SmokeUtils::StopLevelPmc(World);
+		if (IConsoleVariable* Pressure = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.Enabled")))
 		{
-			if (IConsoleVariable* Variable = IConsoleManager::Get().FindConsoleVariable(Name))
-			{
-				Variable->Set(0, ECVF_SetByConsole);
-			}
+			Pressure->Set(0, ECVF_SetByConsole);
 		}
 		if (IConsoleVariable* Doors = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Doors.Openable")))
 		{

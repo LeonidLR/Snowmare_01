@@ -173,8 +173,8 @@
     },
     {
       "name": "kit-showcase",
-      "globs": ["Source/**/Debug/CoverIndoorSmoke*", "Source/**/Characters/CoverAnimSetRules*", "Source/**/Characters/OperativeAnimInstanceCoverSet*", "Source/**/Debug/WindowStairHoverSmoke*", "Source/**/Debug/FormationStairSmoke*", "Source/**/Debug/FormationWindowSmoke*", "Content/Data/LevelJson/L_Gen_StoryShowcase_Kit.json", "Content/Data/Animation/cover_anim_sets.json"],
-      "tests": ["CodexTactics.Animation.CoverAnimSet"],
+      "globs": ["Source/**/Debug/CoverIndoorSmoke*", "Source/**/Characters/CoverAnimSetRules*", "Source/**/Characters/OperativeAnimInstanceCoverSet*", "Source/**/Debug/WindowStairHoverSmoke*", "Source/**/Debug/FormationStairSmoke*", "Source/**/Debug/FormationWindowSmoke*", "Source/**/Debug/SmokeUtilsTest.cpp", "Content/Data/LevelJson/L_Gen_StoryShowcase_Kit.json", "Content/Data/Animation/cover_anim_sets.json"],
+      "tests": ["CodexTactics.Animation.CoverAnimSet", "CodexTactics.Smoke.Fixture"],
       "smokes": ["CoverIndoorSmoke", "WindowStairHoverSmoke", "FormationStairSmoke", "FormationWindowSmoke"]
     },
     {
