@@ -12,3 +12,5 @@ MantleClickSmoke / CoverSmoke / LowCoverMoveLakeSmoke on X6, or a new small chec
 takes cover; the vault stays on the top click / double click.
 Done = root cause + fix on codex/103-low-cover-click, build, -Smart, the cover + mantle-click smokes on the worker PASS.
 Rules: docs/port/TANDEM.md 'WORK PROCESS'. Report in outbox + chat FINISH.
+
+Designer answer 2026-11-24 15:40: he clicks the FRONT / END FACE of the cover, never the top - and they still climb over.
