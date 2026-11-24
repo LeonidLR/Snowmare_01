@@ -97,6 +97,13 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 	{
 		return false;
 	}
+	// The knee probe reaches beyond the cover destination. Do not vault the obstacle we are about
+	// to use from this side. A route approaching its opposite face may still cross it.
+	if (bHasPendingCover && PendingCoverSlot.WallActor.Get() == Front.GetActor()
+		&& FVector::DotProduct(Location - PendingCoverSlot.WallPoint, PendingCoverSlot.WallNormal) >= 0.f)
+	{
+		return false;
+	}
 	// A whole (shut) window only by the window rules (designer 2026-11-23, WindowOrderRules: the window click, or Solo with the squad
 	// selected in a fight; never a formation follower - FormationStairSmoke S04: a plain walk's knee-height auto-vault broke a window).
 	// A broken window is an ordinary quiet vault.

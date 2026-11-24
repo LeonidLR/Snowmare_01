@@ -14,6 +14,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Characters/VaultRules.h"
+#include "Core/CodexTacticsPlayerController.h"
 #include "CodexTactics.h"
 #include "Containers/Ticker.h"
 #include "Debug/SmokeUtils.h"
@@ -49,6 +50,7 @@ namespace DepotVaultSmoke
 		TArray<FObstacle> Picks; // one per kind tried by hand, the first one also by the path
 		int32 Pick = 0;
 		FVector Goal = FVector::ZeroVector;
+		FHitResult CoverFaceHit;
 		bool bSawVault = false;
 		int32 HandVaults = 0;
 	};
@@ -126,6 +128,7 @@ namespace DepotVaultSmoke
 			{
 				return true;
 			}
+			SmokeUtils::StopLevelPmc(World);
 			State->Leader = Squad->GetLeader();
 			Leader = State->Leader.Get();
 			Squad->EnterSoloMode();
@@ -238,7 +241,8 @@ namespace DepotVaultSmoke
 			// By hand: in front of each kind's pick, facing it, 60 cm off its face - TryVault.
 			if (!State->Picks.IsValidIndex(State->Pick))
 			{
-				return Finish(*State, true);
+				Next(*State, 6);
+				return true;
 			}
 			const FObstacle& Obstacle = State->Picks[State->Pick];
 			const FVector Spot = SmokeUtils::FreeSpot(World, Obstacle.Centre - Obstacle.Across * (Obstacle.HalfDepth + 70.f) + FVector(0.f, 0.f, 100.f), Leader);
@@ -272,6 +276,66 @@ namespace DepotVaultSmoke
 			++State->Pick;
 			Next(*State, 3);
 			return true;
+		}
+		case 6:
+		{
+			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+			const FObstacle& First = State->Picks[0];
+			const FVector Face = First.Centre - First.Across * First.HalfDepth;
+			const FVector RayStart = Face - First.Across * 150.f + FVector(0.f, 0.f, VaultRules::ProbeHeight);
+			const FVector RayEnd = Face + First.Across * 25.f + FVector(0.f, 0.f, VaultRules::ProbeHeight);
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(DepotVaultCoverClickSmoke), false, Leader);
+			const bool bHit = World->LineTraceSingleByChannel(State->CoverFaceHit, RayStart, RayEnd, ECC_Visibility, Params)
+				&& State->CoverFaceHit.GetActor() == First.Actor.Get() && FMath::Abs(State->CoverFaceHit.ImpactNormal.Z) < 0.3f;
+			Check(*State, PC && bHit, TEXT("the low obstacle's face is the cursor hit"));
+			if (!PC || !bHit)
+			{
+				return Finish(*State, false);
+			}
+			const FVector Spot = SmokeUtils::FreeSpot(World, RayStart + First.Across * 45.f + FVector(0.f, 0.f, 100.f), Leader);
+			Leader->StopOperative();
+			Leader->TeleportTo(FVector(Spot.X, Spot.Y, Spot.Z + 4.f), First.Across.Rotation(), false, true);
+			PC->CancelClickPreview(TEXT("DepotVaultSmoke"));
+			PC->HandlePlayerClick(State->CoverFaceHit);
+			Check(*State, PC->GetClickPreviewKind() == EClickPreviewKind::Cover && PC->HasCoverPreview(),
+				TEXT("click on a vaultable cover face shows the cover ghost"));
+			Next(*State, 7);
+			return true;
+		}
+		case 7:
+		{
+			if (State->StageTime < 1.f)
+			{
+				return true;
+			}
+			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+			if (!PC || !Leader)
+			{
+				return Finish(*State, false);
+			}
+			PC->HandlePlayerClick(State->CoverFaceHit);
+			const bool bMatchingOrder = Leader->HasPendingCover() && Leader->GetPendingCoverSlot().WallActor == State->Picks[0].Actor;
+			Check(*State, bMatchingOrder, TEXT("confirming the face's ghost sends an order to the clicked cover"));
+			if (!bMatchingOrder)
+			{
+				return Finish(*State, false);
+			}
+			// Force the usual knee probe while still in range. A blocked approach uses this same fallback.
+			State->bSawVault = Leader->TryVault(State->Picks[0].Across, true);
+			Check(*State, !State->bSawVault, TEXT("the knee probe does not vault the destination cover"));
+			Next(*State, 8);
+			return true;
+		}
+		case 8:
+		{
+			State->bSawVault |= Leader->IsVaulting();
+			if (!Leader->bInCover && State->StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(*State, !State->bSawVault && Leader->bInCover && Leader->GetCoverSlot().WallActor == State->Picks[0].Actor,
+				TEXT("the leader reaches the face's cover without vaulting it"));
+			return Finish(*State, true);
 		}
 		default:
 			return Finish(*State, false);
