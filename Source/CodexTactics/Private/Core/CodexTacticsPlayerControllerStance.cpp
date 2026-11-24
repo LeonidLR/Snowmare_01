@@ -3,6 +3,7 @@
 // Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
 
 #include "Core/CodexTacticsPlayerController.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
@@ -15,6 +16,8 @@
 
 void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance)
 {
+	FDemoOrderScope Demo(this, EDemoOrderKind::Stance);
+	Demo.SetCrouch(Stance == EOperativeStance::Crouching);
 	USquadSubsystem* Squad = GetSquad();
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
 	if (!Squad || RefuseIfLocked(ControllerCommands::ForStance(Stance, true)))
@@ -142,6 +145,7 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 
 void ACodexTacticsPlayerController::CycleLeaderStance()
 {
+	FDemoOrderScope Demo(this, EDemoOrderKind::Stance);
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	if (!Leader || IsDialogueOpen() || BlockRealTimeOrder())
@@ -167,6 +171,7 @@ void ACodexTacticsPlayerController::CycleLeaderStance()
 	{
 		Leader->SetStance(Next);
 	}
+	Demo.SetCrouch(Next == EOperativeStance::Crouching);
 	Squad->NotePlayerStanceOrder(*Leader); // the player's order: kept in Solo through selection switches (bug 2026-11-08)
 	ControllerCommands::Report(this, ControllerCommands::ForStance(Next, false));
 }

@@ -64,6 +64,7 @@
 //   "precondition", failed criteria as "A-00A.n" / "A-00B.n" so a red run says which of the two it is.
 
 #include "CoreMinimal.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 
 #if !UE_BUILD_SHIPPING
 
@@ -4056,6 +4057,10 @@ namespace PmcArena
 		if (!World)
 		{
 			return;
+		}
+		if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(World))
+		{
+			Recorder->SuppressSession(FName(TEXT("arena")));
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->Options = Parse(Args);

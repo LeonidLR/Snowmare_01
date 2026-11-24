@@ -3,6 +3,7 @@
 // Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
 
 #include "Core/CodexTacticsPlayerController.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "Combat/HoldSphereActor.h"
 #include "Combat/CombatTimeModeRules.h"
@@ -75,6 +76,10 @@ void ACodexTacticsPlayerController::HandleSpaceTap()
 	const EGameFlowResult Result = Flow->ToggleTacticalPause();
 	if (Result == EGameFlowResult::Ok)
 	{
+		if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+		{
+			Recorder->RecordMode(EDemoMode::Pause, !bWasPaused);
+		}
 		ControllerCommands::Report(this, bWasPaused ? PlayerCommands::PauseRelease : PlayerCommands::TacticalPause);
 	}
 	switch (Result)

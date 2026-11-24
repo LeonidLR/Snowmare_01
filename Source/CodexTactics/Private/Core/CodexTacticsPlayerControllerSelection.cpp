@@ -3,6 +3,7 @@
 // Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
 
 #include "Core/CodexTacticsPlayerController.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Combat/HordeIntroSubsystem.h"
@@ -161,7 +162,8 @@ void ACodexTacticsPlayerController::OnClick()
 		}
 		if (GetGrenadeAimPoint(Point))
 		{
-			Grenades->ThrowAtCursor(Point);
+			FDemoOrderScope Demo(this, EDemoOrderKind::Grenade, Grenades->GetThrower(), Point);
+			Demo.SetResult(Grenades->ThrowAtCursor(Point) != nullptr);
 			ControllerCommands::Report(this, PlayerCommands::GrenadeThrow, nullptr, false, false, nullptr, Point);
 		}
 		return;
@@ -381,6 +383,10 @@ void ACodexTacticsPlayerController::ToggleSoloMode()
 		bBoxSelecting = false;
 		bLmbDown = false;
 		Squad->ToggleSoloMode();
+		if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+		{
+			Recorder->RecordMode(EDemoMode::Solo, Squad->IsSoloMode());
+		}
 		ControllerCommands::Report(this, Squad->IsSoloMode() ? PlayerCommands::SoloOn : PlayerCommands::Regroup);
 	}
 }

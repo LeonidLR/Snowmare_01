@@ -258,6 +258,12 @@ TArray<AOperativeCharacter*> UPmcSquadSubsystem::GetTeamMembers(int32 TeamId) co
 TArray<AOperativeCharacter*> UPmcSquadSubsystem::GetHostileOperatives() const
 {
 	TArray<AOperativeCharacter*> Out;
+	ForEachHostileOperative([&Out](AOperativeCharacter& Fighter) { Out.Add(&Fighter); });
+	return Out;
+}
+
+void UPmcSquadSubsystem::ForEachHostileOperative(TFunctionRef<void(AOperativeCharacter&)> Visit) const
+{
 	for (const TPair<int32, FTeam>& Pair : Teams)
 	{
 		if (Pair.Key == PmcTeam::Player)
@@ -268,11 +274,10 @@ TArray<AOperativeCharacter*> UPmcSquadSubsystem::GetHostileOperatives() const
 		{
 			if (AOperativeCharacter* Fighter = Member.Get())
 			{
-				Out.Add(Fighter);
+				Visit(*Fighter);
 			}
 		}
 	}
-	return Out;
 }
 
 bool UPmcSquadSubsystem::HasLiveHostileOperatives(const UWorld* World)

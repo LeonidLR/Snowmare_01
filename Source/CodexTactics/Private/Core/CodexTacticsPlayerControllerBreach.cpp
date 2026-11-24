@@ -7,6 +7,7 @@
 // at the nearest jamb; a box selection: the selected ones; formation: the squad. Godot reference: none (UE-only).
 
 #include "Core/CodexTacticsPlayerController.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Characters/OperativeCharacter.h"
@@ -243,13 +244,14 @@ int32 ACodexTacticsPlayerController::GetBreachEnteredCount() const
 
 bool ACodexTacticsPlayerController::OrderBreach(const FBreachPlan& Plan, bool bSprint)
 {
+	FDemoOrderScope Demo(this, EDemoOrderKind::Breach, Plan.Members.IsEmpty() ? nullptr : Plan.Members[0], Plan.Center, bSprint);
 	using namespace ControllerBreachLocal;
 	UWorld* World = GetWorld();
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Plan.Members.IsEmpty() ? nullptr : Plan.Members[0];
 	if (!World || !Squad || !Leader || Plan.Assignments.IsEmpty())
 	{
-		return false;
+		return Demo.SetResult(false);
 	}
 	EndBreach(TEXT("a new breach order"));
 	Squad->HandOverLeadForOrder(Leader, TEXT("a breach order"));
@@ -328,7 +330,7 @@ bool ACodexTacticsPlayerController::OrderBreach(const FBreachPlan& Plan, bool bS
 		{
 			Messages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("BreachUnreachable", "⚠️ No way to that doorway."));
 		}
-		return false;
+		return Demo.SetResult(false);
 	}
 	Breach.Phase = EBreachPhase::Stacking;
 	Breach.DoorwayId = Plan.DoorwayId;
@@ -346,7 +348,7 @@ bool ACodexTacticsPlayerController::OrderBreach(const FBreachPlan& Plan, bool bS
 	{
 		Messages->PostMessage(Leader->DisplayName, Breach.Members.Num() > 1 ? LOCTEXT("BreachStack", "🚪 Stack on the door!") : LOCTEXT("BreachSolo", "🚪 Covering the doorway."));
 	}
-	return true;
+	return Demo.SetResult(true);
 }
 
 FHitResult ACodexTacticsPlayerController::BreachEntryHit(const FHitResult& Hit) const

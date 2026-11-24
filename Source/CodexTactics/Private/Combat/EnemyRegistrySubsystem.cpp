@@ -139,26 +139,31 @@ UEnemyRegistrySubsystem::FActorList UEnemyRegistrySubsystem::GetTaggedEnemies(co
 UEnemyRegistrySubsystem::FEnemyList UEnemyRegistrySubsystem::GetEnemyCharacters(const UWorld* World)
 {
 	FEnemyList Result;
+	ForEachEnemyCharacter(World, [&Result](AEnemyCharacter& Enemy) { Result.Add(&Enemy); });
+	return Result;
+}
+
+void UEnemyRegistrySubsystem::ForEachEnemyCharacter(const UWorld* World, TFunctionRef<void(AEnemyCharacter&)> Visit)
+{
 	if (!World)
 	{
-		return Result;
+		return;
 	}
 	const UEnemyRegistrySubsystem* Registry = World->GetSubsystem<UEnemyRegistrySubsystem>();
 	if (!Registry || !World->HasBegunPlay() || !IsEnabled())
 	{
 		for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 		{
-			Result.Add(*It);
+			Visit(**It);
 		}
-		return Result;
+		return;
 	}
 	for (const TWeakObjectPtr<AEnemyCharacter>& Entry : Registry->Enemies.GetItems())
 	{
 		AEnemyCharacter* Enemy = Entry.Get();
 		if (IsValid(Enemy))
 		{
-			Result.Add(Enemy);
+			Visit(*Enemy);
 		}
 	}
-	return Result;
 }

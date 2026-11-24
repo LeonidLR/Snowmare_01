@@ -4,6 +4,7 @@
 // Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
 
 #include "Core/CodexTacticsPlayerController.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "AI/StealthLureSubsystem.h"
 #include "Combat/GrenadeSubsystem.h"
@@ -79,6 +80,7 @@ bool ACodexTacticsPlayerController::CancelGrenadeAim()
 
 void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
 {
+	FDemoOrderScope Demo(Item == EPersonalItem::Medkit ? this : nullptr, EDemoOrderKind::Medkit);
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
@@ -158,6 +160,7 @@ void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
 
 void ACodexTacticsPlayerController::UseFirstAidItem(EFirstAidItem Item)
 {
+	FDemoOrderScope Demo(Item == EFirstAidItem::Medkit ? this : nullptr, EDemoOrderKind::Medkit);
 	USquadSubsystem* Squad = GetSquad();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	UFirstAidSubsystem* FirstAid = UFirstAidSubsystem::Get(this);
