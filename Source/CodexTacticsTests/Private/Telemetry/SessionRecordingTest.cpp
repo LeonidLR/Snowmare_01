@@ -9,6 +9,8 @@
 #include "Misc/Paths.h"
 #include "Serialization/JsonSerializer.h"
 
+#include <limits>
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #define DEMO_TEST(Name) IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDemo##Name##Test, "CodexTactics.Telemetry.SessionRecording." #Name, \
@@ -158,6 +160,8 @@ bool FDemoSerializeTest::RunTest(const FString& Parameters)
 	Session.Frames[1].Actor = FName(TEXT("Op_0"));
 	Session.Frames[1].Facts.Kind = EDemoOrderKind::Medkit;
 	Session.Frames[2].Time = 2.;
+	Session.Frames[2].RealTime = std::numeric_limits<double>::quiet_NaN();
+	Session.Frames[0].Destination = FVector(std::numeric_limits<double>::infinity(), 100.4, .8);
 	Session.Frames[3].Time = 4.;
 	Session.Frames[4].Type = FDemoFrame::EType::Mode;
 	Session.Frames[4].Time = 2.;
@@ -182,6 +186,7 @@ bool FDemoSerializeTest::RunTest(const FString& Parameters)
 		{
 			const double Time = Object->GetNumberField(TEXT("t"));
 			TestTrue(TEXT("Time is finite and nondecreasing"), FMath::IsFinite(Time) && Time >= Previous);
+			TestTrue(TEXT("Real time is finite"), FMath::IsFinite(Object->GetNumberField(TEXT("rt"))));
 			Previous = Time;
 		}
 	}
@@ -202,13 +207,13 @@ bool FDemoLifecycleTest::RunTest(const FString& Parameters)
 		Recorder->OnWorldBeginPlay(*World);
 		TestNull(TEXT("Automation leaves recording off"), USessionRecordingSubsystem::GetIfRecording(World));
 		const FString Root = FPaths::AutomationTransientDir() / TEXT("DemoRecording") / FGuid::NewGuid().ToString();
-		const auto Check = [&](const TCHAR* Case, double End, int32 Accepted, bool bWrite)
+		const auto Check = [&](const TCHAR* Case, double End, int32 Accepted, bool bRefused, bool bWrite)
 		{
 			const FString Directory = Root / Case;
 			Recorder->StartForTest(Directory);
 			FDemoFacts Refused;
 			Refused.bAccepted = false;
-			Recorder->RecordOrderAt(1., Refused);
+			if (bRefused) { Recorder->RecordOrderAt(1., Refused); }
 			for (int32 I = 0; I < Accepted; ++I) { Recorder->RecordOrderAt(2. + I, FDemoFacts{}); }
 			Recorder->SnapshotAt(3.);
 			Recorder->FinishAt(End);
@@ -223,9 +228,10 @@ bool FDemoLifecycleTest::RunTest(const FString& Parameters)
 				TestEqual(TEXT("Header, two orders, snapshot, footer"), Lines.Num(), 5);
 			}
 		};
-		Check(TEXT("Long accepted"), 61., 1, true);
-		Check(TEXT("Short accepted"), 30., 1, false);
-		Check(TEXT("Refused only"), 61., 0, false);
+		Check(TEXT("Long accepted"), 61., 2, false, true);
+		Check(TEXT("Short accepted"), 30., 1, false, false);
+		Check(TEXT("No orders"), 61., 0, false, false);
+		Check(TEXT("Refused only"), 61., 0, true, false);
 		IFileManager::Get().DeleteDirectory(*Root, false, true);
 	}
 	GEngine->DestroyWorldContext(World);
