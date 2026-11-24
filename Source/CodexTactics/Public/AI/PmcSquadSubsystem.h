@@ -43,6 +43,8 @@ struct CODEXTACTICS_API FPmcTeamStats
 	int32 ObjectiveMoves = 0;
 	/** RpgStrike orders taken (the RPG gunner's ordered rocket, 2026-11-09). */
 	int32 RpgStrikes = 0;
+	/** Grenade orders that left the hand (G014). */
+	int32 GrenadesThrown = 0;
 	/** fix/pmc-arena-stalemate (2026-11-10): orders that ended short of their goal / were not taken (cooldown), detours taken after
 	 * RepathAfterSeconds without progress, running orders replaced by a clearly better one, decisions made while the team pushed. */
 	int32 OrdersFailed = 0;
@@ -146,6 +148,12 @@ public:
 	void SetDefenceFallBackCover(bool bOn) { bDefenceFallBackCover = bOn; }
 	bool IsDefenceFallBackCover() const { return bDefenceFallBackCover; }
 	/**
+	 * G014 (the arena's Grenades=0|1; default on, so a level encounter throws too): the commander may order a hand grenade.
+	 * Off: Grenade scores 0. The autonomous monster-cluster throw is unchanged.
+	 */
+	void SetGrenadeOrdersEnabled(bool bOn) { bGrenadeOrders = bOn; }
+	bool AreGrenadeOrdersEnabled() const { return bGrenadeOrders; }
+	/**
 	 * G008: where the attackers come from. The defender arc is centred on the yaw from the objective toward this point.
 	 * Unset: yaw 0, and the sectors are still deterministic. Call it before SetTeamObjective, or after (the posts are split again).
 	 */
@@ -240,6 +248,8 @@ public:
 private:
 	/** R1: SetDefenceFallBackCover. */
 	bool bDefenceFallBackCover = false;
+	/** G014: SetGrenadeOrdersEnabled. Default on (a level encounter has no arena flag). */
+	bool bGrenadeOrders = true;
 	struct FKnownTarget
 	{
 		TWeakObjectPtr<AActor> Actor;
@@ -276,6 +286,11 @@ private:
 		bool bHoldingFire = false;
 		/** The RPG gunner's best rocket target this decision (BuildFighterView; the RpgStrike order fires at it). */
 		TWeakObjectPtr<AActor> LauncherTarget;
+		/** G014: a grenade impact was chosen this decision (feet). Not tested against zero: the world origin is a valid point. */
+		bool bHasGrenadeTarget = false;
+		FVector GrenadeImpact = FVector::ZeroVector;
+		/** World time the next grenade order may be offered (-1: ready). Also the squad's one-thrower lock while it is in the future. */
+		double GrenadeReadyAt = -1.0;
 		/** fix/pmc-arena-stalemate: a walk order was given and has not ended yet (ending short of its goal = failed). */
 		bool bWalkPending = false;
 		/** An RpgStrike was given and has not ended yet (its end starts a cooldown: no rocket order every decision). */

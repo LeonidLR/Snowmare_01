@@ -174,6 +174,7 @@ a failed order (ended short of its goal / not takeable) sits out `failed_order_c
 | Sidearm | an empty clip, a seen threat under 4 m, a pistol | `SwitchToWeaponById("pistol")` |
 | Crouch | in contact, standing still in the open | crouch |
 | RpgStrike | the RPG gunner sees a rocket target (the shared launcher rule's score, `rpg_strike` 1.1 x min(1, score) x 0.85 unless a mate flanks / advances, x0.2 while a mate fires one) | `OrderLauncherStrike` (catalog `LauncherStrike`): draw, one rocket, back to the rifle (section 10) |
+| Grenade | a seen hostile operative the rifle cannot hit, or 2+ inside the blast, in throw range, no mate near the impact (`grenade` 0.9 x `ScoreGrenadeTarget`; one thrower at a time). Commander-only, not a Learning Agents action. `Grenades=0` on the arena turns it off | `UGrenadeSubsystem::ThrowAt` at his feet (G014) |
 
 **High ground** (2026-11-03, the Depot arena): `FindCoverNear` (the one search behind TakeCover, Relocate and Ambush) scores every slot x
 `HighGroundFactor(level)` = 1 + `high_ground` (0.2) x min(level, `high_ground_max_levels` 3), the level = `SightRules::HeightLevel` (3 m steps) of the

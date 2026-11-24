@@ -846,4 +846,94 @@ bool FPmcCommanderThreatHysteresisTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcCommanderGrenadeTargetTest, "CodexTactics.AI.PmcCommander.GrenadeTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcCommanderGrenadeTargetTest::RunTest(const FString&)
+{
+	const FPmcWeights W;
+	FPmcGrenadeTargetView V;
+	V.GrenadesLeft = 2;
+	V.DistanceCm = 800.f;
+	V.ThrowRangeCm = 1200.f;
+	V.ClusterCount = 1;
+	V.bRifleBlocked = false;
+	V.MatesNear = 0;
+
+	V.GrenadesLeft = 0;
+	TestEqual(TEXT("no grenades"), PmcCommanderRules::ScoreGrenadeTarget(V, W), 0.f);
+	V.GrenadesLeft = 2;
+
+	V.MatesNear = 1;
+	TestEqual(TEXT("a mate near the impact"), PmcCommanderRules::ScoreGrenadeTarget(V, W), 0.f);
+	V.MatesNear = 0;
+
+	V.DistanceCm = 1500.f;
+	TestEqual(TEXT("out of throw range"), PmcCommanderRules::ScoreGrenadeTarget(V, W), 0.f);
+	V.DistanceCm = 400.f;
+	TestEqual(TEXT("inside the minimum range"), PmcCommanderRules::ScoreGrenadeTarget(V, W), 0.f);
+	V.DistanceCm = 800.f;
+
+	TestEqual(TEXT("a lone man in the open is the rifle's"), PmcCommanderRules::ScoreGrenadeTarget(V, W), 0.f);
+
+	V.bRifleBlocked = true;
+	TestEqual(TEXT("a covered man the rifle cannot hit"), PmcCommanderRules::ScoreGrenadeTarget(V, W), W.GrenadeCover, 1e-4f);
+
+	V.bRifleBlocked = false;
+	V.ClusterCount = 2;
+	TestEqual(TEXT("a cluster of 2"), PmcCommanderRules::ScoreGrenadeTarget(V, W), 0.5f, 1e-4f);
+	V.ClusterCount = 3;
+	TestEqual(TEXT("a full cluster of 3"), PmcCommanderRules::ScoreGrenadeTarget(V, W), 1.f, 1e-4f);
+
+	V.bRifleBlocked = true;
+	TestEqual(TEXT("cover and a full cluster: the better reason"), PmcCommanderRules::ScoreGrenadeTarget(V, W), 1.f, 1e-4f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcCommanderGrenadeOrderTest, "CodexTactics.AI.PmcCommander.GrenadeOrder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcCommanderGrenadeOrderTest::RunTest(const FString&)
+{
+	using namespace PmcCommanderTestLocal;
+	FPmcFighterView F = Fighter(800.f, true);
+	F.GrenadeScore = 1.f;
+	FPmcSquadView S = Squad(3, 2, true);
+	const FPmcWeights Defaults;
+	TestEqual(TEXT("a missing weight never throws"), PmcCommanderRules::ScoreOrder(EPmcOrder::Grenade, F, S, Defaults), 0.f);
+	TestEqual(TEXT("its name"), FString(PmcCommanderRules::OrderName(EPmcOrder::Grenade)), FString(TEXT("Grenade")));
+	TestFalse(TEXT("a grenade is not a walk"), PmcCommanderRules::IsMoveOrder(EPmcOrder::Grenade));
+
+	FPmcWeights On = Defaults;
+	On.Grenade = 0.9f;
+	TestEqual(TEXT("weight x the target score"), PmcCommanderRules::ScoreOrder(EPmcOrder::Grenade, F, S, On), 0.9f, 1e-4f);
+	S.MatesThrowingGrenade = 1;
+	TestEqual(TEXT("a mate already threw: x0.25"), PmcCommanderRules::ScoreOrder(EPmcOrder::Grenade, F, S, On), 0.225f, 1e-4f);
+	S.MatesThrowingGrenade = 0;
+	F.GrenadeScore = 0.f;
+	TestEqual(TEXT("nothing to throw at"), PmcCommanderRules::ScoreOrder(EPmcOrder::Grenade, F, S, On), 0.f);
+
+	const TSharedPtr<FJsonObject> Json = PmcParseJson(TEXT("{\"grenade\":0.4,\"grenade_min_range_m\":7,\"grenade_friendly_clear_m\":8}"));
+	TestNotNull(TEXT("parsed"), Json.Get());
+	if (Json.IsValid())
+	{
+		const FPmcWeights Parsed = PmcCommanderRules::FromJson(*Json);
+		TestEqual(TEXT("grenade read"), Parsed.Grenade, 0.4f, 1e-4f);
+		TestEqual(TEXT("min range in metres"), Parsed.GrenadeMinRangeCm, 700.f, 0.5f);
+		TestEqual(TEXT("friendly clear in metres"), Parsed.GrenadeFriendlyClearCm, 800.f, 0.5f);
+		TestEqual(TEXT("an unread cover weight stays the code default"), Parsed.GrenadeCover, Defaults.GrenadeCover, 1e-4f);
+	}
+	const TSharedPtr<FJsonObject> Bare = PmcParseJson(TEXT("{\"hold\":0.2}"));
+	if (Bare.IsValid())
+	{
+		TestEqual(TEXT("a file without grenade stays 0"), PmcCommanderRules::FromJson(*Bare).Grenade, 0.f);
+	}
+	FPmcWeights Shipped;
+	TestTrue(TEXT("shipped pmc_commander.json loads"), PmcCommanderRules::LoadWeightsFile(FString(), Shipped));
+	TestEqual(TEXT("shipped grenade weight"), Shipped.Grenade, 0.9f, 1e-4f);
+	TestEqual(TEXT("shipped min range 5 m"), Shipped.GrenadeMinRangeCm, 500.f, 0.5f);
+	TestEqual(TEXT("shipped friendly clear 6 m"), Shipped.GrenadeFriendlyClearCm, 600.f, 0.5f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

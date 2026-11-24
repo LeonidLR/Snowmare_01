@@ -6,6 +6,8 @@
 #include "AI/PmcArenaBehaviourRules.h"
 #include "AI/PmcDefenceRules.h"
 #include "AI/PmcOperatorRules.h"
+#include "Combat/GrenadeRules.h"
+#include "Combat/GrenadeSubsystem.h"
 #include "Combat/LauncherTacticsRules.h"
 #include "Combat/MortarNestActor.h"
 #include "Combat/MortarRules.h"
@@ -1335,6 +1337,66 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			State.LauncherTarget = Rocket;
 		}
 	}
+	// G014: a seen hostile operative the rifle cannot hit, or a cluster inside the blast. Monsters stay on TryAIGrenadeThrow.
+	State.bHasGrenadeTarget = false;
+	State.GrenadeImpact = FVector::ZeroVector;
+	View.GrenadeScore = 0.f;
+	if (bGrenadeOrders && Fighter.GrenadesCount > 0 && Now >= State.GrenadeReadyAt)
+	{
+		const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
+		const float ThrowRange = GrenadeRules::EffectiveRange(Fighter.GrenadeThrowRange > 0.f ? Fighter.GrenadeThrowRange : 1200.f, Fighter.GetStance());
+		const float Blast = Fighter.GrenadeEffectRadius > 0.f ? Fighter.GrenadeEffectRadius : 400.f;
+		const float AimUp = SuppressionRules::GetConfig().OrderAimHeightCm;
+		struct FSeenEnemy
+		{
+			FVector Feet = FVector::ZeroVector;
+			FVector Aim = FVector::ZeroVector;
+		};
+		TArray<FSeenEnemy> Seen;
+		for (const TPair<TWeakObjectPtr<AActor>, FKnownTarget>& Pair : Team.Known)
+		{
+			AOperativeCharacter* Enemy = Cast<AOperativeCharacter>(Pair.Value.Actor.Get());
+			if (!Pair.Value.bSeenNow || !PmcSquadLocal::IsLiveOperative(Enemy) || Enemy == &Fighter || Enemy->TeamId == Fighter.TeamId)
+			{
+				continue;
+			}
+			FSeenEnemy Row;
+			Row.Feet = PmcSquadLocal::FeetOf(*Enemy);
+			Row.Aim = Enemy->GetActorLocation() + FVector(0.f, 0.f, AimUp);
+			Seen.Add(Row);
+		}
+		float Best = 0.f;
+		for (int32 Index = 0; Index < Seen.Num(); ++Index)
+		{
+			FPmcGrenadeTargetView Candidate;
+			Candidate.GrenadesLeft = Fighter.GrenadesCount;
+			Candidate.DistanceCm = FVector::Dist2D(Feet, Seen[Index].Feet);
+			Candidate.ThrowRangeCm = ThrowRange;
+			Candidate.bRifleBlocked = !Fighter.HasUsefulFireLine(Seen[Index].Aim);
+			Candidate.ClusterCount = 0;
+			for (const FSeenEnemy& Other : Seen)
+			{
+				Candidate.ClusterCount += FVector::Dist2D(Seen[Index].Feet, Other.Feet) <= Blast ? 1 : 0;
+			}
+			Candidate.MatesNear = 0;
+			for (const AOperativeCharacter* Mate : Mates)
+			{
+				if (!PmcSquadLocal::IsLiveOperative(Mate) || Mate == &Fighter)
+				{
+					continue;
+				}
+				Candidate.MatesNear += FVector::Dist2D(PmcSquadLocal::FeetOf(*Mate), Seen[Index].Feet) <= Team.Weights.GrenadeFriendlyClearCm ? 1 : 0;
+			}
+			const float Score = PmcCommanderRules::ScoreGrenadeTarget(Candidate, Team.Weights);
+			if (Score > Best)
+			{
+				Best = Score;
+				View.GrenadeScore = Score;
+				State.bHasGrenadeTarget = true;
+				State.GrenadeImpact = Seen[Index].Feet;
+			}
+		}
+	}
 	View.bInCover = Fighter.bInCover;
 	View.bExposed = State.ExposedSince >= 0.0;
 	View.bUnderFire = Now - State.LastShotAtTime <= PmcSquadLocal::UnderFireSeconds;
@@ -1633,13 +1695,18 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 	Squad.QuietSeconds = static_cast<float>(FMath::Max(0.0, Now - FMath::Max(Team.LastShotTime, Team.ObjectiveSetTime)));
 	for (AOperativeCharacter* Mate : Mates)
 	{
-		if (const FFighterState* State = Team.Fighters.Find(Mate); State && IsOrderRunning(*Mate, *State))
+		if (const FFighterState* State = Team.Fighters.Find(Mate))
 		{
-			Squad.MatesSuppressing += State->Order == EPmcOrder::Suppress ? 1 : 0;
-			Squad.MatesFlanking += State->Order == EPmcOrder::Flank ? 1 : 0;
-			Squad.MatesAdvancing += State->Order == EPmcOrder::Advance ? 1 : 0;
-			Squad.MatesHealing += State->Order == EPmcOrder::Heal ? 1 : 0;
-			Squad.MatesRpgStriking += State->Order == EPmcOrder::RpgStrike ? 1 : 0;
+			// A throw just made is not a running order (ThrowAt is instant). The cooldown is the one-thrower lock.
+			Squad.MatesThrowingGrenade += State->GrenadeReadyAt > Now ? 1 : 0;
+			if (IsOrderRunning(*Mate, *State))
+			{
+				Squad.MatesSuppressing += State->Order == EPmcOrder::Suppress ? 1 : 0;
+				Squad.MatesFlanking += State->Order == EPmcOrder::Flank ? 1 : 0;
+				Squad.MatesAdvancing += State->Order == EPmcOrder::Advance ? 1 : 0;
+				Squad.MatesHealing += State->Order == EPmcOrder::Heal ? 1 : 0;
+				Squad.MatesRpgStriking += State->Order == EPmcOrder::RpgStrike ? 1 : 0;
+			}
 		}
 	}
 	// The ambush springs: the first contact of a fight while men hold in ambush.
@@ -1742,6 +1809,10 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		View.RunningOrder = bRunning ? State.Order : EPmcOrder::Count;
 		// The mates' counters are about the OTHERS: his own running order is not a mate's.
 		FPmcSquadView Own = Squad;
+		if (State.GrenadeReadyAt > Now)
+		{
+			Own.MatesThrowingGrenade = FMath::Max(0, Own.MatesThrowingGrenade - 1);
+		}
 		if (bRunning)
 		{
 			Own.MatesSuppressing -= State.Order == EPmcOrder::Suppress ? 1 : 0;
@@ -1765,6 +1836,12 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 			}
 		}
 		const bool bHoldFire = PmcCommanderRules::ShouldHoldFire(View, Own, Team.Weights);
+		// An ambush that is still holding its fire must not announce itself with a grenade.
+		if (bHoldFire)
+		{
+			View.GrenadeScore = 0.f;
+			State.bHasGrenadeTarget = false;
+		}
 		if (bHoldFire != State.bHoldingFire)
 		{
 			FSquadOrderContext Discipline;
@@ -1840,6 +1917,7 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 			Squad.MatesAdvancing += Pick == EPmcOrder::Advance ? 1 : 0;
 			Squad.MatesHealing += Pick == EPmcOrder::Heal ? 1 : 0;
 			Squad.MatesRpgStriking += Pick == EPmcOrder::RpgStrike ? 1 : 0;
+			Squad.MatesThrowingGrenade += Pick == EPmcOrder::Grenade ? 1 : 0;
 		}
 	}
 }
@@ -2478,6 +2556,22 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 				*Context.Target->GetName(), View.LauncherScore);
 		}
 		break;
+	case EPmcOrder::Grenade:
+	{
+		// The operative throw (G014). ThrowAt adds the +12 cm landing lift and refuses an empty belt or a turn-based fight.
+		UGrenadeSubsystem* Grenades = GetWorld() ? GetWorld()->GetSubsystem<UGrenadeSubsystem>() : nullptr;
+		const bool bThrow = !State.bHoldingFire && State.bHasGrenadeTarget && Grenades
+			&& Grenades->ThrowAt(&Fighter, State.GrenadeImpact) != nullptr;
+		bTaken = bThrow;
+		if (bTaken)
+		{
+			++Team.Stats.GrenadesThrown;
+			State.GrenadeReadyAt = Now + FMath::Max(0.f, Team.Weights.GrenadeCooldownSeconds);
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s grenade at (%.0f, %.0f, %.0f) score %.2f, %d left"), TeamId,
+				*Fighter.DisplayName.ToString(), State.GrenadeImpact.X, State.GrenadeImpact.Y, State.GrenadeImpact.Z, View.GrenadeScore, Fighter.GrenadesCount);
+		}
+		break;
+	}
 	case EPmcOrder::Crouch:
 		// 2026-11-04: a rifleman / sniper in the open at his band's distance goes prone (a smaller target, the steadier shot); pistols and
 		// shotguns, and anybody out of his band, crouch.

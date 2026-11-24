@@ -126,6 +126,7 @@ namespace PmcCommanderRules
 		case EPmcOrder::Crouch: return TEXT("Crouch");
 		case EPmcOrder::Objective: return TEXT("Objective");
 		case EPmcOrder::RpgStrike: return TEXT("RpgStrike");
+		case EPmcOrder::Grenade: return TEXT("Grenade");
 		default: return TEXT("?");
 		}
 	}
@@ -370,6 +371,14 @@ namespace PmcCommanderRules
 				* (F.RunningOrder == EPmcOrder::RpgStrike ? FMath::Max(Clamp01(F.LauncherScore), 0.5f) : Clamp01(F.LauncherScore))
 				* (S.MatesFlanking + S.MatesAdvancing > 0 ? 1.f : 0.85f)
 				* (S.MatesRpgStriking == 0 ? 1.f : 0.2f);
+		case EPmcOrder::Grenade:
+			// Commander-only (G014). Instant: no running-score floor. A cooldown zeros GrenadeScore, and a floor would pin the order.
+			// One thrower at a time (a mate still on his grenade cooldown damps this one).
+			if (W.Grenade <= 0.f)
+			{
+				return 0.f;
+			}
+			return FMath::Max(W.Grenade, 0.f) * Clamp01(F.GrenadeScore) * (S.MatesThrowingGrenade == 0 ? 1.f : 0.25f);
 		default:
 			return 0.f;
 		}
@@ -666,6 +675,29 @@ namespace PmcCommanderRules
 		return Weights.MortarFire * FMath::Clamp(ClusterCount / FMath::Max(1.f, Weights.MortarClusterFull), 0.f, 1.f);
 	}
 
+	float ScoreGrenadeTarget(const FPmcGrenadeTargetView& View, const FPmcWeights& Weights)
+	{
+		using namespace PmcCommanderLocal;
+		if (View.GrenadesLeft <= 0 || View.MatesNear > 0)
+		{
+			return 0.f;
+		}
+		if (View.DistanceCm > View.ThrowRangeCm || View.DistanceCm < Weights.GrenadeMinRangeCm)
+		{
+			return 0.f;
+		}
+		const float Cover = View.bRifleBlocked ? Clamp01(Weights.GrenadeCover) : 0.f;
+		const float Min = FMath::Max(2.f, Weights.GrenadeClusterMin);
+		float Cluster = 0.f;
+		if (static_cast<float>(View.ClusterCount) >= Min)
+		{
+			const float Full = FMath::Max(Min, Weights.GrenadeClusterFull);
+			const float Span = FMath::Max(1.f, Full - 1.f);
+			Cluster = Clamp01((static_cast<float>(View.ClusterCount) - 1.f) / Span) * Clamp01(Weights.GrenadeCluster);
+		}
+		return FMath::Max(Cover, Cluster);
+	}
+
 	FPmcWeights FromJson(const FJsonObject& Json, const FPmcWeights& Base)
 	{
 		using namespace PmcCommanderLocal;
@@ -688,6 +720,12 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("sidearm"), Out.Sidearm);
 		ReadNumber(Json, TEXT("crouch"), Out.Crouch);
 		ReadNumber(Json, TEXT("rpg_strike"), Out.RpgStrike);
+		ReadNumber(Json, TEXT("grenade"), Out.Grenade);
+		ReadNumber(Json, TEXT("grenade_cover"), Out.GrenadeCover);
+		ReadNumber(Json, TEXT("grenade_cluster"), Out.GrenadeCluster);
+		ReadNumber(Json, TEXT("grenade_cluster_min"), Out.GrenadeClusterMin);
+		ReadNumber(Json, TEXT("grenade_cluster_full"), Out.GrenadeClusterFull);
+		ReadNumber(Json, TEXT("grenade_cooldown_s"), Out.GrenadeCooldownSeconds);
 		ReadNumber(Json, TEXT("heal_below"), Out.HealBelow);
 		ReadNumber(Json, TEXT("fall_back_below"), Out.FallBackBelow);
 		ReadNumber(Json, TEXT("suppress_ammo_min"), Out.SuppressAmmoMin);
@@ -773,6 +811,12 @@ namespace PmcCommanderRules
 		float HealReachM = Out.HealReachCm / 100.f;
 		ReadNumber(Json, TEXT("heal_reach_m"), HealReachM);
 		Out.HealReachCm = FMath::Max(HealReachM, 0.f) * 100.f;
+		float GrenadeClearM = Out.GrenadeFriendlyClearCm / 100.f;
+		ReadNumber(Json, TEXT("grenade_friendly_clear_m"), GrenadeClearM);
+		Out.GrenadeFriendlyClearCm = FMath::Max(GrenadeClearM, 0.f) * 100.f;
+		float GrenadeMinM = Out.GrenadeMinRangeCm / 100.f;
+		ReadNumber(Json, TEXT("grenade_min_range_m"), GrenadeMinM);
+		Out.GrenadeMinRangeCm = FMath::Max(GrenadeMinM, 0.f) * 100.f;
 		// Target attention (2026-11-07).
 		ReadNumber(Json, TEXT("attention"), Out.Attention);
 		ReadNumber(Json, TEXT("ambush_patience"), Out.AmbushPatience);

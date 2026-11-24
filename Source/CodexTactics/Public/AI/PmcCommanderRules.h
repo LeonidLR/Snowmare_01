@@ -53,6 +53,11 @@ enum class EPmcOrder : uint8
 	 * then back to the rifle (AOperativeCharacter::OrderLauncherStrike).
 	 */
 	RpgStrike,
+	/**
+	 * A hand grenade at a seen hostile operative the rifle cannot hit, or at a cluster inside the blast (G014).
+	 * Commander-only: not a Learning Agents action. UGrenadeSubsystem::ThrowAt does the throw.
+	 */
+	Grenade,
 	Count
 };
 
@@ -211,6 +216,25 @@ struct CODEXTACTICS_API FPmcWeights
 	float Crouch = 0.5f;
 	/** "rpg_strike" (2026-11-09): the RPG gunner's ordered rocket - x min(1, the launcher rule's best target score). */
 	float RpgStrike = 1.1f;
+	/**
+	 * "grenade" (G014): the commander-only hand-grenade order, x ScoreGrenadeTarget (0..1). 0 in code so a missing key never throws.
+	 * The shipped pmc_commander.json turns it on. Not a Learning Agents action.
+	 */
+	float Grenade = 0.f;
+	/** A seen man the rifle cannot hit. */
+	float GrenadeCover = 0.85f;
+	/** A full cluster (GrenadeClusterFull) inside the blast. */
+	float GrenadeCluster = 1.f;
+	/** The smallest cluster, the target included. Below this the cluster term is 0. */
+	float GrenadeClusterMin = 2.f;
+	/** The cluster term is 1 from this count ((count - 1) / (full - 1), same shape as the launcher). */
+	float GrenadeClusterFull = 3.f;
+	/** No throw when a living mate stands within this of the impact, cm. */
+	float GrenadeFriendlyClearCm = 600.f;
+	/** No throw closer than this (the thrower stays outside the blast), cm. */
+	float GrenadeMinRangeCm = 500.f;
+	/** Seconds after a throw before this fighter is offered another. */
+	float GrenadeCooldownSeconds = 8.f;
 	/** A mate below this health fraction is a patient. */
 	float HealBelow = 0.45f;
 	/** Below this health fraction the fighter breaks contact. */
@@ -493,6 +517,8 @@ struct CODEXTACTICS_API FPmcFighterView
 	bool bHasLauncher = false;
 	/** The launcher rule's best target score among the targets his team sees (ordered_threshold, no veto; 0: none). */
 	float LauncherScore = 0.f;
+	/** ScoreGrenadeTarget of the best seen hostile operative this decision (0: no throw). */
+	float GrenadeScore = 0.f;
 	/** TACTICAL_MAP P2: the danger of his spot for the PMC (DangerAt(feet, Pmc), 0..1: inside a chokepoint); 0 without a tactical file. */
 	float DangerHere = 0.f;
 	/** His tactical post (PmcTacticalRules::PlanPlacement): its kind (None: no post), its effective score and whether he stands on it. */
@@ -559,6 +585,8 @@ struct CODEXTACTICS_API FPmcSquadView
 	int32 MatesHealing = 0;
 	/** Mates running an RpgStrike (one rocket at a time per squad). */
 	int32 MatesRpgStriking = 0;
+	/** Mates whose grenade throw is still on cooldown (one thrower at a time). */
+	int32 MatesThrowingGrenade = 0;
 	/** A shot was fired between this team and an enemy in this fight (an ambush holding its fire is blown). */
 	bool bShotsExchanged = false;
 	/** Seconds since the team's first contact of the fight (0 before it). */
@@ -578,6 +606,25 @@ struct CODEXTACTICS_API FPmcCommitment
 	/** Each failed order stays excluded until its own world-clock expiry. */
 	TMap<EPmcOrder, double> FailedUntil;
 	double NowSeconds = 0.0;
+};
+
+/**
+ * One grenade candidate as the pure rule sees it (the squad fills it; ScoreGrenadeTarget does not touch the world).
+ * Hostile operatives only. Monsters stay on the autonomous cluster throw.
+ */
+struct CODEXTACTICS_API FPmcGrenadeTargetView
+{
+	int32 GrenadesLeft = 0;
+	/** Thrower feet to the impact (the target's feet), cm. */
+	float DistanceCm = 0.f;
+	/** Stance-scaled throw range (GrenadeRules::EffectiveRange), cm. */
+	float ThrowRangeCm = 1200.f;
+	/** Seen hostile operatives inside the blast disk, this target included. */
+	int32 ClusterCount = 1;
+	/** The rifle has no useful line to this target. */
+	bool bRifleBlocked = false;
+	/** Living mates (not the thrower) within GrenadeFriendlyClearCm of the impact. */
+	int32 MatesNear = 0;
 };
 
 /** Why PickCommitted chose its order. */
@@ -609,6 +656,13 @@ namespace PmcCommanderRules
 
 	/** The weight x the product of the order's considerations for Fighter in Squad; 0 when the order makes no sense now. */
 	CODEXTACTICS_API float ScoreOrder(EPmcOrder Order, const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
+
+	/**
+	 * 0..1 for one grenade candidate (G014). 0 with no grenades, a mate near the impact, outside the throw range, or inside
+	 * GrenadeMinRangeCm. Otherwise the best of a blocked rifle line (GrenadeCover) and a cluster of GrenadeClusterMin or more.
+	 * A lone man in the open is 0: the rifle.
+	 */
+	CODEXTACTICS_API float ScoreGrenadeTarget(const FPmcGrenadeTargetView& View, const FPmcWeights& Weights);
 
 	/** Every order scored, best first. */
 	CODEXTACTICS_API TArray<FPmcOrderScore> ScoreAll(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);

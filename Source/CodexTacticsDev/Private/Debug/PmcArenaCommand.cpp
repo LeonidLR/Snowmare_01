@@ -229,6 +229,11 @@ namespace PmcArena
 		 * sides' spawns (PmcArenaRoundRules::IsReachableFromBoth), else another point; off = the old placement (the measurement).
 		 */
 		bool bObjectiveReach = true;
+		/**
+		 * Grenades=0|1 (G014, default 1): the commander may order a hand grenade (UPmcSquadSubsystem::SetGrenadeOrdersEnabled).
+		 * 0 turns that order off. The autonomous monster-cluster throw is unchanged. Written to the round as "grenades".
+		 */
+		bool bGrenades = true;
 	};
 
 	/** PmcStalemateSmoke's limits (the designer 2026-11-08): the fight resumes within this after a quiet spell, s. */
@@ -603,6 +608,7 @@ namespace PmcArena
 			else if (Key == TEXT("rocketcontact")) { Options.bRocketContact = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
 			else if (Key == TEXT("fallbackcover")) { Options.bFallBackCover = FCString::Atoi(*Value) != 0; }
 			else if (Key == TEXT("objectivereach")) { Options.bObjectiveReach = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
+			else if (Key == TEXT("grenades")) { Options.bGrenades = FCString::Atoi(*Value) != 0; }
 			else if (Key == TEXT("scenario"))
 			{
 				EPmcScenario Scenario = EPmcScenario::Skirmish;
@@ -2519,6 +2525,7 @@ namespace PmcArena
 		Json->SetNumberField(TEXT("orders"), Stats.OrdersIssued);
 		Json->SetNumberField(TEXT("objective_moves"), Stats.ObjectiveMoves);
 		Json->SetNumberField(TEXT("rpg_strikes"), Stats.RpgStrikes);
+		Json->SetNumberField(TEXT("grenades_thrown"), Stats.GrenadesThrown);
 		Json->SetNumberField(TEXT("orders_failed"), Stats.OrdersFailed);
 		Json->SetNumberField(TEXT("detours"), Stats.Detours);
 		Json->SetNumberField(TEXT("preempts"), Stats.Preempts);
@@ -2613,6 +2620,7 @@ namespace PmcArena
 			// fix/pmc-arena-stalemate: a round without a shot between the sides is a no-reward draw for the trainer; the fight flow numbers.
 			Round->SetBoolField(TEXT("contact"), Result.bContact);
 			Round->SetBoolField(TEXT("fallback_cover"), State.Options.bFallBackCover);
+			Round->SetBoolField(TEXT("grenades"), State.Options.bGrenades);
 			{
 				TSharedRef<FJsonObject> Flow = MakeShared<FJsonObject>();
 				auto Round1 = [](float Value) { return FMath::RoundToFloat(Value * 10.f) / 10.f; };
@@ -2670,6 +2678,7 @@ namespace PmcArena
 				Side->SetNumberField(TEXT("median_engagement_m"), FMath::RoundToFloat(Result.MedianEngagementM[Index] * 10.f) / 10.f);
 				Side->SetNumberField(TEXT("shots"), Result.Shots[Index]);
 				Side->SetNumberField(TEXT("rockets"), Result.Rockets[Index]);
+				Side->SetNumberField(TEXT("grenades_thrown"), Result.Stats[Index].GrenadesThrown);
 				Side->SetNumberField(TEXT("rocket_bursts_near"), Result.RocketBurstsNear[Index]);
 				Side->SetNumberField(TEXT("strikes_unobserved"), Result.StrikesUnobserved[Index]);
 				// TACTICAL_MAP P3: the side's behaviour (G002 codex.pmc_arena_behaviour/1).
@@ -3507,6 +3516,7 @@ namespace PmcArena
 			Pmc->SetTeamObjective(DefenderTeamId, EPmcRole::Defender, State.Objective, State.Config.ObjectiveRadiusCm, State.Config.ObjectiveLevelCm);
 		}
 		Pmc->SetDefenceFallBackCover(State.bRoundObjective && State.Options.bFallBackCover);
+		Pmc->SetGrenadeOrdersEnabled(State.Options.bGrenades);
 		// TACTICAL_MAP P2/P3: on a map with a tactical file the defenders know the attackers' way to the point (cover slots facing it); the
 		// tactical round set it with their posts already.
 		const int32 DefenderTeam = State.Sides[1 - AttackerIndex].TeamId;
@@ -3813,6 +3823,7 @@ namespace PmcArena
 				Pmc->SetTeamObjective(Team, EPmcRole::None, FVector::ZeroVector, 0.f);
 			}
 			Pmc->SetDefenceFallBackCover(false);
+			Pmc->SetGrenadeOrdersEnabled(true);
 			Pmc->SetTeamCommanded(TeamA, false);
 			Pmc->SetTeamCommanded(TeamB, false);
 			Pmc->SetTeamCommanded(PmcTeam::Player, false);
@@ -4207,7 +4218,7 @@ namespace PmcArena
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.PmcArena"),
-		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot|script script=run|bound time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard|tactical; writes Saved/Arena/<timestamp>.json, then exits."),
+		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot|script script=run|bound time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 Grenades=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard|tactical; writes Saved/Arena/<timestamp>.json, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 
 	static FAutoConsoleCommandWithWorldAndArgs SmokeCommand(
