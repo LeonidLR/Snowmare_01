@@ -22,6 +22,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Interactables/VaultNavigation.h"
 #include "NavModifierComponent.h"
+#include "Tactics/CoverTraceRules.h"
 
 namespace DepotVaultSmoke
 {
@@ -126,6 +127,7 @@ namespace DepotVaultSmoke
 			{
 				return true;
 			}
+			SmokeUtils::StopLevelPmc(World);
 			State->Leader = Squad->GetLeader();
 			Leader = State->Leader.Get();
 			Squad->EnterSoloMode();
@@ -238,7 +240,8 @@ namespace DepotVaultSmoke
 			// By hand: in front of each kind's pick, facing it, 60 cm off its face - TryVault.
 			if (!State->Picks.IsValidIndex(State->Pick))
 			{
-				return Finish(*State, true);
+				Next(*State, 6);
+				return true;
 			}
 			const FObstacle& Obstacle = State->Picks[State->Pick];
 			const FVector Spot = SmokeUtils::FreeSpot(World, Obstacle.Centre - Obstacle.Across * (Obstacle.HalfDepth + 70.f) + FVector(0.f, 0.f, 100.f), Leader);
@@ -272,6 +275,44 @@ namespace DepotVaultSmoke
 			++State->Pick;
 			Next(*State, 3);
 			return true;
+		}
+		case 6:
+		{
+			const FObstacle& First = State->Picks[0];
+			const FVector Face = First.Centre - First.Across * First.HalfDepth;
+			FCoverSlot Slot;
+			const bool bHasSlot = CoverTraceRules::FindCoverSlotAt(World, Face + FVector(0.f, 0.f, VaultRules::ProbeHeight), First.Across, Slot)
+				&& Slot.IsValid() && Slot.WallActor == First.Actor;
+			Check(*State, bHasSlot, TEXT("the vaultable face has a cover slot on the approach side"));
+			if (!bHasSlot)
+			{
+				return Finish(*State, false);
+			}
+			const FVector Spot = SmokeUtils::FreeSpot(World, Face - First.Across * 108.f + FVector(0.f, 0.f, 100.f), Leader);
+			Leader->StopOperative();
+			Leader->TeleportTo(FVector(Spot.X, Spot.Y, Spot.Z + 4.f), First.Across.Rotation(), false, true);
+			const bool bOrdered = Leader->OrderTakeCover(Slot, true) == EOperativeOrderResult::Accepted && Leader->HasPendingCover();
+			Check(*State, bOrdered, TEXT("the cover order retains the clicked face's slot"));
+			if (!bOrdered)
+			{
+				return Finish(*State, false);
+			}
+			// Force the ordinary knee probe while still in range, as a blocked approach would.
+			State->bSawVault = Leader->TryVault(First.Across, true);
+			Check(*State, !State->bSawVault, TEXT("the knee probe does not vault the destination cover"));
+			Next(*State, 7);
+			return true;
+		}
+		case 7:
+		{
+			State->bSawVault |= Leader->IsVaulting();
+			if (!Leader->bInCover && State->StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(*State, !State->bSawVault && Leader->bInCover && Leader->GetCoverSlot().WallActor == State->Picks[0].Actor,
+				TEXT("the leader reaches the face's cover without vaulting it"));
+			return Finish(*State, true);
 		}
 		default:
 			return Finish(*State, false);
