@@ -314,7 +314,10 @@ bool UTrainingSectorSubsystem::SelectSector(int32 Id)
 		{
 			for (const int32 Team : Pmc->GetTeamIds())
 			{
-				Pmc->DestroyTeam(Team);
+				if (Team > 0)
+				{
+					Pmc->DestroyTeam(Team);
+				}
 			}
 		}
 		if (UPmcEncounterSubsystem* Encounters = UPmcEncounterSubsystem::Get(World))

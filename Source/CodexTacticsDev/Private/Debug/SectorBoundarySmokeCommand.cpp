@@ -110,7 +110,8 @@ namespace SectorBoundarySmoke
 			}
 			Member->bTacticalCeaseFire = true;
 		}
-		const TArray<int32> TeamIds = Pmc->GetTeamIds();
+		TArray<int32> TeamIds = Pmc->GetTeamIds();
+		TeamIds.RemoveAll([](int32 Team) { return Team <= 0; });
 		if (TeamIds.Num() > 1)
 		{
 			return Finish(false, TEXT("more than one PMC squad"));
