@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { bayPlanAscii, planBaySection, type BayPlan } from './bayPlan.ts';
 import { BAY_SECTIONS } from './kitPlan.ts';
+import { bayStairGeom } from './bayStair.ts';
 
 const isOverlap = (a: BayPlan['cells'][number], b: BayPlan['cells'][number]) =>
   Math.max(a.u0, b.u0) < Math.min(a.u1, b.u1) && Math.max(a.v0, b.v0) < Math.min(a.v1, b.v1);
@@ -71,4 +72,22 @@ for (const [id, length, bedrooms] of [
 test('legacy and unknown templates leave the bay planner unselected', () => {
   assert.equal(planBaySection('block_khrushchevka'), undefined);
   assert.equal(planBaySection('unknown'), undefined);
+});
+
+test('the two 205 cm lanes turn at the court and leave the spine landing clear', () => {
+  const p = planBaySection('block_1_464')!;
+  const g = bayStairGeom(p);
+  const { core, walls_cm: walls } = BAY_SECTIONS;
+  const halfWidth = core.flight_clear_cm / 2;
+  assert.equal(g.uIn[1] - g.uIn[0], core.floor_landing_clear_cm[0]);
+  assert.ok(g.lane[0] - halfWidth >= g.uIn[0]);
+  assert.ok(g.lane[1] + halfWidth <= g.uIn[1]);
+  assert.equal(g.lane[1] - g.lane[0] - 2 * halfWidth, walls.partition);
+  assert.equal(g.vLanding, p.landing.v0);
+  assert.ok(g.vFar < g.vMid && g.vMid < g.vLanding);
+  assert.equal(g.vLanding - g.vMid, g.run);
+  assert.ok(Math.abs(Math.atan(150 / g.run) * 180 / Math.PI - core.slope_deg) < 0.15);
+  assert.ok(g.vMid - g.vFar >= 195, 'court half-landing leaves a full passage');
+  assert.equal(p.landing.v1 - p.landing.v0 - walls.bearing, core.floor_landing_clear_cm[1]);
+  assert.equal(p.landing.v1 - walls.bearing / 2 - p.spine, core.landing_past_spine_cm);
 });

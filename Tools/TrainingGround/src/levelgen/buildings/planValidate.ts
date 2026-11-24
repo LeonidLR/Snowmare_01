@@ -11,8 +11,9 @@ import { STAIR_APPROACH_CM, isSwitchback, stairFlights } from '../schema.ts';
 import type { Box, CoreFlight } from '../windowClearance.ts';
 import { boxesOverlap, coreBoxesOn } from '../windowClearance.ts';
 import { BUILDING_PLANS } from './bandPlan.ts';
-import { kitTemplate } from './kitPlan.ts';
+import { baySectionTemplate, BAY_SECTIONS, kitTemplate } from './kitPlan.ts';
 
+const isFixedBay = (b: GenBuilding): boolean => !!b.plan?.template && !!baySectionTemplate(b.plan.template);
 const C = BUILDING_PLANS.constants;
 const O = C.openings;
 /** Every comparison tolerates 1 cm (the generator emits whole cm; a rotated building adds float noise). */
@@ -134,7 +135,8 @@ function roomTiling(b: GenBuilding, rooms: GenRoom[], issues: TraversalIssue[]):
 
 function offGrid(b: GenBuilding, rooms: GenRoom[], placed: Placed[], issues: TraversalIssue[]): void {
   const fp = b.footprint;
-  const grid = b.plan?.pattern === 'kit' ? kitTemplate(b.plan.template).grid_cm : C.grid_cm; // the kit's rooms lie on the designer's 50 cm grid
+  const fixed = isFixedBay(b);
+  const grid = fixed ? 1 : b.plan?.pattern === 'kit' ? kitTemplate(b.plan.template).grid_cm : C.grid_cm; // the kit's rooms lie on the designer's 50 cm grid
   // the edge a stair-core room makes at its depth (200 / 350 from a building wall) is off the 100 grid by design; its neighbours share it
   const core: [number[], number[]] = [[], []];
   for (const r of rooms) {
@@ -146,11 +148,12 @@ function offGrid(b: GenBuilding, rooms: GenRoom[], placed: Placed[], issues: Tra
       }
     }
   }
+  const aligned = (cm: number, step: number): boolean => fixed ? Math.abs(cm - Math.round(cm)) < 0.05 : onGrid(cm, step);
   const axisName = ['x', 'y'];
   for (const r of rooms) {
     for (const a of [0, 1] as const) {
       for (const e of [r.bounds.min[a], r.bounds.max[a]]) {
-        if (onGrid(e - fp[0][a], grid) || core[a].some((c) => near(c, e))) continue;
+        if (aligned(e - fp[0][a], grid) || core[a].some((c) => near(c, e))) continue;
         issues.push({ severity: PLAN_SEVERITY.off_grid, code: 'off_grid', ref: r.id, message: `${r.id}: its ${axisName[a]} edge at ${Math.round(e)} is ${Math.round(e - fp[0][a])} cm from the footprint corner, off the ${grid} grid` });
       }
     }
@@ -158,7 +161,7 @@ function offGrid(b: GenBuilding, rooms: GenRoom[], placed: Placed[], issues: Tra
   for (const p of placed) {
     if (!isDoorOrWindow(p)) continue;
     const rel = p.pos[p.along] - fp[0][p.along];
-    if (!onGrid(rel, C.opening_grid_cm)) issues.push({ severity: PLAN_SEVERITY.off_grid, code: 'off_grid', ref: p.ref, message: `${p.ref}: its centre is ${Math.round(rel * 10) / 10} cm along its wall, off the ${C.opening_grid_cm} grid` });
+    if (!aligned(rel, C.opening_grid_cm)) issues.push({ severity: PLAN_SEVERITY.off_grid, code: 'off_grid', ref: p.ref, message: `${p.ref}: its centre is ${Math.round(rel * 10) / 10} cm along its wall, off the ${C.opening_grid_cm} grid` });
   }
 }
 
@@ -173,11 +176,24 @@ function roomSize(b: GenBuilding, rooms: GenRoom[], issues: TraversalIssue[]): v
   const suiteFits = (u: number, v: number): boolean => range(u, C.end_bay_cm.min, C.end_bay_cm.max) && v >= C.room_cm.min - TOL;
   const roomFits = (u: number, v: number): boolean => range(u, C.room_cm.min, C.room_cm.max) && range(v, C.room_cm.min, C.room_cm.max);
   const serviceFits = (u: number, v: number): boolean => range(v, C.service_room.depth_min_cm, C.service_room.depth_max_cm) && range(u, C.service_room.width_min_cm, C.service_room.width_max_cm);
+  const fixed = isFixedBay(b);
   const KIT = kitTemplate(b.plan?.template);
   const kitAreas = KIT.room_area_m2 as Record<string, number[]>;
   for (const r of rooms) {
     const a = rectOf(r), w = a.x1 - a.x0, h = a.y1 - a.y0, u = alongY ? h : w, v = alongY ? w : h;
     const dims = `${Math.round(u)} x ${Math.round(v)} cm (u x v)`;
+    if (fixed && r.use) {
+      const { walls_cm, core, rooms: role, corridor_clear_min_cm } = BAY_SECTIONS;
+      const endWall = (walls_cm.exterior + walls_cm.bearing) / 2;
+      const landingEnd = BAY_SECTIONS.depth_cm / 2 + core.landing_past_spine_cm + walls_cm.bearing / 2;
+      const minimum = r.use === 'hall' || r.use === 'tambour' ? corridor_clear_min_cm + walls_cm.bearing : BAY_SECTIONS.doors_cm.bath;
+      const ok = r.use === 'landing' ? near(u, core.bay_cm) && near(v, landingEnd)
+        : r.use === 'living' ? u >= role.living.clear_width_cm - TOL
+        : r.use === 'bedroom' ? u - endWall >= role.bedroom.clear_width_cm - TOL
+        : Math.min(u, v) >= minimum - TOL;
+      if (!ok) bad(r, `a fixed-bay ${r.use} has invalid dimensions (${dims})`);
+      continue;
+    }
     if (r.use) {
       // a kit room: the kit's area band of its use; living rooms at least one 3 m bay wide; the core = the kit's stair cell
       const m2 = (w * h) / 1e4, band = kitAreas[r.use];
@@ -396,9 +412,11 @@ export const isCorridorEndWindow = (rooms: readonly GenRoom[], op: WallOpening):
 
 function windowRule(b: GenBuilding, rooms: GenRoom[], placed: Placed[], issues: TraversalIssue[]): void {
   const windows = placed.filter((p) => p.op.kind === 'window' && !p.part);
-  // (a) a room touching an exterior wall has a window on its storey
+  const fixed = isFixedBay(b);
+  // (a) a habitable room touching an exterior wall has a window on its storey
   for (const r of rooms) {
     if (!isRoomy(r) || r.kind === 'lobby' || !(r.walls?.length)) continue; // a lobby's exterior door is its opening (a 400 lobby has no room for a window beside it)
+    if (fixed && r.use && r.use !== 'living' && r.use !== 'bedroom' && r.use !== 'kitchen') continue;
     if (!windows.some((w) => w.op.floor === r.floor && w.op.links?.[0] === r.id)) {
       issues.push({ severity: PLAN_SEVERITY.window_rule, code: 'window_rule', ref: r.id, message: `${r.id}: touches an exterior wall but has no window` });
     }

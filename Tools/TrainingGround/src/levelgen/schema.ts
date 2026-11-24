@@ -316,7 +316,7 @@ export interface GenRoom {
   bounds: { min: Vec2; max: Vec2 };
   kind?: 'room' | 'corridor' | 'stairwell' | 'hall' | 'balcony' | 'lobby' | 'service';
   /** Kit-planned blocks: what the room is for (kitPlan.ts RoomUse): hall, corridor, bath, kitchen, living, tambour, landing (the stair core). */
-  use?: 'hall' | 'corridor' | 'bath' | 'kitchen' | 'living' | 'tambour' | 'landing' | 'service';
+  use?: 'hall' | 'corridor' | 'bath' | 'kitchen' | 'living' | 'bedroom' | 'tambour' | 'landing' | 'service';
   /** Kit gable service bay (ground storey of the end flat, template gable_door.service_room): what the room is called (дворницкая, щитовая, ЖЭК, кладовая ...). */
   label?: string;
   /** Ids of every opening whose `links` name the room (planned buildings: windows too; seam ids between two corridor cells). */

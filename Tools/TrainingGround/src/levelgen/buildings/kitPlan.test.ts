@@ -19,13 +19,13 @@ import type { BandPlan, PlanCell } from './bandPlan.ts';
 const area = (c: PlanCell): number => ((c.u1 - c.u0) * (c.v1 - c.v0)) / 1e4;
 const FIXTURES: [number, number][] = [[1800, 1000], [2000, 1400], [3600, 1200], [3700, 1200]];
 
-function kitBlock(w: number, h: number, floors = 2, seed = 4, opts: { pattern?: 'kit' | 'sections'; roof?: boolean; gable?: 'none' } = {}): { l: GenLayout; b: GenBuilding } {
+function kitBlock(w: number, h: number, floors = 2, seed = 4, opts: { pattern?: 'kit' | 'sections'; roof?: boolean; gable?: 'none' | 'high'; template?: string } = {}): { l: GenLayout; b: GenBuilding } {
   const d: Draft = { walls: [], buildings: [], ladders: [], covers: [], zones: [], routes: [], spawn_points: [], ambush_points: [], patrol_routes: [], mantle_edges: [], keepFree: [], building_plans: true };
   let n = seed * 7919;
   const random = (): number => { n = (n * 1103515245 + 12345) & 0x7fffffff; return n / 0x7fffffff; };
   addBuilding(d, 'B_k', [[20.37, 15.21], [20.37 + w, 15.21 + h]], {
     height: floors * LEVEL_HEIGHT, floors, enterable: true, roof_walkable: opts.roof ?? true, stairwell: true, set_piece: 'facade', archetype: 'block',
-    doorSides: ['south'], windowSides: ['south', 'north'], partitionRooms: true, plan_template: opts.pattern === 'sections' ? 'block_sections' : 'block_khrushchevka',
+    doorSides: ['south'], windowSides: ['south', 'north'], partitionRooms: true, plan_template: opts.template ?? (opts.pattern === 'sections' ? 'block_sections' : 'block_khrushchevka'),
     ...(opts.gable ? { gable_door: opts.gable } : {}),
   }, random);
   const l = finalizeDraftToLayout(d, [90, 90], { name: 't', profile: 't', seed: 1, params: { ...DEFAULT_PARAMS, size_m: [90, 90], building_plans: true }, start: [4, 2], end: [36, 58] });
@@ -269,4 +269,26 @@ test('CodexTactics.LevelGen.KitPlan.Templates: the khrushchevka (series 1-464) i
     assert.ok(['kit_sections', 'sections'].includes(t.planner), id);
   }
   assert.ok(KIT.flats_per_landing === 3 && KIT.storey_cm === 300 && KIT.entrance_side === 'court' && KIT.stair === 'half_landing');
+});
+
+test('fixed-bay generator emits navigable standard and rotated short switchbacks', () => {
+  for (const [w, h, length, id] of [
+    [26, 14, 2600, 'block_1_464'], [14, 23, 2250, 'block_1_464_short'],
+  ] as const) {
+    const { b, l } = kitBlock(w, h, 3, 8, { template: 'block_1_464', gable: 'high' });
+    assert.equal(b.plan?.template, id);
+    assert.equal(b.series, '1-464');
+    assert.deepEqual(b.footprint[1].map((hi, i) => hi - b.footprint[0][i]).sort((a, b) => a - b), [1400, length]);
+    assert.equal(b.stairs?.length, 3);
+    for (const stair of b.stairs ?? []) {
+      assert.ok(isSwitchback(stair));
+      assert.equal(stair.width, 205);
+      assert.ok(Math.abs(Math.hypot(stair.pos[0] - stair.turn[0], stair.pos[1] - stair.turn[1]) - 215) < 1);
+    }
+    assert.equal(b.floors_detail?.filter((f) => f.gaps.some((gap) => gap.kind === 'stairwell')).length, 2);
+    assert.deepEqual([0, 1, 2].map((floor) => b.units?.filter((u) => u.floor === floor).length), [3, 4, 4]);
+    assert.deepEqual(errorsOf(b, l), []);
+  }
+  const { b } = kitBlock(20, 12, 2, 8, { template: 'block_1_464' });
+  assert.equal(b.plan?.template, 'block_khrushchevka', 'a plot too small keeps the legacy plan');
 });

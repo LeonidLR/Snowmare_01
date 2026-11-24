@@ -61,7 +61,7 @@ function useTemplate(id?: string): void {
 }
 
 /** What a room of a kit flat is for (GenRoom.use). The core cell is the 'landing' (it holds the floor landing and the flights). */
-export type RoomUse = 'hall' | 'corridor' | 'bath' | 'kitchen' | 'living' | 'tambour' | 'landing' | 'service';
+export type RoomUse = 'hall' | 'corridor' | 'bath' | 'kitchen' | 'living' | 'bedroom' | 'tambour' | 'landing' | 'service';
 export type KitFlat = 'A' | 'B' | 'C';
 
 /** One door the kit plan wants: the two cells it joins, its role and (optionally) the preferred centre along the shared wall. */
@@ -430,7 +430,7 @@ export function validateKitPlan(plan: BandPlan): string[] {
   return out;
 }
 
-const USE_GLYPH: Record<RoomUse, string> = { hall: 'h', corridor: 'c', bath: 'b', kitchen: 'k', living: 'L', tambour: 'T', landing: 'S', service: 'v' };
+const USE_GLYPH: Record<RoomUse, string> = { hall: 'h', corridor: 'c', bath: 'b', kitchen: 'k', living: 'L', bedroom: 'B', tambour: 'T', landing: 'S', service: 'v' };
 
 /**
  * One char per 50 cm (the kit grid), v = D on the top row (the street), v = 0 at the bottom (the court). Each cell paints its use glyph (h hall,
