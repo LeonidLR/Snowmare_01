@@ -17,6 +17,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "SmokeUtils.h"
 #include "AIController.h"
 #include "Camera/RoofCutawaySubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -451,7 +452,7 @@ namespace CutawayClickSmoke
 		}
 	}
 
-	void Run(const TArray<FString>& Args, UWorld* /*World*/)
+	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		Runner = MakeShared<FRunner>();
 		for (const FString& Arg : Args)
@@ -480,6 +481,7 @@ namespace CutawayClickSmoke
 		{
 			Pressure->Set(0, ECVF_SetByConsole);
 		}
+		SmokeUtils::StopLevelPmc(World); // Showcase Kit PMC squad off (Codex 085)
 		Runner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddStatic(&Tick);
 		UE_LOG(LogCodexTactics, Display, TEXT("CutawayClickSmoke: building %s, %d storeys"), Runner->BuildingArg.IsEmpty() ? TEXT("(auto)") : *Runner->BuildingArg, Runner->Storeys.Num());
 	}

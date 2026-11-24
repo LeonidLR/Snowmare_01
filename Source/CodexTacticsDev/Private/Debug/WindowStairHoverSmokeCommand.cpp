@@ -15,6 +15,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "SmokeUtils.h"
 #include "AIController.h"
 #include "Camera/RoofCutawaySubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -515,6 +516,7 @@ namespace WindowStairHoverSmoke
 		{
 			Pressure->Set(0, ECVF_SetByConsole);
 		}
+		SmokeUtils::StopLevelPmc(World); // Showcase Kit PMC squad off (Codex 085)
 		Runner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddLambda([]() { Tick(); });
 		UE_LOG(LogCodexTactics, Display, TEXT("WindowStairHoverSmoke: start"));
 	}

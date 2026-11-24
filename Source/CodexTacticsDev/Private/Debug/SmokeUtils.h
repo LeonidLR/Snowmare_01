@@ -23,9 +23,38 @@
 #include "NavMesh/NavMeshBoundsVolume.h"
 #include "NavigationSystem.h"
 #include "NavigationPath.h"
+#include "AI/PmcEncounterSubsystem.h"
+#include "AI/PmcSquadSubsystem.h"
 
 namespace SmokeUtils
 {
+	/**
+	 * Keeps a level's scheduled PMC encounter out of a smoke that is not about PMC fights: Codex.Pmc.Encounters 0, the pending
+	 * encounter cancelled and any PMC team it already spawned during the world preload destroyed (the Showcase Kit is PMC-only
+	 * since Codex 076 and its squad killed the smoke squad - Codex 085).
+	 */
+	inline void StopLevelPmc(UWorld* World)
+	{
+		if (IConsoleVariable* PmcEncounters = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pmc.Encounters")))
+		{
+			PmcEncounters->Set(0, ECVF_SetByConsole);
+		}
+		if (!World)
+		{
+			return;
+		}
+		if (UPmcEncounterSubsystem* Encounters = UPmcEncounterSubsystem::Get(World))
+		{
+			Encounters->CancelPending();
+		}
+		if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
+		{
+			for (const int32 TeamId : Pmc->GetTeamIds())
+			{
+				Pmc->DestroyTeam(TeamId);
+			}
+		}
+	}
 	/** Result of FPreloadGate::Poll. */
 	enum class EPreloadGate : uint8
 	{

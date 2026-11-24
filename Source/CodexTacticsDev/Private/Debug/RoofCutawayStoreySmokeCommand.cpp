@@ -17,6 +17,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "SmokeUtils.h"
 #include "AIController.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Camera/CameraActor.h"
@@ -579,7 +580,7 @@ namespace RoofCutawayStoreySmoke
 		}
 	}
 
-	void Run(const TArray<FString>& Args, UWorld* /*World*/)
+	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		Runner = MakeShared<FRunner>();
 		Runner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("StoryShowcase") / TEXT("cutaway"));
@@ -627,6 +628,7 @@ namespace RoofCutawayStoreySmoke
 		{
 			Pressure->Set(0, ECVF_SetByConsole);
 		}
+		SmokeUtils::StopLevelPmc(World); // Showcase Kit PMC squad off (Codex 085)
 		Runner->DrawHandle = UDebugDrawService::Register(TEXT("Game"), FDebugDrawDelegate::CreateStatic(&OnDraw));
 		Runner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddStatic(&Tick);
 		UE_LOG(LogCodexTactics, Display, TEXT("RoofCutawayStoreySmoke: building %s, storeys %d, shots %d -> %s"), Runner->BuildingArg.IsEmpty() ? TEXT("(auto)") : *Runner->BuildingArg,

@@ -1,5 +1,7 @@
 # Codex 085-coverindoor-smoke-pmc
 
+**TAKEN BY LEAD 2026-11-24 15:00 (Codex was not running) - Codex: skip it.**
+
 Assigned by Lead 2026-11-24. Small C++ smoke fix (Source/CodexTacticsDev only).
 
 Problem: CodexTactics.CoverIndoorSmoke FAILs on the worker since 076 made StoryShowcase_Kit PMC-only

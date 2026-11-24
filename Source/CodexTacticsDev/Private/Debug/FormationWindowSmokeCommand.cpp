@@ -12,6 +12,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "SmokeUtils.h"
 #include "AIController.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -313,6 +314,7 @@ namespace FormationWindowSmoke
 		{
 			Pressure->Set(0, ECVF_SetByConsole); // no fight: rule 2 out of combat
 		}
+		SmokeUtils::StopLevelPmc(World); // Showcase Kit PMC squad off (Codex 085)
 		Runner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddLambda([]() { Tick(); });
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: FormationWindowSmoke started"));
 	}

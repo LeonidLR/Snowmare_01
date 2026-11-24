@@ -12,6 +12,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "SmokeUtils.h"
 #include "AIController.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Camera/CameraActor.h"
@@ -797,7 +798,7 @@ namespace CoverIndoorSmoke
 		}
 	}
 
-	void Run(const TArray<FString>& Args, UWorld* /*World*/)
+	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		Runner = MakeShared<FRunner>();
 		Runner->Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("CoverIndoor"));
@@ -825,6 +826,7 @@ namespace CoverIndoorSmoke
 		{
 			Pressure->Set(0, ECVF_SetByConsole);
 		}
+		SmokeUtils::StopLevelPmc(World); // Showcase Kit PMC squad off (Codex 085)
 		Runner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddStatic(&Tick);
 		UE_LOG(LogCodexTactics, Display, TEXT("CoverIndoorSmoke: building %s, shots %d -> %s"), Runner->BuildingArg.IsEmpty() ? TEXT("(auto)") : *Runner->BuildingArg,
 			Runner->bShots ? 1 : 0, *Runner->Dir);
