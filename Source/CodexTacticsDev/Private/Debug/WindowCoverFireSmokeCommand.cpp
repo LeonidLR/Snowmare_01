@@ -20,6 +20,7 @@
 #include "CollisionQueryParams.h"
 #include "Combat/HealthComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
@@ -108,6 +109,10 @@ namespace WindowCoverFireSmoke
 	{
 		const float Half = Member.GetCapsuleComponent() ? Member.GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 88.f;
 		Member.TeleportTo(FVector(Feet.X, Feet.Y, Feet.Z + Half + 2.f), FRotator(0.f, Yaw, 0.f), false, true);
+		if (USkeletalMeshComponent* Mesh = Member.GetMesh())
+		{
+			Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+		}
 		Member.StopOperative();
 		Member.ColdLevel = 0.f;
 		Member.bTacticalCeaseFire = true;
@@ -143,9 +148,8 @@ namespace WindowCoverFireSmoke
 		FCoverSlot Slot;
 		const FVector Center = Box.GetCenter();
 		Slot.WallNormal = Normal;
-		Slot.WallPoint = Center + Normal * 15.f;
-		Slot.WallPoint.Z = Box.Max.Z + 40.f;
-		Slot.WorldLocation = FVector(Slot.WallPoint.X, Slot.WallPoint.Y, FeetZ) + Normal * 45.f;
+		Slot.WallPoint = FVector(Center.X, Center.Y, Box.Max.Z + 40.f);
+		Slot.WorldLocation = FVector(Center.X, Center.Y, FeetZ) + Normal * 45.f;
 		Slot.Height = ECoverHeight::HighCover;
 		Slot.WallTopCm = 240.f;
 		Slot.WallActor = &Sill;
@@ -527,6 +531,11 @@ namespace WindowCoverFireSmoke
 		}
 	}
 
+	void OnSmokeFrame()
+	{
+		Tick();
+	}
+
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		(void)Args;
@@ -536,7 +545,7 @@ namespace WindowCoverFireSmoke
 			Pressure->Set(0, ECVF_SetByConsole);
 		}
 		SmokeUtils::StopLevelPmc(World);
-		Runner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddStatic(&Tick);
+		Runner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddStatic(&OnSmokeFrame);
 		UE_LOG(LogCodexTactics, Display, TEXT("WindowCoverFireSmoke: Codex.Cover.RiffleOutdoor %d"), RiffleOutdoor());
 	}
 

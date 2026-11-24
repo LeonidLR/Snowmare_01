@@ -9,6 +9,8 @@
 
 namespace
 {
+	using namespace WindowCoverRules;
+
 	FWindowCoverOpening Opening(int32 Floor, uint32 WallId, const FVector& Normal)
 	{
 		FWindowCoverOpening Out;

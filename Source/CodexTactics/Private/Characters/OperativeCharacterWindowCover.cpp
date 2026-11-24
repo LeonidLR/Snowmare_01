@@ -4,6 +4,7 @@
 
 #include "Camera/RoofCutawaySubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/HealthComponent.h"
 #include "CollisionQueryParams.h"
 #include "Components/PrimitiveComponent.h"
 #include "Core/PlayerCommands.h"
@@ -170,7 +171,9 @@ void AOperativeCharacter::BreakWindowGlassFromShot(AActor* Sill)
 
 void AOperativeCharacter::ResolveWindowGlassRound(const FVector& AimAt)
 {
-	if (bWindowGlassShot || !IsWindowCoverConfirmed() || !IsWindowCoverShot(AimAt))
+	// The flag is this shot's result, not a latch. A leftover true from the glass cartridge would swallow the next round.
+	bWindowGlassShot = false;
+	if (!IsWindowCoverConfirmed() || !IsWindowCoverShot(AimAt))
 	{
 		return;
 	}
@@ -200,6 +203,10 @@ void AOperativeCharacter::RefreshWindowCover(bool bForce)
 
 	const FVector Here = GetActorLocation();
 	const bool bLostSill = WindowCover.Sill.IsStale();
+	FString SlotBuildingNow;
+	const int32 SlotFloorNow = FloorOf(CoverSlot.WallActor.Get(), CoverSlot.WallComponent.Get(), SlotBuildingNow);
+	const bool bFloorChanged = WindowCover.bHasInterval && SlotFloorNow != INDEX_NONE && WindowCover.Floor != INDEX_NONE
+		&& SlotFloorNow != WindowCover.Floor;
 	const FVector Segment = bShimmying && bHasPendingCover ? PendingCoverSlot.WorldLocation : FVector(FLT_MAX);
 	const bool bNewSegment = bShimmying && !WindowCoverSegment.Equals(Segment, 1.f);
 	WindowCoverRules::EWindowIntervalPlace Place = WindowCoverRules::EWindowIntervalPlace::Outside;
@@ -211,14 +218,14 @@ void AOperativeCharacter::RefreshWindowCover(bool bForce)
 	const bool bCrossed = WindowCover.bHasInterval && Place != WindowCoverLastPlace;
 	const bool bWallChanged = WindowCoverWall.Get() != CoverSlot.WallComponent.Get();
 	const bool bSameSpot = FVector::DistSquared2D(Here, WindowCoverSearchedAt) <= FMath::Square(5.f);
-	if (!bForce && !bLostSill && !bCrossed && !bWallChanged && !bNewSegment && (bSameSpot || bShimmying))
+	if (!bForce && !bLostSill && !bCrossed && !bWallChanged && !bFloorChanged && !bNewSegment && (bSameSpot || bShimmying))
 	{
 		WindowCoverLastPlace = Place;
 		return;
 	}
 
-	FString SlotBuilding;
-	const int32 SlotFloor = FloorOf(CoverSlot.WallActor.Get(), CoverSlot.WallComponent.Get(), SlotBuilding);
+	FString& SlotBuilding = SlotBuildingNow;
+	const int32 SlotFloor = SlotFloorNow;
 	const uint32 SlotWallId = CoverSlot.WallComponent.IsValid() ? CoverSlot.WallComponent->GetUniqueID() : 0;
 	const FVector AlongAxis = FVector::CrossProduct(FVector::UpVector, CoverSlot.WallNormal).GetSafeNormal();
 	static const FName SillTag(TEXT("window_sill"));
