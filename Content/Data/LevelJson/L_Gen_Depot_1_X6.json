@@ -11,13 +11,23 @@
   "wave_rest_duration": 20,
   "intro_dialogue": false,
   "environment": {
-    "_comment": "Generated map (designer 2026-11-18): live weather ladder, random start weather; tune here or in the Wave Editor.",
+    "_comment": "WEATHER PAUSED (designer 2026-11-24: weather system fully off until he says - focus on bot training). Restore = the 'paused_from' block below.",
+    "visuals": false,
     "locked": true,
+    "override_carry": true,
     "weather": "Clear",
     "start_hour": 2,
-    "snow_cover": 0.1,
-    "override_carry": true,
-    "weather_strength": 0.3
+    "snow_cover": 0.5,
+    "paused_from": {
+      "_comment": "Generated map (designer 2026-11-18): live weather ladder, random start weather; tune here or in the Wave Editor.",
+      "locked": true,
+      "weather": "Clear",
+      "start_hour": 2,
+      "snow_cover": 0.5,
+      "override_carry": true,
+      "weather_strength": 0.3,
+      "climate": "temperate"
+    }
   },
   "cheats": {
     "immortal": false,

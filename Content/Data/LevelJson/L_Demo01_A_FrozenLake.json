@@ -13,7 +13,21 @@
   "cold_rate_mult": 0.4,
   "gate_open_mode": "generator_waves",
   "gate_exit": "auto",
-  "environment": { "locked": true, "start_hour": 23, "weather": "Snowfall", "snow_cover": 0.6 },
+  "environment": {
+    "_comment": "WEATHER PAUSED (designer 2026-11-24: weather system fully off until he says - focus on bot training). Restore = the 'paused_from' block below.",
+    "visuals": false,
+    "locked": true,
+    "override_carry": true,
+    "weather": "Clear",
+    "start_hour": 23,
+    "snow_cover": 0.6,
+    "paused_from": {
+      "locked": true,
+      "start_hour": 23,
+      "weather": "Snowfall",
+      "snow_cover": 0.6
+    }
+  },
   "demo": {
     "panic": false,
     "tutorial": true,
