@@ -1195,8 +1195,9 @@ function switchbackCore(bid: string, f: PlanFrame, coreU0: number, upTo: number,
   const idBase = index ? `${bid}_c${index}` : bid;
   const stairs: Stair[] = [];
   const midRect = R(g.uIn[0], g.vMid, g.uIn[1], g.vFar);
+  const [firstLane, secondLane] = bay ? [g.lane[1], g.lane[0]] : g.lane;
   for (let n = 0; n < upTo; n++) {
-    stairs.push({ id: `${idBase}_stair_${n}`, pos: P(g.lane[0], g.vLanding), turn: P(g.lane[0], g.vMid), mid: P(g.lane[1], g.vMid), top: P(g.lane[1], g.vLanding),
+    stairs.push({ id: `${idBase}_stair_${n}`, pos: P(firstLane, g.vLanding), turn: P(firstLane, g.vMid), mid: P(secondLane, g.vMid), top: P(secondLane, g.vLanding),
       from: n, to: n + 1, kind: 'stairwell', mid_rect: midRect, width: bay ? BAY_SECTIONS.core.flight_clear_cm : KIT.core.flight_w_cm });
   }
   const box = bay ? R(bay.stair.u0, 0, bay.stair.u1, bay.landing.v1) : R(coreU0, 0, coreU0 + KIT.core.width_cm, KIT.core.depth_cm);
