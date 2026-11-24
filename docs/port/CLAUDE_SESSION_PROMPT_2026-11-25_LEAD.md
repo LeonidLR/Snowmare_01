@@ -9,7 +9,7 @@ ROLE: route, review diffs, merge (Scripts/Tools/merge_gate.ps1), push (CODEX_AGE
 Gemini 4 HYDROGEN ONLY - Carbon+ too expensive) implement. You do not implement; spend few tokens (Claude weekly was 87 % on 11-24,
 reset 11-28 09:00 UTC). No subagents (agent_guard) unless the designer says so.
 - Every task: inbox file docs/port/<agent>/inbox/<id>-<slug>.md in main FIRST, then a chat line (agent_chat.py post --as claude).
-- Monitors: agent chat (Saved/AgentChat/chat.jsonl, new non-claude lines) + the night watch script (silent agents / grok stopped /
+- Monitors: agent chat (Saved/AgentChat/chat.jsonl, new non-claude lines) + the night watch script Saved/Lead/night_watch.py (silent agents / grok stopped /
   worker on DERP relay) - copy from the previous session's scratchpad idea: poll every 10 min, print only anomalies. Re-arm every 30 min.
 - Agents are woken ONLY by chat while their wait loop runs; Grok is NOT in a loop - you launch it: Scripts/Tools/grok_task.ps1
   -PromptFile <file> -Session grok-<id> (one task per run). If an agent goes silent after its limit reset, give the designer a restart prompt.
