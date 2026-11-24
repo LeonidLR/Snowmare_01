@@ -460,6 +460,7 @@ class Dresser:
         self.state_of = state_of
         self.extra = list(extra_openings)
         self.filler_mode = filler_mode
+        self.fixed_bays = (b.get("plan") or {}).get("template") in ("block_1_464", "block_1_464_short")
         self.bid = b["id"]
         self.gz = float(layout.get("ground_z", 0.0))
         self.floors = int(b["floors"])
@@ -701,14 +702,24 @@ class Dresser:
         ent = S.get("entrance") or {}
         bd = S.get("balcony_door") or {}
         mod = self.module
+        paired_rooms = {
+            op["links"][0] for op, _, _ in ops if op.get("links")
+            and (op.get("role") == "balcony" or op.get("slot") == "balcony")
+        } if self.fixed_bays and f > 0 else set()
         for op, c, w in ops:
             kind = op.get("kind")
             if kind == "loophole":
                 bays.append((c - w / 2.0, c + w / 2.0, 0.0, 0.0, "keep", op))
                 continue
+            if self.fixed_bays and f > 0 and (op.get("role") == "balcony"
+                    or op.get("slot") == "balcony"
+                    or (kind == "window" and (op.get("links") or [None])[0] in paired_rooms)):
+                bays.append((c - w / 2.0, c + w / 2.0, 0.0, 0.0, "fixed_opening", {"op": op, "c": c, "w": w}))
+                continue
             if kind == "door" and f == 0 and ent:
                 hole = ent["hole"]
-                sx = clamp_stretch(w, hole[1] - hole[0], self.max_dev)
+                hw = hole[1] - hole[0]
+                sx = w / hw if self.fixed_bays else clamp_stretch(w, hw, self.max_dev)
                 start = c - (hole[0] + hole[1]) / 2.0 * sx
                 bays.append((start, start + mod * sx, hole[0] * sx, (mod - hole[1]) * sx, "entry", {"op": op, "sx": sx}))
                 continue
@@ -765,7 +776,9 @@ class Dresser:
         t = e.t
         for k, (s0, s1, jl, jr, kind, data) in enumerate(bays):
             anchor = e.at(s0, t / 2.0) + (z0,)
-            if kind == "win":
+            if kind == "fixed_opening":
+                self.emit_fixed_opening(e, z0, s0, data)
+            elif kind == "win":
                 op = data["op"]
                 win, s = data["win"], data["s"]
                 state = self.state_of(op)
@@ -834,11 +847,68 @@ class Dresser:
                 jl = 0.0
             ext_l = max(0.0, cur_jamb - (JAMB_MARGIN if cur > e.lo else 0.0))
             ext_r = max(0.0, jl - (JAMB_MARGIN if kind != "end" else 0.0))
-            for fs, fw, recess in fill(cur, s0, ext_l, ext_r, mod, self.max_dev, self.filler_mode):
-                p = e.at(fs, t / 2.0 - recess)
-                self.add(S["solid"], e.d, e.n, (p[0], p[1], z0), scale=(fw / mod, 1.0, sz), part="facade_solid")
+            if self.fixed_bays:
+                self.emit_fixed_fill(e, cur, s0, z0)
+            else:
+                for fs, fw, recess in fill(cur, s0, ext_l, ext_r, mod, self.max_dev, self.filler_mode):
+                    p = e.at(fs, t / 2.0 - recess)
+                    self.add(S["solid"], e.d, e.n, (p[0], p[1], z0), scale=(fw / mod, 1.0, sz), part="facade_solid")
             cur = max(cur, s1)
             cur_jamb = 0.0 if kind in ("open", "keep", "column") else jr
+
+    def facade_trim(self, e, start, width, z, height):
+        # Engine cube is 100 cm per side. This is a cut panel, with the kit
+        # material and exact dimensions, rather than a stretched facade module.
+        if width <= 0.5 or height <= 0.5:
+            return
+        p = e.at(start + width / 2.0, 0.0)
+        self.add("/Engine/BasicShapes/Cube.Cube", e.d, e.n, (p[0], p[1], z + height / 2.0),
+                 scale=(width / 100.0, e.t / 100.0, height / 100.0), part="facade_trim", mat=self.S["fixed_bay_trim"]["material"])
+
+    def emit_fixed_fill(self, e, start, end, z):
+        # Keep the long-side corner caps out of the 75 cm bay trim widths.
+        if start < 0.0:
+            self.facade_trim(e, start, min(end, 0.0) - start, z, STOREY)
+            start = 0.0
+        if end > e.L:
+            cap_start = max(start, e.L)
+            self.facade_trim(e, cap_start, end - cap_start, z, STOREY)
+            end = e.L
+        while end - start >= self.module - 0.5:
+            p = e.at(start, e.t / 2.0)
+            self.add(self.S["solid"], e.d, e.n, (p[0], p[1], z), scale=(1.0, 1.0, self.sz), part="facade_solid")
+            start += self.module
+        if end - start <= 0.5:
+            return
+        count = math.ceil((end - start) / self.S["fixed_bay_trim"]["width_cm"])
+        width = (end - start) / count
+        for i in range(count):
+            self.facade_trim(e, start + i * width, width, z, STOREY)
+
+    def emit_fixed_opening(self, e, z, start, data):
+        op, c, width = data["op"], data["c"], data["w"]
+        sill = float(op.get("sill_height", 0.0))
+        head = float(op.get("top_height", 210.0))
+        self.facade_trim(e, start, width, z, sill)
+        self.facade_trim(e, start, width, z + head, STOREY - head)
+        state = self.state_of(op)
+        if op.get("kind") == "door":
+            bd = self.S["balcony_door"]
+            if state in ("closed", "locked"):
+                self.door_leaf_in_hole(e, start, width, z, bd.get("leaf"), "balcony_door_leaf")
+                self.consume_state(op, ("door_leaf",))
+            if op.get("balcony") or op.get("id") in self.balcony_of_door:
+                self.balcony(e, start, z, op, True)
+            return
+        if state in ("glazed", "fixed", None):
+            win = self.S["windows"][0]
+            lo, hi = win["hole"]
+            low_z, high_z = win["hole_z"]
+            xs, zs = width / (hi - lo), (head - sill) / (high_z - low_z)
+            anchor = e.at(c - (lo + hi) * xs / 2.0, e.t / 2.0) + (z + sill - low_z * zs,)
+            self.add(win["glass"], e.d, e.n, anchor, scale=(xs, 1.0, zs), part="window")
+            self.consume_state(op, ("window_glass",))
+        self.radiator(e, c, z)
 
     def door_leaf_in_hole(self, e, s_hinge, width, z0, leaf, part):
         """A separate door leaf in a facade hole: leaf = {"mesh", "width_cm", "height_cm", "mat", "inset_cm"} (mesh pivot at its hinge corner,

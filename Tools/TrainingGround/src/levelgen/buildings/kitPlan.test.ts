@@ -8,24 +8,26 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { validateBuilding } from '../buildingTraversal.ts';
+import { applySlotBalconies } from '../buildingStories.ts';
+import { annotateStructure } from '../structureClasses.ts';
 import type { Draft } from '../generate.ts';
 import { addBuilding, finalizeDraftToLayout } from '../generate.ts';
 import type { GenBuilding, GenLayout, WallOpening } from '../schema.ts';
 import { DEFAULT_PARAMS, LEVEL_HEIGHT, STAIR_RUN_PER_RISE, isSwitchback, stairFlights } from '../schema.ts';
 import { toBuildingFrame } from '../rotation.ts';
-import { DEFAULT_BLOCK_TEMPLATE, KIT, blockTemplate, kitPlanToAscii, kitStairGeom, planKitBlock, templateForSeries, validateKitPlan } from './kitPlan.ts';
+import { BAY_SECTIONS, baySectionTemplate, DEFAULT_BLOCK_TEMPLATE, KIT, blockTemplate, kitPlanToAscii, kitStairGeom, planKitBlock, templateForSeries, validateKitPlan } from './kitPlan.ts';
 import type { BandPlan, PlanCell } from './bandPlan.ts';
 
 const area = (c: PlanCell): number => ((c.u1 - c.u0) * (c.v1 - c.v0)) / 1e4;
 const FIXTURES: [number, number][] = [[1800, 1000], [2000, 1400], [3600, 1200], [3700, 1200]];
 
-function kitBlock(w: number, h: number, floors = 2, seed = 4, opts: { pattern?: 'kit' | 'sections'; roof?: boolean; gable?: 'none' } = {}): { l: GenLayout; b: GenBuilding } {
+function kitBlock(w: number, h: number, floors = 2, seed = 4, opts: { pattern?: 'kit' | 'sections'; roof?: boolean; gable?: 'none' | 'high'; template?: string } = {}): { l: GenLayout; b: GenBuilding } {
   const d: Draft = { walls: [], buildings: [], ladders: [], covers: [], zones: [], routes: [], spawn_points: [], ambush_points: [], patrol_routes: [], mantle_edges: [], keepFree: [], building_plans: true };
   let n = seed * 7919;
   const random = (): number => { n = (n * 1103515245 + 12345) & 0x7fffffff; return n / 0x7fffffff; };
   addBuilding(d, 'B_k', [[20.37, 15.21], [20.37 + w, 15.21 + h]], {
     height: floors * LEVEL_HEIGHT, floors, enterable: true, roof_walkable: opts.roof ?? true, stairwell: true, set_piece: 'facade', archetype: 'block',
-    doorSides: ['south'], windowSides: ['south', 'north'], partitionRooms: true, plan_template: opts.pattern === 'sections' ? 'block_sections' : 'block_khrushchevka',
+    doorSides: ['south'], windowSides: ['south', 'north'], partitionRooms: true, plan_template: opts.template ?? (opts.pattern === 'sections' ? 'block_sections' : 'block_khrushchevka'),
     ...(opts.gable ? { gable_door: opts.gable } : {}),
   }, random);
   const l = finalizeDraftToLayout(d, [90, 90], { name: 't', profile: 't', seed: 1, params: { ...DEFAULT_PARAMS, size_m: [90, 90], building_plans: true }, start: [4, 2], end: [36, 58] });
@@ -223,6 +225,30 @@ export type { BandPlan };
 
 // ---- (4) the template catalog (lead addendum 2026-11-21: several house types, the khrushchevka is one) ----------------------------------
 
+test('1-464 fixed bays: standard and short templates use the designer dimensions', () => {
+  const standard = baySectionTemplate('block_1_464');
+  const short = baySectionTemplate('block_1_464_short');
+  assert.ok(standard && short);
+  assert.equal(blockTemplate('block_1_464').series, '1-464');
+  assert.equal(blockTemplate('block_1_464_short').planner, 'bay_sections');
+  assert.equal(baySectionTemplate('block_khrushchevka'), undefined);
+  assert.equal(baySectionTemplate('missing'), undefined);
+  assert.deepEqual(standard.bays_cm, [450, 450, 450, 450, 450, 350]);
+  assert.deepEqual(standard.bays_cm.slice(0, -1), short.bays_cm);
+  assert.equal(standard.bays_cm.reduce((length, bay) => length + bay, 0), 2600);
+  assert.equal(short.bays_cm.reduce((length, bay) => length + bay, 0), 2250);
+  assert.deepEqual([standard.flat_two_living_rooms, short.flat_two_living_rooms], [2, 1]);
+  assert.equal(BAY_SECTIONS.depth_cm, 1400);
+  assert.equal(BAY_SECTIONS.storey_cm, 300);
+  assert.deepEqual(BAY_SECTIONS.storeys, [2, 3]);
+  assert.equal(BAY_SECTIONS.rooms.living.clear_width_cm, 430);
+  assert.equal(BAY_SECTIONS.rooms.bedroom.clear_width_cm, 325);
+  assert.deepEqual(BAY_SECTIONS.walls_cm, { exterior: 30, bearing: 20, partition: 10 });
+  assert.deepEqual(BAY_SECTIONS.doors_cm, { entry: 150, tambour: 150, flat: 150, living: 150, kitchen: 120, bedroom: 120, bath: 120 });
+  assert.equal(BAY_SECTIONS.core.flight_clear_cm, 205);
+  assert.equal(BAY_SECTIONS.core.half_landing_side, 'court');
+});
+
 test('CodexTactics.LevelGen.KitPlan.Templates: the khrushchevka (series 1-464) is the default block template; a series or a template id picks; the building records template / series / era', () => {
   assert.equal(DEFAULT_BLOCK_TEMPLATE, 'block_khrushchevka');
   assert.deepEqual(blockTemplate(), { id: 'block_khrushchevka', planner: 'kit_sections', series: '1-464', era: 'khrushchev_1960s' });
@@ -245,4 +271,70 @@ test('CodexTactics.LevelGen.KitPlan.Templates: the khrushchevka (series 1-464) i
     assert.ok(['kit_sections', 'sections'].includes(t.planner), id);
   }
   assert.ok(KIT.flats_per_landing === 3 && KIT.storey_cm === 300 && KIT.entrance_side === 'court' && KIT.stair === 'half_landing');
+});
+
+test('fixed-bay generator emits navigable standard and rotated short switchbacks', () => {
+  for (const [w, h, length, id] of [
+    [26, 14, 2600, 'block_1_464'], [14, 23, 2250, 'block_1_464_short'],
+  ] as const) {
+    const { b, l } = kitBlock(w, h, 3, 8, { template: 'block_1_464', gable: 'high' });
+    assert.equal(b.plan?.template, id);
+    assert.equal(b.series, '1-464');
+    assert.deepEqual(b.footprint[1].map((hi, i) => hi - b.footprint[0][i]).sort((a, b) => a - b), [1400, length]);
+    assert.equal(b.stairs?.length, 3);
+    for (const stair of b.stairs ?? []) {
+      assert.ok(isSwitchback(stair));
+      assert.equal(stair.width, 205);
+      assert.ok(Math.abs(Math.hypot(stair.pos[0] - stair.turn[0], stair.pos[1] - stair.turn[1]) - 215) < 1);
+    }
+    assert.equal(b.floors_detail?.filter((f) => f.gaps.some((gap) => gap.kind === 'stairwell')).length, 2);
+    assert.deepEqual([0, 1, 2].map((floor) => b.units?.filter((u) => u.floor === floor).length), [3, 4, 4]);
+    assert.deepEqual(errorsOf(b, l), []);
+  }
+  const { b } = kitBlock(20, 12, 2, 8, { template: 'block_1_464' });
+  assert.equal(b.plan?.template, 'block_khrushchevka', 'a plot too small keeps the legacy plan');
+});
+
+test('fixed-bay facades retain centered fenestration, measured rooms and 30/20/10 cm walls', () => {
+  for (const [width, height] of [[26, 14], [14, 22.5]]) {
+    const { b, l } = kitBlock(width, height, 3, 11, { template: 'block_1_464' });
+    annotateStructure(l);
+    const outer = l.walls.filter((wall) => wall.building === b.id && wall.kind === 'building');
+    assert.ok(outer.length > 0);
+    assert.ok(outer.every((wall) => wall.thickness === 30 && wall.structure === 'load_bearing'));
+    assert.deepEqual(new Set(b.partitions?.map((part) => part.thickness)), new Set([10, 20]));
+    for (const part of b.partitions ?? []) {
+      assert.equal(part.structure, part.thickness === 10 ? 'partition' : 'load_bearing');
+    }
+
+    const axis = width > height ? 1 : 0;
+    const across = 1 - axis;
+    const thicknessAt = (edge: number, cross: number): number => {
+      if (b.footprint.some((corner) => corner[axis] === edge)) return 30;
+      const partition = b.partitions?.find((part) => part.floor === 1 && part.start?.[axis] === edge
+        && part.end?.[axis] === edge
+        && Math.min(part.start![across], part.end![across]) < cross
+        && Math.max(part.start![across], part.end![across]) > cross);
+      assert.ok(partition);
+      return partition.thickness!;
+    };
+    for (const room of b.rooms?.filter((r) => r.floor === 1 && (r.use === 'living' || r.use === 'bedroom')) ?? []) {
+      const lo = room.bounds.min[axis], hi = room.bounds.max[axis];
+      const cross = (room.bounds.min[across] + room.bounds.max[across]) / 2;
+      assert.equal(hi - lo - (thicknessAt(lo, cross) + thicknessAt(hi, cross)) / 2, room.use === 'living' ? 430 : 325);
+    }
+
+    assert.ok(allDoors(b).some((door) => door.role === 'room' && door.width === 120));
+    assert.ok(allDoors(b).filter((door) => door.role === 'unit_entry').every((door) => door.width === 150));
+    const windows = (b.openings ?? []).filter((op) => op.kind === 'window');
+    assert.ok(windows.filter((op) => op.slot === 'balcony').every((op) => op.width === 100));
+    assert.ok(windows.filter((op) => !op.slot).every((op) => op.width === 150));
+    for (const op of windows.filter((opening) => opening.floor === 0)) {
+      const room = b.rooms!.find((r) => r.id === op.links?.[0])!;
+      assert.equal(op.pos[axis], (room.bounds.min[axis] + room.bounds.max[axis]) / 2);
+    }
+    assert.ok(applySlotBalconies(l, b) > 0);
+    assert.ok(allDoors(b).filter((door) => door.role === 'balcony').every((door) => door.width === 100));
+    assert.deepEqual(errorsOf(b, l), []);
+  }
 });

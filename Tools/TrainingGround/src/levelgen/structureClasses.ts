@@ -11,6 +11,7 @@
 // Rooms are found in the building frame (toBuildingFrame), so a rotated building is classified like an axis-aligned one. Deterministic, no draws.
 import structureCfg from '../../../../Content/Data/LevelGen/structure_classes.json' with { type: 'json' };
 import plansCfg from '../../../../Content/Data/LevelGen/building_plans.json' with { type: 'json' };
+import { baySectionTemplate, BAY_SECTIONS } from './buildings/kitPlan.ts';
 import type { Vec2 } from '../movement/geometry.ts';
 import { classifyObstacleHeight } from './obstacleHeights.ts';
 import type { ObstacleHeightClass } from './obstacleHeights.ts';
@@ -25,6 +26,10 @@ export const STRUCTURE_CLASSES = structureCfg;
 const RULES = structureCfg.rules as unknown as Record<string, Record<WallRole, [string, string]>>;
 const FREE = structureCfg.free_walls as unknown as Record<string, [string, string]>;
 const VAULT = plansCfg.constants.window_vault;
+function fixedBayWallRole(b: GenBuilding, thickness: number | undefined): 'inner' | 'cross' | undefined {
+  if (!b.plan?.template || !baySectionTemplate(b.plan.template) || thickness === undefined) return undefined;
+  return thickness === BAY_SECTIONS.walls_cm.partition ? 'inner' : 'cross';
+}
 
 /** The class / material of a wall of a building of `archetype` in `role`. */
 export function structureOf(archetype: string | undefined, role: WallRole): { structure: StructureClass; material: WallMaterial } {
@@ -57,7 +62,7 @@ export function annotateStructure(l: GenLayout): GenLayout {
     const b = w.building ? byId.get(w.building) : undefined;
     let cls;
     if (!b) { const [structure, material] = FREE[w.kind ?? 'default'] ?? FREE.default; cls = { structure: structure as StructureClass, material: material as WallMaterial }; }
-    else if (w.kind === 'interior' || w.kind === 'partition') cls = structureOf(b.archetype, interiorRole(b, w.id, w.a, w.b, w.floor ?? 0));
+    else if (w.kind === 'interior' || w.kind === 'partition') cls = structureOf(b.archetype, fixedBayWallRole(b, w.thickness) ?? interiorRole(b, w.id, w.a, w.b, w.floor ?? 0));
     else cls = structureOf(b.archetype, 'perimeter');
     w.structure = cls.structure;
     w.material = cls.material;
@@ -67,7 +72,7 @@ export function annotateStructure(l: GenLayout): GenLayout {
     for (const op of b.openings ?? []) { op.structure = outer.structure; op.material = outer.material; }
     for (const pt of b.partitions ?? []) {
       if (!pt.start || !pt.end) continue;
-      const cls = structureOf(b.archetype, interiorRole(b, pt.id, pt.start, pt.end, pt.floor));
+      const cls = structureOf(b.archetype, fixedBayWallRole(b, pt.thickness) ?? interiorRole(b, pt.id, pt.start, pt.end, pt.floor));
       pt.structure = cls.structure;
       pt.material = cls.material;
       for (const op of pt.openings ?? []) { op.structure = cls.structure; op.material = cls.material; }

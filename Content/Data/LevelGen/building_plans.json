@@ -90,6 +90,36 @@
       "slot_min_storey": 1,
       "p_three_storeys": 0.35,
       "dead_end_min_run_cm": 800,
+      "bay_sections": {
+        "comment": "Plan 072, designer choices B/B/A+C/A for the 1-464 section. Dimensions are cm. Bays are centreline to centreline, unless a field says clear.",
+        "depth_cm": 1400,
+        "storey_cm": 300,
+        "storeys": [2, 3],
+        "core": {
+          "bay_cm": 450,
+          "flight_clear_cm": 205,
+          "slope_deg": 35,
+          "floor_landing_clear_cm": [430, 470],
+          "landing_past_spine_cm": 220,
+          "half_landing_side": "court"
+        },
+        "corridor_clear_min_cm": 195,
+        "walls_cm": { "exterior": 30, "bearing": 20, "partition": 10 },
+        "doors_cm": { "entry": 150, "tambour": 150, "flat": 150, "living": 150, "kitchen": 120, "bedroom": 120, "bath": 120 },
+        "door_jamb_clear_min_cm": 50,
+        "flat_door_spacing_cm": 245,
+        "rooms": {
+          "living": { "clear_width_cm": 430, "facade": true },
+          "bedroom": { "clear_width_cm": 325, "facade": true },
+          "kitchen": { "bay_cm": 450, "facade": true },
+          "bath": { "facade": false },
+          "hall": { "facade": false },
+          "tambour": { "facade": false },
+          "service": { "ground_only": true }
+        },
+        "windows_cm": { "standard": 150, "balcony_door": 100, "balcony_window": 150 },
+        "kit_window_module_cm": 300
+      },
       "templates": {
         "comment": "Residential block plan templates (lead addendum 2026-11-21: several house types / eras - Stalin, brick, barracks, dormitory - are one data entry each). A building takes templates.default unless its spec names one (BuildingSpec.plan_template) or a series (BuildingSpec.series) that matches a template's series; GenBuilding.plan.template and GenBuilding.series / era record the choice. planner = the code that reads the entry: 'kit_sections' (buildings/kitPlan.ts: sections round a court-side core, flats with hall / bath / kitchen / living rooms) or 'sections' (the S2.3 planner, bandPlan.ts planBlock, numbers in recipes.block itself). A new template of an existing planner is a JSON entry only; storey_cm other than 300 needs a per-building storey height in the generator / builder (LEVEL_HEIGHT, z_of) - not wired yet.",
         "default": "block_khrushchevka",
@@ -192,6 +222,20 @@
               25
             ]
           }
+        },
+        "block_1_464": {
+          "planner": "bay_sections",
+          "series": "1-464",
+          "era": "khrushchev_1960s",
+          "bays_cm": [450, 450, 450, 450, 450, 350],
+          "flat_two_living_rooms": 2
+        },
+        "block_1_464_short": {
+          "planner": "bay_sections",
+          "series": "1-464",
+          "era": "khrushchev_1960s",
+          "bays_cm": [450, 450, 450, 450, 450],
+          "flat_two_living_rooms": 1
         },
         "block_sections": {
           "comment": "The S2.3 sections planner (S2_ROOMS_PLAN.md S2.3): flat core flat sections with a landing and lobbies; its numbers are recipes.block. Kept as a template and as the fallback of a footprint the kit planner cannot cut.",
