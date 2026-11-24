@@ -20,7 +20,8 @@
   "intro_dialogue": false,
   "cheats": {
     "immortal": false,
-    "infinite_ammo": true
+    "infinite_ammo": false,
+    "infinite_ammo_squad": true
   },
   "levelgen_layout": "Content/Data/LevelGen/accepted/gen_story_showcase.json",
   "minimap": {

@@ -165,7 +165,12 @@ bool FLevelJsonPressureTest::RunTest(const FString&)
 	FString Error;
 	TestTrue(TEXT("A level without the block parses"), LevelJsonRules::ParseLevel(TEXT(R"({"level_id":"p"})"), TEXT("p"), Config, Error));
 	TestFalse(TEXT("No block: pressure off"), Config.Pressure.bEnabled);
-	TestFalse(TEXT("No block: no cheats"), Config.bCheatImmortal || Config.bCheatInfiniteAmmo);
+	TestFalse(TEXT("No block: no cheats"), Config.bCheatImmortal || Config.bCheatInfiniteAmmo || Config.bCheatInfiniteAmmoSquad);
+
+	FLevelCombatConfig SquadAmmo;
+	TestTrue(TEXT("Squad-only flag parses"), LevelJsonRules::ParseLevel(
+		TEXT(R"({"level_id":"p","cheats":{"infinite_ammo_squad":true}})"), TEXT("p"), SquadAmmo, Error));
+	TestTrue(TEXT("Squad-only flag is distinct from legacy"), SquadAmmo.bCheatInfiniteAmmoSquad && !SquadAmmo.bCheatInfiniteAmmo);
 
 	const FString Json = TEXT(R"({"level_id":"p", "cheats": {"immortal": true, "infinite_ammo": true},
 		"pressure": {"interval_sec": 90, "first_event_sec": 5, "group_min": 1, "group_max": 3, "max_alive": 4, "patrol_share": 0.25, "seed": 77,
@@ -183,7 +188,7 @@ bool FLevelJsonPressureTest::RunTest(const FString&)
 	TestTrue(TEXT("Parses"), LevelJsonRules::ParseLevel(Json, TEXT("p"), Config, Error));
 	const FCombatPressureConfig& P = Config.Pressure;
 	TestTrue(TEXT("Enabled by default when present"), P.bEnabled);
-	TestTrue(TEXT("Cheats on"), Config.bCheatImmortal && Config.bCheatInfiniteAmmo);
+	TestTrue(TEXT("Legacy cheats on"), Config.bCheatImmortal && Config.bCheatInfiniteAmmo && !Config.bCheatInfiniteAmmoSquad);
 	TestEqual(TEXT("interval"), P.IntervalSeconds, 90.f);
 	TestEqual(TEXT("first event"), P.FirstEventSeconds, 5.f);
 	TestEqual(TEXT("group"), P.GroupMax, 3);

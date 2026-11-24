@@ -42,13 +42,19 @@ bool CombatCheats::IsImmortal(const UWorld* World)
 #endif
 }
 
-bool CombatCheats::IsInfiniteAmmo(const UWorld* World)
+bool CombatCheats::ResolveInfiniteAmmo(int32 ConsoleValue, bool bWorldFlag, bool bSquadFlag, bool bPlayerTeam, bool bShippingBuild)
+{
+	return Resolve(ConsoleValue, bWorldFlag || (bSquadFlag && bPlayerTeam), bShippingBuild);
+}
+
+bool CombatCheats::IsInfiniteAmmo(const UWorld* World, bool bPlayerTeam)
 {
 #if UE_BUILD_SHIPPING
 	return false;
 #else
 	const FLevelCombatConfig* Level = CombatCheatsLocal::LevelOf(World);
-	return Resolve(CombatCheatsLocal::CVarCheatInfiniteAmmo.GetValueOnGameThread(), Level && Level->bCheatInfiniteAmmo, false);
+	return ResolveInfiniteAmmo(CombatCheatsLocal::CVarCheatInfiniteAmmo.GetValueOnGameThread(),
+		Level && Level->bCheatInfiniteAmmo, Level && Level->bCheatInfiniteAmmoSquad, bPlayerTeam, false);
 #endif
 }
 
