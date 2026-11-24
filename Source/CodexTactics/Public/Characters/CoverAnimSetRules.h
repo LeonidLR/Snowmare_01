@@ -84,7 +84,8 @@ namespace CoverAnimSetRules
 	 * The set for Context: the operative's own entry (any of OperativeKeys, first match) over the context's; disabled, unknown or "m4"
 	 * -> empty (= the native clips).
 	 */
-	CODEXTACTICS_API FString ChooseSet(const FCoverAnimSetConfig& Config, ECoverAnimContext Context, const TArray<FString>& OperativeKeys);
+	CODEXTACTICS_API FString ChooseSet(const FCoverAnimSetConfig& Config, ECoverAnimContext Context, const TArray<FString>& OperativeKeys,
+		bool bRiffleOutdoor = false);
 
 	/** The clip table of Set for a skeleton (its own entry, else "default"); nullptr when the set or both entries are missing. */
 	CODEXTACTICS_API const TMap<FString, FString>* FindBodyClips(const FCoverAnimSetConfig& Config, const FString& Set, const FString& SkeletonName);
