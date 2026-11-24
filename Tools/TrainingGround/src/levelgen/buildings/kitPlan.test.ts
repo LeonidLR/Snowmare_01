@@ -8,6 +8,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { validateBuilding } from '../buildingTraversal.ts';
+import { applySlotBalconies } from '../buildingStories.ts';
+import { annotateStructure } from '../structureClasses.ts';
 import type { Draft } from '../generate.ts';
 import { addBuilding, finalizeDraftToLayout } from '../generate.ts';
 import type { GenBuilding, GenLayout, WallOpening } from '../schema.ts';
@@ -291,4 +293,48 @@ test('fixed-bay generator emits navigable standard and rotated short switchbacks
   }
   const { b } = kitBlock(20, 12, 2, 8, { template: 'block_1_464' });
   assert.equal(b.plan?.template, 'block_khrushchevka', 'a plot too small keeps the legacy plan');
+});
+
+test('fixed-bay facades retain centered fenestration, measured rooms and 30/20/10 cm walls', () => {
+  for (const [width, height] of [[26, 14], [14, 22.5]]) {
+    const { b, l } = kitBlock(width, height, 3, 11, { template: 'block_1_464' });
+    annotateStructure(l);
+    const outer = l.walls.filter((wall) => wall.building === b.id && wall.kind === 'building');
+    assert.ok(outer.length > 0);
+    assert.ok(outer.every((wall) => wall.thickness === 30 && wall.structure === 'load_bearing'));
+    assert.deepEqual(new Set(b.partitions?.map((part) => part.thickness)), new Set([10, 20]));
+    for (const part of b.partitions ?? []) {
+      assert.equal(part.structure, part.thickness === 10 ? 'partition' : 'load_bearing');
+    }
+
+    const axis = width > height ? 1 : 0;
+    const across = 1 - axis;
+    const thicknessAt = (edge: number, cross: number): number => {
+      if (b.footprint.some((corner) => corner[axis] === edge)) return 30;
+      const partition = b.partitions?.find((part) => part.floor === 1 && part.start?.[axis] === edge
+        && part.end?.[axis] === edge
+        && Math.min(part.start![across], part.end![across]) < cross
+        && Math.max(part.start![across], part.end![across]) > cross);
+      assert.ok(partition);
+      return partition.thickness!;
+    };
+    for (const room of b.rooms?.filter((r) => r.floor === 1 && (r.use === 'living' || r.use === 'bedroom')) ?? []) {
+      const lo = room.bounds.min[axis], hi = room.bounds.max[axis];
+      const cross = (room.bounds.min[across] + room.bounds.max[across]) / 2;
+      assert.equal(hi - lo - (thicknessAt(lo, cross) + thicknessAt(hi, cross)) / 2, room.use === 'living' ? 430 : 325);
+    }
+
+    assert.ok(allDoors(b).some((door) => door.role === 'room' && door.width === 120));
+    assert.ok(allDoors(b).filter((door) => door.role === 'unit_entry').every((door) => door.width === 150));
+    const windows = (b.openings ?? []).filter((op) => op.kind === 'window');
+    assert.ok(windows.filter((op) => op.slot === 'balcony').every((op) => op.width === 100));
+    assert.ok(windows.filter((op) => !op.slot).every((op) => op.width === 150));
+    for (const op of windows.filter((opening) => opening.floor === 0)) {
+      const room = b.rooms!.find((r) => r.id === op.links?.[0])!;
+      assert.equal(op.pos[axis], (room.bounds.min[axis] + room.bounds.max[axis]) / 2);
+    }
+    assert.ok(applySlotBalconies(l, b) > 0);
+    assert.ok(allDoors(b).filter((door) => door.role === 'balcony').every((door) => door.width === 100));
+    assert.deepEqual(errorsOf(b, l), []);
+  }
 });

@@ -1,7 +1,8 @@
-import type { BandPlan, PlanCell } from './bandPlan.ts';
+import { BUILDING_PLANS, type BandPlan, type PlanCell } from './bandPlan.ts';
 import type { BayPlan } from './bayPlan.ts';
 import { BAY_SECTIONS, type GableChoice, type KitGable } from './kitPlan.ts';
 import type { PlanDoorsResult, PlanOpening } from './planDoors.ts';
+import type { PlanWindowsOpts } from './planWindows.ts';
 import type { DoorState } from '../schema.ts';
 
 const isGable = (end: 'low' | 'high', gable: GableChoice) => gable === end || gable === 'both';
@@ -75,4 +76,48 @@ export function bayBuildingPlan(
     },
     doors: { openings, lobbies: [entryCell.id, ...gables.map((g) => g.door)], service: [...service], warnings: [] },
   };
+}
+
+// A balcony bay reserves 60 cm between the door and its neighbouring window,
+// matching the existing fire-escape planner's opening clearance.
+export function bayWindows(plan: BandPlan, opts: PlanWindowsOpts): PlanOpening[] {
+  const out: PlanOpening[] = [];
+  const widths = BAY_SECTIONS.windows_cm;
+  const jamb = BUILDING_PLANS.constants.openings.window_jamb_cm;
+  for (let storey = 0; storey < opts.storeys; storey++) {
+    let index = 0;
+    for (const cell of plan.cells) {
+      if (cell.use !== 'living' && cell.use !== 'bedroom' && cell.use !== 'kitchen') continue;
+      const wall = cell.v0 === 0 ? 'v0' : cell.v1 === plan.D ? 'vD' : undefined;
+      if (!wall) continue;
+      const at = wall === 'v0' ? 0 : plan.D;
+      const centre = (cell.u0 + cell.u1) / 2;
+      const fits = (c: number, width: number): boolean => {
+        const half = width / 2;
+        return !(opts.blocked?.[wall] ?? []).some(([a, b]) => c + half > a && c - half < b)
+          && !opts.doors.some((d) => d.storey === storey && d.wall === wall && Math.abs(d.c - c) < d.width / 2 + half + jamb);
+      };
+      const emit = (c: number, width: number, balcony = false): void => {
+        out.push({
+          id: `f${storey}_w${index++}`, storey, kind: 'window', role: 'window', module: 'wall_window_200',
+          axis: 'u', at, c, width, links: [cell.id, 'street'], wall, ...(balcony ? { slot: 'balcony' } : {}),
+        });
+      };
+      const balcony = storey > 0 && wall === 'vD' && cell.use === 'living' && !!cell.unit
+        && plan.kit?.balconyColumns?.includes(cell.unit);
+      if (balcony) {
+        const wing = (widths.balcony_door + jamb + widths.balcony_window) / 2;
+        const towardInterior = centre < plan.L / 2 ? 1 : -1;
+        const doorCentre = centre + towardInterior * (wing - widths.balcony_door / 2);
+        const windowCentre = centre - towardInterior * (wing - widths.balcony_window / 2);
+        if (fits(doorCentre, widths.balcony_door) && fits(windowCentre, widths.balcony_window)) {
+          emit(doorCentre, widths.balcony_door, true);
+          emit(windowCentre, widths.balcony_window);
+          continue;
+        }
+      }
+      if (fits(centre, widths.standard)) emit(centre, widths.standard);
+    }
+  }
+  return out;
 }

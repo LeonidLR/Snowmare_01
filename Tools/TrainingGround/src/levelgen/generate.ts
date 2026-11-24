@@ -71,7 +71,7 @@ import { WALL_ORDER, planDoors, wallSpan } from './buildings/planDoors.ts';
 import { planWindows } from './buildings/planWindows.ts';
 import { fixEntryRoles, planUnits } from './buildings/planUnits.ts';
 import type { GableChoice } from './buildings/kitPlan.ts';
-import { bayBuildingPlan } from './buildings/bayBuilding.ts';
+import { bayBuildingPlan, bayWindows } from './buildings/bayBuilding.ts';
 import { planBaySection, type BayPlan } from './buildings/bayPlan.ts';
 import { bayStairGeom } from './buildings/bayStair.ts';
 import { BAY_SECTIONS, DEFAULT_BLOCK_TEMPLATE, GABLE_CHOICES, blockTemplate, kitStairGeom, kitTemplate, planKitBlock, templateForSeries } from './buildings/kitPlan.ts';
@@ -1114,7 +1114,7 @@ function addPlannedBlock(d: Draft, bid: string, r: Rect, s: BuildingSpec, random
     const p = planShell(d, bid, rp, s, random);
     p.cores = [switchbackCore(bid, f, bay.stair.u0, coreTop, 0, bay.template, bay)];
     const building = emitPlanned({ d, bid, s, random, p, plan: fixed.plan, f, rp, planSeed,
-      coreSide: f.coreSide, first, doors: { core: null }, plannedDoors: fixed.doors });
+      coreSide: f.coreSide, first, doors: { core: null }, plannedDoors: fixed.doors, bay });
     building.plan!.template = bay.template;
     if (tpl.series) building.series = tpl.series;
     building.era = tpl.era;
@@ -1212,6 +1212,7 @@ interface PlannedArgs {
   /** The core(s) for planDoors: the pad-portal origin and depth (an office `core`, a block `cores` per section). */
   doors: Pick<PlanDoorsOpts, 'core' | 'cores'>;
   plannedDoors?: PlanDoorsResult;
+  bay?: BayPlan;
 }
 
 /**
@@ -1244,7 +1245,8 @@ function emitPlanned(a: PlannedArgs): DraftBuilding {
       (blocked[key] ??= []).push([Math.min(a[ax], b[ax]), Math.max(a[ax], b[ax])]);
     }
   }
-  const windows = planWindows(plan, { storeys: s.floors, doors: res.openings, blocked });
+  const windowOptions = { storeys: s.floors, doors: res.openings, blocked };
+  const windows = a.bay ? bayWindows(plan, windowOptions) : planWindows(plan, windowOptions);
   const block = plan.archetype === 'block';
   const units = block ? planUnits(plan, res.openings, [...res.lobbies, ...res.service], s.floors) : [];
   if (block) fixEntryRoles(res.openings, units); // roles follow the flats (the S2.9 ground-floor mismatches)
@@ -1299,6 +1301,7 @@ function emitPlanned(a: PlannedArgs): DraftBuilding {
   // 8. partitions (one per shared cell edge that is not a corridor seam), the same wall as an `interior` wall split at its openings
   const interior = res.openings.filter((x) => !x.wall);
   const segs = sharedSegs(plan);
+  const aBay = a.bay;
   const seamIds = new Map<string, string[]>();
   for (let storey = 0; storey < s.floors; storey++) {
     let k = 0, seamK = 0;
@@ -1312,10 +1315,14 @@ function emitPlanned(a: PlannedArgs): DraftBuilding {
         && o.links.includes(seg.a.id) && o.links.includes(seg.b.id)).map(mkOpening);
       const a = seg.axis === 'u' ? toDraft(f, seg.lo, seg.at) : toDraft(f, seg.at, seg.lo), b = seg.axis === 'u' ? toDraft(f, seg.hi, seg.at) : toDraft(f, seg.at, seg.hi);
       const partId = `${bid}_part_f${storey}_${k++}`;
-      p.partitions.push({ id: partId, start: a, end: b, floor: storey, thickness: 20, openings: ops });
+      const fixedCrossRib = aBay?.bays.length === 6 && seg.axis === 'v'
+        && aBay.bays.slice(-2).some((bay) => bay.u0 === seg.at);
+      const bearing = seg.a.kind === 'core' || seg.b.kind === 'core' || seg.a.unit !== seg.b.unit || fixedCrossRib;
+      const thickness = aBay ? BAY_SECTIONS.walls_cm[bearing ? 'bearing' : 'partition'] : 20;
+      p.partitions.push({ id: partId, start: a, end: b, floor: storey, thickness, openings: ops });
       const horizontal = a[1] === b[1];
       const gaps = ops.map((op): [number, number] => { const c = horizontal ? op.pos[0] : op.pos[1], h = (op.width ?? 0) / 200; return [c - h, c + h]; });
-      splitWall(d, partId, a, b, gaps, LEVEL_HEIGHT, 20, 'interior', storey, bid);
+      splitWall(d, partId, a, b, gaps, LEVEL_HEIGHT, thickness, 'interior', storey, bid);
     }
   }
   // 7. rooms: one per cell and storey
@@ -1346,7 +1353,7 @@ function emitPlanned(a: PlannedArgs): DraftBuilding {
   }
   // 9. the rest of the pipeline (no fitWindows / planRooms / placeWindows / placeExteriorDoors on this path)
   placeLoopholes(p);
-  buildPerimeterWalls(p);
+  buildPerimeterWalls(p, a.bay ? BAY_SECTIONS.walls_cm.exterior : BUILDING_T);
   placeStairs(p);
   addRoofParapets(p);
   addRoofHatch(p);
@@ -1518,12 +1525,12 @@ function placeLoopholes(p: BuildingPlan): void {
 }
 
 /** Stage 6, the perimeter walls, split at the exterior door gaps. */
-function buildPerimeterWalls(p: BuildingPlan): void {
+function buildPerimeterWalls(p: BuildingPlan, thickness = BUILDING_T): void {
   const { d, bid, s, x0, y0, x1, y1, perSide } = p;
-  splitWall(d, `${bid}_N`, [x0, y0], [x1, y0], perSide.north, s.height, BUILDING_T, 'building', 0, bid);
-  splitWall(d, `${bid}_S`, [x0, y1], [x1, y1], perSide.south, s.height, BUILDING_T, 'building', 0, bid);
-  splitWall(d, `${bid}_W`, [x0, y0], [x0, y1], perSide.west, s.height, BUILDING_T, 'building', 0, bid);
-  splitWall(d, `${bid}_E`, [x1, y0], [x1, y1], perSide.east, s.height, BUILDING_T, 'building', 0, bid);
+  splitWall(d, `${bid}_N`, [x0, y0], [x1, y0], perSide.north, s.height, thickness, 'building', 0, bid);
+  splitWall(d, `${bid}_S`, [x0, y1], [x1, y1], perSide.south, s.height, thickness, 'building', 0, bid);
+  splitWall(d, `${bid}_W`, [x0, y0], [x0, y1], perSide.west, s.height, thickness, 'building', 0, bid);
+  splitWall(d, `${bid}_E`, [x1, y0], [x1, y1], perSide.east, s.height, thickness, 'building', 0, bid);
 }
 
 /**

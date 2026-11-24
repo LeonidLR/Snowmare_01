@@ -13,6 +13,7 @@
 // generator pipeline yet (a later step does that).
 
 import storiesJson from '../../../../Content/Data/LevelGen/building_stories.json' with { type: 'json' };
+import { baySectionTemplate, BAY_SECTIONS } from './buildings/kitPlan.ts';
 import type { Vec2 } from '../movement/geometry.ts';
 import { closestOnSegment, dist, rng } from '../movement/geometry.ts';
 import { fnv1a } from './props/rng.ts';
@@ -408,7 +409,8 @@ export function applySlotBalconies(l: GenLayout, b: GenBuilding, maxColumns = 2)
       b.mantle_edges = (b.mantle_edges ?? []).filter((m) => m.id !== `me_${slot.id}`);
       if (realRooms.has(rm)) rm.door_ids = (rm.door_ids ?? []).filter((x) => x !== slot.id);
       editableOpenings(b).push({
-        id: doorId, kind: 'door', pos: slot.pos, floor: f, width: O.door_cm, ...(slot.wall ? { wall: slot.wall } : {}),
+        id: doorId, kind: 'door', pos: slot.pos, floor: f, width: b.plan?.template && baySectionTemplate(b.plan.template) ? BAY_SECTIONS.windows_cm.balcony_door : O.door_cm,
+        ...(slot.wall ? { wall: slot.wall } : {}),
         sill_height: 0, top_height: O.door_top_cm, links: [rm.id, `balcony:${balconyId}`] as [string, string], role: 'balcony' as const, module: 'wall_door_200',
       });
       if (realRooms.has(rm)) rm.door_ids = [...(rm.door_ids ?? []), doorId];
