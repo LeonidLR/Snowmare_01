@@ -58,6 +58,9 @@ describe('listMapEntries / the persisted choice (T-020)', () => {
   beforeEach(() => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tg-currentmap-'));
     dirs = { levelJson: path.join(tmp, 'LevelJson'), props: path.join(tmp, 'props'), accepted: path.join(tmp, 'accepted') };
+    const mapAssets = path.join(tmp, 'Maps');
+    dirs.mapAssets = mapAssets;
+    write(path.join(mapAssets, 'Generated/L_Orphan.umap'), 'asset marker');
     // X6: level JSON + props + accepted meta; Depot: level JSON + props, older meta; Hand: a level JSON without a layout (not a generated map);
     // Orphan: a props file only; a fixture and a non-props json in props/ are not maps
     write(path.join(dirs.levelJson, 'L_X6.json'), { level_id: 'L_X6', levelgen_layout: 'Content/Data/LevelGen/accepted/lay_x6.json' });
@@ -67,6 +70,7 @@ describe('listMapEntries / the persisted choice (T-020)', () => {
     write(path.join(dirs.props, 'L_X6.props.json'), { schema: 'codex.levelgen_props/1', map: 'L_X6', layout: 'lay_x6', layers: [] });
     write(path.join(dirs.props, 'L_Depot.props.json'), { schema: 'codex.levelgen_props/1', map: 'L_Depot', layout: 'lay_depot', layers: [] });
     write(path.join(dirs.props, 'L_Orphan.props.json'), { schema: 'codex.levelgen_props/1', map: 'L_Orphan', layout: 'lay_orphan', layers: [] });
+    write(path.join(dirs.props, 'L_Gen_Bgen_Test_X6.props.json'), { schema: 'codex.levelgen_props/1', map: 'L_Gen_Bgen_Test_X6', layout: 'stale' });
     write(path.join(dirs.props, 'notes.props.json'), { schema: 'something/else' });
     write(path.join(dirs.props, 'fixtures', 'golden_a.props.json'), { schema: 'codex.levelgen_props/1', map: 'Golden' });
     write(path.join(dirs.accepted, 'lay_x6.meta.json'), { at: '2026-11-16T14:45:24.205Z' });
@@ -74,7 +78,7 @@ describe('listMapEntries / the persisted choice (T-020)', () => {
   });
   afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
 
-  it('lists every generated map (level JSON with levelgen_layout and / or a props file), not the hand levels or fixtures', () => {
+  it('lists level JSON layouts and real props-only map assets; omits orphan props and fixtures', () => {
     const list = listMapEntries(dirs);
     assert.deepEqual(list.map((e) => e.map), ['L_Depot', 'L_Orphan', 'L_X6']);
     const x6 = list.find((e) => e.map === 'L_X6')!;
@@ -96,6 +100,7 @@ describe('listMapEntries / the persisted choice (T-020)', () => {
     fs.rmSync(path.join(dirs.levelJson, 'L_Depot.json'));
     fs.rmSync(path.join(dirs.props, 'L_Depot.props.json'));
     assert.equal(pickCurrentMap(listMapEntries(dirs), readCurrentMap(file)), 'L_X6', 'the saved map is gone');
+    assert.equal(pickCurrentMap(listMapEntries(dirs), 'L_Gen_Bgen_Test_X6'), 'L_X6', 'a props-only leftover cannot restore the stale choice');
   });
 
   it('writing the same choice again writes nothing; a damaged file reads as no choice', () => {
