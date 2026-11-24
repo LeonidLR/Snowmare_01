@@ -2,6 +2,8 @@
   "$schema": "../Schemas/level_config.schema.json",
   "level_id": "L_Gen_StoryShowcase_Kit",
   "level_name": "Kit blocks (gen_story_showcase.json)",
+  "_cold_paused": "designer 2026-11-24: cold system off until he says (focus on fighting); restore cold_rate_mult to 1 (absent = 1)",
+  "cold_rate_mult": 0,
   "description": "Kit dressing showcase (Scripts/Editor/kit_dress.py, docs/design/levelgen/KIT_DRESS.md): every building with a facade series dressed with the Soviet kit; the generator's grey boxes stay as hidden collision / navigation proxies.",
   "combat_start": "ambush",
   "ambush_fight": "skirmish",

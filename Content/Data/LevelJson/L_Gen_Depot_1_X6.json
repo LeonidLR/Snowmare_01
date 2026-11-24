@@ -2,6 +2,8 @@
   "$schema": "../Schemas/level_config.schema.json",
   "level_id": "L_Gen_Depot_1_X6",
   "level_name": "Generated ref_01_02_depot (seed 1)",
+  "_cold_paused": "designer 2026-11-24: cold system off until he says (focus on fighting); restore cold_rate_mult to 1 (absent = 1)",
+  "cold_rate_mult": 0,
   "description": "Generated greybox (docs/design/levelgen/LEVEL_GENERATOR.md) from ref_01_02_depot seed 1 by Scripts/Editor/build_levelgen_map.py; the squad walks the mandatory route (LevelGenRouteSmoke); one PMC street encounter. The empty wave roster prevents fallback monster waves.",
   "combat_start": "ambush",
   "ambush_fight": "skirmish",
@@ -11,23 +13,13 @@
   "wave_rest_duration": 20,
   "intro_dialogue": false,
   "environment": {
-    "_comment": "WEATHER PAUSED (designer 2026-11-24: weather system fully off until he says - focus on bot training). Restore = the 'paused_from' block below.",
-    "visuals": false,
+    "_comment": "Generated map (designer 2026-11-18): live weather ladder, random start weather; tune here or in the Wave Editor.",
     "locked": true,
-    "override_carry": true,
     "weather": "Clear",
     "start_hour": 2,
-    "snow_cover": 0.5,
-    "paused_from": {
-      "_comment": "Generated map (designer 2026-11-18): live weather ladder, random start weather; tune here or in the Wave Editor.",
-      "locked": true,
-      "weather": "Clear",
-      "start_hour": 2,
-      "snow_cover": 0.5,
-      "override_carry": true,
-      "weather_strength": 0.3,
-      "climate": "temperate"
-    }
+    "snow_cover": 0.1,
+    "override_carry": true,
+    "weather_strength": 0.3
   },
   "cheats": {
     "immortal": false,

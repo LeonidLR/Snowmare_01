@@ -10,24 +10,11 @@
   "horde_enabled": false,
   "ambush_fight": "skirmish",
   "susanin_wave": 0,
-  "cold_rate_mult": 0.4,
+  "_cold_paused": "designer 2026-11-24: cold system off until he says (focus on fighting); restore cold_rate_mult to 0.4",
+  "cold_rate_mult": 0,
   "gate_open_mode": "generator_waves",
   "gate_exit": "auto",
-  "environment": {
-    "_comment": "WEATHER PAUSED (designer 2026-11-24: weather system fully off until he says - focus on bot training). Restore = the 'paused_from' block below.",
-    "visuals": false,
-    "locked": true,
-    "override_carry": true,
-    "weather": "Clear",
-    "start_hour": 23,
-    "snow_cover": 0.6,
-    "paused_from": {
-      "locked": true,
-      "start_hour": 23,
-      "weather": "Snowfall",
-      "snow_cover": 0.6
-    }
-  },
+  "environment": { "locked": true, "start_hour": 23, "weather": "Snowfall", "snow_cover": 0.6 },
   "demo": {
     "panic": false,
     "tutorial": true,
