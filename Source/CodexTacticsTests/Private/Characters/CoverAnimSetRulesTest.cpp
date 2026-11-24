@@ -68,6 +68,9 @@ bool FCoverAnimSetChooseTest::RunTest(const FString& Parameters)
 	const TArray<FString> Nobody = { TEXT("Engineer") };
 	TestEqual(TEXT("indoor -> riffle"), CoverAnimSetRules::ChooseSet(Config, ECoverAnimContext::Indoor, Nobody), FString(TEXT("riffle")));
 	TestEqual(TEXT("outdoor -> native (m4 = empty)"), CoverAnimSetRules::ChooseSet(Config, ECoverAnimContext::Outdoor, Nobody), FString());
+	TestEqual(TEXT("opt-in outdoor -> riffle"), CoverAnimSetRules::ChooseSet(Config, ECoverAnimContext::Outdoor, Nobody, true), FString(TEXT("riffle")));
+	TestEqual(TEXT("opt-in does not affect stealth"), CoverAnimSetRules::ChooseSet(Config, ECoverAnimContext::Stealth, Nobody, true), FString());
+	TestEqual(TEXT("opt-in preserves indoor override"), CoverAnimSetRules::ChooseSet(Config, ECoverAnimContext::Indoor, { TEXT("Medic") }, true), FString());
 	TestEqual(TEXT("stealth -> native for now"), CoverAnimSetRules::ChooseSet(Config, ECoverAnimContext::Stealth, Nobody), FString());
 	TestEqual(TEXT("an operative's own outdoor style"), CoverAnimSetRules::ChooseSet(Config, ECoverAnimContext::Outdoor, { TEXT("x"), TEXT("Sniper") }), FString(TEXT("riffle")));
 	TestEqual(TEXT("an operative opting out indoors"), CoverAnimSetRules::ChooseSet(Config, ECoverAnimContext::Indoor, { TEXT("Medic") }), FString());
@@ -76,6 +79,7 @@ bool FCoverAnimSetChooseTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("an unknown set -> native"), CoverAnimSetRules::ChooseSet(Config, ECoverAnimContext::Indoor, Nobody), FString());
 	Config.Contexts.Add(TEXT("indoor"), TEXT("riffle"));
 	Config.bEnabled = false;
+	TestEqual(TEXT("disabled rejects outdoor opt-in"), CoverAnimSetRules::ChooseSet(Config, ECoverAnimContext::Outdoor, Nobody, true), FString());
 	TestEqual(TEXT("disabled -> native everywhere"), CoverAnimSetRules::ChooseSet(Config, ECoverAnimContext::Indoor, Nobody), FString());
 	return true;
 }

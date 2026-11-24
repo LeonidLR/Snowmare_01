@@ -118,11 +118,16 @@ ECoverAnimContext CoverAnimSetRules::DecideContext(bool bInBuilding, bool bSteal
 	return bStealth ? ECoverAnimContext::Stealth : bInBuilding ? ECoverAnimContext::Indoor : ECoverAnimContext::Outdoor;
 }
 
-FString CoverAnimSetRules::ChooseSet(const FCoverAnimSetConfig& Config, ECoverAnimContext Context, const TArray<FString>& OperativeKeys)
+FString CoverAnimSetRules::ChooseSet(const FCoverAnimSetConfig& Config, ECoverAnimContext Context, const TArray<FString>& OperativeKeys,
+	bool bRiffleOutdoor)
 {
 	if (!Config.bEnabled)
 	{
 		return FString();
+	}
+	if (bRiffleOutdoor && Context == ECoverAnimContext::Outdoor && Config.Sets.Contains(TEXT("riffle")))
+	{
+		return TEXT("riffle");
 	}
 	const FString ContextKey = ContextName(Context);
 	const FString* Chosen = nullptr;

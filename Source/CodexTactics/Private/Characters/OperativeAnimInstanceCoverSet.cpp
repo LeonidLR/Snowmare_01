@@ -21,6 +21,9 @@ namespace
 	TAutoConsoleVariable<int32> CVarCoverAnimSets(TEXT("Codex.Cover.AnimSets"), -1,
 		TEXT("Cover animation sets (cover_anim_sets.json): -1 = the JSON's 'enabled' and the ABP's bUseCoverAnimSets, 0 = the native M4 clips everywhere, 1 = on."));
 
+	TAutoConsoleVariable<int32> CVarRiffleOutdoor(TEXT("Codex.Cover.RiffleOutdoor"), 0,
+		TEXT("Try the Riffle cover animation set on outdoor walls (0 = normal context selection, 1 = Riffle outdoors). Enter cover again after changing it."));
+
 	FCoverAnimSetConfig& CoverSetConfigStorage()
 	{
 		static FCoverAnimSetConfig Config;
@@ -217,7 +220,8 @@ void UOperativeAnimInstance::ChooseCoverAnimSet(const AOperativeCharacter& Opera
 		const bool bInBuilding = Cutaway && Cutaway->GetOperativeStorey(Operative, Building, Storey);
 		const ECoverAnimContext Context = CoverAnimSetRules::DecideContext(bInBuilding, Operative.IsInStealthMode());
 		CoverAnimContextName = CoverAnimSetRules::ContextName(Context);
-		Wanted = CoverAnimSetRules::ChooseSet(CoverSetConfig(), Context, { Operative.DisplayName.ToString(), Operative.GetName() });
+		Wanted = CoverAnimSetRules::ChooseSet(CoverSetConfig(), Context, { Operative.DisplayName.ToString(), Operative.GetName() },
+			CVarRiffleOutdoor.GetValueOnGameThread() != 0);
 		if (!LoadedCoverSets.Contains(Wanted))
 		{
 			Wanted.Reset(); // the set has no clips for this body
