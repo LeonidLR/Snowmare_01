@@ -2,7 +2,7 @@
   "$schema": "../Schemas/level_config.schema.json",
   "level_id": "L_Gen_Depot_1_X6",
   "level_name": "Generated ref_01_02_depot (seed 1)",
-  "description": "Generated greybox (docs/design/levelgen/LEVEL_GENERATOR.md) from ref_01_02_depot seed 1 by Scripts/Editor/build_levelgen_map.py; the squad walks the mandatory route (LevelGenRouteSmoke); combat-lab style pressure. ONE small wave only (a valid wave list is required).",
+  "description": "Generated greybox (docs/design/levelgen/LEVEL_GENERATOR.md) from ref_01_02_depot seed 1 by Scripts/Editor/build_levelgen_map.py; the squad walks the mandatory route (LevelGenRouteSmoke); one PMC street encounter. The empty wave roster prevents fallback monster waves.",
   "combat_start": "ambush",
   "ambush_fight": "skirmish",
   "susanin_wave": 0,
@@ -20,8 +20,8 @@
     "weather_strength": 0.3
   },
   "cheats": {
-    "immortal": true,
-    "infinite_ammo": true
+    "immortal": false,
+    "infinite_ammo": false
   },
   "levelgen_layout": "Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1_x6.json",
   "minimap": {
@@ -35,22 +35,25 @@
   "waves": [
     {
       "wave_index": 1,
-      "name": "Wave 1",
-      "max_simultaneous_enemies": 2,
-      "spawns": [
-        {
-          "enemy_type": "FROSTBITTEN",
-          "count": 2,
-          "spawn_lane": "ANY",
-          "spawn_delay_sec": 1,
-          "initial_delay_sec": 0
-        }
-      ],
-      "wave_modifiers": {
-        "enemy_hp_mult": 1,
-        "enemy_damage_mult": 1,
-        "enemy_speed_mult": 1,
-        "cold_drain_mult": 1
+      "name": "PMC only",
+      "spawns": []
+    }
+  ],
+  "pmc_squads": [
+    {
+      "count": 3,
+      "weights": "pmc_commander.json",
+      "posture": "defend",
+      "seed": 7701,
+      "post": {
+        "id": "x6_south_street",
+        "kind": "street",
+        "pos": [
+          2250,
+          -4250,
+          0
+        ],
+        "yaw": -90
       }
     }
   ],
@@ -59,6 +62,7 @@
     "preset_tier": "STANDARD"
   },
   "pressure": {
+    "enabled": false,
     "first_event_sec": 30,
     "interval_sec": 90,
     "group_min": 2,
