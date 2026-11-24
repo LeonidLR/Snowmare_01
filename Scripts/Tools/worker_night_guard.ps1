@@ -27,9 +27,12 @@ function Kill-Tree([int]$id) {
 }
 if ($procs.Count -eq 0) { Start-Loop 'none running'; exit 0 }
 if ($age -gt $StaleMin) {
-    foreach ($p in $procs) { Kill-Tree $p.ProcessId }
+    foreach ($p in $procs) {
+        Kill-Tree $p.ProcessId
+        & taskkill.exe /T /F /PID $($p.ProcessId) *> $null
+    }
     $l = Join-Path $Repo 'Saved\agent.lock'
-    if ((Test-Path $l) -and ((Get-Content $l -Raw) -match 'night-loop')) { Remove-Item $l -Force }
+    if ((Test-Path $l) -and ((Get-Content $l -Raw) -match 'night-loop|night-trainer')) { Remove-Item $l -Force }
     G ("heartbeat {0:N0} min old - killed {1} loop process(es)" -f $age, $procs.Count)
     Start-Loop 'restart after a stale heartbeat'
     exit 0
