@@ -161,7 +161,7 @@ bool FDemoSerializeTest::RunTest(const FString& Parameters)
 	Session.Frames[1].Facts.Kind = EDemoOrderKind::Medkit;
 	Session.Frames[2].Time = 2.;
 	Session.Frames[2].RealTime = std::numeric_limits<double>::quiet_NaN();
-	Session.Frames[0].Destination = FVector(std::numeric_limits<double>::infinity(), 100.4, .8);
+	Session.Frames[0].Facts.FlankDegrees = std::numeric_limits<double>::infinity();
 	Session.Frames[3].Time = 4.;
 	Session.Frames[4].Type = FDemoFrame::EType::Mode;
 	Session.Frames[4].Time = 2.;

@@ -73,7 +73,7 @@ void USessionRecordingSubsystem::OnWorldBeginPlay(UWorld& World)
 	Super::OnWorldBeginPlay(World);
 	using namespace SessionRecordingRuntime;
 	const TCHAR* Cmd = FCommandLine::Get();
-	const FDemoGate Gate{ CVarRecord.GetValueOnGameThread(), World.IsGameWorld() && World.GetNetMode() != NM_DedicatedServer,
+	const FDemoGate Gate{ CVarRecord.GetValueOnGameThread(), World.IsGameWorld(),
 		FApp::IsUnattended(), FParse::Param(Cmd, TEXT("nullrhi")), FParse::Param(Cmd, TEXT("NoTelemetry")),
 		IsRunningCommandlet(), GIsAutomationTesting };
 	if (const TCHAR* Why = SessionRecordingRules::OffReason(Gate))
