@@ -3,7 +3,8 @@
 param(
     [Parameter(Position=0)][string[]]$Branches,
     [switch]$DryRun,
-    [switch]$FullTests
+    [switch]$FullTests,
+    [switch]$Resume
 )
 
 function ConvertFrom-GateGitStatus([string]$Text) {
@@ -95,11 +96,125 @@ function Backup-GateDesignerFiles([string]$RepoDir, [string]$BackupDir, [string[
     ConvertTo-Json -InputObject $entries | Set-Content -LiteralPath (Join-Path $BackupDir 'SHA256.json') -Encoding UTF8
 }
 
-function Get-GateDiffPaths([string]$From, [string]$To, [switch]$Preview) {
-    $range = if ($Preview) { "$From...$To" } else { "$From..$To" }
+function Get-GateDiffPaths([string]$From, [string]$To) {
+    $range = "$From..$To"
     $raw = git diff --no-renames --name-only -z $range --
     if ($LASTEXITCODE -ne 0) { throw "Could not read changed paths for $range" }
     return ($raw -join [Environment]::NewLine).Split([char]0) | Where-Object { $_ }
+}
+
+
+function Assert-GateEditorClosed([string]$Project) {
+    foreach ($editor in @(Get-CimInstance Win32_Process -Filter "Name = 'UnrealEditor.exe'")) {
+        if (-not $editor.CommandLine) { throw "Cannot read CommandLine for Unreal Editor PID $($editor.ProcessId)." }
+        if (Test-GateEditorCommandLine $editor.CommandLine $Project) {
+            throw "The designer's Unreal Editor is open for this checkout (PID $($editor.ProcessId))."
+        }
+    }
+}
+
+function Assert-GateNoPathOverlap([string[]]$Changed, [string[]]$Protected) {
+    $files = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $parents = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($path in $Protected) {
+        $file = $path.TrimEnd('/')
+        $null = $files.Add($file)
+        while ($file.Contains('/')) {
+            $file = $file.Substring(0, $file.LastIndexOf('/'))
+            if (-not $parents.Add($file)) { break }
+        }
+    }
+    foreach ($file in $Changed) {
+        if ($parents.Contains($file)) { throw "Merge would replace a directory containing designer changes: $file" }
+        $path = $file
+        while ($path) {
+            if ($files.Contains($path)) { throw "Merge overlaps a designer path: $path (changed: $file)." }
+            $slash = $path.LastIndexOf('/')
+            if ($slash -lt 0) { break }
+            $path = $path.Substring(0, $slash)
+        }
+    }
+}
+
+function Get-GateMergePlan([string]$Head, [object[]]$Tips, [string[]]$ProtectedPaths) {
+    $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+    $objectRoot = Join-Path $tempRoot ('codex-gate-objects-' + [Guid]::NewGuid().ToString('N'))
+    $previousObjects = $env:GIT_OBJECT_DIRECTORY
+    $previousAlternates = $env:GIT_ALTERNATE_OBJECT_DIRECTORIES
+    $currentObjects = git rev-parse --path-format=absolute --git-path objects
+    if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the repository object directory.' }
+
+    # Hold synthetic trees and commits outside the checkout's Git object store, even on -DryRun.
+    $null = New-Item -ItemType Directory -Path $objectRoot
+    try {
+        $env:GIT_ALTERNATE_OBJECT_DIRECTORIES = (@($currentObjects, $previousAlternates) | Where-Object { $_ }) -join [IO.Path]::PathSeparator
+        $env:GIT_OBJECT_DIRECTORY = $objectRoot
+        $synthetic = $Head
+        foreach ($tip in $Tips) {
+            git merge-base --is-ancestor $tip.Commit $synthetic
+            $ancestorExit = $LASTEXITCODE
+            if ($ancestorExit -eq 0) { throw "Branch $($tip.Name) is already in HEAD or an earlier planned merge." }
+            if ($ancestorExit -ne 1) { throw "Could not check ancestry of $($tip.Name)." }
+
+            $merge = @(git merge-tree --write-tree $synthetic $tip.Commit)
+            if ($LASTEXITCODE -ne 0) {
+                $details = @($merge | Where-Object { $_ -match 'CONFLICT' }) -join ', '
+                throw "Preflight conflict at $($tip.Name). HEAD unchanged. $details"
+            }
+            $tree = $merge[0]
+            if ($tree -notmatch '^[0-9a-f]{40,64}$') { throw "Unexpected merge-tree output for $($tip.Name)." }
+            $stepPaths = @(Get-GateDiffPaths $synthetic $tree)
+            if (-not $stepPaths.Count) { throw "Branch $($tip.Name) produces an empty merge diff." }
+            Assert-GateNoPathOverlap $stepPaths $ProtectedPaths
+            $synthetic = git -c user.name=MergeGate -c user.email=mergegate@example.invalid -c commit.gpgsign=false commit-tree $tree -p $synthetic -p $tip.Commit -m 'Merge gate preflight'
+            if ($LASTEXITCODE -ne 0) { throw "Could not simulate merge of $($tip.Name)." }
+        }
+        $paths = @(Get-GateDiffPaths $Head $synthetic)
+        if (-not $paths.Count) { throw 'The combined merge diff is empty.' }
+        return [pscustomobject]@{ Paths = $paths; Tree = $tree }
+    } finally {
+        $env:GIT_OBJECT_DIRECTORY = $previousObjects
+        $env:GIT_ALTERNATE_OBJECT_DIRECTORIES = $previousAlternates
+        $resolved = (Resolve-Path -LiteralPath $objectRoot).ProviderPath
+        if ($resolved.StartsWith((Join-Path $tempRoot 'codex-gate-objects-'), [StringComparison]::OrdinalIgnoreCase)) {
+            Remove-Item -LiteralPath $resolved -Recurse -Force
+        }
+    }
+}
+
+function Write-GateState([string]$Path, $State) {
+    $null = New-Item -ItemType Directory -Path (Split-Path $Path -Parent) -Force
+    $temp = "$Path.$PID.tmp"
+    $json = ConvertTo-Json -Depth 8 -InputObject $State
+    try {
+        [IO.File]::WriteAllText($temp, $json, [Text.UTF8Encoding]::new($false))
+        if (Test-Path -LiteralPath $Path) {
+            $previous = "$temp.previous"
+            [IO.File]::Replace($temp, $Path, $previous)
+            Remove-Item -LiteralPath $previous
+        } else {
+            [IO.File]::Move($temp, $Path)
+        }
+    } finally {
+        if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp }
+    }
+}
+
+function Read-GateWorkerRows([string]$Directory, [datetime]$Started, [string[]]$Expected, [int]$ExitCode) {
+    $path = Join-Path $Directory 'SmokeParallel-worker.json'
+    $file = Get-Item -LiteralPath $path -ErrorAction SilentlyContinue
+    if (-not $file -or $file.LastWriteTimeUtc -lt $Started) {
+        throw "Worker did not return a fresh smoke result (exit $ExitCode): $path"
+    }
+    $rows = @((Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).results)
+    $summary = @($rows | ForEach-Object { "$($_.Name)=$($_.State)" }) -join ', '
+    Write-Host "Worker smoke results (exit $ExitCode): $summary"
+    $names = @($rows | ForEach-Object Name | Sort-Object)
+    if ($names.Count -ne $Expected.Count -or (Compare-Object ($Expected | Sort-Object) $names) -or
+        @($rows | Where-Object State -notin @('PASS','PASS*','KNOWN-FAIL','FAIL')).Count) {
+        throw "Worker returned incomplete or unexpected results (exit $ExitCode): $summary"
+    }
+    return $rows
 }
 
 function Test-GateNeedsBuild([string[]]$Paths) {
@@ -107,12 +222,10 @@ function Test-GateNeedsBuild([string[]]$Paths) {
 }
 
 function Show-GateSummary($Stages) {
-    $Stages.GetEnumerator() | ForEach-Object {
-        [pscustomobject]@{ Step = $_.Key; Result = $_.Value }
-    } | Format-Table -AutoSize | Out-Host
+    $Stages.GetEnumerator() | ForEach-Object { Write-Host "$($_.Key): $($_.Value)" }
 }
 
-function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$RunFull) {
+function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$RunFull, [switch]$ResumeRun) {
     $ErrorActionPreference = 'Stop'
     $toolsDir = $PSScriptRoot
     $scriptsDir = Split-Path $toolsDir -Parent
@@ -121,17 +234,19 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
     $stage = 'Editor'
     $ownsLock = $false
     $code = 1
+    $state = $null
+    $head = $null
+    $statePath = Join-Path $repoDir 'Saved/Logs/merge-gate-state.json'
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
     $previousEncoding = [Console]::OutputEncoding
     Push-Location -LiteralPath $repoDir
     try {
         [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
         $names = @($BranchNames -split '[,\s]+' | Where-Object { $_ })
-        if (-not $names.Count) { throw 'Specify at least one branch with -Branches.' }
+        if ($Preview -and $ResumeRun) { throw '-DryRun and -Resume cannot be combined.' }
+        if (-not $ResumeRun -and -not $names.Count) { throw 'Specify at least one branch with -Branches.' }
         $project = Join-Path $repoDir 'CodexTactics.uproject'
-        $editor = Get-CimInstance Win32_Process -Filter "Name = 'UnrealEditor.exe'" | Where-Object {
-            Test-GateEditorCommandLine $_.CommandLine $project
-        } | Select-Object -First 1
-        if ($editor) { throw "The designer's Unreal Editor is open for this checkout (PID $($editor.ProcessId))." }
+        Assert-GateEditorClosed $project
         $stages.Editor = 'clear'
 
         if (-not $Preview) {
@@ -139,48 +254,85 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
             $ownsLock = Enter-AgentLock 'Lead merge gate'
             if ((git branch --show-current) -ne 'main') { throw 'Run the merge gate on main. Use -DryRun to preview from another branch.' }
         }
-        $head = (git rev-parse --verify HEAD)
-        if ($LASTEXITCODE -ne 0) { throw 'Could not resolve HEAD.' }
-        $tips = @(
-            foreach ($name in $names) {
-                $tip = git rev-parse --verify --end-of-options "$name^{commit}"
-                if ($LASTEXITCODE -ne 0) { throw "Cannot resolve branch $name." }
-                [pscustomobject]@{ Name = $name; Commit = $tip }
-            }
-        )
-        $status = git --no-optional-locks status --porcelain=v1 -z --untracked-files=no
-        if ($LASTEXITCODE -ne 0) { throw 'Could not read designer changes.' }
-        $changes = @(ConvertFrom-GateGitStatus ($status -join [Environment]::NewLine))
-        $dirty = @($changes | Where-Object Status -eq ' M' | ForEach-Object Path)
-        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
-        $stage = 'Backup'
-        if ($Preview -or -not $dirty.Count) {
-            $stages.Backup = if ($Preview) { "would verify SHA256 for $($dirty.Count) file(s)" } else { 'no modified tracked files' }
-        } else {
-            $backupDir = Join-Path $repoDir "Saved/Backups/designer-wip-$stamp"
-            Backup-GateDesignerFiles $repoDir $backupDir $dirty
-            $stages.Backup = "$($dirty.Count) file(s) verified at $backupDir"
-        }
-
         $stage = 'Merge'
-        if (@($changes | Where-Object { $_.Status[0] -ne ' ' -or $_.Status[1] -eq 'U' }).Count) {
-            throw 'The index contains staged or unresolved changes. The merge has not started.'
-        }
+        $currentHead = git rev-parse --verify HEAD
+        if ($LASTEXITCODE -ne 0) { throw 'Could not resolve HEAD.' }
         $mergeHead = git rev-parse --git-path MERGE_HEAD
         if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $mergeHead)) { throw 'An earlier merge is still in progress.' }
-        if ($Preview) {
-            $paths = @(
-                foreach ($tip in $tips) { Get-GateDiffPaths $head $tip.Commit -Preview }
-            )
-            $paths = @($paths | Sort-Object -Unique)
-            $stages.Merge = "would merge $($names -join ', ') (diffs from each merge base)"
-        } else {
-            foreach ($tip in $tips) {
-                git merge --no-ff --no-edit -m "Merge $($tip.Name)" -- $tip.Commit | Out-Host
-                if ($LASTEXITCODE -ne 0) { throw "Merge stopped at $($tip.Name). Resolve the reported error or conflicts before proceeding." }
+        $status = git --no-optional-locks status --porcelain=v1 -z --untracked-files=all
+        if ($LASTEXITCODE -ne 0) { throw 'Could not read designer changes.' }
+        $changes = @(ConvertFrom-GateGitStatus ($status -join [Environment]::NewLine))
+        $tracked = @($changes | Where-Object Status -ne '??')
+        $dirty = @($tracked | Where-Object Status -eq ' M' | ForEach-Object Path)
+        if (@($tracked | Where-Object { $_.Status[0] -ne ' ' -or $_.Status[1] -eq 'U' }).Count) {
+            throw 'The index contains staged or unresolved changes. The merge has not started.'
+        }
+        $saved = if (-not $Preview -and (Test-Path -LiteralPath $statePath)) {
+            Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+        }
+
+        if ($ResumeRun) {
+            if (-not $saved -or $saved.Status -ne 'verifying' -or $saved.MergedHead -ne $currentHead -or
+                $saved.PreMerge -notmatch '^[0-9a-f]{40,64}$') {
+                throw "No resumable verification for current HEAD. State: $statePath"
             }
-            $paths = @(Get-GateDiffPaths $head HEAD)
-            $stages.Merge = "merged $($names -join ', ')"
+            if ($names.Count -and (($names -join ',') -ne (@($saved.Tips | ForEach-Object Name) -join ','))) {
+                throw 'The supplied branches do not match the saved merge.'
+            }
+            $state = $saved
+            $head = $state.PreMerge
+            $paths = @(Get-GateDiffPaths $head $currentHead)
+            if (-not $paths.Count) { throw 'The saved merge diff is empty.' }
+            $stages.Merge = "resumed verification of $currentHead"
+            $stages.Backup = "stored designer backup: $($state.BackupDir)"
+            $RunFull = $RunFull -or $state.FullTests
+        } else {
+            if ($saved -and $saved.Status -ne 'passed' -and $saved.PreMerge -ne $currentHead) {
+                throw "A previous merge has not passed verification. Use -Resume on its merged HEAD or recover to $($saved.PreMerge)."
+            }
+            $head = $currentHead
+            $tips = @(
+                foreach ($name in $names) {
+                    $tip = git rev-parse --verify --end-of-options "$name^{commit}"
+                    if ($LASTEXITCODE -ne 0) { throw "Cannot resolve branch $name." }
+                    [pscustomobject]@{ Name = $name; Commit = $tip }
+                }
+            )
+            $mergePlan = Get-GateMergePlan $head $tips @($changes | ForEach-Object Path)
+            $paths = @($mergePlan.Paths)
+            $stage = 'Backup'
+            $backupDir = Join-Path $repoDir "Saved/Backups/designer-wip-$stamp"
+            if ($Preview) {
+                $stages.Backup = "would verify SHA256 for $($dirty.Count) file(s)"
+                $stages.Merge = "would merge $($names -join ', ') (all branches preflighted)"
+            } else {
+                if ($dirty.Count) { Backup-GateDesignerFiles $repoDir $backupDir $dirty }
+                $stages.Backup = if ($dirty.Count) { "$($dirty.Count) file(s) verified at $backupDir" } else { 'no modified tracked files' }
+                $stage = 'Merge'
+                $state = [pscustomobject]@{ PreMerge = $head; MergedHead = ''; Status = 'merging'; Tips = $tips
+                    FullTests = [bool]$RunFull; BackupDir = $backupDir }
+                Write-GateState $statePath $state
+                foreach ($tip in $tips) {
+                    Assert-GateEditorClosed $project
+                    try {
+                        git merge --no-ff --no-edit --no-overwrite-ignore -m "Merge $($tip.Name)" -- $tip.Commit | Out-Host
+                        if ($LASTEXITCODE -ne 0) { throw "Merge stopped at $($tip.Name) (exit $LASTEXITCODE)." }
+                    } catch {
+                        if (Test-Path -LiteralPath $mergeHead) {
+                            git merge --abort | Out-Host
+                            if ($LASTEXITCODE -ne 0) { throw "Merge stopped at $($tip.Name) and git merge --abort failed." }
+                        }
+                        throw
+                    }
+                }
+                $mergedTree = git rev-parse 'HEAD^{tree}'
+                if ($LASTEXITCODE -ne 0 -or $mergedTree -ne $mergePlan.Tree) { throw 'The merged tree differs from preflight.' }
+                $state.MergedHead = git rev-parse --verify HEAD
+                if ($LASTEXITCODE -ne 0) { throw 'Could not resolve merged HEAD.' }
+                $state.Status = 'verifying'
+                Write-GateState $statePath $state
+                $stages.Merge = "merged $($names -join ', ')"
+            }
         }
         . (Join-Path $scriptsDir 'verify_lib.ps1')
         $plan = Resolve-Impact $paths (Get-TestMap)
@@ -195,6 +347,7 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
             $code = 0
         } else {
             $stage = 'Build'
+            Assert-GateEditorClosed $project
             if (Test-GateNeedsBuild $paths) {
                 powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $scriptsDir 'build.ps1') | Out-Host
                 if ($LASTEXITCODE -ne 0) { throw "Build failed (exit $LASTEXITCODE)." }
@@ -224,26 +377,33 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
             $stage = 'Worker smokes'
             if ($smokeNames.Count) {
                 $resultDir = Join-Path $repoDir "Saved/Logs/Worker/merge-gate-$stamp"
+                $smokeStarted = [DateTime]::UtcNow
                 powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $toolsDir 'worker_sync.ps1') `
                     -RemoteRoot C:/Work/CodexTactics-slot1 -ShipHead -ShareMachine -Jobs 1 -Commands ($smokeNames -join ',') -ResultDir $resultDir | Out-Host
-                if ($LASTEXITCODE -ne 0) { throw "Worker smoke command failed (exit $LASTEXITCODE)." }
-                $results = (Get-Content -LiteralPath (Join-Path $resultDir 'SmokeParallel-worker.json') -Raw | ConvertFrom-Json).results
-                $summary = @($results | ForEach-Object { "$($_.Name)=$($_.State)" })
-                $expected = @($plan.Smokes | Sort-Object)
-                $actual = @($results | ForEach-Object { $_.Name } | Sort-Object)
-                if ($actual.Count -ne $expected.Count -or (Compare-Object $expected $actual) -or
-                    @($results | Where-Object State -notin @('PASS', 'PASS*', 'KNOWN-FAIL')).Count) {
-                    throw "Worker returned missing, unexpected or unsuccessful smoke results: $($summary -join ', ')"
+                $workerExit = $LASTEXITCODE
+                $rows = @(Read-GateWorkerRows $resultDir $smokeStarted $plan.Smokes $workerExit)
+                $summary = @($rows | ForEach-Object { "$($_.Name)=$($_.State)" }) -join ', '
+                $failed = @($rows | Where-Object State -eq 'FAIL')
+                $known = @($rows | Where-Object State -eq 'KNOWN-FAIL')
+                if ($failed.Count -or ($workerExit -ne 0 -and -not ($workerExit -eq 1 -and $known.Count))) {
+                    throw "Worker smoke verification failed (exit $workerExit): $summary"
                 }
-                $stages['Worker smokes'] = $summary -join ', '
+                $stages['Worker smokes'] = $summary
             } else {
                 $stages['Worker smokes'] = 'none mapped'
             }
+            $state.Status = 'passed'
+            Write-GateState $statePath $state
             $code = 0
         }
     } catch {
         $stages[$stage] = "FAIL: $($_.Exception.Message)"
     } finally {
+        if ($code -ne 0 -and -not $Preview -and $state) {
+            Write-Host "Pre-merge SHA: $head"
+            if ($state.Status -eq 'verifying') { Write-Host 'After fixing the failure, run merge_gate.ps1 -Resume.' }
+            Write-Host "To discard the merge while keeping local changes: git reset --keep $head"
+        }
         if ($ownsLock) { Exit-AgentLock }
         Pop-Location
         [Console]::OutputEncoding = $previousEncoding
@@ -254,5 +414,5 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
-    exit (Invoke-MergeGate $Branches -Preview:$DryRun -RunFull:$FullTests)
+    exit (Invoke-MergeGate $Branches -Preview:$DryRun -RunFull:$FullTests -ResumeRun:$Resume)
 }

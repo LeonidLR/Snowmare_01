@@ -139,7 +139,7 @@ class MergeGateParsers(unittest.TestCase):
         self.assertEqual(decisions, [True, True, False, False])
 
 
-class MergeGateDryRun(unittest.TestCase):
+class MergeGateFixture(unittest.TestCase):
     def setUp(self):
         temp = TemporaryDirectory(prefix="codex-gate-preview-")
         self.addCleanup(temp.cleanup)
@@ -183,9 +183,15 @@ class MergeGateDryRun(unittest.TestCase):
         git(self.repo, "checkout", "-q", "main")
         self.designer.write_text("dirty", encoding="utf-8")
 
-    def preview(self, args):
-        return powershell(f"& {ps_quote(self.gate)} {args}", cwd=self.repo)
+    def preview(self, args, setup=""):
+        return powershell(
+            "function Get-CimInstance { param($ClassName, $Filter) }\n" + setup
+            + f"\n& {ps_quote(self.gate)} {args}", cwd=self.repo
+        )
 
+
+
+class MergeGateDryRun(MergeGateFixture):
     def test_source_dry_run_reports_actions_without_mutations(self):
         result = self.preview("-Branches 'source-change,docs-only' -DryRun")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -215,6 +221,73 @@ class MergeGateDryRun(unittest.TestCase):
         self.assertIn("The index contains staged or unresolved changes", result.stdout)
         self.assertEqual(git(self.repo, "rev-parse", "HEAD"), self.head)
         self.assertFalse((self.repo / "Saved").exists())
+
+
+class MergeGateExecution(MergeGateFixture):
+    """Use real merges only in temporary Git fixtures. Build, automation and worker are stubs."""
+
+    def setUp(self):
+        super().setUp()
+        scripts = self.repo / "Scripts"
+        (self.repo / ".gitignore").write_text("Saved/\n", encoding="utf-8")
+        (scripts / "agent_lock.ps1").write_text(
+            "function Enter-AgentLock { param($Purpose); return $true }\nfunction Exit-AgentLock {}\n", encoding="utf-8"
+        )
+        (scripts / "build.ps1").write_text("Write-Host 'fixture: build'\nexit 0\n", encoding="utf-8")
+        (scripts / "test.ps1").write_text(
+            "param([switch]$Smart, [switch]$SkipSmokes, [string]$Base, [string]$Filter)\n"
+            "New-Item Saved -ItemType Directory -Force | Out-Null\n"
+            "Add-Content Saved/test-bases.txt $Base\n"
+            "if ($env:CODEX_GATE_FIXTURE_TEST_FAIL -eq '1') { exit 1 }\nexit 0\n",
+            encoding="utf-8",
+        )
+        (scripts / "Tools/worker_sync.ps1").write_text(
+            "param([string]$RemoteRoot, [switch]$ShipHead, [switch]$ShareMachine, [int]$Jobs, "
+            "[string]$Commands, [string]$ResultDir, [string]$ShipRef, [string]$Ref, [switch]$Build, [switch]$AllLogs)\n"
+            "$state = if ($env:CODEX_GATE_FIXTURE_SMOKE) { $env:CODEX_GATE_FIXTURE_SMOKE } else { 'PASS' }\n"
+            "$rows = @($Commands.Split(',') | ForEach-Object { @{Name = ($_ -replace '^CodexTactics\\.', ''); State = $state} })\n"
+            "New-Item $ResultDir -ItemType Directory -Force | Out-Null\n"
+            "@{results = $rows} | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $ResultDir 'SmokeParallel-worker.json')\n"
+            "if ($state -ne 'PASS') { exit 1 }\nexit 0\n",
+            encoding="utf-8",
+        )
+        git(self.repo, "add", "--", ".gitignore", "Scripts")
+        git(self.repo, "commit", "-qm", "fixture runners")
+        self.head = git(self.repo, "rev-parse", "HEAD")
+
+    def test_red_smoke_names_visible_even_when_worker_exits_nonzero(self):
+        result = self.preview("-Branches source-change", "$env:CODEX_GATE_FIXTURE_SMOKE='FAIL'")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("WalkSmoke=FAIL", result.stdout)
+
+    def test_red_run_requires_resume_and_keeps_pre_merge_base(self):
+        result = self.preview("-Branches source-change", "$env:CODEX_GATE_FIXTURE_TEST_FAIL='1'")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        after_merge = git(self.repo, "rev-parse", "HEAD")
+        self.assertNotEqual(after_merge, self.head)
+        plain = self.preview("-Branches source-change")
+        self.assertNotEqual(plain.returncode, 0, plain.stdout + plain.stderr)
+        self.assertNotIn("ready to push", plain.stdout)
+        resumed = self.preview("-Resume")
+        self.assertEqual(resumed.returncode, 0, resumed.stdout + resumed.stderr)
+        self.assertIn("ready to push", resumed.stdout)
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), after_merge)
+        self.assertEqual((self.repo / "Saved/test-bases.txt").read_text().splitlines(), [self.head, self.head])
+
+    def test_second_branch_conflict_leaves_head_and_index_untouched(self):
+        for branch, text in (("conflict-a", "one"), ("conflict-b", "two")):
+            git(self.repo, "checkout", "-qb", branch, self.head)
+            file = self.repo / "collision.txt"
+            file.write_text(text, encoding="utf-8")
+            git(self.repo, "add", "--", file.name)
+            git(self.repo, "commit", "-qm", branch)
+        git(self.repo, "checkout", "-q", "main")
+        result = self.preview("-Branches conflict-a,conflict-b")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("conflict-b", result.stdout)
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), self.head)
+        self.assertFalse((self.repo / ".git/MERGE_HEAD").exists())
+        self.assertFalse((self.repo / "collision.txt").exists())
 
 
 if __name__ == "__main__":
