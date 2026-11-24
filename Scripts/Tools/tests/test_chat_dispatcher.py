@@ -1,15 +1,15 @@
-"""Unit tests for Scripts/Tools/chat_dispatcher.py on fixture chats (no real subprocesses/spend)."""
+"""Unit tests for Scripts/Tools/chat_dispatcher.py on fixture chats with real Git and no agent launches."""
 from __future__ import annotations
 
 import datetime as dt
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 TOOLS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if TOOLS_DIR not in sys.path:
@@ -20,8 +20,18 @@ import chat_dispatcher  # noqa: E402
 
 class TestChatDispatcher(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = tempfile.mkdtemp()
-        self.root = Path(self.tmp)
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+
+        # Git commands from both the fixture and dispatcher must use fixture-local settings.
+        git_env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+        empty_config = self.root / "gitconfig"
+        empty_config.touch()
+        git_env.update(GIT_CONFIG_GLOBAL=str(empty_config), GIT_CONFIG_NOSYSTEM="1")
+        git_environment = patch.dict(os.environ, git_env, clear=True)
+        git_environment.start()
+        self.addCleanup(git_environment.stop)
         self.main_repo = self.root / "CodexTactics"
         self.interim_wt = self.root / "CodexTactics-interim"
         self.gemini_wt = self.root / "CodexTactics-gemc5"
@@ -59,11 +69,16 @@ class TestChatDispatcher(unittest.TestCase):
             "gemini_spend_file": str(self.state_dir / "gemini_spend.jsonl"),
         }
 
-    def tearDown(self) -> None:
-        shutil.rmtree(self.tmp, ignore_errors=True)
-
     def _git(self, cwd: Path, args: list[str]) -> str:
-        return subprocess.check_output(["git", "-C", str(cwd)] + args, stderr=subprocess.STDOUT, text=True)
+        result = subprocess.run(
+            ["git", "-C", str(cwd), *args], capture_output=True, encoding="utf-8", errors="replace",
+        )
+        if result.returncode:
+            raise RuntimeError(
+                f"git {args!r} in {cwd} exited {result.returncode}: "
+                f"{result.stderr.strip() or result.stdout.strip()}"
+            )
+        return result.stdout
 
     def _write_chat(self, msgs: list[dict]) -> None:
         with self.chat_file.open("w", encoding="utf-8") as fh:

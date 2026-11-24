@@ -92,10 +92,16 @@ class TaskBoardTests(unittest.TestCase):
                             "title": "Бой",
                             "items": [
                                 {
-                                    "id": "throwables-system",
+                                    "id": "grenade-system",
                                     "name": "Система гранат и метания",
                                     "status": "in_port",
                                     "doc": "docs/port/codex/inbox/008-throwables.md",
+                                },
+                                {
+                                    "id": "overwatch-system",
+                                    "name": "Overwatch register name",
+                                    "status": "planned",
+                                    "doc": "docs/port/reactive-fire.md",
                                 },
                                 {
                                     "id": "psychic-psionics",
@@ -228,6 +234,8 @@ class TaskBoardTests(unittest.TestCase):
         # Register matching & unmatched items marked not_started
         self.assertEqual(by_id["codex-008"]["title_ru"], "Система гранат и метания")
         self.assertEqual(by_id["codex-008"]["area"], "Бой")
+        self.assertEqual(by_id["codex-009"]["area"], "Бой")
+        self.assertEqual(by_id["codex-009"]["title_ru"], "")
         unmatched = [r for r in board["not_started_register"] if r["id"] == "psychic-psionics"]
         self.assertEqual(len(unmatched), 1)
         self.assertEqual(unmatched[0]["state"], "not_started")
@@ -235,8 +243,8 @@ class TaskBoardTests(unittest.TestCase):
         # Per-agent "Сейчас" strip
         self.assertEqual(board["now_strip"]["gemini"]["task_id"], "gemini-031")
         self.assertEqual(board["now_strip"]["gemini"]["idle_min"], 5)
-        self.assertEqual(board["now_strip"]["codex"]["task_id"], "codex-008")
-        self.assertEqual(board["now_strip"]["codex"]["idle_min"], 10)
+        self.assertNotIn("codex", board["now_strip"])
+        self.assertEqual(by_id["codex-008"]["idle_min"], 10)
         self.assertEqual(board["now_strip"]["claude"]["state"], "idle")
 
     def test_grok_tasks_and_generic_moves(self) -> None:
