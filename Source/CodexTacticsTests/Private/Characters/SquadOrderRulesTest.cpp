@@ -4,6 +4,7 @@
 
 #include "Misc/AutomationTest.h"
 #include "Characters/SquadOrderRules.h"
+#include "Characters/OperativeCharacter.h"
 #include "Data/LevelJsonRules.h"
 #include "Data/WaveConfigTypes.h"
 
@@ -34,6 +35,28 @@ bool FSquadOrderOwnOrderTest::RunTest(const FString&)
 	// Solo: the idle followers hold now, the one on his own order finishes it first.
 	TestFalse(TEXT("Solo: own order finishes first"), ShouldHoldNow(true));
 	TestTrue(TEXT("Solo: idle follower holds"), ShouldHoldNow(false));
+	return true;
+}
+
+SQUAD_ORDER_TEST(FSquadOrderPlannedGroupFallbackTest, "PlannedGroupRetriesUnreachableOffset")
+bool FSquadOrderPlannedGroupFallbackTest::RunTest(const FString&)
+{
+	using namespace SquadOrderRules;
+	const FVector Offset(31327.f, -497.f, 0.f);
+	const FVector Click(31240.f, -673.f, 0.f);
+	const TOptional<FVector> GroupFallback(Click);
+	TestTrue(TEXT("Lake pause: a failed group offset retries the original click"),
+		ShouldRetryPlannedGroupMove(EOperativeOrderResult::Unreachable, Offset, GroupFallback));
+	TestFalse(TEXT("A reachable offset keeps the member's own assigned place"),
+		ShouldRetryPlannedGroupMove(EOperativeOrderResult::Accepted, Offset, GroupFallback));
+	TestFalse(TEXT("A refusal is not retried"),
+		ShouldRetryPlannedGroupMove(EOperativeOrderResult::Refused, Offset, GroupFallback));
+	TestFalse(TEXT("An unavailable controller is not retried"),
+		ShouldRetryPlannedGroupMove(EOperativeOrderResult::NoController, Offset, GroupFallback));
+	TestFalse(TEXT("The already attempted centre is not retried"),
+		ShouldRetryPlannedGroupMove(EOperativeOrderResult::Unreachable, Click, GroupFallback));
+	TestFalse(TEXT("An individual or cover plan has no group fallback"),
+		ShouldRetryPlannedGroupMove(EOperativeOrderResult::Unreachable, Offset, {}));
 	return true;
 }
 

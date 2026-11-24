@@ -1445,19 +1445,31 @@ void USquadSubsystem::BeginOrderPlanning()
 
 FVector USquadSubsystem::PlanMove(AOperativeCharacter* Operative, const FVector& Destination, bool bSprint, float Radius)
 {
+	return StorePlannedMove(Operative, Destination, bSprint, Radius, nullptr);
+}
+
+FVector USquadSubsystem::PlanGroupMove(AOperativeCharacter* Operative, const FVector& Destination, const FVector& GroupAnchor, bool bSprint, float Radius)
+{
+	return StorePlannedMove(Operative, Destination, bSprint, Radius, &GroupAnchor);
+}
+
+FVector USquadSubsystem::StorePlannedMove(AOperativeCharacter* Operative, const FVector& Destination, bool bSprint, float Radius, const FVector* GroupAnchor)
+{
 	if (!Operative)
 	{
 		return Destination;
 	}
 	HandOverLeadForOrder(Operative, TEXT("a planned order")); // bug 2026-11-08: a plan for the selected member is the next order
 	const FVector* Origin = PauseOrigins.Find(Operative);
-	const FVector Planned = SquadFormation::ClampToRadius2D(Origin ? *Origin : Operative->GetActorLocation(), Destination, Radius);
+	const FVector PlanOrigin = Origin ? *Origin : Operative->GetActorLocation();
+	const FVector Planned = SquadFormation::ClampToRadius2D(PlanOrigin, Destination, Radius);
 	if (PlannedWallOrder.Direct.Get() == Operative)
 	{
 		PlannedWallOrder = FPlannedWallOrder(); // a new plan for him in this pause replaces the planned wall layout
 	}
 	FPlannedOrder& Order = PlannedOrders.FindOrAdd(Operative);
 	Order.Destination = Planned;
+	Order.GroupFallback = GroupAnchor ? TOptional<FVector>(SquadFormation::ClampToRadius2D(PlanOrigin, *GroupAnchor, Radius)) : TOptional<FVector>();
 	Order.bSprint = bSprint;
 	return Planned;
 }
@@ -1483,7 +1495,13 @@ void USquadSubsystem::ExecutePlannedOrders()
 	{
 		if (AOperativeCharacter* Operative = Entry.Key.Get())
 		{
-			Operative->OrderMoveTo(Entry.Value.Destination, Entry.Value.bSprint);
+			const FPlannedOrder& Order = Entry.Value;
+			const EOperativeOrderResult Result = Operative->OrderMoveTo(Order.Destination, Order.bSprint);
+			if (SquadOrderRules::ShouldRetryPlannedGroupMove(Result, Order.Destination, Order.GroupFallback))
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[PauseOrders] %s: retrying unreachable group slot at the planned click"), *Operative->DisplayName.ToString());
+				Operative->OrderMoveTo(Order.GroupFallback.GetValue(), Order.bSprint);
+			}
 		}
 	}
 	StartPlannedGroupCoverProne();
