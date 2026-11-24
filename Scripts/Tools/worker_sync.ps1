@@ -254,6 +254,9 @@ try {
             & git -C $BinariesFrom fetch --quiet origin 2>$null
             $onRemote = @(& git -C $BinariesFrom branch -r --contains $Ref 2>$null).Count -gt 0
             if (-not $onRemote) {
+                Say "lfs: pushing LFS objects for $($Ref.Substring(0,8)) to origin (refs stay unpushed)"
+                & git -C $BinariesFrom lfs push origin $Ref 2>&1 | Out-Host
+                if ($LASTEXITCODE -ne 0) { throw "LFS-FAILED: git lfs push origin $Ref failed (exit $LASTEXITCODE)" }
                 $bundle = Join-Path ([IO.Path]::GetTempPath()) "worker_sync-$Token.bundle"
                 try {
                     $bundleRef = New-WorkerCommitBundle $BinariesFrom $Ref $bundle $Token
@@ -267,17 +270,25 @@ try {
             } else { Say "ship $sourceRef $($Ref.Substring(0,8)) (on origin)" }
         }
         Say "git: fetch + reset to $Ref + lfs pull"
-        $git = Invoke-Worker @"
+        $git = Invoke-Worker -AllowFail @"
 Set-Location '$RemoteRoot'
 git fetch --quiet origin 2>&1 | Out-Null
 if (`$LASTEXITCODE -ne 0) { 'FETCH-FAILED'; exit 2 }
 $fetchExtra
-git reset --quiet --hard '$Ref' 2>&1 | Out-Null
-if (`$LASTEXITCODE -ne 0) { 'RESET-FAILED'; exit 2 }
-git lfs pull 2>&1 | Select-Object -Last 1
+`$resetOut = (git reset --quiet --hard '$Ref' 2>&1 | Out-String)
+if (`$LASTEXITCODE -ne 0) {
+    if (`$resetOut -match 'smudge filter lfs|git-lfs|LFS') { `$resetOut.Trim(); 'LFS-FAILED'; exit 2 }
+    `$resetOut.Trim(); 'RESET-FAILED'; exit 2
+}
+`$lfsOut = (git lfs pull 2>&1 | Out-String)
+if (`$LASTEXITCODE -ne 0) { `$lfsOut.Trim(); 'LFS-FAILED'; exit 2 }
 'HEAD ' + (git rev-parse --short HEAD) + ' ' + (git log -1 --format=%s)
 "@
         $git | ForEach-Object { Say "  $_" }
+        if ($script:LastWorkerExit -ne 0) {
+            $tag = @($git | Where-Object { $_ -match '^(FETCH-FAILED|BUNDLE-FAILED|LFS-FAILED|RESET-FAILED)$' } | Select-Object -Last 1)
+            throw "worker git sync failed: $(if ($tag) { $tag } else { "exit $($script:LastWorkerExit)" })"
+        }
         # Uncommitted work of the caller: tracked changes as a binary patch, new (untracked) source files as a zip.
         # Files a previous patch / zip added stay as untracked leftovers (no git clean: the designer packs are untracked too);
         # UBT only compiles what the module folders contain, so a leftover .cpp of another branch could break a build -
