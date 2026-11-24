@@ -17,3 +17,6 @@ You do the sector DATA (Codex 106 does the runtime boundary walls + sector choic
 4. A top-down PNG of X6 with the 6 boxes, ids, starts and PMC posts (outbox) - the designer approves it from his phone.
 5. Check (worker only, after 106 lands): per sector 5 seeds, first-contact time, no unit leaves the box, no stuck units.
 Branch gemini/105-x6-sectors. Pause 102 (commit WIP), return to it after. Report in outbox + chat FINISH. Never push.
+
+NUMBERING (designer): top row left->right = sectors 1, 2, 3; bottom row left->right = 4, 5, 6 (as seen in his top view).
+Use these ids everywhere (JSON id, Codex.Sector N, PNG labels, recordings, reports: "training in sector 5").
