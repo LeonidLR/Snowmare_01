@@ -428,6 +428,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	FVector PlanMove(AOperativeCharacter* Operative, const FVector& Destination, bool bSprint, float Radius);
 
+	/** Plan a formation offset with the player's actual group click as a fallback if that offset is unreachable. */
+	FVector PlanGroupMove(AOperativeCharacter* Operative, const FVector& Destination, const FVector& GroupAnchor, bool bSprint, float Radius);
+
 	/** Where Operative stood when the current tactical pause began; false outside a pause. */
 	bool GetPauseOrigin(const AOperativeCharacter* Operative, FVector& OutOrigin) const;
 
@@ -1062,9 +1065,12 @@ private:
 	/** The squad tick of a pending leader (SquadOrderRules::StepPendingLeader). */
 	void UpdatePendingLeader();
 
+	FVector StorePlannedMove(AOperativeCharacter* Operative, const FVector& Destination, bool bSprint, float Radius, const FVector* GroupAnchor);
+
 	struct FPlannedOrder
 	{
 		FVector Destination = FVector::ZeroVector;
+		TOptional<FVector> GroupFallback;
 		bool bSprint = false;
 	};
 
