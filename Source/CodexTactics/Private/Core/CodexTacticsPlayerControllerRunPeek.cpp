@@ -428,6 +428,7 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 		if (PlanRunGroupCornerPeek(Operative, Face, Peeker, &Stack, &Unplaced) && Peeker)
 		{
 			PeekOperative = Peeker;
+			Demo.SetActor(Peeker);
 			Result = Peeker->OrderRunCornerPeek(Face.Corner, Face.EdgeOnFace, bDouble);
 			bOrdered = true;
 			if (Result == EOperativeOrderResult::Accepted)
@@ -450,7 +451,7 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 	{
 		if (bDouble && !bClickPreviewSprint && PeekCarry.bActive)
 		{
-			return true; // the second click of a double-click: the squad's wall order at that corner already runs
+			return Demo.SetResult(true); // the second click of a double-click: the squad's wall order at that corner already runs
 		}
 		const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 		const bool bGroupSprint = bDouble;
@@ -632,6 +633,7 @@ bool ACodexTacticsPlayerController::PlanRunCornerPeekClick(AOperativeCharacter* 
 		if (PlanRunGroupCornerPeek(Operative, Face, Peeker, &Stack) && Peeker)
 		{
 			PeekOperative = Peeker;
+			Demo.SetActor(Peeker);
 			PlanRunCornerPeek(*Peeker, Face.Corner, Face.EdgeOnFace, bSprint, Radius, Planned);
 			for (const TPair<AOperativeCharacter*, FCoverSlot>& Each : Stack)
 			{

@@ -47,6 +47,9 @@ private:
 	void Flush(double Duration);
 	void TakeSnapshot();
 	void Capture(FDemoFrame& Frame, const AOperativeCharacter* Actor);
+	void AppendSnapshot(FDemoFrame Frame);
+	int32 AppendOrder(FDemoFrame Frame, const AOperativeCharacter* Actor);
+	void SelectActor(FDemoFrame& Frame, FName Actor);
 	int32 BeginOrder(EDemoOrderKind Kind, const AOperativeCharacter* Actor, const TOptional<FVector>& Destination,
 		const FCoverSlot* Cover, const AActor* Target, bool bSprint, bool bPlan);
 	void EndOrder(int32 Index);
@@ -82,6 +85,9 @@ public:
 	void SetCrouch(bool bCrouch);
 	void SetCease();
 	void SetPlan(bool bPlan);
+	void SetActor(const AOperativeCharacter* Actor);
+	void SetTarget(const AActor* Target, const FVector* KnownPosition = nullptr);
+	void SetSprint(bool bSprint);
 
 private:
 	USessionRecordingSubsystem* Recorder = nullptr;

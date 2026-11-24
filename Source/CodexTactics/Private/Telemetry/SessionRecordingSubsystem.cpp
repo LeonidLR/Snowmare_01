@@ -212,6 +212,11 @@ void USessionRecordingSubsystem::TakeSnapshot()
 	if (!bRecording || !Suppressed.IsNone()) { return; }
 	FDemoFrame Frame;
 	Stamp(Frame);
+	AppendSnapshot(Frame);
+}
+
+void USessionRecordingSubsystem::AppendSnapshot(FDemoFrame Frame)
+{
 	if (Frame.Time >= SessionRecordingRules::MaxSessionSec)
 	{
 		Session.bTruncated = true;
@@ -250,21 +255,19 @@ void USessionRecordingSubsystem::Capture(FDemoFrame& Frame, const AOperativeChar
 	const AOperativeCharacter* Selected = Squad->GetLeader();
 	if (!Actor && Frame.Type == FDemoFrame::EType::Order) { Actor = Selected; }
 	Frame.Actor = Actor ? Actor->GetFName() : NAME_None;
-	bool bHasSelection = false;
+	bool& bHasSelection = Frame.bBoxSelected;
 	for (const TWeakObjectPtr<AOperativeCharacter>& Ref : Squad->GetMemberRefs())
 	{
 		const AOperativeCharacter* Op = Ref.Get();
 		bHasSelection |= Op && Alive(*Op) && Squad->IsGroupSelected(Op);
 	}
 
-	int32 ActorIndex = INDEX_NONE;
 	FVector Centre = FVector::ZeroVector;
 	Session.Alive = 0;
 	for (const TWeakObjectPtr<AOperativeCharacter>& Ref : Squad->GetMemberRefs())
 	{
 		const AOperativeCharacter* Op = Ref.Get();
 		if (!Op) { continue; }
-		if (Op == Actor) { ActorIndex = Session.Ops.Num(); }
 		FDemoOp& View = Session.Ops.AddDefaulted_GetRef();
 		View.Id = Op->GetFName();
 		View.Position = Op->GetActorLocation();
@@ -322,14 +325,7 @@ void USessionRecordingSubsystem::Capture(FDemoFrame& Frame, const AOperativeChar
 			const FVector2D Measured = SessionRecordingRules::ThreatDistanceBearing(View.Position, View.Yaw, &Position);
 			View.ThreatDistance = Measured.X;
 			View.ThreatBearing = Measured.Y;
-			if (Actor && View.Id == Frame.Actor && Frame.Destination)
-			{
-				Frame.Facts.ThreatDistanceNew = FVector::Dist2D(*Frame.Destination, Position);
-				const FVector A = (View.Position - Position).GetSafeNormal2D();
-				const FVector B = (*Frame.Destination - Position).GetSafeNormal2D();
-				Frame.Facts.FlankDegrees = A.IsNearlyZero() || B.IsNearlyZero() ? 0.
-					: FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(A, B), -1., 1.)));
-			}
+			View.NearestThreat = Position;
 		}
 	};
 	UEnemyRegistrySubsystem::ForEachEnemyCharacter(&World, [&](const AEnemyCharacter& Enemy)
@@ -342,14 +338,34 @@ void USessionRecordingSubsystem::Capture(FDemoFrame& Frame, const AOperativeChar
 	}
 	for (const FNearest& Entry : Nearest) { Session.Threats.Add(Describe(*Entry.Actor)); }
 	Frame.NumThreats = Nearest.Num();
-	if (ActorIndex != INDEX_NONE)
+	SelectActor(Frame, Frame.Actor);
+	if (Goal && Frame.Destination) { Frame.Facts.GoalDistanceNew = FVector::Dist2D(*Goal, *Frame.Destination); }
+}
+
+void USessionRecordingSubsystem::SelectActor(FDemoFrame& Frame, FName Actor)
+{
+	Frame.Actor = Actor;
+	for (int32 Index = Frame.FirstOp; Index < Frame.FirstOp + Frame.NumOps; ++Index)
 	{
-		const FDemoOp* View = &Session.Ops[ActorIndex];
-		Frame.Facts.bMoving = View->bMoving;
-		Frame.Facts.bInCover = View->bCover;
-		Frame.Facts.ThreatDistance = View->ThreatDistance;
-		Frame.Facts.GoalDistance = View->GoalDistance;
-		if (Goal && Frame.Destination) { Frame.Facts.GoalDistanceNew = FVector::Dist2D(*Goal, *Frame.Destination); }
+		const FDemoOp& View = Session.Ops[Index];
+		if (View.Id != Actor) { continue; }
+		Frame.Facts.bMoving = View.bMoving;
+		Frame.Facts.bInCover = View.bCover;
+		Frame.Facts.ThreatDistance = View.ThreatDistance;
+		Frame.Facts.GoalDistance = View.GoalDistance;
+		Frame.Facts.ThreatDistanceNew = -1.;
+		Frame.Facts.FlankDegrees = 0.;
+		if (View.ThreatDistance >= 0. && Frame.Destination)
+		{
+			Frame.Facts.ThreatDistanceNew = FVector::Dist2D(*Frame.Destination, View.NearestThreat);
+			const FVector A = (View.Position - View.NearestThreat).GetSafeNormal2D();
+			const FVector B = (*Frame.Destination - View.NearestThreat).GetSafeNormal2D();
+			if (!A.IsNearlyZero() && !B.IsNearlyZero())
+			{
+				Frame.Facts.FlankDegrees = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(A, B), -1., 1.)));
+			}
+		}
+		break;
 	}
 }
 
@@ -359,7 +375,6 @@ int32 USessionRecordingSubsystem::BeginOrder(EDemoOrderKind Kind, const AOperati
 	TRACE_CPUPROFILER_EVENT_SCOPE(DemoRecord_Order);
 	FDemoFrame Frame;
 	Stamp(Frame);
-	Frame.Type = FDemoFrame::EType::Order;
 	Frame.Facts.Kind = Kind;
 	Frame.Destination = Destination;
 	Frame.bSprint = bSprint;
@@ -371,7 +386,13 @@ int32 USessionRecordingSubsystem::BeginOrder(EDemoOrderKind Kind, const AOperati
 		Frame.CoverHeight = static_cast<uint8>(Cover->Height);
 	}
 	if (Target) { Frame.Target = SessionRecordingRuntime::Describe(*Target); }
-	Capture(Frame, Actor);
+	return AppendOrder(Frame, Actor);
+}
+
+int32 USessionRecordingSubsystem::AppendOrder(FDemoFrame Frame, const AOperativeCharacter* Actor)
+{
+	Frame.Type = FDemoFrame::EType::Order;
+	if (!bTestSession) { Capture(Frame, Actor); }
 	return Session.Frames.Add(Frame);
 }
 
@@ -387,7 +408,7 @@ void USessionRecordingSubsystem::EndOrder(int32 Index)
 		const bool bDirect = Op.Id == Frame.Actor;
 		const bool bGroupOrder = Frame.Facts.Kind == EDemoOrderKind::Move || Frame.Facts.Kind == EDemoOrderKind::Cover
 			|| Frame.Facts.Kind == EDemoOrderKind::CornerPeek || Frame.Facts.Kind == EDemoOrderKind::Breach;
-		if (!bDirect && (!bGroupOrder || !Op.bAlive || (Frame.bSolo && !Op.bSelected))) { continue; }
+		if (!bDirect && (!bGroupOrder || !Op.bAlive || ((Frame.bBoxSelected && !Op.bSelected) || (Frame.bSolo && !Frame.bBoxSelected)))) { continue; }
 		const FLastOrder Last{ Op.Id, FName(bDirect ? (Mapping.Order ? Mapping.Order : SessionRecordingRules::KindName(Frame.Facts.Kind)) : TEXT("Follow")),
 			Frame.Time };
 		if (FLastOrder* Entry = LastOrders.FindByPredicate([&Op](const FLastOrder& Existing) { return Existing.Id == Op.Id; })) { *Entry = Last; }
@@ -434,6 +455,24 @@ void FDemoOrderScope::SetPlan(bool bPlan)
 	if (Frame != INDEX_NONE) { Recorder->Session.Frames[Frame].bPlan = bPlan; }
 }
 
+void FDemoOrderScope::SetActor(const AOperativeCharacter* Actor)
+{
+	if (Frame != INDEX_NONE && Actor) { Recorder->SelectActor(Recorder->Session.Frames[Frame], Actor->GetFName()); }
+}
+
+void FDemoOrderScope::SetTarget(const AActor* Target, const FVector* KnownPosition)
+{
+	if (Frame == INDEX_NONE) { return; }
+	FDemoThreat& View = Recorder->Session.Frames[Frame].Target;
+	View = Target ? SessionRecordingRuntime::Describe(*Target) : FDemoThreat{};
+	if (KnownPosition && Target) { View.Position = *KnownPosition; }
+}
+
+void FDemoOrderScope::SetSprint(bool bSprint)
+{
+	if (Frame != INDEX_NONE) { Recorder->Session.Frames[Frame].bSprint = bSprint; }
+}
+
 FDemoSuppressScope::FDemoSuppressScope(const UObject* Context) : Recorder(USessionRecordingSubsystem::GetIfRecording(Context))
 {
 	if (Recorder) { ++Recorder->SuppressDepth; }
@@ -453,19 +492,19 @@ void USessionRecordingSubsystem::StartForTest(const FString& Directory)
 
 void USessionRecordingSubsystem::RecordOrderAt(double Time, const FDemoFacts& Facts)
 {
-	FDemoFrame& Frame = Session.Frames.AddDefaulted_GetRef();
-	Frame.Type = FDemoFrame::EType::Order;
+	FDemoFrame Frame;
 	Frame.Time = Time;
 	Frame.RealTime = Time;
 	Frame.Facts = Facts;
-	EndOrder(Session.Frames.Num() - 1);
+	EndOrder(AppendOrder(Frame, nullptr));
 }
 
 void USessionRecordingSubsystem::SnapshotAt(double Time)
 {
-	FDemoFrame& Frame = Session.Frames.AddDefaulted_GetRef();
+	FDemoFrame Frame;
 	Frame.Time = Time;
 	Frame.RealTime = Time;
+	AppendSnapshot(Frame);
 }
 
 void USessionRecordingSubsystem::FinishAt(double Time)

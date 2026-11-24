@@ -1186,6 +1186,7 @@ void ACodexTacticsPlayerController::IssueTargetedShot(AActor* HitActor)
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	const bool bPaused = Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
 	const ETargetedShotKind Kind = AOperativeCharacter::ClassifyShotTarget(HitActor);
+	Demo.SetPlan(bPaused && Kind != ETargetedShotKind::None);
 	// 2026-10-19 (symmetric sight): exploring, an enemy no operative sees is no target - the order would start the fight at an
 	// enemy the squad cannot see (in a fight the priority is kept until it shows up, as before).
 	if (const UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>(); Sight && Kind == ETargetedShotKind::Enemy
@@ -1363,6 +1364,7 @@ void ACodexTacticsPlayerController::IssueQuickFire(const FHitResult& Hit)
 	}
 	const int32 Picked = QuickFireRules::PickTarget(Point, Candidates, Config.EnemyPickRadiusCm);
 	AActor* Enemy = Picked != INDEX_NONE ? EnemyActors[Picked] : nullptr;
+	Demo.SetTarget(Enemy);
 
 	// Turn-based: the active operative's grid attack (its AP rules) on the enemy / object there; no fire at an empty spot.
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased())
@@ -1384,6 +1386,8 @@ void ACodexTacticsPlayerController::IssueQuickFire(const FHitResult& Hit)
 		}
 		HideCoverPreview();
 		AOperativeCharacter* Active = TurnBased->GetActiveUnit();
+		Demo.SetActor(Active);
+		Demo.SetTarget(GridTarget);
 		TurnBased->HandleWorldClick(GridTarget == Hit.GetActor() ? Point : GridTarget->GetActorLocation(), GridTarget, /*bAttackOrder*/ true);
 		ControllerCommands::Report(this, PlayerCommands::QuickFire, GridTarget, false, false, Active, Point);
 		return;
@@ -1398,6 +1402,7 @@ void ACodexTacticsPlayerController::IssueQuickFire(const FHitResult& Hit)
 	Shooters.RemoveAll([](const AOperativeCharacter* Member) { return !Member || VehicleQueries::IsMounted(Member); });
 	const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 	const bool bPlan = Flow && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+	Demo.SetPlan(bPlan);
 	int32 Accepted = 0;
 	for (AOperativeCharacter* Shooter : Shooters)
 	{
@@ -1581,6 +1586,7 @@ bool ACodexTacticsPlayerController::IssueSuppress(const FHitResult& Hit)
 	}
 	Demo.SetPlan(bPlan);
 	Demo.SetResult(true);
+	Demo.SetTarget(Enemy, &Spot);
 	ControllerCommands::Report(this, PlayerCommands::Suppress, Enemy, bPlan, Accepted > 1, Leader, Spot);
 	return true;
 }

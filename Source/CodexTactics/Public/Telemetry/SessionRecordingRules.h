@@ -49,6 +49,7 @@ struct FDemoOp
 {
 	FName Id;
 	FName LastOrder;
+	FVector NearestThreat = FVector::ZeroVector;
 	FVector Position = FVector::ZeroVector;
 	double Yaw = 0.;
 	double ThreatDistance = -1.;
@@ -97,6 +98,7 @@ struct FDemoFrame
 	EDemoMode Mode = EDemoMode::Solo;
 	bool bModeOn = false;
 	bool bSolo = false;
+	bool bBoxSelected = false;
 	bool bSprint = false;
 	bool bPlan = false;
 	bool bPaused = false;

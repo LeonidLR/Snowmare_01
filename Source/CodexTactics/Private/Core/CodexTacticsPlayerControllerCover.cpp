@@ -945,6 +945,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 			CoverSwitchRules::VerdictName(LastCoverSwitchVerdict), bSwitch ? TEXT("the cover switch") : TEXT("the ordinary cover order"));
 	}
 	const bool bCoverFast = Operative->IsInStealthMode() ? bDoubleClick : true;
+	Demo.SetSprint(bCoverFast);
 	// Game designer 2026-10-20: a box selection / group mode takes cover together (the others beside him or prone behind it).
 	if (OrderGroupCover(Operative, Target, Dispatch == ECombatOrderDispatch::Queue, Flow ? Flow->GetPauseOrderRadius() : 1200.f, bSwitch, nullptr, bCoverFast))
 	{
