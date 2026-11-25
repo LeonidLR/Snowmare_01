@@ -1195,6 +1195,8 @@ public:
 	bool TryDrawSidearm();
 	/** The sidearm drawn by the rule goes back to the primary (which then reloads) after the holster time without a target / when dry. */
 	void UpdateSidearmReturn(float DeltaTime);
+	/** Auto-switches between shotgun (<= 12 m) and m16 (> 15 m) with hysteresis unless the player picked a weapon. */
+	void UpdateShotgunRifleChoice();
 	/** He holds the sidearm the rule drew (not a weapon the player chose). */
 	bool IsSidearmDrawnByRule() const { return bSidearmDrawnByRule; }
 	/** Sidearm draws by the rule since spawn (for the smokes). */

@@ -57,6 +57,8 @@ namespace SectorRoundsSmoke
 		int32 AccPlayerHits[4]{};
 		int32 AccPmcShots[4]{};
 		int32 AccPmcHits[4]{};
+		bool bRpgCapEngineer = false;
+		int32 SubStage = 0;
 	};
 
 	bool Finish(bool bPass, const TCHAR* What)
@@ -336,6 +338,82 @@ namespace SectorRoundsSmoke
 			}
 			return Now < State->StageAt + 1200.0 || Finish(false, TEXT("accuracy measure timed out"));
 		}
+		if (State->bRpgCapEngineer)
+		{
+			const double Now = World->GetTimeSeconds();
+			AOperativeCharacter* Commander = nullptr;
+			AOperativeCharacter* Engineer = nullptr;
+			AOperativeCharacter* Pmc = nullptr;
+			for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+			{
+				if (It->IsActorBeingDestroyed() || It->IsKilledInAction()) continue;
+				if (It->IsPlayerTeam())
+				{
+					if (It->SquadRole == EOperativeRole::Commander) Commander = *It;
+					else if (It->SquadRole == EOperativeRole::Engineer) Engineer = *It;
+				}
+				else if (!Pmc)
+				{
+					Pmc = *It;
+				}
+			}
+			if (!Commander || !Engineer || !Pmc)
+			{
+				return Now - State->StageAt < 30.0 || Finish(false, TEXT("RpgCapEngineer: missing commander/engineer/pmc"));
+			}
+			if (State->SubStage == 0)
+			{
+				const FWeaponAmmoState InitRpg = Commander->GetAmmoState(TEXT("rpg7"));
+				if (InitRpg.Clip + InitRpg.Reserve != 2)
+				{
+					return Finish(false, TEXT("RpgCapEngineer: initial rpg7 total != 2"));
+				}
+				Commander->AddAmmo(TEXT("rpg7"), 5);
+				const FWeaponAmmoState AfterAdd = Commander->GetAmmoState(TEXT("rpg7"));
+				if (AfterAdd.Clip + AfterAdd.Reserve != 2)
+				{
+					return Finish(false, TEXT("RpgCapEngineer: AddAmmo exceeded rpg7 cap 2"));
+				}
+				// Spend both rockets and verify resupply never refills rpg7.
+				Commander->SwitchToWeaponById(TEXT("rpg7"));
+				Commander->CurrentClip = 0;
+				Commander->ReserveAmmo = 0;
+				Commander->AmmoInventory.FindOrAdd(TEXT("rpg7")) = { 0, 0 };
+				Commander->AutoSwitchOnEmpty();
+				if (Commander->IsLauncherEquipped())
+				{
+					return Finish(false, TEXT("RpgCapEngineer: commander did not switch off empty rpg7"));
+				}
+				// Engineer range switch: 30 m -> m16, 8 m -> shotgun.
+				const FVector EngPos = Engineer->GetActorLocation();
+				Pmc->TeleportTo(EngPos + FVector(3000.f, 0.f, 0.f), Pmc->GetActorRotation(), false, true);
+				Engineer->UpdateShotgunRifleChoice();
+				if (!Engineer->CurrentWeapon || Engineer->CurrentWeapon->WeaponId != TEXT("m16"))
+				{
+					return Finish(false, TEXT("RpgCapEngineer: engineer did not switch to m16 at 30 m"));
+				}
+				Pmc->TeleportTo(EngPos + FVector(800.f, 0.f, 0.f), Pmc->GetActorRotation(), false, true);
+				Engineer->UpdateShotgunRifleChoice();
+				if (!Engineer->CurrentWeapon || Engineer->CurrentWeapon->WeaponId != TEXT("shotgun"))
+				{
+					return Finish(false, TEXT("RpgCapEngineer: engineer did not switch to shotgun at 8 m"));
+				}
+				State->Mark = Now;
+				State->SubStage = 1;
+				UE_LOG(LogCodexTactics, Display, TEXT("[RpgCapEngineer] cap=2, empty switch, 30m->m16, 8m->shotgun OK; waiting 22s resupply check"));
+				return true;
+			}
+			if (Now >= State->Mark + 22.0)
+			{
+				const FWeaponAmmoState AfterResupply = Commander->GetAmmoState(TEXT("rpg7"));
+				if (AfterResupply.Clip + AfterResupply.Reserve != 0)
+				{
+					return Finish(false, TEXT("RpgCapEngineer: rpg7 was refilled by resupply"));
+				}
+				return Finish(true, TEXT("rpg7 capped at 2 and not resupplied; engineer m16@30m / shotgun@8m"));
+			}
+			return true;
+		}
 		const double Now = World->GetTimeSeconds();
 		const FSectorRoundView View = Training->GetRoundView();
 		const FSectorFightConfig& Config = Training->GetFightConfig();
@@ -503,6 +581,10 @@ namespace SectorRoundsSmoke
 			else if (FParse::Value(*Arg, TEXT("Rounds="), Val) && Val > 0)
 			{
 				State->TargetRounds = Val;
+			}
+			else if (FParse::Value(*Arg, TEXT("RpgCapEngineer="), Val))
+			{
+				State->bRpgCapEngineer = Val != 0;
 			}
 		}
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float) { return Step(State); }), 0.f);

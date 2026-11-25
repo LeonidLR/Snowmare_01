@@ -44,6 +44,19 @@ namespace LauncherRules
 
 	constexpr float MinScatterCm = 150.f;
 	constexpr float MaxScatterCm = 350.f;
+	inline constexpr int32 DefaultRocketsPerRound = 2;
+
+	struct FLauncherAmmoCap
+	{
+		int32 Clip = 0;
+		int32 Reserve = 0;
+	};
+
+	/** Caps launcher clip + reserve so total rockets never exceed MaxRockets (1 loaded + 1 spare = 2). */
+	CODEXTACTICS_API FLauncherAmmoCap CapAmmo(int32 Clip, int32 Reserve, int32 MaxRockets = DefaultRocketsPerRound);
+
+	/** Clamps an additive reserve delta so CurrentClip + CurrentReserve + Delta <= MaxRockets. */
+	CODEXTACTICS_API int32 CapReserveToAdd(int32 CurrentClip, int32 CurrentReserve, int32 AddCount, int32 MaxRockets = DefaultRocketsPerRound);
 
 	/** The feed / floating text for a refusal ("" for None). */
 	CODEXTACTICS_API FString RefusalText(ELauncherRefusal Refusal);

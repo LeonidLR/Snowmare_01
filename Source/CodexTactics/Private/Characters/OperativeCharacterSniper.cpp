@@ -6,6 +6,7 @@
 #include "CodexTactics.h"
 #include "Animation/Skeleton.h"
 #include "Characters/OperativeAnimInstance.h"
+#include "Combat/LauncherRules.h"
 #include "Combat/SniperRules.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -170,6 +171,12 @@ void AOperativeCharacter::AddArsenalWeapon(UWeaponDataAsset* Weapon, int32 Reser
 	{
 		Ammo.Reserve += *Extra;
 		ExtraAmmo.Remove(FName(*Weapon->WeaponId));
+	}
+	if (Weapon->Stats.Handling == EWeaponHandling::Launcher || Weapon->WeaponId == TEXT("rpg7"))
+	{
+		const LauncherRules::FLauncherAmmoCap Capped = LauncherRules::CapAmmo(Ammo.Clip, Ammo.Reserve);
+		Ammo.Clip = Capped.Clip;
+		Ammo.Reserve = Capped.Reserve;
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("%s: arsenal + %s [%d / %d]"), *DisplayName.ToString(), *Weapon->WeaponId, Ammo.Clip, Ammo.Reserve);
 }
