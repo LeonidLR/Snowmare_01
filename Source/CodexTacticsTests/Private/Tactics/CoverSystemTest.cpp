@@ -44,7 +44,7 @@ bool FCoverTraceHeightTest::RunTest(const FString&)
 	A.WallNormal = -A.WallNormal;
 	TestTrue(TEXT("reversing the face selects the other approach"), IsOnApproachSide(A, FVector(150.f, 20.f, 10.f)));
 	TestTrue(TEXT("a low fence face whose climb goes over stays cover"), FaceDoubleClickStaysCover(true, false));
-	TestFalse(TEXT("a low face whose climb stands on the top still climbs"), FaceDoubleClickStaysCover(true, true));
+	TestTrue(TEXT("a low face whose climb stands on the top stays cover too (designer 11-25)"), FaceDoubleClickStaysCover(true, true));
 	TestFalse(TEXT("a high face still climbs"), FaceDoubleClickStaysCover(false, false));
 	TestFalse(TEXT("a high face that stands on top still climbs"), FaceDoubleClickStaysCover(false, true));
 	TestEqual(TEXT("high cover enters standing"), CoverRules::DefaultStanceFor(ECoverHeight::HighCover), EOperativeStance::Standing);
