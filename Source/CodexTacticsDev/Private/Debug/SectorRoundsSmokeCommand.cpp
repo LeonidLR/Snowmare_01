@@ -343,8 +343,13 @@ namespace SectorRoundsSmoke
 				}
 				const double PlayerD = Closest(*World, Sector.Starts[View.Pair.StartIndex].Position, true);
 				const double PmcD = Closest(*World, Sector.Posts[View.Pair.PostIndex].Pos, false);
-				UE_LOG(LogCodexTactics, Display, TEXT("[SectorRounds] round 2 pair start %d post %d player %.0f cm pmc %.0f cm"), View.Pair.StartIndex,
-					View.Pair.PostIndex, PlayerD, PmcD);
+				const double PairDistM = FVector::Dist2D(Sector.Starts[View.Pair.StartIndex].Position, Sector.Posts[View.Pair.PostIndex].Pos) / 100.0;
+				UE_LOG(LogCodexTactics, Display, TEXT("[SectorRounds] round 2 pair start %d post %d dist %.1f m player %.0f cm pmc %.0f cm"), View.Pair.StartIndex,
+					View.Pair.PostIndex, PairDistM, PlayerD, PmcD);
+				if (PairDistM < Config.MinStartPostDistanceM)
+				{
+					return Finish(false, TEXT("round 2 start/post distance is below min_start_post_distance_m"));
+				}
 				if (PlayerD > 900.0 || PmcD > 800.0)
 				{
 					return Finish(false, TEXT("the new squads are not on the new start and post"));

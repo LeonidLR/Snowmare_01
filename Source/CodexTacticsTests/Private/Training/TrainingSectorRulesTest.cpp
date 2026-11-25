@@ -169,6 +169,26 @@ bool FTrainingSectorFightTest::RunTest(const FString&)
 	const FSectorPair Only{0, 0};
 	TestTrue(TEXT("the only pair repeats"), TrainingSectorRules::PickRoundPair(1, 1, 3, 2, Only) == Only);
 
+	// Safe round pair choice: >= MinStartPostDistanceM and no LOS, else farthest fallback.
+	FTrainingSector SafeSec;
+	SafeSec.Starts.Add({FVector(0, 0, 0), 0.0});
+	SafeSec.Starts.Add({FVector(5000, 0, 0), 0.0});
+	FPmcEncounterPost PostNear; PostNear.Id = TEXT("near"); PostNear.Pos = FVector(2000, 0, 0); // 20 m from start 0, 30 m from start 1
+	FPmcEncounterPost PostFar;  PostFar.Id = TEXT("far");  PostFar.Pos = FVector(0, 6000, 0); // 60 m from start 0, ~78 m from start 1
+	SafeSec.Posts.Add(PostNear);
+	SafeSec.Posts.Add(PostFar);
+	bool bFallback = false;
+	// With LOS on (1, 1), only (0, 1) qualifies (60 m, no LOS).
+	const FSectorPair SafePick = TrainingSectorRules::PickSafeRoundPair(SafeSec, 1, 2, {0, 0}, 40.f,
+		[](const FSectorPair& P) { return P.StartIndex == 1 && P.PostIndex == 1; }, &bFallback);
+	TestFalse(TEXT("safe pick did not fall back"), bFallback);
+	TestTrue(TEXT("safe pick chose (0, 1)"), SafePick == FSectorPair({0, 1}));
+	// With LOS on all pairs, falls back to farthest pair (1, 1) (~78 m).
+	const FSectorPair FarthestPick = TrainingSectorRules::PickSafeRoundPair(SafeSec, 1, 2, {0, 0}, 40.f,
+		[](const FSectorPair&) { return true; }, &bFallback);
+	TestTrue(TEXT("all-LOS falls back to farthest"), bFallback);
+	TestTrue(TEXT("farthest pair is (1, 1)"), FarthestPick == FSectorPair({1, 1}));
+
 	FSectorResupplyQuery Query;
 	Query.bUsesAmmo = true;
 	Query.bHasWeapon = true;

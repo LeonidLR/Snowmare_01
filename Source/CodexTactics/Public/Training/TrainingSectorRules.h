@@ -50,6 +50,8 @@ struct CODEXTACTICS_API FSectorFightConfig
 	float RoundRestartDelayS = 8.f;
 	float RoundTimeLimitS = 600.f;
 	float ResupplyDelayS = 20.f;
+	float MinStartPostDistanceM = 40.f;
+	float RespawnGraceS = 3.f;
 	ESectorAmmoMode AmmoMode = ESectorAmmoMode::Resupply;
 };
 
@@ -112,6 +114,8 @@ namespace TrainingSectorRules
 	CODEXTACTICS_API FSectorFightConfig FightConfig(const FJsonObject& Json, int32 SectorId);
 	CODEXTACTICS_API ESectorRoundEnd EvaluateRound(const FSectorSideCount& Player, const FSectorSideCount& Pmc, double ElapsedS, double LimitS);
 	CODEXTACTICS_API FSectorPair PickRoundPair(int32 StartCount, int32 PostCount, int32 Seed, int32 RoundIndex, const FSectorPair& Previous);
+	CODEXTACTICS_API FSectorPair PickSafeRoundPair(const FTrainingSector& Sector, int32 Seed, int32 RoundIndex, const FSectorPair& Previous,
+		float MinDistanceM, TFunctionRef<bool(const FSectorPair&)> HasLosFn, bool* bOutFallback = nullptr);
 	CODEXTACTICS_API void ApplyPair(const FTrainingSector& Sector, const FSectorPair& Pair, int32 Seed, FTrainingSectorStart& Start, FPmcEncounterSpec& Squad);
 	CODEXTACTICS_API FSectorPair PairOf(const FTrainingSector& Sector, const FTrainingSectorStart& Start, const FPmcEncounterSpec& Squad);
 	CODEXTACTICS_API bool ShouldRefillReserve(const FSectorResupplyQuery& Query, ESectorAmmoMode Mode, double DelayS);

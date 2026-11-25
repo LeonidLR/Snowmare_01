@@ -455,6 +455,7 @@ void UTrainingSectorSubsystem::BeginFight(int32 Seed)
 	BannerUntil = -1.0;
 	RoundStartedAt = 0.0;
 	IntermissionUntil = 0.0;
+	RespawnGraceUntil = -1.0;
 	LastResult = ESectorRoundEnd::None;
 	Phase = ESectorRoundPhase::Waiting;
 	bRespawnApplied = false;
@@ -560,6 +561,7 @@ void UTrainingSectorSubsystem::TryStartRound(double Now)
 	}
 	++RoundNumber;
 	RoundStartedAt = Now;
+	RespawnGraceUntil = (RoundNumber > 1 && Fight.RespawnGraceS > 0.f) ? (Now + Fight.RespawnGraceS) : -1.0;
 	RoundKillsPlayer = 0;
 	RoundKillsPmc = 0;
 	Watched.Reset();
@@ -570,8 +572,56 @@ void UTrainingSectorSubsystem::TryStartRound(double Now)
 		GetSectorId(), FightSeed, CurrentPair.StartIndex, *Encounter.Post.Id);
 }
 
+bool UTrainingSectorSubsystem::HasStartPostLos(const FTrainingSector& Sector, const FSectorPair& Pair) const
+{
+	const UWorld* World = GetWorld();
+	if (!World || !Sector.Starts.IsValidIndex(Pair.StartIndex) || !Sector.Posts.IsValidIndex(Pair.PostIndex))
+	{
+		return false;
+	}
+	const FTrainingSectorStart& S = Sector.Starts[Pair.StartIndex];
+	const FPmcEncounterPost& P = Sector.Posts[Pair.PostIndex];
+	const FRotator StartFacing = S.Transform().Rotator();
+	const FRotator PostFacing(0.0, P.YawDeg, 0.0);
+	const FVector PostRight = FRotationMatrix(PostFacing).GetScaledAxis(EAxis::Y);
+	const FCollisionQueryParams Params(SCENE_QUERY_STAT(SectorRespawnLos), false);
+	const FVector EyeOffset(0.0, 0.0, 160.0);
+	for (int32 StartSlot = 0; StartSlot < 3; ++StartSlot)
+	{
+		const FVector StartEye = S.Position + StartFacing.RotateVector(FVector(0.0, StartSlot * 120.0, 0.0)) + EyeOffset;
+		for (int32 PmcSlot = 0; PmcSlot < 3; ++PmcSlot)
+		{
+			const FVector PmcEye = P.Pos + PostRight * ((PmcSlot - 1) * 150.0) + EyeOffset;
+			FHitResult Hit;
+			if (!World->LineTraceSingleByChannel(Hit, StartEye, PmcEye, ECC_Visibility, Params))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 void UTrainingSectorSubsystem::TickFighting(double Now)
 {
+	if (RespawnGraceUntil > 0.0)
+	{
+		const bool bInGrace = Now < RespawnGraceUntil;
+		if (UWorld* World = GetWorld())
+		{
+			for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+			{
+				if (!It->IsPlayerTeam())
+				{
+					It->bTacticalCeaseFire = bInGrace;
+				}
+			}
+		}
+		if (!bInGrace)
+		{
+			RespawnGraceUntil = -1.0;
+		}
+	}
 	RefillReserves(Now);
 	NoteKills();
 	UWorld* World = GetWorld();
@@ -604,7 +654,14 @@ void UTrainingSectorSubsystem::TickFighting(double Now)
 	{
 		It->bTacticalCeaseFire = true;
 	}
-	NextPair = TrainingSectorRules::PickRoundPair(Active->Starts.Num(), Active->Posts.Num(), FightSeed, RoundNumber + 1, CurrentPair);
+	bool bPairFallback = false;
+	NextPair = TrainingSectorRules::PickSafeRoundPair(*Active, FightSeed, RoundNumber + 1, CurrentPair, Fight.MinStartPostDistanceM,
+		[this](const FSectorPair& Candidate) { return Active && HasStartPostLos(*Active, Candidate); }, &bPairFallback);
+	if (bPairFallback)
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("[TrainingSector] No start/post pair >= %.0f m without LOS; using farthest (%d, %d)"),
+			Fight.MinStartPostDistanceM, NextPair.StartIndex, NextPair.PostIndex);
+	}
 	bRespawnApplied = false;
 	Phase = ESectorRoundPhase::Intermission;
 	IntermissionUntil = Now + Fight.RoundRestartDelayS;

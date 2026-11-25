@@ -71,9 +71,11 @@ private:
 	double RoundStartedAt = 0.0;
 	double IntermissionUntil = 0.0;
 	double BannerUntil = -1.0;
+	double RespawnGraceUntil = -1.0;
 	bool bRespawnApplied = false;
 
 	bool IsTrainingMap() const;
+	bool HasStartPostLos(const FTrainingSector& Sector, const FSectorPair& Pair) const;
 	bool BuildBoundary(const FTrainingSector& Sector, TArray<TWeakObjectPtr<AActor>>& Out) const;
 	void BeginFight(int32 Seed);
 	void EndFight();
