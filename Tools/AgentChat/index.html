@@ -486,6 +486,82 @@
       border-bottom: 1px solid var(--border-color);
       padding-bottom: 6px;
     }
+    .board-col-in_progress {
+      border-color: rgba(249, 115, 22, 0.55);
+      background: rgba(249, 115, 22, 0.08);
+    }
+    .board-col-in_progress .board-col-title {
+      color: #fb923c;
+      border-bottom-color: rgba(249, 115, 22, 0.35);
+    }
+    .board-col-done {
+      border-color: rgba(125, 211, 252, 0.5);
+      background: rgba(125, 211, 252, 0.07);
+    }
+    .board-col-done .board-col-title {
+      color: #7dd3fc;
+      border-bottom-color: rgba(125, 211, 252, 0.35);
+    }
+    .board-col-in_main {
+      border-color: rgba(34, 197, 94, 0.5);
+      background: rgba(34, 197, 94, 0.07);
+    }
+    .board-col-in_main .board-col-title {
+      color: #4ade80;
+      border-bottom-color: rgba(34, 197, 94, 0.35);
+    }
+    .blocker-chip {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(239, 68, 68, 0.22);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.55);
+    }
+    .task-progress {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      margin-top: 2px;
+    }
+    .task-progress-track {
+      height: 4px;
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .task-progress-fill {
+      height: 100%;
+      background: #f97316;
+      border-radius: 3px;
+      transition: width 0.2s ease;
+    }
+    .task-progress-label {
+      font-size: 11px;
+      color: #fdba74;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .register-footer {
+      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .register-toggle {
+      align-self: flex-start;
+      background: var(--bg-surface);
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .register-toggle:hover { color: #e2e8f0; border-color: #64748b; }
     .task-card {
       background: var(--bg-base);
       border: 1px solid var(--border-color);
@@ -712,9 +788,8 @@
       </select>
       <select id="filter-state">
         <option value="all">Все статусы</option>
-        <option value="in_progress">В работе</option>
-        <option value="waiting">Ждёт ответа</option>
         <option value="queued">В очереди</option>
+        <option value="in_progress">В работе</option>
         <option value="done">Готово (ревью)</option>
         <option value="in_main">В main</option>
         <option value="not_started">Не начато (реестр)</option>
@@ -1146,9 +1221,8 @@
         const q = filterSearch.value.trim().toLowerCase();
 
         const columnsDef = [
-          ['in_progress', 'В работе'],
-          ['waiting', 'Ждёт ответа / блокер'],
           ['queued', 'В очереди'],
+          ['in_progress', 'В работе'],
           ['done', 'Готово (ревью)'],
           ['in_main', 'В main'],
         ];
@@ -1158,7 +1232,8 @@
           columnsDef.forEach(([stKey, stLabel]) => {
             if (stateVal !== 'all' && stateVal !== stKey) return;
             const list = (boardData.tasks || []).filter(t => {
-              if (t.state !== stKey) return false;
+              const matchesCol = stKey === 'in_progress' ? (t.state === 'in_progress' || t.state === 'waiting') : (t.state === stKey);
+              if (!matchesCol) return false;
               if (ownerVal !== 'all' && t.owner !== ownerVal) return false;
               if (areaVal !== 'all' && t.area !== areaVal) return false;
               if (q && !(t.id + ' ' + t.title + ' ' + (t.title_ru || '') + ' ' + (t.branch || '')).toLowerCase().includes(q)) return false;
@@ -1166,7 +1241,7 @@
             });
 
             const col = document.createElement('div');
-            col.className = 'board-col';
+            col.className = `board-col board-col-${stKey}`;
             const colHead = document.createElement('div');
             colHead.className = 'board-col-title';
             const titleSpan = document.createElement('span');
@@ -1190,6 +1265,12 @@
               ownerEl.className = `owner-pill owner-${t.owner}`;
               ownerEl.textContent = t.moved_note ? `${t.owner} (${t.moved_note})` : t.owner;
               top.appendChild(idEl);
+              if (t.state === 'waiting' || t.blocked) {
+                const blockerEl = document.createElement('span');
+                blockerEl.className = 'blocker-chip';
+                blockerEl.textContent = 'блокер';
+                top.appendChild(blockerEl);
+              }
               top.appendChild(ownerEl);
               card.appendChild(top);
 
@@ -1197,6 +1278,29 @@
               titleEl.className = 'task-title';
               titleEl.textContent = t.title_ru && t.title_ru !== t.title ? `${t.title_ru} · ${t.title}` : t.title;
               card.appendChild(titleEl);
+
+              if (stKey === 'in_progress' && (t.progress_total > 0 || t.progress_done !== null)) {
+                const pWrap = document.createElement('div');
+                pWrap.className = 'task-progress';
+                const total = t.progress_total > 0 ? t.progress_total : 1;
+                const done = Math.min(total, Math.max(0, t.progress_done || 0));
+                const pct = Math.round((done / total) * 100);
+                const track = document.createElement('div');
+                track.className = 'task-progress-track';
+                const fill = document.createElement('div');
+                fill.className = 'task-progress-fill';
+                fill.style.width = `${pct}%`;
+                track.appendChild(fill);
+                pWrap.appendChild(track);
+                const label = document.createElement('div');
+                label.className = 'task-progress-label';
+                const parts = [t.progress_total > 0 ? `${done}/${total}` : 'в работе'];
+                if (t.progress_step) parts.push(t.progress_step);
+                if (t.idle_min !== null && t.idle_min !== undefined) parts.push(`${t.idle_min} мин назад`);
+                label.textContent = parts.join(' · ');
+                pWrap.appendChild(label);
+                card.appendChild(pWrap);
+              }
 
               if (t.branch || t.idle_min !== null) {
                 const metaEl = document.createElement('div');
@@ -1237,24 +1341,44 @@
           });
         }
 
+        const boardParent = boardCols.parentElement;
+        if (boardParent) {
+          boardParent.querySelectorAll('.register-footer').forEach(el => el.remove());
+        }
+
         if (stateVal === 'all' || stateVal === 'not_started') {
-          const regList = (boardData.not_started_register || []).filter(r => {
+          const allReg = (boardData.not_started_register || []).filter(r => {
             if (areaVal !== 'all' && r.area !== areaVal) return false;
             if (q && !(r.id + ' ' + r.name + ' ' + r.area).toLowerCase().includes(q)) return false;
             return true;
-          }).slice(0, 40);
-          if (regList.length > 0) {
-            const col = document.createElement('div');
-            col.className = 'board-col';
-            const colHead = document.createElement('div');
-            colHead.className = 'board-col-title';
-            const titleSpan = document.createElement('span');
-            titleSpan.textContent = 'Реестр без задачи (not started)';
-            const countSpan = document.createElement('span');
-            countSpan.textContent = String((boardData.not_started_register || []).length);
-            colHead.appendChild(titleSpan);
-            colHead.appendChild(countSpan);
-            col.appendChild(colHead);
+          });
+          const regList = allReg.slice(0, 40);
+          if (regList.length > 0 && boardParent) {
+            const footer = document.createElement('div');
+            footer.className = 'register-footer';
+
+            let isOpen = false;
+            try {
+              isOpen = localStorage.getItem('agent_chat_register_open') === '1';
+            } catch (_) {
+              isOpen = false;
+            }
+            if (stateVal === 'not_started') {
+              isOpen = true;
+            }
+
+            const toggleBtn = document.createElement('button');
+            toggleBtn.type = 'button';
+            toggleBtn.className = 'register-toggle';
+            const totalReg = (boardData.not_started_register || []).length;
+            const updateLabel = (open) => {
+              toggleBtn.textContent = (open ? '▾ ' : '▸ ') + 'Реестр (' + totalReg + ')';
+            };
+            updateLabel(isOpen);
+
+            const regGrid = document.createElement('div');
+            regGrid.className = 'register-grid';
+            regGrid.style.display = isOpen ? 'grid' : 'none';
 
             regList.forEach(r => {
               const card = document.createElement('div');
@@ -1274,9 +1398,21 @@
               titleEl.textContent = r.name;
               card.appendChild(top);
               card.appendChild(titleEl);
-              col.appendChild(card);
+              regGrid.appendChild(card);
             });
-            boardCols.appendChild(col);
+
+            toggleBtn.addEventListener('click', () => {
+              isOpen = !isOpen;
+              regGrid.style.display = isOpen ? 'grid' : 'none';
+              updateLabel(isOpen);
+              try {
+                localStorage.setItem('agent_chat_register_open', isOpen ? '1' : '0');
+              } catch (_) {}
+            });
+
+            footer.appendChild(toggleBtn);
+            footer.appendChild(regGrid);
+            boardParent.appendChild(footer);
           }
         }
       }
