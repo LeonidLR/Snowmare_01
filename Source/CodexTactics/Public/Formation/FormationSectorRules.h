@@ -88,6 +88,13 @@ namespace FormationSectorRules
 		float LeaderYaw, const TOptional<float>& PassageWidth = TOptional<float>(), const FFormationConfig& Config = FFormationConfig());
 
 	/**
+	 * Vertical scan (G025), degrees, + up. Independent of LookYaw (the parity golden stays). A slow up / level / down
+	 * sweep of ScanPitchAmp on ScanPeriod, phase per role so the squad is not in step, centred on HighBiasDeg when
+	 * high geometry is in front (0 on open ground). Clamped to +-90. Open ground (bias 0) spans 2 * ScanPitchAmp.
+	 */
+	CODEXTACTICS_API float LookPitch(EFormationRole Role, float TimeInPatrol, float HighBiasDeg, const FFormationConfig& Config = FFormationConfig());
+
+	/**
 	 * v2.1.1 (user decision: nobody looks into a wall, in ANY formation; v2.3 contract 13.1 / 13.4): a wall whose surface is within
 	 * LookWallDist of Pos blocks the directions within LookWallAngle of the direction to its closest point.
 	 * - Yaw is kept when it is not blocked and lies in a free arc at least LookMinFreeDeg wide (a sliver between two wall spans does

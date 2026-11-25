@@ -161,6 +161,24 @@ namespace FormationSectorRules
 		return FRotator::NormalizeAxis(LeaderYaw + LookOffset(Role, Formation, Mode, MemberCount, TimeInPatrol, PassageWidth, Config));
 	}
 
+	static float ScanPitchPhase(EFormationRole Role)
+	{
+		// Desynced on purpose (G025): the four roles do not nod together.
+		switch (Role)
+		{
+		case EFormationRole::Right: return 2.1f;
+		case EFormationRole::Left: return 4.2f;
+		case EFormationRole::Rear: return 1.1f;
+		default: return 0.f;
+		}
+	}
+
+	float LookPitch(EFormationRole Role, float TimeInPatrol, float HighBiasDeg, const FFormationConfig& Config)
+	{
+		const float Pitch = ScanValue(HighBiasDeg, Config.ScanPitchAmp, Config.ScanPeriod, ScanPitchPhase(Role), TimeInPatrol, Config.ScanDwellExp);
+		return FMath::Clamp(Pitch, -90.f, 90.f);
+	}
+
 	float ClearLook(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float Yaw, float CurrentYaw, const FFormationConfig& Config,
 		const TOptional<float>& Held, const TOptional<FFormationLookLimit>& Limit, const TOptional<FVector2D>& Ahead)
 	{
