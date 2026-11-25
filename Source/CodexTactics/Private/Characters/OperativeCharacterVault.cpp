@@ -33,7 +33,7 @@ void AOperativeCharacter::UpdateVaultTrigger(float DeltaTime)
 	const AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController());
 	const UPathFollowingComponent* PathFollowing = AIController ? AIController->GetPathFollowingComponent() : nullptr;
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	if (!PathFollowing || PathFollowing->GetStatus() != EPathFollowingStatus::Moving || Stance == EOperativeStance::Prone
+	if (bInCover || !PathFollowing || PathFollowing->GetStatus() != EPathFollowingStatus::Moving || Stance == EOperativeStance::Prone
 		|| VaultCooldown > 0.f || (Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased))
 	{
 		BlockedTimer = 0.f;
