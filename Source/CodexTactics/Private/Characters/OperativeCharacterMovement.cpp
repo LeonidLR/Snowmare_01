@@ -129,6 +129,12 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		// (before, he crossed to the other wall still "in cover" here: the cover pose slid along and the arrival played no enter clip).
 		LeaveCover(TEXT("another cover"));
 	}
+	// A player's own order (not a formation follow, not the deferred replay of a rise) puts a leftover torso back on the move.
+	// The scan pitch stays while a formation look is set: slot updates must not zero it.
+	if (!bAutonomousOrder && !bPendingMoveReplay && !bInCover && !bMantling)
+	{
+		ReleaseTorsoToMovement(FormationLookYaw.IsSet());
+	}
 	// Commander Mode (Sprint 07-B): every player move order pins the anchor the autonomy fights around.
 	if (!bAutonomousOrder && !bPendingMoveReplay)
 	{
