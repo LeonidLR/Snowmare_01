@@ -674,12 +674,10 @@ namespace GeneratedPropsSmoke
 				State->MapName = FPaths::GetBaseFilename(Arg.Mid(4));
 			}
 		}
-		for (const TCHAR* Name : { TEXT("Codex.Pressure.Enabled"), TEXT("Codex.Pmc.Encounters") })
+		SmokeUtils::StopLevelPmc(World);
+		if (IConsoleVariable* Pressure = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.Enabled")))
 		{
-			if (IConsoleVariable* Variable = IConsoleManager::Get().FindConsoleVariable(Name))
-			{
-				Variable->Set(0, ECVF_SetByConsole);
-			}
+			Pressure->Set(0, ECVF_SetByConsole);
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s on %s"), CommandName, *State->MapName);
 		TWeakObjectPtr<UWorld> WeakWorld(World);

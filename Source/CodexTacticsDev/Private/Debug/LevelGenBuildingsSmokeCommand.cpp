@@ -13,6 +13,8 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
+
 #include "AIController.h"
 #include "Algo/StableSort.h"
 #include "Characters/OperativeCharacter.h"
@@ -1225,6 +1227,14 @@ namespace LevelGenBuildingsSmoke
 			FinishWalk(Walk);
 			return false;
 		}
+		if (Walk.Phase != EWalkPhase::Settle)
+		{
+			const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+			if (!Squad || Squad->GetMembers().Num() != Walk.Members.Num())
+			{
+				return Finish(TEXT("FAIL LevelGenBuildingsWalk: the initial squad lost a member"));
+			}
+		}
 		const double T = Now(*World);
 		switch (Walk.Phase)
 		{
@@ -1249,6 +1259,10 @@ namespace LevelGenBuildingsSmoke
 				{
 					Walk.Members.Add(Operative);
 				}
+			}
+			if (Walk.Options.bSquad && Walk.Members.Num() < 2)
+			{
+				return Finish(TEXT("FAIL LevelGenBuildingsWalk: no follower in the initial squad"));
 			}
 			for (const TWeakObjectPtr<AOperativeCharacter>& Weak : Walk.Members)
 			{
@@ -1405,10 +1419,11 @@ namespace LevelGenBuildingsSmoke
 		const double WallStart = FPlatformTime::Seconds();
 		// The path check waits up to 60 s for an operative and a ready navmesh; walk mode allows a slow cold start on a big map.
 		const double Deadline = WallStart + (Options.bWalk ? 180.0 : 60.0);
+		SmokeUtils::StopLevelPmc(World);
 		if (Options.bWalk)
 		{
 			// A walk check, not a fight (as LevelGenLaddersSmoke / LevelGenRampSmoke): no pressure, no PMC squads, no manoeuvre under fire.
-			for (const TCHAR* Name : { TEXT("Codex.Pressure.Enabled"), TEXT("Codex.Pmc.Encounters"), TEXT("Codex.Combat.UnderFireManoeuvre") })
+			for (const TCHAR* Name : { TEXT("Codex.Pressure.Enabled"), TEXT("Codex.Combat.UnderFireManoeuvre") })
 			{
 				if (IConsoleVariable* Variable = IConsoleManager::Get().FindConsoleVariable(Name))
 				{

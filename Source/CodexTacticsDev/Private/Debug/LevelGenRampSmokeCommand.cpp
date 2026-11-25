@@ -21,6 +21,8 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
+
 #include "AIController.h"
 #include "Characters/OperativeCharacter.h"
 #include "Survival/ColdSurvivalComponent.h"
@@ -87,6 +89,7 @@ namespace LevelGenRampSmoke
 
 	struct FState
 	{
+		int32 InitialSquadSize = 0;
 		TWeakObjectPtr<UWorld> World;
 		FString MapName;
 		float GroundZ = 0.f;
@@ -691,6 +694,11 @@ namespace LevelGenRampSmoke
 			Check(State, false, TEXT("the smoke ran out of time"));
 			return Finish(State, false);
 		}
+		if (State.InitialSquadSize > 0 && (!Squad || Squad->GetMembers().Num() != State.InitialSquadSize))
+		{
+			Check(State, false, TEXT("the initial squad lost a member"));
+			return Finish(State, false);
+		}
 		switch (State.Phase)
 		{
 		case EPhase::Settle:
@@ -711,7 +719,8 @@ namespace LevelGenRampSmoke
 			{
 				return false;
 			}
-			Check(State, State.Legs.Num() > 0 && Squad->GetMembers().Num() >= 3, FString::Printf(TEXT("%d legs planned, %d operatives"), State.Legs.Num(),
+			State.InitialSquadSize = Squad->GetMembers().Num();
+			Check(State, State.Legs.Num() > 0 && State.InitialSquadSize >= 3, FString::Printf(TEXT("%d legs planned, %d operatives"), State.Legs.Num(),
 				Squad->GetMembers().Num()));
 			if (State.Legs.Num() == 0)
 			{
@@ -869,12 +878,7 @@ namespace LevelGenRampSmoke
 		{
 			Pressure->Set(0, ECVF_SetByConsole);
 		}
-		// 2026-11-10: nor the Depot's scheduled PMC squads (pmc_squads at 30 s / 120 s) - their firefight (covers, grenades, the RPG, the
-		// horde after it) kept the ordered man in cover / took his order mid-leg; this smoke checks the stairs, not a fight.
-		if (IConsoleVariable* Encounters = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pmc.Encounters")))
-		{
-			Encounters->Set(0, ECVF_SetByConsole);
-		}
+		SmokeUtils::StopLevelPmc(World);
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float)
 		{
 			return Step(State);
