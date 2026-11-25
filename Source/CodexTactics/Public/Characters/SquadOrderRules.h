@@ -250,6 +250,12 @@ namespace SquadOrderRules
 	CODEXTACTICS_API bool KeepsPostFightHold(bool bHold, bool bLeaderMoving, bool bRegroup = false);
 
 	/**
+	 * Task 127: after a formation doorway breach clears a room, followers keep their cleared corner spots until the leader moves or regroups
+	 * instead of immediately collapsing back into the doorway behind him.
+	 */
+	CODEXTACTICS_API bool ShouldHoldClearedBreachSpots(bool bCleared, bool bSoloMode, bool bFollowersHoldingBefore);
+
+	/**
 	 * The exploration formation runs (followers walk to their slots, Solo / Regroup, group cover, the post-fight hold): while exploring
 	 * and after the final fight. Bug 2026-10-23: PostCombat lasts until the level ends (nothing returns the flow to Exploration), and
 	 * the formation was off there - after the horde no follower ever walked again, B toggled Solo without effect. Godot

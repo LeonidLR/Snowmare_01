@@ -197,6 +197,10 @@ bool FSquadOrderPostFightHoldTest::RunTest(const FString&)
 	TestTrue(TEXT("Leader standing: the hold stays"), KeepsPostFightHold(true, false));
 	TestFalse(TEXT("Leader moves: the formation follows again"), KeepsPostFightHold(true, true));
 	TestFalse(TEXT("No hold armed: nothing held"), KeepsPostFightHold(false, false));
+	TestTrue(TEXT("Cleared formation breach holds corners until leader moves"), ShouldHoldClearedBreachSpots(true, false, false));
+	TestFalse(TEXT("Unclear/aborted breach does not arm post-clear hold"), ShouldHoldClearedBreachSpots(false, false, false));
+	TestFalse(TEXT("Solo breach does not arm formation post-clear hold"), ShouldHoldClearedBreachSpots(true, true, false));
+	TestFalse(TEXT("Already holding followers stays on explicit hold"), ShouldHoldClearedBreachSpots(true, false, true));
 	return true;
 }
 
