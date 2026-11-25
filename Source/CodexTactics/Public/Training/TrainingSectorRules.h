@@ -52,8 +52,31 @@ struct CODEXTACTICS_API FSectorFightConfig
 	float ResupplyDelayS = 20.f;
 	float MinStartPostDistanceM = 40.f;
 	float RespawnGraceS = 3.f;
+	float NoContactRelocateS = 90.f;
+	float RelocateDistanceM = 40.f;
+	int32 RelocateMaxPerRound = 3;
 	int32 LauncherRocketsPerRound = 2;
 	ESectorAmmoMode AmmoMode = ESectorAmmoMode::Resupply;
+};
+
+struct CODEXTACTICS_API FSectorRelocateCandidate
+{
+	FVector Location = FVector::ZeroVector;
+	float DistToCentroidM = 0.f;
+	float MinPlayerDistM = 0.f;
+	bool bHasLos = true;
+	bool bNearCover = false;
+};
+
+struct CODEXTACTICS_API FSectorRelocatePick
+{
+	bool bValid = false;
+	int32 CandidateIndex = INDEX_NONE;
+	FVector Location = FVector::ZeroVector;
+	float DistToCentroidM = 0.f;
+	bool bHasLos = false;
+	bool bNearCover = false;
+	bool bFallback = false;
 };
 
 struct CODEXTACTICS_API FSectorPair
@@ -126,4 +149,7 @@ namespace TrainingSectorRules
 	CODEXTACTICS_API const TCHAR* RoundEndName(ESectorRoundEnd Result);
 	CODEXTACTICS_API bool IsFighterDown(bool bAlive, bool bIncapacitated);
 	CODEXTACTICS_API bool ResupplyTouchesGrenades();
+	CODEXTACTICS_API bool ShouldRelocateNoContact(double Now, double LastContactAt, float DelayS, int32 RelocatedCount, int32 MaxPerRound, bool bInGrace);
+	CODEXTACTICS_API FSectorRelocatePick PickRelocatePoint(TConstArrayView<FSectorRelocateCandidate> Candidates, float TargetDistM, float BandHalfM,
+		float MinPlayerDistM, int32 Seed);
 }

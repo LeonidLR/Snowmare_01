@@ -217,6 +217,18 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 		const FDemoRoundEvent& Event = Session.Rounds[RoundIndex];
 		Line([&](FWriter& W)
 		{
+			if (Event.bPmcRelocated)
+			{
+				W.WriteValue(TEXT("type"), TEXT("pmc_relocated"));
+				W.WriteValue(TEXT("t"), Finite(Event.Time));
+				W.WriteValue(TEXT("rt"), Finite(Event.RealTime));
+				W.WriteValue(TEXT("sector_id"), Event.SectorId);
+				W.WriteValue(TEXT("seed"), Event.Seed);
+				W.WriteValue(TEXT("round"), Event.Round);
+				W.WriteValue(TEXT("distance_m"), Finite(Event.RelocateDistanceM));
+				W.WriteValue(TEXT("los"), Event.bRelocateLos);
+				return;
+			}
 			const TCHAR* Results[] = { TEXT("none"), TEXT("victory"), TEXT("defeat"), TEXT("draw") };
 			W.WriteValue(TEXT("type"), Event.bStart ? TEXT("round_start") : TEXT("round_end"));
 			W.WriteValue(TEXT("t"), Finite(Event.Time));
@@ -389,7 +401,7 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 			int32 Draw = 0;
 			for (const FDemoRoundEvent& Event : Session.Rounds)
 			{
-				if (!Event.bStart)
+				if (!Event.bStart && !Event.bPmcRelocated)
 				{
 					++Ends;
 					Victory = Event.ScoreVictory;

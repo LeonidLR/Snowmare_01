@@ -206,6 +206,9 @@ namespace TrainingSectorFight
 		Out.ResupplyDelayS = Read(TEXT("resupply_delay_s"), Out.ResupplyDelayS);
 		Out.MinStartPostDistanceM = Read(TEXT("min_start_post_distance_m"), Out.MinStartPostDistanceM);
 		Out.RespawnGraceS = Read(TEXT("respawn_grace_s"), Out.RespawnGraceS);
+		Out.NoContactRelocateS = Read(TEXT("no_contact_relocate_s"), Out.NoContactRelocateS);
+		Out.RelocateDistanceM = Read(TEXT("relocate_distance_m"), Out.RelocateDistanceM);
+		Out.RelocateMaxPerRound = FMath::Max(0, FMath::RoundToInt(Read(TEXT("relocate_max_per_round"), static_cast<float>(Out.RelocateMaxPerRound))));
 		Out.LauncherRocketsPerRound = FMath::Max(0, FMath::RoundToInt(Read(TEXT("launcher_rockets_per_round"), static_cast<float>(Out.LauncherRocketsPerRound))));
 		FString Mode;
 		if (Json.TryGetStringField(TEXT("ammo_mode"), Mode))
@@ -410,4 +413,81 @@ bool TrainingSectorRules::IsFighterDown(bool bAlive, bool bIncapacitated)
 bool TrainingSectorRules::ResupplyTouchesGrenades()
 {
 	return false;
+}
+
+bool TrainingSectorRules::ShouldRelocateNoContact(double Now, double LastContactAt, float DelayS, int32 RelocatedCount, int32 MaxPerRound, bool bInGrace)
+{
+	return !bInGrace && DelayS > 0.f && MaxPerRound > 0 && RelocatedCount < MaxPerRound && (Now - LastContactAt) >= static_cast<double>(DelayS);
+}
+
+FSectorRelocatePick TrainingSectorRules::PickRelocatePoint(TConstArrayView<FSectorRelocateCandidate> Candidates, float TargetDistM, float BandHalfM,
+	float MinPlayerDistM, int32 Seed)
+{
+	FSectorRelocatePick Out;
+	TArray<int32> Allowed;
+	Allowed.Reserve(Candidates.Num());
+	for (int32 i = 0; i < Candidates.Num(); ++i)
+	{
+		if (Candidates[i].MinPlayerDistM >= MinPlayerDistM)
+		{
+			Allowed.Add(i);
+		}
+	}
+	if (Allowed.IsEmpty())
+	{
+		return Out;
+	}
+	const float BandMinM = FMath::Max(0.f, TargetDistM - BandHalfM);
+	const float BandMaxM = TargetDistM + BandHalfM;
+	// Tier priority: 0 = in-band + no LOS + cover, 1 = in-band + no LOS, 2 = in-band + LOS (cover first), 3 = out-of-band fallback (no LOS > cover).
+	auto TierOf = [BandMinM, BandMaxM](const FSectorRelocateCandidate& C) -> int32
+	{
+		const bool bInBand = C.DistToCentroidM >= BandMinM && C.DistToCentroidM <= BandMaxM;
+		if (bInBand)
+		{
+			if (!C.bHasLos)
+			{
+				return C.bNearCover ? 0 : 1;
+			}
+			return C.bNearCover ? 2 : 3;
+		}
+		if (!C.bHasLos)
+		{
+			return C.bNearCover ? 4 : 5;
+		}
+		return C.bNearCover ? 6 : 7;
+	};
+	int32 BestTier = MAX_int32;
+	float BestDistErr = TNumericLimits<float>::Max();
+	for (const int32 Idx : Allowed)
+	{
+		const int32 Tier = TierOf(Candidates[Idx]);
+		const float Err = FMath::Abs(Candidates[Idx].DistToCentroidM - TargetDistM);
+		if (Tier < BestTier || (Tier == BestTier && Err < BestDistErr))
+		{
+			BestTier = Tier;
+			BestDistErr = Err;
+		}
+	}
+	TArray<int32> Pool;
+	for (const int32 Idx : Allowed)
+	{
+		const int32 Tier = TierOf(Candidates[Idx]);
+		const float Err = FMath::Abs(Candidates[Idx].DistToCentroidM - TargetDistM);
+		if (Tier == BestTier && Err <= BestDistErr + 0.5f)
+		{
+			Pool.Add(Idx);
+		}
+	}
+	FRandomStream Stream(Seed != 0 ? Seed : 1);
+	const int32 ChosenIdx = Pool[Stream.RandRange(0, Pool.Num() - 1)];
+	const FSectorRelocateCandidate& Chosen = Candidates[ChosenIdx];
+	Out.bValid = true;
+	Out.CandidateIndex = ChosenIdx;
+	Out.Location = Chosen.Location;
+	Out.DistToCentroidM = Chosen.DistToCentroidM;
+	Out.bHasLos = Chosen.bHasLos;
+	Out.bNearCover = Chosen.bNearCover;
+	Out.bFallback = BestTier >= 2;
+	return Out;
 }

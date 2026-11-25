@@ -41,6 +41,9 @@ public:
 	FVector PlacePlayer(const FVector& Feet, double HalfHeight) const;
 	void MovePlayersToSector(bool bOnlyOutside) const;
 	void RecordShot(const class AOperativeCharacter& Shooter, const AActor* Target, bool bHit);
+	int32 GetRelocateCount() const { return RoundRelocations; }
+	float GetLastRelocateDistanceM() const { return LastRelocateDistanceM; }
+	bool GetLastRelocateLos() const { return bLastRelocateLos; }
 
 private:
 	struct FSectorFighterWatch
@@ -74,13 +77,19 @@ private:
 	int32 RoundShotsPmc[4]{};
 	int32 RoundHitsPmc[4]{};
 	double RoundStartedAt = 0.0;
+	double LastContactAt = 0.0;
 	double IntermissionUntil = 0.0;
 	double BannerUntil = -1.0;
 	double RespawnGraceUntil = -1.0;
+	int32 RoundRelocations = 0;
+	float LastRelocateDistanceM = -1.f;
+	bool bLastRelocateLos = false;
 	bool bRespawnApplied = false;
 
 	bool IsTrainingMap() const;
 	bool HasStartPostLos(const FTrainingSector& Sector, const FSectorPair& Pair) const;
+	void SyncContactClock(double Now);
+	bool RelocatePmcSquad(double Now);
 	bool BuildBoundary(const FTrainingSector& Sector, TArray<TWeakObjectPtr<AActor>>& Out) const;
 	void BeginFight(int32 Seed);
 	void EndFight();

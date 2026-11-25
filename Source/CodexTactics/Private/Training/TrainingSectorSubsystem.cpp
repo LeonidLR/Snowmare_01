@@ -5,7 +5,9 @@
 #include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "Core/CodexTacticsGameMode.h"
+#include "GameFlow/GameFlowSubsystem.h"
 #include "Data/WeaponDataAsset.h"
 #include "Components/BoxComponent.h"
 #include "Components/LineBatchComponent.h"
@@ -459,6 +461,10 @@ void UTrainingSectorSubsystem::BeginFight(int32 Seed)
 	Banner.Empty();
 	BannerUntil = -1.0;
 	RoundStartedAt = 0.0;
+	LastContactAt = 0.0;
+	RoundRelocations = 0;
+	LastRelocateDistanceM = -1.f;
+	bLastRelocateLos = false;
 	IntermissionUntil = 0.0;
 	RespawnGraceUntil = -1.0;
 	LastResult = ESectorRoundEnd::None;
@@ -477,6 +483,10 @@ void UTrainingSectorSubsystem::EndFight()
 	Phase = ESectorRoundPhase::Idle;
 	Banner.Empty();
 	BannerUntil = -1.0;
+	LastContactAt = 0.0;
+	RoundRelocations = 0;
+	LastRelocateDistanceM = -1.f;
+	bLastRelocateLos = false;
 	Watched.Reset();
 	RoundNumber = 0;
 	StopFightTick();
@@ -570,6 +580,10 @@ void UTrainingSectorSubsystem::TryStartRound(double Now)
 	}
 	++RoundNumber;
 	RoundStartedAt = Now;
+	LastContactAt = Now;
+	RoundRelocations = 0;
+	LastRelocateDistanceM = -1.f;
+	bLastRelocateLos = false;
 	RespawnGraceUntil = (RoundNumber > 1 && Fight.RespawnGraceS > 0.f) ? (Now + Fight.RespawnGraceS) : -1.0;
 	RoundKillsPlayer = 0;
 	RoundKillsPmc = 0;
@@ -637,10 +651,18 @@ void UTrainingSectorSubsystem::TickFighting(double Now)
 	}
 	RefillReserves(Now);
 	NoteKills();
+	SyncContactClock(Now);
 	UWorld* World = GetWorld();
 	if (!World || !Active)
 	{
 		return;
+	}
+	const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+	const bool bPausedMode = Flow && (Flow->GetCombatMode() == ECodexCombatMode::TacticalPause || Flow->GetCombatMode() == ECodexCombatMode::TurnBased);
+	if (!bPausedMode && TrainingSectorRules::ShouldRelocateNoContact(Now, LastContactAt, Fight.NoContactRelocateS, RoundRelocations,
+		Fight.RelocateMaxPerRound, RespawnGraceUntil > 0.0))
+	{
+		RelocatePmcSquad(Now);
 	}
 	FSectorSideCount Players;
 	FSectorSideCount Pmc;
@@ -872,6 +894,10 @@ void UTrainingSectorSubsystem::RecordShot(const AOperativeCharacter& Shooter, co
 	{
 		return;
 	}
+	if (const UWorld* World = GetWorld())
+	{
+		LastContactAt = FMath::Max(LastContactAt, World->GetTimeSeconds());
+	}
 	const float DistM = static_cast<float>(FVector::Dist2D(Shooter.GetActorLocation(), Target->GetActorLocation())) / 100.f;
 	const int32 Bucket = FDemoRoundEvent::BucketForDistanceM(DistM);
 	if (Shooter.IsPlayerTeam())
@@ -918,4 +944,242 @@ void UTrainingSectorSubsystem::RecordRound(bool bStart, ESectorRoundEnd Result, 
 	default: Event.Result = EDemoRoundResult::None; break;
 	}
 	Recorder->RecordSectorRound(Event);
+}
+
+void UTrainingSectorSubsystem::SyncContactClock(double Now)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	if (const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
+	{
+		const double Latest = Pmc->GetLatestContactActivityTime();
+		if (Latest <= Now && Latest > LastContactAt)
+		{
+			LastContactAt = Latest;
+		}
+	}
+	for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+	{
+		if (*It && !It->IsActorBeingDestroyed())
+		{
+			const double ShotAt = It->GetLastShotTime();
+			if (ShotAt <= Now && ShotAt > LastContactAt)
+			{
+				LastContactAt = ShotAt;
+			}
+		}
+	}
+}
+
+bool UTrainingSectorSubsystem::RelocatePmcSquad(double Now)
+{
+	UWorld* World = GetWorld();
+	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+	if (!World || !Nav || !Pmc || !Active)
+	{
+		return false;
+	}
+	TArray<AOperativeCharacter*> Players;
+	TArray<AOperativeCharacter*> Pmcs;
+	FVector PlayerCentroid = FVector::ZeroVector;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(SectorRelocate), false);
+	for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+	{
+		AOperativeCharacter* Op = *It;
+		if (!Op || Op->IsActorBeingDestroyed())
+		{
+			continue;
+		}
+		Params.AddIgnoredActor(Op);
+		if (!TrainingSectorFightRuntime::IsUp(*Op))
+		{
+			continue;
+		}
+		if (Op->IsPlayerTeam())
+		{
+			Players.Add(Op);
+			PlayerCentroid += Op->GetActorLocation();
+		}
+		else
+		{
+			Pmcs.Add(Op);
+		}
+	}
+	if (Players.IsEmpty() || Pmcs.IsEmpty())
+	{
+		return false;
+	}
+	PlayerCentroid /= static_cast<double>(Players.Num());
+
+	auto ProjectGroundNav = [&](const FVector2D& XY, FVector& OutNavLoc) -> bool
+	{
+		if (!TrainingSectorRules::Contains(Active->Area, FVector(XY.X, XY.Y, 0.0)))
+		{
+			return false;
+		}
+		FHitResult Ground;
+		const bool bHit = World->LineTraceSingleByChannel(Ground, FVector(XY.X, XY.Y, Active->Heights.Y + 500.0),
+			FVector(XY.X, XY.Y, Active->Heights.X - 500.0), ECC_WorldStatic, Params);
+		if (!bHit || Ground.ImpactNormal.Z <= 0.7f || Ground.ImpactPoint.Z > 110.0)
+		{
+			return false;
+		}
+		FNavLocation OnNav;
+		if (!Nav->ProjectPointToNavigation(Ground.ImpactPoint, OnNav, FVector(120.0, 120.0, 120.0)))
+		{
+			return false;
+		}
+		if (OnNav.Location.Z > 110.0 || FMath::Abs(OnNav.Location.Z - Ground.ImpactPoint.Z) > 60.0)
+		{
+			return false;
+		}
+		if (!Allows(World, OnNav.Location, PlacementInset))
+		{
+			return false;
+		}
+		OutNavLoc = OnNav.Location;
+		return true;
+	};
+
+	auto HasPlayerLos = [&](const FVector& Spot) -> bool
+	{
+		const FVector Eye = Spot + FVector(0.0, 0.0, 160.0);
+		for (const AOperativeCharacter* Player : Players)
+		{
+			FHitResult Hit;
+			if (!World->LineTraceSingleByChannel(Hit, Eye, UTacticalSightSubsystem::EyePoint(*Player), ECC_Visibility, Params))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+
+	auto HasNearbyCover = [&](const FVector& Spot) -> bool
+	{
+		const FVector Origin = Spot + FVector(0.0, 0.0, 65.0);
+		for (int32 Dir = 0; Dir < 8; ++Dir)
+		{
+			const double Rad = static_cast<double>(Dir) * (UE_DOUBLE_PI / 4.0);
+			FHitResult Hit;
+			if (World->LineTraceSingleByChannel(Hit, Origin, Origin + FVector(FMath::Cos(Rad), FMath::Sin(Rad), 0.0) * 180.0, ECC_WorldStatic, Params))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+
+	const float TargetM = FMath::Max(5.f, Fight.RelocateDistanceM);
+	const float BandHalfM = 5.f;
+	const float RadiiM[] = {
+		TargetM,
+		TargetM + 2.f,
+		FMath::Max(5.f, TargetM - 2.f),
+		TargetM + 4.f,
+		FMath::Max(5.f, TargetM - 4.f),
+		TargetM + BandHalfM,
+		FMath::Max(5.f, TargetM - BandHalfM),
+		TargetM + BandHalfM + 4.f,
+		TargetM + BandHalfM + 10.f
+	};
+	constexpr int32 AngleCount = 16;
+	TArray<FSectorRelocateCandidate> Candidates;
+	Candidates.Reserve(UE_ARRAY_COUNT(RadiiM) * AngleCount);
+	for (const float RM : RadiiM)
+	{
+		const double RadiusCm = static_cast<double>(RM) * 100.0;
+		for (int32 A = 0; A < AngleCount; ++A)
+		{
+			const double Theta = static_cast<double>(A) * (2.0 * UE_DOUBLE_PI / static_cast<double>(AngleCount));
+			const FVector2D XY(PlayerCentroid.X + FMath::Cos(Theta) * RadiusCm, PlayerCentroid.Y + FMath::Sin(Theta) * RadiusCm);
+			FVector Spot;
+			if (!ProjectGroundNav(XY, Spot))
+			{
+				continue;
+			}
+			FSectorRelocateCandidate& Cand = Candidates.AddDefaulted_GetRef();
+			Cand.Location = Spot;
+			Cand.DistToCentroidM = static_cast<float>(FVector::Dist2D(Spot, PlayerCentroid) / 100.0);
+			float MinP = TNumericLimits<float>::Max();
+			for (const AOperativeCharacter* Player : Players)
+			{
+				MinP = FMath::Min(MinP, static_cast<float>(FVector::Dist2D(Spot, Player->GetActorLocation()) / 100.0));
+			}
+			Cand.MinPlayerDistM = MinP;
+			Cand.bHasLos = HasPlayerLos(Spot);
+			Cand.bNearCover = HasNearbyCover(Spot);
+		}
+	}
+
+	const int32 PickSeed = FightSeed + RoundNumber * 31 + (RoundRelocations + 1) * 7;
+	const FSectorRelocatePick Pick = TrainingSectorRules::PickRelocatePoint(Candidates, TargetM, BandHalfM, Fight.MinStartPostDistanceM, PickSeed);
+	if (!Pick.bValid)
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("[TrainingSector] Round %d: no valid no-contact relocate spot found (>= %.0f m); resetting clock"),
+			RoundNumber, Fight.MinStartPostDistanceM);
+		LastContactAt = Now;
+		return false;
+	}
+
+	const FRotator Facing = (PlayerCentroid - Pick.Location).GetSafeNormal2D().Rotation();
+	const FVector Right = FRotationMatrix(Facing).GetScaledAxis(EAxis::Y);
+	const int32 Count = Pmcs.Num();
+	TSet<int32> RelocatedTeams;
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		AOperativeCharacter* Fighter = Pmcs[Index];
+		const FVector Offset = Right * ((static_cast<double>(Index) - static_cast<double>(Count - 1) * 0.5) * 140.0);
+		FVector SlotNav = Pick.Location;
+		FVector TrySpot;
+		if (ProjectGroundNav(FVector2D(Pick.Location.X + Offset.X, Pick.Location.Y + Offset.Y), TrySpot))
+		{
+			float MinSlotPlayerM = TNumericLimits<float>::Max();
+			for (const AOperativeCharacter* Player : Players)
+			{
+				MinSlotPlayerM = FMath::Min(MinSlotPlayerM, static_cast<float>(FVector::Dist2D(TrySpot, Player->GetActorLocation()) / 100.0));
+			}
+			if (MinSlotPlayerM >= Fight.MinStartPostDistanceM && (Pick.bHasLos || !HasPlayerLos(TrySpot)))
+			{
+				SlotNav = TrySpot;
+			}
+		}
+		Fighter->StopOperative();
+		if (Fighter->bInCover)
+		{
+			Fighter->LeaveCover(TEXT("sector no-contact relocate"));
+		}
+		Fighter->ClearPendingCover();
+		const FVector Dest(SlotNav.X, SlotNav.Y, SlotNav.Z + Fighter->GetSimpleCollisionHalfHeight() + 2.0);
+		Fighter->TeleportTo(Dest, Facing, false, true);
+		RelocatedTeams.Add(Fighter->TeamId);
+	}
+	for (const int32 TeamId : RelocatedTeams)
+	{
+		Pmc->EngageRelocatedTeam(TeamId, PlayerCentroid);
+	}
+	++RoundRelocations;
+	LastContactAt = Now;
+	LastRelocateDistanceM = Pick.DistToCentroidM;
+	bLastRelocateLos = Pick.bHasLos;
+	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+	{
+		FDemoRoundEvent Event;
+		Event.bPmcRelocated = true;
+		Event.SectorId = GetSectorId();
+		Event.Seed = FightSeed;
+		Event.Round = RoundNumber;
+		Event.RelocateDistanceM = Pick.DistToCentroidM;
+		Event.bRelocateLos = Pick.bHasLos;
+		Recorder->RecordSectorRound(Event);
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[TrainingSector] Round %d pmc_relocated #%d/%d: %.1f m from squad (LOS %s, cover %s, fallback %s) to %s"),
+		RoundNumber, RoundRelocations, Fight.RelocateMaxPerRound, Pick.DistToCentroidM,
+		Pick.bHasLos ? TEXT("yes") : TEXT("no"), Pick.bNearCover ? TEXT("yes") : TEXT("no"),
+		Pick.bFallback ? TEXT("yes") : TEXT("no"), *Pick.Location.ToCompactString());
+	return true;
 }
