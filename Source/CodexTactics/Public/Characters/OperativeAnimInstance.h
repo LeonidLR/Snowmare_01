@@ -832,6 +832,10 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
 	bool bCoverAtCorner = false;
 
+	/** G016: his own confirmed window, off the corner. Crouch-over (Aim2) when that set has the clips. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Cover State")
+	bool bCoverWindow = false;
+
 	/**
 	 * Corner pose with an active threat (AOperativeCharacter::IsCoverFireReady): hold the fire-ready idle
 	 * (CoverStandFireIdle / CoverCrouchFireIdle); without it the corner pose is the look-around idle (CoverStandCorner).

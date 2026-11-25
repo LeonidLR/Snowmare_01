@@ -119,6 +119,12 @@ bool FCoverAnimSetFireSetTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("high cover: side peek"), CoverAnimSetRules::DecideFireSet(true, ECoverHeight::HighCover, false, true) == ECoverFireSet::Side);
 	TestTrue(TEXT("standing: side peek"), CoverAnimSetRules::DecideFireSet(false, ECoverHeight::LowCover, false, true) == ECoverFireSet::Side);
 	TestTrue(TEXT("no over clips: side"), CoverAnimSetRules::DecideFireSet(true, ECoverHeight::LowCover, false, false) == ECoverFireSet::Side);
+	TestTrue(TEXT("high facade window, crouched, off the corner: over"),
+		CoverAnimSetRules::DecideFireSet(true, ECoverHeight::HighCover, false, true, true) == ECoverFireSet::Over);
+	TestTrue(TEXT("window at the corner: side peek"),
+		CoverAnimSetRules::DecideFireSet(true, ECoverHeight::HighCover, true, true, true) == ECoverFireSet::Side);
+	TestTrue(TEXT("window without over clips: side"),
+		CoverAnimSetRules::DecideFireSet(true, ECoverHeight::HighCover, false, false, true) == ECoverFireSet::Side);
 	return true;
 }
 

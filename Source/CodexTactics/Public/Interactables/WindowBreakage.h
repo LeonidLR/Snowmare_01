@@ -15,6 +15,24 @@ struct FHitResult;
  */
 namespace WindowBreakage
 {
+	/** FindWindowSillAt face test: the hit is on the window face (glass, frame, the wall round it), cm. */
+	inline constexpr float FaceMarginCm = 30.f;
+	/** FindWindowSillAt face test: height above the sill top that still counts as this window, cm. */
+	inline constexpr float FaceHeightCm = 260.f;
+	/** The opening box is the sill's XY grown by this, cm (a ray through the empty pane). */
+	inline constexpr float OpeningPadCm = 10.f;
+	/** Opening bottom above the sill top, cm. */
+	inline constexpr float OpeningBottomCm = 5.f;
+	/** Opening top above the sill top, cm. Not added on top of OpeningBottomCm. */
+	inline constexpr float OpeningTopCm = 140.f;
+	/** A ray through the opening counts only when it lands this near the sill (2D), cm. */
+	inline constexpr float ThroughLandingCm = 150.f;
+	/** IsOverSill: the volume starts this far below the sill box, cm. */
+	inline constexpr float SillBelowCm = 20.f;
+
+	/** The pane volume FindWindowSillAt tests a through-ray against (the same box as before these names). */
+	CODEXTACTICS_API FBox MakeOpeningBox(const FBox& SillBox);
+
 	/** Hides the glass of the window over Sill; returns how many pieces (pane actors + kit instances) were hidden. */
 	CODEXTACTICS_API int32 HideBrokenWindow(AActor& Sill);
 

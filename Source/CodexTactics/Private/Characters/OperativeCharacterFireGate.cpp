@@ -63,6 +63,10 @@ float AOperativeCharacter::GetFireGateResidualDeg(const FVector& AimAt) const
 	{
 		return 180.f; // the body is still turning onto the wall: not aimed yet
 	}
+	if (HasWindowCoverAim())
+	{
+		return 0.f; // through the opening: the body yaw is the aim. A headless high-cover barrel is not this pose.
+	}
 	// The real barrel while the pose is evaluated (rendered / always ticked): the lean / pop-up clip aims where it aims.
 	const USkeletalMeshComponent* Body = GetMesh();
 	const bool bPoseLive = Body && (Body->VisibilityBasedAnimTickOption == EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones
@@ -123,8 +127,8 @@ bool AOperativeCharacter::CanFireAt(const FVector& AimAt, const TCHAR*& OutReaso
 	Input.bInCover = bInCover;
 	if (bInCover)
 	{
-		// His back to the wall (the cover poses aim from there); the shot itself is judged by the pose's barrel above.
-		Input.bBodyReady = CoverFacingRules::IsFacingAligned(GetActorRotation().Yaw, CoverSlot, CoverFacing, FCoverFacingConfig().FacingToleranceDeg);
+		// His back to the wall, or his body on the window aim (G016). The shot itself is judged by the pose's barrel above.
+		Input.bBodyReady = IsCoverBodyAligned();
 	}
 	else
 	{

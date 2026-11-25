@@ -1923,7 +1923,7 @@ FTurnAttackResult UTurnBasedCombatSubsystem::ResolveAttackCell(const FIntPoint& 
 	// a full wall without an exposed corner has no firing position. Only a target behind the wall / around the corner
 	// needs that (CoverFacingRules::ShouldCornerShot); one out on the open side gets a normal shot off the wall and he
 	// comes back to the slot afterwards (AOperativeCharacter::BeginOpenShotFromCover).
-	const bool bCoverShot = Unit->bInCover && Unit->IsCornerShotTarget(Target->GetActorLocation());
+	const bool bCoverShot = Unit->bInCover && (Unit->IsCornerShotTarget(Target->GetActorLocation()) || Unit->IsWindowCoverShot(Target->GetActorLocation()));
 	if (bCoverShot && !Unit->CanFireFromCover())
 	{
 		Log(TEXT("⚠️ No firing angle from this cover - move to the edge of the wall!"));

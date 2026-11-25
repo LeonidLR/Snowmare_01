@@ -553,7 +553,7 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 			// Shot from the corner (user rule 2026-10-06): from the plain cover idle the idle -> fire transition plays first, then
 			// the shot, then the fire-ready idle again; already in the fire-ready pose the shot plays at once.
 			const bool bCornerShot = !(Shooter && Shooter->bIsBlindFiring)
-				&& (bCoverAtCorner || CoverHeight == ECoverHeight::LowCover || (Shooter && Shooter->IsCornerAimActive())); // sustained aim: from fire_idle, no cycle per shot; a low cover is fired over anywhere
+				&& (bCoverAtCorner || bCoverWindow || CoverHeight == ECoverHeight::LowCover || (Shooter && Shooter->IsCornerAimActive())); // sustained aim: from fire_idle, no cycle per shot; a low cover or a window is fired over anywhere
 			if (bCornerShot && PickCoverClip(bIsCrouching ? CoverCrouchFireIdle : CoverStandFireIdle))
 			{
 				if (CoverPendingFireClip.IsValid())
@@ -1236,6 +1236,7 @@ void UOperativeAnimInstance::UpdateState()
 	bBlindFiring = Operative->bIsBlindFiring;
 	bCoverShimmyForward = bShimmying && Operative->IsShimmyForward();
 	bCoverAtCorner = bInCover && Operative->bAtCoverCorner;
+	bCoverWindow = bInCover && Operative->IsWindowCoverConfirmed() && !bShimmying && !Operative->bAtCoverCorner;
 	bCoverFireReady = bInCover && Operative->IsCoverFireReady();
 	bCoverCornerAim = bInCover && Operative->IsCornerAimActive();
 	// The stance first (user request 2026-10-07): entering a crouched cover from a standing run picked the STANDING
