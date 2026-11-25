@@ -6,11 +6,12 @@
 // Checks: the map got its mantle links (none dropped by the links.max_total cap); up to MaxFences 135 cm fences whose way round is longer than
 // the mantle area's entering cost by links.entering_cost_cm: the fence carries a link; a ground click beyond it (the controller's
 // HandleWorldHit) makes the Solo leader mantle over it (high_fence_over) and arrive within the time limit.
-// B17-4 (designer 2026-11-17: "his body passes THROUGH the fence first, only then the vault clip plays"): on that fence four ways over it -
+// B17-4 (designer 2026-11-17: "his body passes THROUGH the fence first, only then the vault clip plays"): on that fence four ways -
 // the ground click beyond (the path's link, walking), a double ground click beyond (the link, running), a double click on the fence's face
-// (the run climb order) and a click on its top (the walk climb order; skipped when the camera cannot hit the 10 cm top) - each time, before
-// the clip's hand plant neither the pelvis nor the capsule's centre is past the fence's near face plane, and at the plant the nearer hand is on
-// the fence's top (within align.hand_edge_tolerance_cm of the grip).
+// and a click on its top (the walk climb order; skipped when the camera cannot hit the 10 cm top). Task 120: the face double click is the
+// crouch cover order and must stay on the near side. The path and top orders still climb; before the clip's hand plant neither the pelvis
+// nor the capsule's centre is past the fence's near face plane, and at the plant the nearer hand is on the fence's top
+// (within align.hand_edge_tolerance_cm of the grip).
 
 #include "CoreMinimal.h"
 
@@ -85,7 +86,7 @@ namespace MantleFenceRouteSmoke
 		{
 		case PathWalk: return TEXT("path link, walking (a ground click beyond)");
 		case PathRun: return TEXT("path link, running (a double ground click beyond)");
-		case FaceDoubleClick: return TEXT("run climb order (a double click on its face)");
+		case FaceDoubleClick: return TEXT("cover order (a double click on its face)");
 		default: return TEXT("walk climb order (a click on its top)");
 		}
 	}
@@ -321,6 +322,23 @@ namespace MantleFenceRouteSmoke
 			const FVector Feet = FeetOf(*Leader);
 			const bool bMantled = Leader->GetMantleCount() > State->MantlesBefore;
 			const bool bPath = State->Variant == PathWalk || State->Variant == PathRun;
+			if (State->Variant == FaceDoubleClick)
+			{
+				// Task 120: the crouch silhouette on a thin fence is cover, on the side he started from.
+				const FCoverSlot& Held = Leader->GetCoverSlot();
+				const bool bCover = Leader->bInCover && Held.Height == ECoverHeight::LowCover && Held.WallActor == State->Site.Actor
+					&& Leader->GetStance() == EOperativeStance::Crouching && CoverTraceRules::IsOnApproachSide(Held, State->Site.Feet)
+					&& !bMantled && !Leader->IsVaulting() && !Leader->IsMantling();
+				if (!bCover && State->StageTime < ArriveLimitSeconds)
+				{
+					return true;
+				}
+				Check(*State, bCover, FString::Printf(TEXT("%s: a double click on its face stays low cover on the near side, crouched, no climb (mantle %s, in cover %d)"),
+					*GetNameSafe(State->Site.Actor.Get()), bMantled ? *Leader->GetLastMantleClass().ToString() : TEXT("none"), Leader->bInCover ? 1 : 0));
+				State->bSampling = false;
+				Next(*State, 4);
+				return true;
+			}
 			const bool bThere = bPath ? FVector::Dist2D(Feet, State->Goal) <= ArriveRadiusCm && !Leader->IsMantling() : bMantled && !Leader->IsMantling();
 			if (!bThere && State->StageTime < ArriveLimitSeconds)
 			{

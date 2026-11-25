@@ -99,9 +99,11 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 		return false;
 	}
 	// A player's low-cover approach never auto-vaults. The knee probe can hit past the slot or hit another piece of the fence.
-	if (bHasPendingCover && ((IsPlayerTeam() && PendingCoverSlot.Height == ECoverHeight::LowCover)
-		|| (PendingCoverSlot.WallActor.Get() == Front.GetActor()
-			&& FVector::DotProduct(Location - PendingCoverSlot.WallPoint, PendingCoverSlot.WallNormal) >= 0.f)))
+	// EnterCover clears the pending flag, so the hold also covers the operative already crouched at the fence.
+	if ((IsPlayerTeam() && bInCover && GetCoverSlot().Height == ECoverHeight::LowCover)
+		|| (bHasPendingCover && ((IsPlayerTeam() && PendingCoverSlot.Height == ECoverHeight::LowCover)
+			|| (PendingCoverSlot.WallActor.Get() == Front.GetActor()
+				&& FVector::DotProduct(Location - PendingCoverSlot.WallPoint, PendingCoverSlot.WallNormal) >= 0.f))))
 	{
 		return false;
 	}

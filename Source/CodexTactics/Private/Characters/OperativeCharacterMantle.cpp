@@ -1251,6 +1251,14 @@ void AOperativeCharacter::EndMantleDescent(bool bResume)
 void AOperativeCharacter::UpdateMantleTrigger(float DeltaTime)
 {
 	using namespace OperativeMantleInternal;
+	// A player's low-cover order stays pressed to the near face. An explicit climb (bMantleOrderPending) still starts.
+	if (!bMantleOrderPending && IsPlayerTeam()
+		&& ((bInCover && GetCoverSlot().Height == ECoverHeight::LowCover)
+			|| (HasPendingCover() && GetPendingCoverSlot().Height == ECoverHeight::LowCover)))
+	{
+		PendingMantleLink = INDEX_NONE;
+		return;
+	}
 	const bool bCoolingDown = GetWorld()->GetTimeSeconds() < MantleCooldown;
 	if (PendingMantleLink != INDEX_NONE)
 	{

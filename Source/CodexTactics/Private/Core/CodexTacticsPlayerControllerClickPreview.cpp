@@ -859,16 +859,24 @@ void ACodexTacticsPlayerController::ExecuteClickPreview(const FHitResult& Hit, b
 	case EClickPreviewKind::Cover:
 	{
 		// A double click on a climbable obstacle's face: run there and climb (the designer's decision 2026-11-17; not in cover: there it is the switch).
+		// Task 120: the crouch ghost on a low fence stays cover. The climb is kept only when it stands on a deep top (a wreck) or the face is high.
+		bool bStayCover = false;
 		if (bDoubleClick && !Leader->bInCover && MantleNavigation::IsBatch2Enabled() && CanOrderMantleClick(Use))
 		{
-			FString Why;
-			if (OrderClimb(Use, true, &Why))
+			FMantleClickPlan ClimbPlan;
+			const bool bStandsOnTop = Leader->PlanMantleClick(Use, ClimbPlan) && ClimbPlan.bTop;
+			bStayCover = CoverTraceRules::FaceDoubleClickStaysCover(CoverPreviewSlot.Height == ECoverHeight::LowCover, bStandsOnTop);
+			if (!bStayCover)
 			{
-				HideCoverPreview();
-				ControllerCommands::Report(this, PlayerCommands::Move, nullptr, false, false, Leader, Use.ImpactPoint);
-				UE_LOG(LogCodexTactics, Display, TEXT("[ClickPreview] double click on the face of %s: %s runs to it and climbs it"), *GetNameSafe(Use.GetActor()),
-					*Leader->DisplayName.ToString());
-				return;
+				FString Why;
+				if (OrderClimb(Use, true, &Why))
+				{
+					HideCoverPreview();
+					ControllerCommands::Report(this, PlayerCommands::Move, nullptr, false, false, Leader, Use.ImpactPoint);
+					UE_LOG(LogCodexTactics, Display, TEXT("[ClickPreview] double click on the face of %s: %s runs to it and climbs it"), *GetNameSafe(Use.GetActor()),
+						*Leader->DisplayName.ToString());
+					return;
+				}
 			}
 		}
 		if (bCoverConfirm && HasCoverPreview())
