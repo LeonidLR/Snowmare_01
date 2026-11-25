@@ -144,7 +144,7 @@ void ADoorActor::ApplyCollision(bool bBlocking)
 void ADoorActor::ApplyNav()
 {
 	const EDoorPassage Passage = DoorRules::GetPassage(State);
-	if (Passage == EDoorPassage::Free)
+	if (Passage != EDoorPassage::Blocked)
 	{
 		if (NavBox->CanEverAffectNavigation())
 		{
@@ -152,8 +152,7 @@ void ADoorActor::ApplyNav()
 		}
 		return;
 	}
-	NavBox->SetAreaClassOverride(Passage == EDoorPassage::Blocked ? TSubclassOf<UNavAreaBase>(UNavArea_Null::StaticClass())
-		: TSubclassOf<UNavAreaBase>(UNavArea_DoorClosed::StaticClass()));
+	NavBox->SetAreaClassOverride(UNavArea_Null::StaticClass());
 	if (!NavBox->CanEverAffectNavigation())
 	{
 		NavBox->SetCanEverAffectNavigation(true);

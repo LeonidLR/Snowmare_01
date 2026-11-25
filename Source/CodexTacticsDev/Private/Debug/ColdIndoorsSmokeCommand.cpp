@@ -12,6 +12,8 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/SmokeUtils.h"
+
 #include "AI/PmcDefenceRules.h"
 #include "Camera/CameraZoneVolume.h"
 #include "Characters/OperativeCharacter.h"
@@ -269,6 +271,7 @@ namespace ColdIndoorsSmoke
 		{
 			return;
 		}
+		SmokeUtils::StopLevelPmc(World);
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		FTimerHandle Handle;
 		World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([WeakWorld]()
