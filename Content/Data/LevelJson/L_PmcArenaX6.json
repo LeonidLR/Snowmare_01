@@ -7,6 +7,8 @@
   "ambush_fight": "skirmish",
   "susanin_wave": 0,
   "horde_enabled": false,
+  "_cold_paused": "Designer 2026-11-24: cold off for training fights. Restore cold_rate_mult to 1 (absent = 1).",
+  "cold_rate_mult": 0,
   "prep_phase_duration": 60,
   "wave_rest_duration": 20,
   "intro_dialogue": false,
