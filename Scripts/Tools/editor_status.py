@@ -195,10 +195,10 @@ def verdict(worktrees, rec):
             who = "build"
             if w["lock"]:
                 who = "%s, %s" % (w["lock"]["agent"], w["lock"]["purpose"])
-            return {"level": "RED", "recommended": rname,
+            return {"level": "YELLOW", "recommended": rname,
                     "reason": "Подожди: идёт сборка в %s (%s)" % (rname, who)}
         if w["smokes_running"]:
-            return {"level": "RED", "recommended": rname,
+            return {"level": "YELLOW", "recommended": rname,
                     "reason": "Подожди: в %s идут смоук-тесты (%d)" % (rname, w["smokes_running"])}
         if w["binaries_fresh"]:
             r = "Можно открывать %s (%s, собрано)" % (rname, note or w["head"])
@@ -206,8 +206,9 @@ def verdict(worktrees, rec):
                 r = "Редактор уже открыт в %s (%s) — already open" % (rname, note or w["head"])
             return {"level": "GREEN", "recommended": rname, "reason": r,
                     "already_open": w["editor_open"]}
-        return {"level": "YELLOW", "recommended": rname,
-                "reason": "Сборка устарела в %s — подожди, Claude соберёт" % rname}
+        # Designer 2026-11-25: green = open, orange (YELLOW) = build / work running, red = do not open.
+        return {"level": "RED", "recommended": rname,
+                "reason": "Нельзя открывать: сборка устарела в %s — Claude соберёт" % rname}
     alt = next((x for x in worktrees if x["name"] != "interim" and _idle(x) and x["binaries_fresh"]), None)
     if alt:
         return {"level": "YELLOW", "recommended": None, "suggested": alt["name"],
