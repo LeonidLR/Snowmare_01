@@ -112,3 +112,21 @@ FWindowSideChoice WindowOrderRules::ChooseSide(const FVector& OperativeLocation,
 	Choice.Yaw = static_cast<float>((-Choice.Through * Choice.OperativeSide).Rotation().Yaw);
 	return Choice;
 }
+
+TOptional<FVector> WindowOrderRules::QueueThroughWindow(const FVector& Approach, const FVector& Landing, const FVector& LeaderLocation,
+	int32 Rank, float SpacingCm)
+{
+	const FVector Through = (Landing - Approach).GetSafeNormal2D();
+	if (Through.IsNearlyZero() || Rank < 0 || SpacingCm < 0.f)
+	{
+		return {};
+	}
+	const FVector Mid = (Approach + Landing) * 0.5f;
+	if (FVector::DotProduct(LeaderLocation - Mid, Through) <= 0.f)
+	{
+		return {};
+	}
+	FVector Place = Landing + Through * (static_cast<float>(Rank + 1) * SpacingCm);
+	Place.Z = Landing.Z;
+	return Place;
+}

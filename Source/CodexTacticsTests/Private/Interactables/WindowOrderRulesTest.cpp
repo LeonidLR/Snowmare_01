@@ -122,4 +122,28 @@ bool FWindowOrderSideTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWindowOrderQueueTest, "CodexTactics.Interactables.WindowOrder.QueueFollowsTheLeaderThrough",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWindowOrderQueueTest::RunTest(const FString& Parameters)
+{
+	const FVector Approach(80.f, 0.f, 10.f);
+	const FVector Landing(-120.f, 0.f, 10.f);
+	TestFalse(TEXT("the leader still on the near side: the column waits"), WindowOrderRules::QueueThroughWindow(Approach, Landing, Approach, 0, 150.f).IsSet());
+	TestFalse(TEXT("the leader on the plane: still waiting"), WindowOrderRules::QueueThroughWindow(Approach, Landing, (Approach + Landing) * 0.5f, 0, 150.f).IsSet());
+	const TOptional<FVector> First = WindowOrderRules::QueueThroughWindow(Approach, Landing, Landing, 0, 150.f);
+	const TOptional<FVector> Second = WindowOrderRules::QueueThroughWindow(Approach, Landing, Landing, 1, 150.f);
+	TestTrue(TEXT("the leader on the far side: the first follower has a place"), First.IsSet());
+	TestTrue(TEXT("and the second"), Second.IsSet());
+	if (First.IsSet() && Second.IsSet())
+	{
+		const FVector Through = (Landing - Approach).GetSafeNormal2D();
+		TestTrue(TEXT("the first place is past the landing, inside"), FVector::DotProduct(*First - Landing, Through) > 140.f);
+		TestTrue(TEXT("the second is further in, the queue"), FVector::DotProduct(*Second - *First, Through) > 140.f);
+		TestTrue(TEXT("Z stays the landing"), FMath::IsNearlyEqual(First->Z, Landing.Z, 0.1f));
+	}
+	TestFalse(TEXT("a bad rank waits"), WindowOrderRules::QueueThroughWindow(Approach, Landing, Landing, -1, 150.f).IsSet());
+	return true;
+}
+
 #endif

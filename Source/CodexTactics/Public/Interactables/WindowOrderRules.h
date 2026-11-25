@@ -76,4 +76,13 @@ namespace WindowOrderRules
 	 */
 	CODEXTACTICS_API FWindowSideChoice ChooseSide(const FVector& OperativeLocation, const FVector& Center, const FVector& ActorForward,
 		const FVector& ActorRight, float SizeX, float SizeY, float ApproachPastCm, float LandingPastCm);
+
+	/**
+	 * Where follower Rank (0 = the first man behind the leader) stands once an explicit window order has carried the leader
+	 * onto the far side. Unset while the leader is still on the near side of the midpoint between Approach and Landing, so the
+	 * column does not cross before he breaks the pane. The place is SpacingCm * (Rank + 1) past Landing, further along the
+	 * climb, so a column longer than the leader's step still ends inside that window.
+	 */
+	CODEXTACTICS_API TOptional<FVector> QueueThroughWindow(const FVector& Approach, const FVector& Landing, const FVector& LeaderLocation,
+		int32 Rank, float SpacingCm);
 }

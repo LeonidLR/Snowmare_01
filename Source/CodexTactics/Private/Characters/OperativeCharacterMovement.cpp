@@ -207,20 +207,22 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		bSprinting = false;
 	}
 	ApplyMovementParams();
-	// The order's destination is always the click (the far landing). Formation followers read GetLastMoveDestination; a walk to
-	// his own side must not replace it (FormationWindowSmoke: the third man never crossed while the goal sat outside).
+	// The order's destination is always the click (the far landing). A walk to his own side must not replace it.
+	// A different click drops the window file. The climb leg orders the landing again and keeps it.
+	if (bWindowFileActive && FVector::Dist2D(Destination, WindowApproachLanding) > WindowOrderRules::Get().ApproachMatchCm)
+	{
+		bWindowFileActive = false;
+	}
 	EOperativeOrderResult Result = RequestMove(Destination);
 	bOwnMoveOrder = bHasMoveOrder; // rev 5g: his own order (the formation leaves him alone until it is done)
 	if (bWindowApproachPending)
 	{
-		const USquadSubsystem* WindowSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
-		// The column files through behind him (FormationWindowSmoke). An outside via parks the rear man on the near side: he never
-		// crosses. Solo, and a man ordered on his own, still walk to their own face with whole windows closed so nav cannot go around.
-		const bool bFormationLeader = WindowSquad && !WindowSquad->IsSoloMode() && WindowSquad->GetFormationLeader() == this
-			&& WindowSquad->GetMembers().Num() > 1;
+		// An explicit window order, in Solo and in formation: walk to his own face with whole windows closed, then climb
+		// this window. Automatic routing never arms the via, so it keeps the open path. Followers file through once he
+		// is on the far side (QueueThroughWindow); they do not take a whole window themselves.
 		const FWindowOrderTuning& WindowTuning = WindowOrderRules::Get();
 		const bool bThisWindow = FVector::Dist2D(Destination, WindowApproachLanding) <= WindowTuning.ApproachMatchCm;
-		if (!bFormationLeader && Result == EOperativeOrderResult::Accepted && bHasMoveOrder && bThisWindow)
+		if (Result == EOperativeOrderResult::Accepted && bHasMoveOrder && bThisWindow)
 		{
 			// This leg only walks to his own side, and must not enter another opening. SteerOwnMoveVia keeps the landing.
 			bWindowApproachWindows = bWindowPathAllowed;
@@ -249,6 +251,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 void AOperativeCharacter::ArmWindowApproach(const FVector& ApproachFeet, const FVector& LandingFeet)
 {
 	bWindowApproachPending = true;
+	bWindowFileActive = true;
 	WindowApproachPoint = ApproachFeet;
 	WindowApproachLanding = LandingFeet;
 }
