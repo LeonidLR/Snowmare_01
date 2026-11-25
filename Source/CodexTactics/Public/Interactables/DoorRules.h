@@ -203,7 +203,7 @@ struct CODEXTACTICS_API FDoorTuning
 	 * a little weaker than the entrances"): of the inner doors shut at the start this share is LOCKED (a stable roll per door from the doors'
 	 * roll seed and its place). Their strength stays the inner one (wood: kick 0.55, pistol 0.6) - weaker than the steel entrances.
 	 */
-	float StartInteriorLockedShare = 0.25f;
+	float StartInteriorLockedShare = 0.f;
 	/**
 	 * "start_interior_locked_quiet_floor" / "start_interior_locked_quiet_entries" (G018): a building with at least this many role=entry doors
 	 * does not random-lock inner doors on floors at or below the quiet floor. The walk between two street doors stays a shut auto-open door

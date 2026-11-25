@@ -13,7 +13,7 @@
   "swing_from_opener": 1,
   "_comment_start_interior_closed": "start_interior_closed (designer 2026-11-22, agents test: many inner doors stood open - for now every inner door is shut): 1 = at the adoption every door open from the start whose both sides are under a roof is shut (entrances and outside doors keep their state).",
   "start_interior_closed": 1,
-  "_comment_start_interior_locked": "start_interior_locked_share (designer 2026-11-22: some inner doors, at random, are locked - kick, shoot the lock or a key; inner doors are a little weaker than the entrances): this share of the inner doors shut at the start is locked, a stable roll per door (roll_seed + its place). Their strength stays the inner one (wood by default, entrances steel).",
+  "_comment_start_interior_locked": "start_interior_locked_share: 0 by default (only story doors start locked). A nonzero diagnostic override locks this share of the inner doors shut at the start via a stable roll per door (roll_seed + its place).",
   "start_interior_locked_share": 0,
   "_comment_start_interior_locked_quiet": "start_interior_locked_quiet_floor / start_interior_locked_quiet_entries (G018): a building with at least this many role=entry doors does not random-lock inner doors on floors at or below the quiet floor. The walk between two street doors (the story quiet way, S03 d20 -> c16 -> c7) stays a shut auto-open door. Upper floors and a building with fewer entries still use the share. 0 entries turns the skip off.",
   "start_interior_locked_quiet_floor": 0,

@@ -825,7 +825,8 @@ bool FDoorsQuietInnerLockTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("the global switch stays off"), File.bEnabled);
 	TestEqual(TEXT("quiet floor from doors.json"), File.StartInteriorLockedQuietFloor, 0);
 	TestEqual(TEXT("quiet entries from doors.json"), File.StartInteriorLockedQuietEntries, 2);
-	TestEqual(TEXT("the random share stays 0.25"), File.StartInteriorLockedShare, 0.25f);
+	TestTrue(TEXT("interior doors start shut"), File.bStartInteriorClosed);
+	TestEqual(TEXT("interior doors are never randomly locked by default"), File.StartInteriorLockedShare, 0.f);
 	TestTrue(TEXT("the kit showcase stays listed"), File.EnabledMaps.Contains(TEXT("L_Gen_StoryShowcase_Kit")));
 	TestFalse(TEXT("X6 is not listed"), File.EnabledMaps.Contains(TEXT("L_Gen_Depot_1_X6")));
 	return true;
