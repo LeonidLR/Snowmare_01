@@ -57,10 +57,10 @@ bool FSniperRifleDataTest::RunTest(const FString&)
 	const FWeaponStats& Stats = Weapon->Stats;
 	TestTrue(TEXT("handling: sniper rifle (kneel / prone, the bolt)"), Stats.IsSniperRifle());
 	TestTrue(TEXT("armour class heavy (decision 2026-11-08)"), Stats.Damage.PenetrationClass == EArmorClass::Heavy);
-	TestEqual(TEXT("70 damage"), Stats.Damage.BaseDamage, 70.f);
+	TestEqual(TEXT("45 damage (designer 2026-11-25)"), Stats.Damage.BaseDamage, 45.f);
 	TestEqual(TEXT("5 rounds"), Stats.Ammo.MagazineSize, 5);
 	TestEqual(TEXT("3.5 s reload"), Stats.Ammo.ReloadSeconds, 3.5f);
-	TestEqual(TEXT("2.4 s between shots"), Stats.Fire.ShotIntervalSeconds, 2.4f);
+	TestEqual(TEXT("3.5 s between shots (designer 2026-11-25)"), Stats.Fire.ShotIntervalSeconds, 3.5f);
 	TestEqual(TEXT("reach 120 m"), Stats.Range.MaxRangeCm, 12000.f);
 	TestEqual(TEXT("effective 90 m"), Stats.Range.GetEffectiveRangeCm(), 9000.f);
 	// The class rule: heavy reaches the Brute (heavy 0.75): 0.75 x (1 - 0.6) = 0.30 stopped; the M16 (light) does not: 0.75.

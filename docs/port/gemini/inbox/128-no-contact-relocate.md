@@ -11,5 +11,5 @@ round start or since the last contact, relocate the living PMC squad (teleport; 
 - never closer than min_start_post_distance_m to a player; the PMC then gets its normal engage / patrol-toward order so contact follows.
 At most relocate_max_per_round (data, default 3). Record a round event "pmc_relocated" (time, distance, LOS yes/no) in the session recording.
 Unit tests for the point choice (distance band, LOS preference, fallback); SectorRoundsSmoke option: force no contact -> relocation after
-the delay, distance 35..45 m, no LOS at the moment of the teleport. Router first; Carbon self-review before FINISH. BUILD ONLY ON THE WORKER.
+the delay, distance 35..45 m, no LOS at the moment of the teleport. Router first; Neon review of the Hydrogen diff before FINISH. BUILD ONLY ON THE WORKER.
 Report docs/port/gemini/outbox/128-no-contact-relocate.report.md + "128 FINISH | ...". Never push.

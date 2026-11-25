@@ -57,13 +57,13 @@
   },
   "flagship_model": "fable",
   "gemini_antigravity": {
-    "note": "Designer 2026-11-25: Antigravity (Gemini 4) models, weakest -> strongest: Hydrogen < Argon (leaving, never use) < Carbon < Neon < Orchestrator (= Neon High, Lead OK only). HYDROGEN is the workhorse for every task. CARBON / NEON: only for SHORT checks and code FIXES (a review pass, a failing test / build error fix, one bounded bug) - never for whole features, sweeps, long runs or mass use; switch back to Hydrogen right after. Expensive: they eat the subscription.",
+    "note": "Designer 2026-11-25: Antigravity (Gemini 4) models, weakest -> strongest: Hydrogen < Argon (leaving, never use) < Carbon < Neon < Orchestrator (= Neon High, Lead OK only). HYDROGEN is the workhorse for every task. CARBON / NEON: only for SHORT checks and code FIXES (a review pass, a failing test / build error fix, one bounded bug) - never for whole features, sweeps, long runs or mass use; switch back to Hydrogen right after. Designer 2026-11-25 evening: code written by Hydrogen is reviewed by NEON (not Carbon) before every FINISH. Expensive: they eat the subscription.",
     "default": "Hydrogen",
     "by_level": {
       "1": "Hydrogen",
       "2": "Hydrogen",
-      "3": "Hydrogen (Carbon only for a short check / fix inside the task)",
-      "4": "Hydrogen + Lead plan (Neon only for a short check / fix inside the task)"
+      "3": "Hydrogen (NEON reviews Hydrogen's diff before FINISH; Neon also for a short fix inside the task)",
+      "4": "Hydrogen + Lead plan (NEON reviews Hydrogen's diff before FINISH; Neon also for a short fix inside the task)"
     },
     "short_check_fix_only": [
       "Carbon",

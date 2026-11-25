@@ -339,7 +339,7 @@ bool FWeaponSchemaProjectFileTest::RunTest(const FString&)
 		TestEqual(TEXT("M16 max reach 60 m"), M16->Stats.Range.MaxRangeCm, 6000.f);
 		TestEqual(TEXT("M16 effective 28 m"), M16->Stats.Range.EffectiveRangeCm, 2800.f);
 		TestEqual(TEXT("M16 full-auto 0.1 s"), M16->Stats.Fire.FullAutoIntervalSeconds, 0.1f);
-		TestEqual(TEXT("sniper 70 damage"), Sniper->Stats.Damage.BaseDamage, 70.f);
+		TestEqual(TEXT("sniper 45 damage (designer 2026-11-25)"), Sniper->Stats.Damage.BaseDamage, 45.f);
 		TestTrue(TEXT("sniper handling"), Sniper->IsSniperRifle());
 	}
 	// Step 2: the game designer's decisions 2026-11-08 written into the file (the intended new values).

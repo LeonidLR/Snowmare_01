@@ -12,5 +12,5 @@ channel? PMC bodies never registered?) - name the cause in the report.
 Data: corpse loot fields in an existing loot / corpse json (no new asset). Fresnel: reuse the existing hover highlight material /
 custom depth stencil used for interactables (no new material unless none exists - then STOP and report).
 Tests: unit tests for the loot roll (seeded, chances, caps, once-only) + a smoke on X6: kill a PMC -> hover -> search -> ammo added,
-second search gives nothing; same for a dead squad member. Router first; Carbon self-review. BUILD ONLY ON THE WORKER.
+second search gives nothing; same for a dead squad member. Router first; Neon review of the Hydrogen diff. BUILD ONLY ON THE WORKER.
 Report docs/port/gemini/outbox/130-corpse-search.report.md + "130 FINISH | ...". Never push.
