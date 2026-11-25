@@ -441,14 +441,14 @@ void AOperativeCharacter::SpawnRemainsLoot()
 		if (CurrentWeapon && !CurrentWeapon->WeaponId.IsEmpty())
 		{
 			HostileWeapons.AddUnique(CurrentWeapon->WeaponId);
-			HostileClipSizes.Add(CurrentWeapon->WeaponId, CurrentWeapon->MaxClipSize);
+			HostileClipSizes.Add(CurrentWeapon->WeaponId, CurrentWeapon->Stats.Ammo.MagazineSize);
 		}
 		for (const UWeaponDataAsset* Weapon : AvailableWeapons)
 		{
 			if (Weapon && !Weapon->WeaponId.IsEmpty())
 			{
 				HostileWeapons.AddUnique(Weapon->WeaponId);
-				HostileClipSizes.Add(Weapon->WeaponId, Weapon->MaxClipSize);
+				HostileClipSizes.Add(Weapon->WeaponId, Weapon->Stats.Ammo.MagazineSize);
 			}
 		}
 	}
