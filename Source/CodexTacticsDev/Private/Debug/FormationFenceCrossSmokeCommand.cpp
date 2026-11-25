@@ -629,6 +629,21 @@ namespace FormationFenceCrossSmoke
 			{
 				return true;
 			}
+			// Part 2 lands him and then the deferred knockdown plays. A wall order during that fall
+			// ends as "the leader's next order" and the file never gets to crouch.
+			if (Leader->IsKnockedDown())
+			{
+				if (State->StageTime < 0.55f)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[FormationFenceCross] part 3 waits: the leader is still down from the vault"));
+				}
+				if (State->StageTime > 15.f)
+				{
+					Check(*State, false, TEXT("part 3: the leader is back on his feet before the cover order"));
+					return Finish(*State, false);
+				}
+				return true;
+			}
 			if (Squad->IsSoloMode())
 			{
 				Squad->ExitSoloMode(false, 0.f);

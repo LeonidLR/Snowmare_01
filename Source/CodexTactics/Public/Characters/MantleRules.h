@@ -78,9 +78,9 @@ enum class EMantleRefusal : uint8
 enum class EMantleCancel : uint8
 {
 	None,
-	/** A knockdown: he drops back to the base, then the knockdown plays there (designer Q5). */
+	/** A knockdown. The climb still finishes; the knockdown plays on the far side (G026, was designer Q5). */
 	Knockdown,
-	/** A hit of at least heavy_hit_damage: he drops back to the base. */
+	/** A hit of at least heavy_hit_damage. The climb still finishes on the far side (G026). */
 	HeavyHit,
 	/** Killed mid-climb: everything released, the body falls (the corpse fall). */
 	Death,
@@ -161,7 +161,7 @@ struct FMantleConfig
 	/** Montage blend in / out, s. "params.blend_in_s" / "params.blend_out_s" */
 	float BlendInSeconds = 0.12f;
 	float BlendOutSeconds = 0.2f;
-	/** A hit of at least this much damage mid-climb drops him to the base (a knockdown always does), HP. "params.heavy_hit_damage" */
+	/** A hit of at least this much damage is a heavy hit, HP. The climb still finishes; a knockdown plays after landing. "params.heavy_hit_damage" */
 	float HeavyHitDamage = 35.f;
 	/** End-of-clip correction onto the planned landing: larger errors are logged as a warning, cm. "params.landing_snap_warn_cm" */
 	float LandingSnapWarnCm = 25.f;
@@ -512,8 +512,30 @@ namespace MantleRules
 	 */
 	CODEXTACTICS_API int32 GhostPoseSample(const FMantleConfig& Config, const FMantleClipTrack& Track, const FMantleClipContact& Contact, bool& bOutLeftHand);
 
-	/** A heavy hit (FinalDamage >= HeavyHitDamage) cancels a running climb. */
+	/** A heavy hit (FinalDamage >= HeavyHitDamage). It does not cancel a climb that has started. */
 	CODEXTACTICS_API bool IsHeavyHit(const FMantleConfig& Config, float FinalDamage);
+
+	/**
+	 * Why a mantle or a vault that has already started might be cut short (G026).
+	 * Hit / Knockdown / MontageStopped still finish on the far side. Death and EndPlay release him where he is.
+	 */
+	enum class ETraversalInterrupt : uint8
+	{
+		Hit,
+		Knockdown,
+		MontageStopped,
+		Death,
+		EndPlay
+	};
+
+	/** True when a started mantle or vault runs on to its landing. */
+	CODEXTACTICS_API bool TraversalCompletes(ETraversalInterrupt Interrupt);
+
+	/**
+	 * A new move asked for during the traversal may replace the resume target only when it is not short of the landing
+	 * (an under-fire sidestep must not walk him back toward the start). ShortCm is how far short still counts as the landing.
+	 */
+	CODEXTACTICS_API bool ResumeKeepsTheLanding(const FVector& Start, const FVector& Landing, const FVector& Asked, float ShortCm = 20.f);
 
 	/**
 	 * A low top also gets a path link back down (the drop links only start at LinkDownBelowCm): a man climbed onto a crate / wreck is never

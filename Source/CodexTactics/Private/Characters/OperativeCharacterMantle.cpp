@@ -17,6 +17,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/KnockdownComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -561,8 +562,15 @@ void AOperativeCharacter::UpdateMantle(float DeltaTime)
 	const FAnimMontageInstance* Instance = Anim && Montage ? Anim->GetActiveInstanceForMontage(Montage) : nullptr;
 	if (!Instance || Instance->IsStopped())
 	{
-		// Someone else stopped the clip (it never runs out by itself: no auto blend-out).
-		CancelMantle(EMantleCancel::Interrupted);
+		// Someone else stopped the clip. A started climb still ends on the far side (G026).
+		if (MantleRules::TraversalCompletes(MantleRules::ETraversalInterrupt::MontageStopped))
+		{
+			FinishMantle();
+		}
+		else
+		{
+			CancelMantle(EMantleCancel::Interrupted);
+		}
 		return;
 	}
 	if (Instance->GetPosition() >= FMath::Min(MantleExitSeconds, MantleDuration) - KINDA_SMALL_NUMBER)
@@ -573,7 +581,14 @@ void AOperativeCharacter::UpdateMantle(float DeltaTime)
 	ApplyMantleWallGuard();
 	if (MantleTimer > MantleDuration + MantleRules::GetConfig().TimeoutPadSeconds)
 	{
-		CancelMantle(EMantleCancel::Interrupted);
+		if (MantleRules::TraversalCompletes(MantleRules::ETraversalInterrupt::MontageStopped))
+		{
+			FinishMantle();
+		}
+		else
+		{
+			CancelMantle(EMantleCancel::Interrupted);
+		}
 	}
 }
 
@@ -606,6 +621,12 @@ void AOperativeCharacter::FinishMantle()
 	bMantling = false;
 	MantleCooldown = static_cast<float>(GetWorld()->GetTimeSeconds()) + Config.CooldownSeconds;
 	RestoreMantleState(false);
+	bool bLandedDown = false;
+	if (UKnockdownComponent* Knockdown = FindComponentByClass<UKnockdownComponent>())
+	{
+		Knockdown->FlushDeferredKnockdown();
+		bLandedDown = Knockdown->IsDown();
+	}
 	if (UMantleSubsystem* Mantle = GetWorld() ? GetWorld()->GetSubsystem<UMantleSubsystem>() : nullptr)
 	{
 		Mantle->Release(this);
@@ -613,7 +634,7 @@ void AOperativeCharacter::FinishMantle()
 	UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s landed %s (%.0f cm off the plan; the wall guard pushed %.0f cm)"), *DisplayName.ToString(),
 		bMantleOnTop ? TEXT("on top") : TEXT("over"), LastMantleLandingError, MantleGuardPushCm);
 	const FVector ToTarget = MantleResumeTarget - MantleLandingFeet;
-	if (bMantleResume && !bMantleStopAfter && ToTarget.Size2D() > 60.f)
+	if (!bLandedDown && bMantleResume && !bMantleStopAfter && ToTarget.Size2D() > 60.f)
 	{
 		bMantleResume = false;
 		ApplyMovementParams();
@@ -683,17 +704,22 @@ void AOperativeCharacter::CancelMantle(EMantleCancel Reason)
 	{
 		Mantle->Release(this);
 	}
-	const bool bToBase = Reason == EMantleCancel::Knockdown || Reason == EMantleCancel::HeavyHit || Reason == EMantleCancel::Interrupted;
-	if (bToBase)
+	if (UKnockdownComponent* Knockdown = FindComponentByClass<UKnockdownComponent>())
 	{
-		// Designer Q5: he drops back to the base he climbed from (a free spot: he stood there), then the knockdown / hit plays there.
-		SetActorLocation(MantleBaseFeet + FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 2.f), false, nullptr,
+		Knockdown->ClearDeferredKnockdown();
+	}
+	// A hit, a knockdown or a stopped clip used to drop him at the base (designer Q5). G026 puts that landing on the far side
+	// if a caller still cancels; death and EndPlay leave him where he is.
+	const bool bToLanding = Reason == EMantleCancel::Knockdown || Reason == EMantleCancel::HeavyHit || Reason == EMantleCancel::Interrupted;
+	if (bToLanding)
+	{
+		SetActorLocation(MantleLandingFeet + FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 2.f), false, nullptr,
 			ETeleportType::TeleportPhysics);
 		bHasMoveOrder = false;
 	}
 	RestoreMantleState(Reason != EMantleCancel::EndPlay);
 	UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s: climb cancelled (%d)%s"), *DisplayName.ToString(), static_cast<int32>(Reason),
-		bToBase ? TEXT(" - dropped back to the base") : TEXT(""));
+		bToLanding ? TEXT(" - put on the far side") : TEXT(""));
 }
 
 bool AOperativeCharacter::PlanMantleClick(const FHitResult& Hit, FMantleClickPlan& Out, FString* OutReason, const FVector* FromFeet) const

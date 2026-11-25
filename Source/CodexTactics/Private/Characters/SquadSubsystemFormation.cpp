@@ -135,8 +135,6 @@ namespace SquadSubsystemFormationLocal
 	/** Item 2: the final approach's line probe - a sphere of this radius this high above his feet, cm. */
 	constexpr float WallFinalApproachProbeZCm = 60.f;
 	constexpr float WallFinalApproachProbeRadiusCm = 20.f;
-	/** ... and turned to his layout yaw within this angle, deg. */
-	constexpr float WallSettleYawDeg = 30.f;
 	/** The leader of a wall order is at his slot within this distance (his own move stops AcceptanceRadius short), cm. */
 	constexpr float WallLeaderSettleCm = 120.f;
 	/** A parked follower restarts only once his (still) slot is this much farther than the stop radius (no idle / walk trembling), cm. */
@@ -1249,8 +1247,8 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 		// Rules v2.1.1 (user "6A"): nobody looks into a wall - in any formation (not the wall layout, a run, the corner watcher).
 		FrameLooks.Add(Follower.Operative, ClearFormationLook(Operative, Role.GetValue(), /*bLeader*/ false, Look));
 	}
-	if (Sectors.bWallOrder && Sectors.bWallOrderCrouch && !Sectors.bSlide && !bRouted && Distance <= WallSettleCm && !bMoving
-		&& FormationMath::AngleBetween(static_cast<float>(Operative.GetActorRotation().Yaw), Slot->Yaw) <= WallSettleYawDeg)
+	// G026: crouch when he himself is in the slot. The approach look (Along / rear) stays until everyone arrives; it no longer holds the stance.
+	if (Sectors.bWallOrder && Sectors.bWallOrderCrouch && !Sectors.bSlide && !bRouted && Distance <= WallSettleCm && !bMoving)
 	{
 		SettleFormationWallPose(Operative);
 	}
@@ -1666,16 +1664,15 @@ void USquadSubsystem::UpdateFormationWallOrder(AOperativeCharacter& LeaderRef, f
 	Sectors.WallOrderSeconds += DeltaTime;
 	const FFormationSlot* Lead = Sectors.WallSlots.FindByPredicate([](const FFormationSlot& Slot) { return Slot.Role == EFormationRole::Commander; });
 	// (The squad's corner peek: the leader peeking at the corner holds his cover pose, not the wall layout's.)
+	// G026: crouch on his own arrival. His approach look stays the run-in's until everyone is in; that yaw used to hold the stance
+	// (the 2026-11-02 passage flake). The swept final approach below still walks him onto the slot, so a crouch does not park him short.
 	if (Lead && Sectors.bWallOrderCrouch && !Sectors.bSlide && !OrderLeader->IsMoving() && !IsFormationPeeker(OrderLeader) && !OrderLeader->bInCover
-		&& FVector2D::Distance(FVector2D(OrderLeader->GetActorLocation()), Lead->Position) <= WallLeaderSettleCm
-		&& FormationMath::AngleBetween(static_cast<float>(OrderLeader->GetActorRotation().Yaw), Lead->Yaw) <= WallSettleYawDeg)
+		&& FVector2D::Distance(FVector2D(OrderLeader->GetActorLocation()), Lead->Position) <= WallLeaderSettleCm)
 	{
 		SettleFormationWallPose(*OrderLeader);
 	}
 	// Bug 2026-10-27: his own move stopped AcceptanceRadius short of his slot - onto it, as one operative in cover. FormationWallHugSmoke
-	// flake (2026-11-02): also before his wall pose. On the covered approach he takes the pose only when everyone is at the wall (his look
-	// is the run-in's until then), and in the lake yard's 2 m passage the rear man walking past him to his place could not get by the
-	// leader standing ~25 cm out of the wall (his run-in's acceptance radius): neither ever arrived. Swept, so a team-mate stops it.
+	// flake (2026-11-02): the lake yard's 2 m passage, the rear man could not get by the leader standing ~25 cm out of the wall. Swept, so a team-mate stops it.
 	// Item 2 (2026-11-03): his own run-in ended short of his place (the followers, now steered in fast, crouched at theirs either side of
 	// it and the crowd avoidance stopped him 1.5 m out - FormationWallHugSmoke's 3.6 m passage): the same steered final approach takes him in.
 	if (Lead && !Sectors.bSlide && !OrderLeader->HasOwnMoveOrder() && !IsFormationPeeker(OrderLeader) && !OrderLeader->bInCover

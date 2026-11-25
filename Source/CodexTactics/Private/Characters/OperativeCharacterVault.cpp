@@ -12,6 +12,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "Characters/VaultRules.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/KnockdownComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -267,6 +268,12 @@ void AOperativeCharacter::UpdateVault(float DeltaTime)
 	SetActorLocation(VaultLanding);
 	SetActorEnableCollision(true);
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	bool bLandedDown = false;
+	if (UKnockdownComponent* Knockdown = FindComponentByClass<UKnockdownComponent>())
+	{
+		Knockdown->FlushDeferredKnockdown();
+		bLandedDown = Knockdown->IsDown();
+	}
 	// The walk goes on from the landing on a new navmesh path, whatever the angle to the goal (VaultRules::DecideResume; bug 2026-11-22:
 	// the Godot ~84 deg gate stopped him behind a window whose room goal lay to the side).
 	VaultRules::FVaultResumeFacts Facts;
@@ -275,7 +282,7 @@ void AOperativeCharacter::UpdateVault(float DeltaTime)
 	Facts.Landing = VaultLanding;
 	Facts.Goal = VaultResumeTarget;
 	Facts.bRecrossing = bVaultRecrossing;
-	const VaultRules::EVaultResume Verdict = VaultRules::DecideResume(Facts);
+	const VaultRules::EVaultResume Verdict = bLandedDown ? VaultRules::EVaultResume::NoOrder : VaultRules::DecideResume(Facts);
 	bLastVaultResumed = Verdict == VaultRules::EVaultResume::Resume;
 	if (bLastVaultResumed)
 	{
