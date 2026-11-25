@@ -4,7 +4,14 @@ import fs from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import { TRAINING_MAPS, X6 } from '../src/aiTraining/trainingTypes.ts';
-import type { TrainingData, TrainingRun, TrainingSector, TrainingSelection } from '../src/aiTraining/trainingTypes.ts';
+import type {
+  SectorFightRow,
+  SectorFightStats,
+  TrainingData,
+  TrainingRun,
+  TrainingSector,
+  TrainingSelection,
+} from '../src/aiTraining/trainingTypes.ts';
 
 export const X6_MAP_PATH = '/Game/Maps/Generated/L_Gen_Depot_1_X6';
 export const UE_EDITOR_EXE = 'C:\\Program Files\\Epic Games\\UE_5.8\\Engine\\Binaries\\Win64\\UnrealEditor.exe';
@@ -92,6 +99,177 @@ function demoHeader(file: string): ObjectData | null {
   }
 }
 
+interface ParsedDemoStats {
+  map: string;
+  sector: number | null;
+  startedAt: string;
+  rounds: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  durationSec: number;
+}
+
+const demoStatsCache = new Map<string, { mtimeMs: number; size: number; value: ParsedDemoStats | null }>();
+const NON_SNAP_TYPE_RE = /"type"\s*:\s*"(header|round_end|footer)"/;
+
+export function resetDemoStatsCacheForTesting(): void {
+  demoStatsCache.clear();
+}
+
+export function resolveMainCheckoutRoot(root: string): string {
+  const dotGit = path.join(root, '.git');
+  try {
+    const stat = fs.statSync(dotGit);
+    if (stat.isFile()) {
+      const text = fs.readFileSync(dotGit, 'utf8').trim();
+      const match = /^gitdir:\s*(.+)$/i.exec(text);
+      if (match) {
+        const gitDir = path.resolve(root, match[1].trim());
+        const normalized = gitDir.replace(/\\/g, '/');
+        const idx = normalized.toLowerCase().lastIndexOf('/.git/worktrees/');
+        if (idx > 0) {
+          return path.resolve(normalized.slice(0, idx));
+        }
+      }
+    }
+  } catch { /* test temp dirs without .git use root directly */ }
+  return root;
+}
+
+function normalizeMapName(rawMap: string): string {
+  return rawMap.split('/').at(-1)?.replace(/^UEDPIE_\d+_/, '') ?? rawMap;
+}
+
+function parseDemoFileStats(fullPath: string, mtime: Date): ParsedDemoStats | null {
+  const raw = fs.readFileSync(fullPath, 'utf8');
+  let header: ObjectData | null = null;
+  let footer: ObjectData | null = null;
+  const roundEnds: Array<{ sector: number | null; result: string; durationSec: number }> = [];
+
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || !NON_SNAP_TYPE_RE.test(trimmed)) continue;
+    let obj: ObjectData | null = null;
+    try {
+      obj = parse(trimmed);
+    } catch {
+      continue; // truncated or corrupted JSON line must not break aggregation
+    }
+    if (!obj) continue;
+    if (obj.type === 'header' && !header) {
+      header = obj;
+    } else if (obj.type === 'round_end') {
+      const sec = finite(obj.sector_id) && Number.isInteger(obj.sector_id) && obj.sector_id >= 1 && obj.sector_id <= 6
+        ? obj.sector_id : null;
+      const resStr = typeof obj.result === 'string' ? obj.result.toLowerCase() : '';
+      const dur = finite(obj.duration_s) && obj.duration_s > 0 ? obj.duration_s : 0;
+      roundEnds.push({ sector: sec, result: resStr, durationSec: dur });
+    } else if (obj.type === 'footer') {
+      footer = obj;
+    }
+  }
+
+  if (!header || typeof header.map !== 'string') return null;
+  const map = normalizeMapName(header.map);
+  const headerSector = finite(header.sector_id) && Number.isInteger(header.sector_id) && header.sector_id >= 1 && header.sector_id <= 6
+    ? header.sector_id : null;
+  const sector = headerSector ?? roundEnds.find((r) => r.sector !== null)?.sector ?? null;
+  const startedAt = typeof header.started_utc === 'string' && Number.isFinite(Date.parse(header.started_utc))
+    ? header.started_utc : mtime.toISOString();
+
+  const roundWins = roundEnds.filter((r) => r.result === 'victory' || r.result === 'win').length;
+  const roundLosses = roundEnds.filter((r) => r.result === 'defeat' || r.result === 'loss').length;
+  const roundDraws = roundEnds.filter((r) => r.result === 'draw').length;
+  const roundDuration = roundEnds.reduce((acc, r) => acc + r.durationSec, 0);
+
+  const hasFooterScores = footer && finite(footer.rounds);
+  const rounds = hasFooterScores
+    ? Math.max(roundEnds.length, Math.trunc(footer!.rounds as number))
+    : roundEnds.length;
+  const wins = footer && finite(footer.score_victory) ? Math.max(0, Math.trunc(footer.score_victory)) : roundWins;
+  const losses = footer && finite(footer.score_defeat) ? Math.max(0, Math.trunc(footer.score_defeat)) : roundLosses;
+  const draws = footer && finite(footer.score_draw) ? Math.max(0, Math.trunc(footer.score_draw)) : roundDraws;
+  const durationSec = footer && finite(footer.duration_s) && footer.duration_s >= 0
+    ? footer.duration_s : roundDuration;
+
+  return { map, sector, startedAt, rounds, wins, losses, draws, durationSec };
+}
+
+function emptyRow(sector: number | null, label: string): SectorFightRow {
+  return { sector, label, sessions: 0, rounds: 0, wins: 0, losses: 0, draws: 0, minutes: 0, lastPlayed: null };
+}
+
+export function readSectorFightStats(root: string): SectorFightStats {
+  const mainRoot = resolveMainCheckoutRoot(root);
+  const demosDir = path.join(mainRoot, 'Saved/Demos');
+  const rows = Array.from({ length: 6 }, (_, i) => emptyRow(i + 1, `Сектор ${i + 1}`));
+  const noSector = emptyRow(null, 'без сектора');
+  const total = emptyRow(null, 'всего');
+  const durationByKey = new Map<string, number>();
+
+  if (fs.existsSync(demosDir)) {
+    for (const entry of fs.readdirSync(demosDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.jsonl')) continue;
+      const fullPath = path.join(demosDir, entry.name);
+      try {
+        const stat = fs.statSync(fullPath);
+        const cached = demoStatsCache.get(fullPath);
+        let parsed: ParsedDemoStats | null;
+        if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+          parsed = cached.value;
+        } else {
+          parsed = parseDemoFileStats(fullPath, stat.mtime);
+          demoStatsCache.set(fullPath, { mtimeMs: stat.mtimeMs, size: stat.size, value: parsed });
+        }
+        if (!parsed || parsed.map !== X6) continue;
+
+        const target = parsed.sector !== null ? rows[parsed.sector - 1] : noSector;
+        const key = parsed.sector !== null ? String(parsed.sector) : 'none';
+        target.sessions += 1;
+        target.rounds += parsed.rounds;
+        target.wins += parsed.wins;
+        target.losses += parsed.losses;
+        target.draws += parsed.draws;
+        durationByKey.set(key, (durationByKey.get(key) ?? 0) + parsed.durationSec);
+        if (!target.lastPlayed || Date.parse(parsed.startedAt) > Date.parse(target.lastPlayed)) {
+          target.lastPlayed = parsed.startedAt;
+        }
+      } catch { /* ignore unreadable/rotating demo file */ }
+    }
+  }
+
+  let totalSec = 0;
+  for (const row of [...rows, noSector]) {
+    const key = row.sector !== null ? String(row.sector) : 'none';
+    const sec = durationByKey.get(key) ?? 0;
+    totalSec += sec;
+    row.minutes = Math.round((sec / 60) * 10) / 10;
+    total.sessions += row.sessions;
+    total.rounds += row.rounds;
+    total.wins += row.wins;
+    total.losses += row.losses;
+    total.draws += row.draws;
+    if (row.lastPlayed && (!total.lastPlayed || Date.parse(row.lastPlayed) > Date.parse(total.lastPlayed))) {
+      total.lastPlayed = row.lastPlayed;
+    }
+  }
+  total.minutes = Math.round((totalSec / 60) * 10) / 10;
+
+  let minRounds = Infinity;
+  let recommendedSector: number | null = null;
+  for (const row of rows) {
+    if (row.rounds < minRounds) {
+      minRounds = row.rounds;
+      recommendedSector = row.sector;
+    }
+  }
+  if (recommendedSector !== null) {
+    rows[recommendedSector - 1].fewest = true;
+  }
+  return { sectors: rows, noSector, total, recommendedSector };
+}
+
 function recentRuns(root: string): TrainingRun[] {
   const result: TrainingRun[] = [];
   for (const source of ['demo', 'arena'] as const) {
@@ -133,6 +311,7 @@ export function readTrainingData(root: string): TrainingData {
     sectors,
     layout: validLayout,
     runs: recentRuns(root),
+    sectorStats: readSectorFightStats(root),
     howto,
     editorCmdPath,
   };
