@@ -48,12 +48,19 @@
       overflow: hidden;
     }
 
-    #editor-banner { flex: 0 0 auto; padding: 8px 16px; text-align: center; color: #fff; background: #475569; }
-    #editor-banner .eb-reason { font-size: 1.25rem; font-weight: 700; line-height: 1.25; }
-    #editor-banner .eb-detail { font-size: 0.72rem; opacity: 0.9; margin-top: 4px; word-break: break-word; }
-    #editor-banner.GREEN { background: #15803d; }
-    #editor-banner.YELLOW { background: #a16207; }
-    #editor-banner.RED { background: #b91c1c; }
+    /* Editor status (designer 2026-11-25): a small dot button in the header, click expands the details. */
+    #editor-banner { position: relative; display: inline-flex; align-items: center; margin: 0 10px; }
+    #eb-btn { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.6); background: #475569; cursor: pointer; padding: 0; }
+    #editor-banner.GREEN #eb-btn { background: #16a34a; }
+    #editor-banner.YELLOW #eb-btn { background: #f97316; }
+    #editor-banner.RED #eb-btn { background: #dc2626; }
+    #eb-pop { display: none; position: absolute; top: 30px; left: 0; z-index: 50; width: min(560px, 80vw); padding: 10px 12px; border-radius: 8px; color: #fff; background: #334155; box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
+    #editor-banner.open #eb-pop { display: block; }
+    #editor-banner.GREEN #eb-pop { background: #15803d; }
+    #editor-banner.YELLOW #eb-pop { background: #c2410c; }
+    #editor-banner.RED #eb-pop { background: #b91c1c; }
+    #editor-banner .eb-reason { font-size: 0.95rem; font-weight: 700; line-height: 1.3; }
+    #editor-banner .eb-detail { font-size: 0.72rem; opacity: 0.9; margin-top: 6px; word-break: break-word; max-height: 40vh; overflow: auto; }
 
     /* Top bar */
     header {
@@ -625,7 +632,6 @@
 </head>
 <body>
 
-  <div id="editor-banner"><div class="eb-reason">Статус редактора…</div><div class="eb-detail"></div></div>
 
   <header>
     <div class="header-left">
@@ -633,6 +639,7 @@
         <span>CodexTactics</span>
         <span class="header-tag">Дизайнер</span>
       </div>
+      <div id="editor-banner" title="Редактор: зелёный — можно открывать, оранжевый — идёт сборка/работа, красный — нельзя"><button id="eb-btn" aria-label="Статус редактора"></button><div id="eb-pop"><div class="eb-reason">Статус редактора…</div><div class="eb-detail"></div></div></div>
       <div class="tab-bar">
         <button class="tab-btn active" id="tab-chat">Чат</button>
         <button class="tab-btn" id="tab-board">Задачи</button>
@@ -1298,16 +1305,19 @@
       const banner = document.getElementById('editor-banner');
       const reasonEl = banner.querySelector('.eb-reason');
       const detailEl = banner.querySelector('.eb-detail');
+      document.getElementById('eb-btn').addEventListener('click', (e) => { e.stopPropagation(); banner.classList.toggle('open'); });
+      document.addEventListener('click', (e) => { if (!banner.contains(e.target)) banner.classList.remove('open'); });
       async function pollEditor() {
         try {
           const r = await fetch('/api/editor-status');
           const d = await r.json();
           const v = d.verdict || {};
-          banner.className = v.level || '';
+          banner.className = (v.level || '') + (banner.classList.contains('open') ? ' open' : '');
+          banner.title = v.reason || '';
           reasonEl.textContent = v.reason || 'Нет данных';
           detailEl.textContent = (d.worktrees || []).map(w => w.name + ': ' + w.branch + ' ' + w.head + (w.editor_open ? ' [editor]' : '')).join(' | ');
         } catch (e) {
-          banner.className = '';
+          banner.className = banner.classList.contains('open') ? 'open' : '';
           reasonEl.textContent = 'Статус редактора недоступен';
         }
       }
