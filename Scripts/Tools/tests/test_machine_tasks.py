@@ -94,6 +94,70 @@ class TestMachineTasks(unittest.TestCase):
         self.assertIn("1 FAIL", s["text"])
         self.assertTrue(items["Агент"]["progress"]["indeterminate"])
 
+    def test_eta_math_and_stale_progress_ignored(self):
+        self.assertIsNone(mt.median([]))
+        self.assertEqual(mt.median([10, 30, 20]), 20.0)
+        self.assertEqual(mt.median([10, 20, 30, 40]), 25.0)
+
+        # Stale progress file (> 10 min = 600 s) is ignored; <= 600 s is kept
+        self.assertIsNone(mt.read_progress_if_fresh(None, NOW))
+        self.assertIsNone(mt.read_progress_if_fresh({"stage": "Build", "t": NOW - 601}, NOW))
+        self.assertIsNotNone(mt.read_progress_if_fresh({"stage": "Build", "t": NOW - 599}, NOW))
+
+        # Merge gate ETA: median of last 5 runs per stage, never negative, None when no history
+        self.assertIsNone(mt.estimate_merge_gate_eta("Build", NOW - 30, [], NOW))
+        hist = [
+            {"stages": {"Build": 100, "Tests": 60, "Worker smokes": 200}},
+            {"stages": {"Build": 120, "Tests": 80, "Worker smokes": 240}},
+            {"stages": {"Build": 140, "Tests": 100, "Worker smokes": 260}},
+        ]
+        # Build median=120, elapsed=30 -> 90; Tests median=80; Worker smokes median=240 => 410s
+        self.assertEqual(mt.estimate_merge_gate_eta("Build", NOW - 30, hist, NOW), 410)
+        # Overtime on last stage never goes negative
+        self.assertEqual(mt.estimate_merge_gate_eta("Worker smokes", NOW - 9999, hist, NOW), 0)
+
+        # Remote build ETA from RemoteBuilds.jsonl median
+        self.assertIsNone(mt.estimate_remote_build_eta(NOW - 10, [], 0, 3, NOW))
+        rb_hist = [{"exit": 0, "total_s": 300}, {"exit": 0, "total_s": 400}, {"exit": 0, "total_s": 500}]
+        self.assertEqual(mt.estimate_remote_build_eta(NOW - 100, rb_hist, 45, 84, NOW), 300)
+        self.assertEqual(mt.estimate_remote_build_eta(NOW - 999, rb_hist, 45, 84, NOW), 0)
+
+        # Smoke batch ETA = sum(remaining last durations) / jobs
+        smoke_hist = [{"n": "A", "s": 60}, {"n": "B", "s": 120}, {"n": "C", "s": 180}]
+        self.assertEqual(
+            mt.estimate_smoke_batch_eta({"A", "B", "C"}, {"A"}, smoke_hist, 2, 60, 1, 3),
+            150,
+        )
+
+    def test_merge_gate_and_remote_build_progress_items(self):
+        root = "c:/x/codextactics"
+        ctx = {
+            root: {
+                "root": root,
+                "merge_gate": {
+                    "stage": "Build",
+                    "stage_index": 4,
+                    "stage_count": 7,
+                    "stage_started": NOW - 20,
+                    "gate_started": NOW - 60,
+                    "t": NOW - 5,
+                },
+                "merge_gate_history": [{"stages": {"Build": 80, "Tests": 40}}],
+                "remote_build": {"stage": "compile", "stage_index": 2, "stage_count": 3, "started": NOW - 120, "t": NOW - 5},
+                "remote_build_history": [{"exit": 0, "total_s": 480}],
+                "build": {"line": "[45/84] Compile Foo.cpp", "t": NOW - 2},
+            }
+        }
+        procs = [
+            P("powershell.exe", r"powershell -File Scripts\Tools\merge_gate.ps1 -ProjectDir C:\x\CodexTactics", age_min=1),
+            P("powershell.exe", r"powershell -File Scripts\Tools\build_remote.ps1 -ProjectDir C:\x\CodexTactics", age_min=2),
+        ]
+        items = {i["label"]: i for i in mt.classify_processes(procs, NOW, ctx)}
+        mg = items["Merge gate (main)"]["progress"]
+        self.assertEqual((mg["stage"], mg["done"], mg["total"], mg["eta_s"]), ("Сборка", 4, 7, 100))
+        rb = items["Удалённая сборка (main)"]["progress"]
+        self.assertEqual((rb["stage"], rb["done"], rb["total"], rb["eta_s"]), ("Сборка", 45, 84, 360))
+
 
 if __name__ == "__main__":
     unittest.main()

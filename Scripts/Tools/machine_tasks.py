@@ -65,6 +65,16 @@ foreach ($r in $roots.Keys) {
   if (Test-Path $tm) { $o.registry = @((Get-Content $tm -Raw | ConvertFrom-Json).smokeRegistry).Count }
   $sf = Get-ChildItem "$r/Saved/Trainer/*/status.json" | Sort-Object LastWriteTime | Select-Object -Last 1
   if ($sf) { $s = Get-Content $sf.FullName -Raw | ConvertFrom-Json; $o.trainer = @{ state = $s.state; gen = $s.generation; max = $s.max_generations; jd = $s.jobs_done; jt = $s.jobs_total; finish = $s.eta.finish_by; t = (Ep $sf.LastWriteTime) } }
+  $mgp = "$r/Saved/Logs/merge-gate-progress.json"
+  if (Test-Path $mgp) { $mgd = Get-Content $mgp -Raw | ConvertFrom-Json; if ($mgd) { $o.merge_gate = @{ stage = $mgd.stage; stage_index = $mgd.stage_index; stage_count = $mgd.stage_count; stage_started = $mgd.stage_started; gate_started = $mgd.gate_started; t = (Ep (Get-Item $mgp).LastWriteTime) } } }
+  $mgh = "$r/Saved/Logs/merge-gate-history.jsonl"
+  if (Test-Path $mgh) { $o.merge_gate_history = @(Get-Content $mgh -Tail 10 | ForEach-Object { $_ | ConvertFrom-Json }) }
+  $rbp = "$r/Saved/Logs/remote-build-progress.json"
+  if (Test-Path $rbp) { $rbd = Get-Content $rbp -Raw | ConvertFrom-Json; if ($rbd) { $o.remote_build = @{ stage = $rbd.stage; stage_index = $rbd.stage_index; stage_count = $rbd.stage_count; started = $rbd.started; t = (Ep (Get-Item $rbp).LastWriteTime) } } }
+  $rbh = "$r/Saved/Logs/RemoteBuilds.jsonl"
+  if (Test-Path $rbh) { $o.remote_build_history = @(Get-Content $rbh -Tail 10 | ForEach-Object { $_ | ConvertFrom-Json }) }
+  $sp = Get-ChildItem "$r/Saved/Logs/SmokeParallel-*.json" | Sort-Object LastWriteTime | Select-Object -Last 1
+  if ($sp) { $spd = Get-Content $sp.FullName -Raw | ConvertFrom-Json; if ($spd -and $spd.results) { $o.smoke_history = @($spd.results | ForEach-Object { @{ n = $_.Name; s = $_.Seconds } }) } }
   $prog += [pscustomobject]$o
 }
 $os = Get-CimInstance Win32_OperatingSystem
@@ -136,8 +146,111 @@ def parse_commands(cmd):
     return names
 
 
+_GATE_STAGE_ORDER = ("Editor", "Backup", "Merge", "Build", "Tests", "Worker smokes", "Designer files")
+_GATE_STAGE_RU = {
+    "Editor": "Редактор",
+    "Backup": "Бэкап",
+    "Merge": "Мердж",
+    "Build": "Сборка",
+    "Tests": "Юнит-тесты",
+    "Worker smokes": "Смоуки воркера",
+    "Designer files": "Файлы дизайнера",
+}
+_REMOTE_STAGE_RU = {"sync": "Синхронизация", "compile": "Сборка", "dlls": "Забор DLL"}
+
+
+def median(values):
+    """Median of numeric values, or None if empty."""
+    nums = sorted(float(v) for v in (values or []) if v is not None)
+    if not nums:
+        return None
+    mid = len(nums) // 2
+    if len(nums) % 2 == 1:
+        return nums[mid]
+    return (nums[mid - 1] + nums[mid]) / 2.0
+
+
+def read_progress_if_fresh(entry, now, max_age_s=600):
+    """Returns progress dict only if present and updated within max_age_s (10 min default)."""
+    if not isinstance(entry, dict):
+        return None
+    ts = entry.get("t") if entry.get("t") is not None else entry.get("updated")
+    if ts is None:
+        return None
+    if (now - float(ts)) > max_age_s:
+        return None
+    return entry
+
+
+def estimate_merge_gate_eta(stage, stage_started, history_records, now):
+    """Remaining seconds for merge gate from median of last 5 runs per stage, or None."""
+    if not history_records:
+        return None
+    last5 = list(history_records)[-5:]
+    per_stage = {}
+    for rec in last5:
+        stages = (rec or {}).get("stages") or {}
+        for k, v in stages.items():
+            if isinstance(v, (int, float)) and v >= 0:
+                per_stage.setdefault(k, []).append(float(v))
+    if not per_stage:
+        return None
+    idx = _GATE_STAGE_ORDER.index(stage) if stage in _GATE_STAGE_ORDER else -1
+    cur_med = median(per_stage.get(stage))
+    if cur_med is None and idx < 0:
+        return None
+    rem = 0.0
+    if cur_med is not None:
+        elapsed_stage = max(0.0, float(now) - float(stage_started or now))
+        rem += max(0.0, cur_med - elapsed_stage)
+    if idx >= 0:
+        for nxt in _GATE_STAGE_ORDER[idx + 1:]:
+            m = median(per_stage.get(nxt))
+            if m is not None:
+                rem += m
+    return max(0, int(round(rem)))
+
+
+def estimate_remote_build_eta(started, history_records, done, total, now):
+    """Remaining seconds for remote build from RemoteBuilds.jsonl median, or linear [N/M], or None."""
+    recs = [r for r in (history_records or []) if isinstance((r or {}).get("total_s"), (int, float)) and r["total_s"] > 0]
+    ok_recs = [r for r in recs if r.get("exit") == 0]
+    pool = ok_recs[-5:] if ok_recs else recs[-5:]
+    med_total = median([r["total_s"] for r in pool])
+    elapsed = max(0.0, float(now) - float(started or now))
+    if med_total is not None:
+        return max(0, int(round(med_total - elapsed)))
+    if done and total and 0 < done < total and elapsed > 30:
+        return max(0, int(round(elapsed / done * (total - done))))
+    return None
+
+
+def estimate_smoke_batch_eta(wanted_names, finished_names, smoke_durations, jobs, elapsed_s, done, total):
+    """Remaining seconds for smoke batch = sum(remaining last durations) / jobs, or linear fallback."""
+    jobs = max(1, int(jobs or 1))
+    dur_map = {}
+    for row in (smoke_durations or []):
+        name = (row or {}).get("n") or (row or {}).get("Name")
+        sec = (row or {}).get("s") if (row or {}).get("s") is not None else (row or {}).get("Seconds")
+        if name and isinstance(sec, (int, float)) and sec >= 0:
+            dur_map[name] = float(sec)
+    if wanted_names and dur_map:
+        remaining = [n for n in wanted_names if n not in (finished_names or set())]
+        known = [dur_map[n] for n in remaining if n in dur_map]
+        if known:
+            return max(0, int(round(sum(known) / jobs)))
+    if done and total and 0 < done < total and elapsed_s > 30:
+        return max(0, int(round(elapsed_s / done * (total - done))))
+    return None
+
+
 def smoke_counts(logs, since, names=None):
     """logs = [{n: 'Smoke-X[-alone].log', t, r}] -> (done, fail) of unique smokes finished since `since` (and in `names` when given)."""
+    seen = _smoke_finished(logs, since, names)
+    return len(seen), sum(1 for _, r in seen.values() if r == "FAIL")
+
+
+def _smoke_finished(logs, since, names=None):
     seen = {}
     for l in logs or []:
         m = re.match(r"Smoke-(.+?)(-alone)?\.log$", l.get("n", ""))
@@ -148,7 +261,7 @@ def smoke_counts(logs, since, names=None):
             continue
         if name not in seen or l["t"] >= seen[name][0]:
             seen[name] = (l["t"], l["r"])
-    return len(seen), sum(1 for _, r in seen.values() if r == "FAIL")
+    return seen
 
 
 def _eta(done, total, elapsed_s):
@@ -157,10 +270,25 @@ def _eta(done, total, elapsed_s):
     return None
 
 
-def _bar(done, total, text, elapsed_s, warn=False):
+def _bar(done, total, text, elapsed_s, warn=False, stage=None, started=None, eta_s=None):
     pct = round(100.0 * done / total, 1) if total else 0
-    return {"indeterminate": False, "done": done, "total": total, "pct": min(100, pct), "text": text,
-            "state": "warn" if warn else "running", "eta_min": _eta(done, total, elapsed_s)}
+    if eta_s is not None:
+        eta_s = max(0, int(round(eta_s)))
+        eta_min = max(1, int(round(eta_s / 60))) if eta_s > 0 else 0
+    else:
+        eta_min = _eta(done, total, elapsed_s)
+        eta_s = eta_min * 60 if eta_min is not None else None
+    out = {
+        "indeterminate": False, "done": done, "total": total, "pct": min(100, pct),
+        "text": text, "state": "warn" if warn else "running", "eta_min": eta_min,
+    }
+    if stage is not None:
+        out["stage"] = stage
+    if started is not None:
+        out["started"] = started
+    if eta_s is not None:
+        out["eta_s"] = eta_s
+    return out
 
 
 def _indet(text=""):
@@ -187,15 +315,47 @@ def _progress_for(p, kind, label, ctx, now):
     elapsed = max(0, now - start) if start else 0
     ctx = ctx or {}
     if kind == "Сборка":
+        if label.startswith("Удалённая сборка"):
+            c = _pick_root(ctx, cmd, start, lambda c: 1 if (c.get("remote_build") or c.get("build")) else 0)
+            rb = read_progress_if_fresh((c or {}).get("remote_build"), now)
+            b = (c or {}).get("build") or {}
+            nm = parse_ubt_line(b.get("line")) if b.get("t", 0) >= start - 120 else None
+            hist = (c or {}).get("remote_build_history") or []
+            rb_started = (rb or {}).get("started") or start
+            if nm:
+                eta_s = estimate_remote_build_eta(rb_started, hist, nm[0], nm[1], now)
+                return _bar(nm[0], nm[1], f"Сборка {nm[0]}/{nm[1]}", elapsed, stage="Сборка", started=rb_started, eta_s=eta_s)
+            if rb and rb.get("stage_count"):
+                st_key = str(rb.get("stage") or "sync")
+                st_ru = _REMOTE_STAGE_RU.get(st_key, st_key)
+                idx = int(rb.get("stage_index") or 1)
+                cnt = int(rb.get("stage_count") or 3)
+                eta_s = estimate_remote_build_eta(rb_started, hist, idx, cnt, now)
+                return _bar(idx, cnt, f"{st_ru} {idx}/{cnt}", elapsed, stage=st_ru, started=rb_started, eta_s=eta_s)
+            return None
         c = _pick_root(ctx, cmd, start, lambda c: 1 if (c.get("build") or {}).get("t", 0) >= start - 120 and (c.get("build") or {}).get("line") else 0)
         b = (c or {}).get("build") or {}
         nm = parse_ubt_line(b.get("line")) if b.get("t", 0) >= start - 120 else None
         if nm:
-            return _bar(nm[0], nm[1], f"{nm[0]} / {nm[1]}", elapsed)
+            return _bar(nm[0], nm[1], f"Сборка {nm[0]}/{nm[1]}", elapsed, stage="Сборка", started=start)
+        return None
+    if kind == "Скрипт" and "merge_gate.ps1" in low:
+        c = _pick_root(ctx, cmd, start, lambda c: 1 if (c.get("merge_gate") or {}).get("stage") else 0)
+        mg = read_progress_if_fresh((c or {}).get("merge_gate"), now)
+        if mg and mg.get("stage"):
+            stage = str(mg["stage"])
+            stage_ru = _GATE_STAGE_RU.get(stage, stage)
+            idx = int(mg.get("stage_index") or 1)
+            cnt = int(mg.get("stage_count") or len(_GATE_STAGE_ORDER))
+            gate_started = mg.get("gate_started") or start
+            eta_s = estimate_merge_gate_eta(stage, mg.get("stage_started") or start, (c or {}).get("merge_gate_history"), now)
+            return _bar(idx, cnt, f"{stage_ru} {idx}/{cnt}", elapsed, stage=stage_ru, started=gate_started, eta_s=eta_s)
         return None
     if kind == "Скрипт" and "smoke_parallel.ps1" in low:
         names = parse_commands(cmd)
         every = "all" in names
+        m_jobs = re.search(r"-Jobs\s+(\d+)", cmd, re.I)
+        jobs = int(m_jobs.group(1)) if m_jobs else 1
 
         def score(c):
             return smoke_counts(c.get("smokes"), start - 5)[0]
@@ -204,11 +364,14 @@ def _progress_for(p, kind, label, ctx, now):
             return None
         total = int(c.get("registry") or 0) if every else len(names)
         wanted = None if every else set(names)
-        done, fail = smoke_counts(c.get("smokes"), start - 5, wanted)
+        finished = _smoke_finished(c.get("smokes"), start - 5, wanted)
+        done = len(finished)
+        fail = sum(1 for _, r in finished.values() if r == "FAIL")
         if total <= 0:
             return None
-        text = f"{done} / {total} smokes" + (f", {fail} FAIL" if fail else "")
-        return _bar(done, total, text, elapsed, warn=fail > 0)
+        eta_s = estimate_smoke_batch_eta(wanted, set(finished.keys()), c.get("smoke_history"), jobs, elapsed, done, total)
+        text = f"Смоуки {done}/{total}" + (f", {fail} FAIL" if fail else "")
+        return _bar(done, total, text, elapsed, warn=fail > 0, stage="Смоуки", started=start, eta_s=eta_s)
     if kind == "Скрипт" and "worker_sync.ps1" in low:
         n = len([x for x in parse_commands(cmd) if x != "all"])
         return _indet(f"{n} smokes на воркере" if n else "")
@@ -264,6 +427,7 @@ def _classify_one(p):
         return "Агент", "Codex"
     if name in ("powershell.exe", "pwsh.exe", "python.exe", "pythonw.exe", "py.exe", "node.exe", "cmd.exe"):
         for key, label in (
+            ("merge_gate.ps1", "Merge gate"),
             ("smoke_parallel.ps1", "Параллельные smoke"),
             ("worker_sync.ps1", "Синхронизация воркера"),
             ("grok_task.ps1", "Грок: задача"),
@@ -272,6 +436,8 @@ def _classify_one(p):
         ):
             if key in low:
                 return "Скрипт", label + wt_s
+        if "build_remote.ps1" in low:
+            return "Сборка", "Удалённая сборка" + wt_s
         if "nighttrainer" in low or re.search(r"scripts[\\/]+trainer", low):
             return "Тренер", "Ночной тренер"
     return None

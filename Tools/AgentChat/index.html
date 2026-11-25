@@ -1105,7 +1105,16 @@
             const pg = i.progress || { indeterminate: true, text: '' };
             const warn = pg.state === 'warn' ? ' warn' : '';
             let ptxt = esc(pg.text || '');
-            if (!pg.indeterminate && pg.eta_min != null) ptxt += ` · ~${esc(pg.eta_min)} мин`;
+            if (!pg.indeterminate) {
+              if (pg.eta_s != null) {
+                const etaS = Math.max(0, Number(pg.eta_s) || 0);
+                if (etaS >= 60) ptxt += ` · ~${Math.round(etaS / 60)} мин осталось`;
+                else if (etaS > 0) ptxt += ` · ~${etaS} сек осталось`;
+                else ptxt += ' · скоро';
+              } else if (pg.eta_min != null) {
+                ptxt += ` · ~${esc(pg.eta_min)} мин осталось`;
+              }
+            }
             const bar = pg.indeterminate
               ? '<div class="mach-bar indet"><div class="mach-fill"></div></div>'
               : `<div class="mach-bar"><div class="mach-fill${warn}" style="width:${Math.max(2, Number(pg.pct) || 0)}%"></div></div>`;

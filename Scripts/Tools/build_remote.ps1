@@ -54,10 +54,26 @@ try {
     if ($NoUnity) { $buildArgs += " -NoUnity" }
     if ($FullUnity) { $buildArgs += " -FullUnity" }
     $resultDir = Join-Path $LogDir "Worker\build-$stamp-$PID"
+    $remoteProg = Join-Path $LogDir "remote-build-progress.json"
+    $t0Epoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $writeRemoteProg = {
+        param([string]$Stage, [int]$Index)
+        try {
+            if (-not $Stage) {
+                if (Test-Path -LiteralPath $remoteProg) { Remove-Item -LiteralPath $remoteProg -Force -ErrorAction SilentlyContinue }
+                return
+            }
+            $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+            @{ stage = $Stage; stage_index = $Index; stage_count = 3; started = $t0Epoch; updated = $now; worker = $Worker } |
+                ConvertTo-Json -Compress | Set-Content -LiteralPath $remoteProg -Encoding UTF8
+        } catch { }
+    }
+    & $writeRemoteProg "sync" 1
     & (Join-Path $PSScriptRoot "worker_sync.ps1") -Worker $Worker -ShipHead -BinariesFrom $ProjectDir -Patch $patchArg -ExtraZip $zipArg `
         -TreeToken $token -Build -BuildArgs $buildArgs -FetchBinaries -WithPdb:$WithPdb -SkipSmoke -ResultDir $resultDir -WaitEngineMinutes $WaitMinutes -ForceFrozen:$ForceFrozen
     $code = $LASTEXITCODE
 } finally {
+    try { if ($remoteProg -and (Test-Path -LiteralPath $remoteProg)) { Remove-Item -LiteralPath $remoteProg -Force -ErrorAction SilentlyContinue } } catch { }
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }
 
