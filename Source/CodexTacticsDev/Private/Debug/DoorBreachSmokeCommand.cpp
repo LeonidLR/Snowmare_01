@@ -30,6 +30,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Interactables/DoorwaySubsystem.h"
 #include "NavigationSystem.h"
+#include "Tactics/DoorwayBreachEntryRules.h"
 
 namespace DoorBreachSmoke
 {
@@ -57,6 +58,17 @@ namespace DoorBreachSmoke
 		int32 ClearedBefore = 0;
 		float ClearedAt = 0.f;
 		bool bHoldBefore = false;
+		/** Entry role verification: #1 right corner, #2 left corner, #3 middle (distinct, within 1 m, in order). */
+		TWeakObjectPtr<AOperativeCharacter> RightOp;
+		TWeakObjectPtr<AOperativeCharacter> LeftOp;
+		TWeakObjectPtr<AOperativeCharacter> CenterOp;
+		FVector StackRightSpot = FVector::ZeroVector;
+		FVector StackLeftSpot = FVector::ZeroVector;
+		FVector StackCenterSpot = FVector::ZeroVector;
+		FVector ExpectedRightCorner = FVector::ZeroVector;
+		FVector ExpectedLeftCorner = FVector::ZeroVector;
+		FVector ExpectedMiddle = FVector::ZeroVector;
+		TArray<TWeakObjectPtr<AOperativeCharacter>> EntryStartOrder;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -371,6 +383,43 @@ namespace DoorBreachSmoke
 			{
 				return Finish(*State, true);
 			}
+			State->RightOp.Reset();
+			State->LeftOp.Reset();
+			State->CenterOp.Reset();
+			State->EntryStartOrder.Reset();
+			{
+				using namespace DoorwayBreachEntryRules;
+				const FVector InDir = EntryDirection(State->Outward);
+				const FVector RightDir = EntryRight(State->Outward);
+				const float HalfWidth = Door.WidthCm * 0.5f;
+				State->ExpectedRightCorner = Door.Center + InDir * HookDepthCm + RightDir * (HalfWidth + HookSideCm);
+				State->ExpectedLeftCorner = Door.Center + InDir * HookDepthCm - RightDir * (HalfWidth + HookSideCm);
+				State->ExpectedMiddle = Door.Center + InDir * CentreDepthCm;
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					const FVector P = Feet(*Member);
+					const float Out = static_cast<float>(FVector::DotProduct(P - Door.Center, State->Outward));
+					const float RightOff = static_cast<float>(FVector::DotProduct(P - Door.Center, RightDir));
+					if (Out <= 120.f && FMath::Abs(RightOff) >= HalfWidth)
+					{
+						if (RightOff >= 0.f && !State->RightOp.IsValid())
+						{
+							State->RightOp = Member;
+							State->StackRightSpot = P;
+						}
+						else if (RightOff < 0.f && !State->LeftOp.IsValid())
+						{
+							State->LeftOp = Member;
+							State->StackLeftSpot = P;
+						}
+					}
+					else if (!State->CenterOp.IsValid())
+					{
+						State->CenterOp = Member;
+						State->StackCenterSpot = P;
+					}
+				}
+			}
 			// c: a click inside the room - where the camera sees its floor (through the opening; a roof's cutaway).
 			FHitResult Inside;
 			State->ClearedBefore = PC->GetBreachClearedCount();
@@ -395,6 +444,24 @@ namespace DoorBreachSmoke
 		}
 		case 5:
 		{
+			auto TrackEntryStart = [&State](const TWeakObjectPtr<AOperativeCharacter>& OpPtr, const FVector& StackSpot)
+			{
+				AOperativeCharacter* Op = OpPtr.Get();
+				if (!Op || State->EntryStartOrder.Contains(Op))
+				{
+					return;
+				}
+				if (Op->IsMoving() || FVector::Dist2D(Feet(*Op), StackSpot) > 25.f)
+				{
+					State->EntryStartOrder.Add(Op);
+					UE_LOG(LogCodexTactics, Display, TEXT("[DoorBreachSmoke] entry start #%d: %s (at %s -> dst %s)"),
+						State->EntryStartOrder.Num(), *Op->DisplayName.ToString(), *Feet(*Op).ToCompactString(),
+						*Op->GetLastMoveDestination().ToCompactString());
+				}
+			};
+			TrackEntryStart(State->RightOp, State->StackRightSpot);
+			TrackEntryStart(State->LeftOp, State->StackLeftSpot);
+			TrackEntryStart(State->CenterOp, State->StackCenterSpot);
 			// The cleared room ends the session at once (review 2026-11-17: it restores the holds / sector looks it set): the cleared count.
 			const bool bCleared = PC->GetBreachClearedCount() > State->ClearedBefore;
 			if (!bCleared && State->StageTime < 25.f)
@@ -406,6 +473,13 @@ namespace DoorBreachSmoke
 				if (State->ClearedAt <= 0.f)
 				{
 					State->ClearedAt = State->StageTime;
+					if (State->RightOp.IsValid() && State->LeftOp.IsValid() && State->CenterOp.IsValid())
+					{
+						UE_LOG(LogCodexTactics, Display, TEXT("[DoorBreachSmoke] at bCleared: R=%s (%s), L=%s (%s), C=%s (%s)"),
+							*State->RightOp->DisplayName.ToString(), *Feet(*State->RightOp).ToCompactString(),
+							*State->LeftOp->DisplayName.ToString(), *Feet(*State->LeftOp).ToCompactString(),
+							*State->CenterOp->DisplayName.ToString(), *Feet(*State->CenterOp).ToCompactString());
+					}
 				}
 				if (State->StageTime - State->ClearedAt < 0.3f)
 				{
@@ -426,6 +500,30 @@ namespace DoorBreachSmoke
 			const int32 Expected = FMath::Min(PC->GetLastBreachParticipantCount(), 3);
 			Check(*State, bCleared && Inside >= Expected, FString::Printf(TEXT("c: the entry - %d men past the threshold (%d expected; cleared %d after %.1f s):%s"), Inside, Expected,
 				bCleared ? 1 : 0, State->StageTime, *Line));
+			if (Expected == 3 && State->RightOp.IsValid() && State->LeftOp.IsValid() && State->CenterOp.IsValid())
+			{
+				const FVector RPos = Feet(*State->RightOp);
+				const FVector LPos = Feet(*State->LeftOp);
+				const FVector CPos = Feet(*State->CenterOp);
+				const float RDist = FVector::Dist2D(RPos, State->ExpectedRightCorner);
+				const float LDist = FVector::Dist2D(LPos, State->ExpectedLeftCorner);
+				const float CDist = FVector::Dist2D(CPos, State->ExpectedMiddle);
+				const float SepRL = FVector::Dist2D(RPos, LPos);
+				const float SepRC = FVector::Dist2D(RPos, CPos);
+				const float SepLC = FVector::Dist2D(LPos, CPos);
+				const bool bInOrder = State->EntryStartOrder.Num() == 3
+					&& State->EntryStartOrder[0].Get() == State->RightOp.Get()
+					&& State->EntryStartOrder[1].Get() == State->LeftOp.Get()
+					&& State->EntryStartOrder[2].Get() == State->CenterOp.Get();
+				const bool bDistinct = FMath::Min3(SepRL, SepRC, SepLC) >= 100.f;
+				const bool bRolesWithin1m = RDist <= 100.f && LDist <= 100.f && CDist <= 100.f;
+				Check(*State, bRolesWithin1m && bDistinct && bInOrder, FString::Printf(
+					TEXT("c2: entry roles within 1 m, distinct, in order - R(%s %.0f cm err), L(%s %.0f cm err), C(%s %.0f cm err), minSep %.0f cm, orderOk %d"),
+					*State->RightOp->DisplayName.ToString(), RDist,
+					*State->LeftOp->DisplayName.ToString(), LDist,
+					*State->CenterOp->DisplayName.ToString(), CDist,
+					FMath::Min3(SepRL, SepRC, SepLC), bInOrder ? 1 : 0));
+			}
 			// d: Solo, one operative.
 			State->bSolo = true;
 			Squad->EnterSoloMode();

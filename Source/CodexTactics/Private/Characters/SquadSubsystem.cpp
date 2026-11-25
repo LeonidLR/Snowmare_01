@@ -631,6 +631,25 @@ void USquadSubsystem::SetFollowersHolding(bool bHold)
 	}
 }
 
+void USquadSubsystem::ArmPostActionHold(const TCHAR* Reason)
+{
+	bPostFightHold = true;
+	for (FFollowerState& Follower : Followers)
+	{
+		Follower.bParked = true;
+		Follower.RepathTimeRemaining = 0.f;
+	}
+	if (Reason && *Reason)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Squad: %s - the followers hold their spots until the leader moves"), Reason);
+	}
+}
+
+void USquadSubsystem::ClearPostActionHold()
+{
+	bPostFightHold = false;
+}
+
 bool USquadSubsystem::IsStealthBlockedByFormation(const AOperativeCharacter& Operative) const
 {
 	const AOperativeCharacter* Target = &Operative;
@@ -1323,13 +1342,7 @@ void USquadSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatM
 	// they fought from (stance, cover) until the leader moves.
 	if (Phase != LastPhase && SquadOrderRules::ArmsPostFightHold(LastPhase, Phase))
 	{
-		bPostFightHold = true;
-		for (FFollowerState& Follower : Followers)
-		{
-			Follower.bParked = true;
-			Follower.RepathTimeRemaining = 0.f;
-		}
-		UE_LOG(LogCodexTactics, Display, TEXT("Squad: the fight is over - the followers hold their spots until the leader moves"));
+		ArmPostActionHold(TEXT("the fight is over"));
 	}
 	LastPhase = Phase;
 	EnforceFormationStealthRule();

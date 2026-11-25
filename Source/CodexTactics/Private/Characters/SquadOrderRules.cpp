@@ -121,6 +121,11 @@ namespace SquadOrderRules
 		return bHold && !bLeaderMoving && !bRegroup;
 	}
 
+	bool ShouldHoldClearedBreachSpots(bool bCleared, bool bSoloMode, bool bFollowersHoldingBefore)
+	{
+		return bCleared && !bSoloMode && !bFollowersHoldingBefore;
+	}
+
 	bool IsFormationPhase(ECodexGamePhase Phase, bool bPostCombatFormation)
 	{
 		return Phase == ECodexGamePhase::Exploration || (bPostCombatFormation && Phase == ECodexGamePhase::PostCombat);

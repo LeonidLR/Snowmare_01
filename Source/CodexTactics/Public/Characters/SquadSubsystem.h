@@ -242,6 +242,12 @@ public:
 	 */
 	bool IsPostFightHoldActive() const { return bPostFightHold; }
 
+	/** Parks followers at their current positions until the leader moves or regroups (used after fight end and room-clear breach). */
+	void ArmPostActionHold(const TCHAR* Reason = nullptr);
+
+	/** Clears any pending post-fight / post-breach spot hold (e.g. when starting a new breach order). */
+	void ClearPostActionHold();
+
 	/** True when formation mode currently blocks stealth for Operative (alive squad member not in Solo/holding and not guarding). */
 	bool IsStealthBlockedByFormation(const AOperativeCharacter& Operative) const;
 	/** Clears stealth on any squad member for whom IsStealthBlockedByFormation is true. */
