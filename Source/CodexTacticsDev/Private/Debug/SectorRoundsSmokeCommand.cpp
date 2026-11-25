@@ -4,6 +4,8 @@
 
 #include "AI/PmcSquadSubsystem.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/PanicComponent.h"
+#include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/DeathCinematicSubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -40,6 +42,12 @@ namespace SectorRoundsSmoke
 		int32 Grenades = -1;
 		FSectorPair FirstPair;
 		bool bSawQuiet = false;
+		int32 ArgSector = 0;
+		TOptional<int32> ArgSeed;
+		bool bSectorApplied = false;
+		bool bPanicMeasure = false;
+		bool bMeasureInitialized = false;
+		double MeasureStartAt = 0.0;
 	};
 
 	bool Finish(bool bPass, const TCHAR* What)
@@ -168,17 +176,74 @@ namespace SectorRoundsSmoke
 		{
 			return false;
 		}
-		Cease(*World);
+		if (!State->bPanicMeasure)
+		{
+			Cease(*World);
+		}
 		switch (State->Preload.Poll(World))
 		{
 		case SmokeUtils::EPreloadGate::Waiting: return true;
 		case SmokeUtils::EPreloadGate::Failed: return Finish(false, TEXT("gameplay preload failed"));
 		default: break;
 		}
-		const UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(World);
+		UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(World);
+		if (Training && !State->bSectorApplied && (State->ArgSector > 0 || State->ArgSeed.IsSet()))
+		{
+			State->bSectorApplied = true;
+			const int32 TargetSector = State->ArgSector > 0 ? State->ArgSector : Training->GetSectorId();
+			if (!Training->SelectSector(TargetSector, State->ArgSeed))
+			{
+				return Finish(false, TEXT("failed to select requested sector/seed"));
+			}
+			State->StageAt = World->GetTimeSeconds();
+		}
 		if (!Training || !Training->HasActiveSector() || !Training->GetSector())
 		{
 			return Finish(false, TEXT("X6 sector 5 did not activate"));
+		}
+		if (State->bPanicMeasure)
+		{
+			const double Now = World->GetTimeSeconds();
+			const FSectorRoundView View = Training->GetRoundView();
+			if (View.Phase != ESectorRoundPhase::Fighting)
+			{
+				return Now - State->StageAt < 60.0 || Finish(false, TEXT("panic measure never entered Fighting"));
+			}
+			if (!State->bMeasureInitialized)
+			{
+				State->bMeasureInitialized = true;
+				State->MeasureStartAt = Now;
+				if (USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
+				{
+					Squad->SetSquadPosture(ESquadFirePosture::Aggressive);
+					Squad->SetFollowersHolding(true);
+				}
+				if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
+				{
+					Pmc->SetTeamCommanded(0, true);
+					if (const FPmcEncounterSpec* Enc = Training->GetEncounter())
+					{
+						Pmc->SetTeamAssault(0, &Enc->Post.Pos);
+					}
+				}
+				for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+				{
+					It->bTacticalCeaseFire = false;
+					if (It->IsPlayerTeam())
+					{
+						ZeroAmmo(**It);
+						if (It->HealthComponent)
+						{
+							It->HealthComponent->RestoreHealth(25.f, 100.f);
+						}
+					}
+				}
+			}
+			if (Now - State->MeasureStartAt >= 90.0 || View.Number > 1)
+			{
+				return Finish(true, TEXT("panic measure 90s completed"));
+			}
+			return true;
 		}
 		const double Now = World->GetTimeSeconds();
 		const FSectorRoundView View = Training->GetRoundView();
@@ -311,7 +376,7 @@ namespace SectorRoundsSmoke
 		}
 	}
 
-	void Run(const TArray<FString>&, UWorld* World)
+	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		if (!World)
 		{
@@ -320,6 +385,22 @@ namespace SectorRoundsSmoke
 		const TSharedRef<FState> State = MakeShared<FState>();
 		State->World = World;
 		State->StageAt = World->GetTimeSeconds();
+		for (const FString& Arg : Args)
+		{
+			int32 Val = 0;
+			if (FParse::Value(*Arg, TEXT("Sector="), Val))
+			{
+				State->ArgSector = Val;
+			}
+			else if (FParse::Value(*Arg, TEXT("Seed="), Val))
+			{
+				State->ArgSeed = Val;
+			}
+			else if (FParse::Value(*Arg, TEXT("PanicMeasure="), Val))
+			{
+				State->bPanicMeasure = Val != 0;
+			}
+		}
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float) { return Step(State); }), 0.f);
 	}
 

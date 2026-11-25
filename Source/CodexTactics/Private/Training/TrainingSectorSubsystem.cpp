@@ -254,14 +254,14 @@ void UTrainingSectorSubsystem::Prepare()
 	}
 }
 
-bool UTrainingSectorSubsystem::SelectSector(int32 Id)
+bool UTrainingSectorSubsystem::SelectSector(int32 Id, TOptional<int32> SeedOverride)
 {
 	UWorld* World = GetWorld();
 	if (!IsTrainingMap() || World->GetNetMode() != NM_Standalone || Id < 0 || Id > 6)
 	{
 		return false;
 	}
-	if (Id == GetSectorId())
+	if (Id == GetSectorId() && !SeedOverride)
 	{
 		return true;
 	}
@@ -309,7 +309,11 @@ bool UTrainingSectorSubsystem::SelectSector(int32 Id)
 		BoundaryActors = MoveTemp(NewBoundary);
 		Active = *Choice;
 		int32 Seed = 0;
-		if (!FParse::Value(FCommandLine::Get(), TEXT("SectorSeed="), Seed))
+		if (SeedOverride)
+		{
+			Seed = *SeedOverride;
+		}
+		else if (!FParse::Value(FCommandLine::Get(), TEXT("SectorSeed="), Seed))
 		{
 			Seed = FMath::Rand();
 		}
@@ -325,7 +329,7 @@ bool UTrainingSectorSubsystem::SelectSector(int32 Id)
 		{
 			Recorder->OnTrainingSectorChanged();
 		}
-		MovePlayersToSector(true);
+		MovePlayersToSector(!SeedOverride.IsSet());
 		if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
 		{
 			for (const int32 Team : Pmc->GetTeamIds())

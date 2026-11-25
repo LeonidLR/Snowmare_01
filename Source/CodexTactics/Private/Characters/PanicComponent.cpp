@@ -20,8 +20,12 @@
 #include "UI/FloatingTextSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 
+#include "HAL/IConsoleManager.h"
+
 namespace
 {
+	TAutoConsoleVariable<int32> CVarPanicLegacy(TEXT("Codex.Panic.Legacy"), 0,
+		TEXT("1 = pre-122 panic rules (chance 1.0, cooldown 0, no sector resupply low-ammo suppression) for A/B checks."));
 	const FLinearColor PanicRed(1.f, 0.2f, 0.2f);
 
 	void PanicLinePost(const AOperativeCharacter* Operative, const FString& Text)
@@ -153,6 +157,10 @@ void UPanicComponent::OnDamageTaken(float FinalDamage)
 
 bool UPanicComponent::IsSectorLowAmmoSuppressed() const
 {
+	if (CVarPanicLegacy.GetValueOnGameThread() != 0)
+	{
+		return false;
+	}
 	const AOperativeCharacter* Operative = GetOperative();
 	const UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(GetWorld());
 	return Operative && Training
@@ -185,13 +193,21 @@ void UPanicComponent::AttemptTriggerPanic()
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 	const int32 PanickedNow = CountPanickedSquadMembers();
 	const bool bIsLeader = Squad && Squad->GetLeader() == Operative;
+	FPanicConfig EffectiveConfig = Config;
+	float EffectiveCooldown = CooldownRemaining;
+	if (CVarPanicLegacy.GetValueOnGameThread() != 0)
+	{
+		EffectiveConfig.TriggerChance = 1.f;
+		EffectiveConfig.PostPanicCooldownSeconds = 0.f;
+		EffectiveCooldown = 0.f;
+	}
 	// Check cooldown and squad/leader limits before consuming a Combat random roll.
 	float Roll01 = 0.f;
-	if (CooldownRemaining <= 0.f && PanicRules::GetTriggerVerdict(Config, PanickedNow, bIsLeader) == PanicRules::ETriggerVerdict::Panic)
+	if (EffectiveCooldown <= 0.f && PanicRules::GetTriggerVerdict(EffectiveConfig, PanickedNow, bIsLeader) == PanicRules::ETriggerVerdict::Panic)
 	{
 		Roll01 = CodexRandom::FRandRange(ECodexRandomStream::Combat, this, 0.f, 1.f);
 	}
-	switch (PanicRules::EvaluateTriggerAttempt(Config, PanickedNow, bIsLeader, CooldownRemaining, Roll01))
+	switch (PanicRules::EvaluateTriggerAttempt(EffectiveConfig, PanickedNow, bIsLeader, EffectiveCooldown, Roll01))
 	{
 	case PanicRules::ETriggerVerdict::HoldOnCooldown:
 		Stress = FMath::Min(Stress, 90.f);

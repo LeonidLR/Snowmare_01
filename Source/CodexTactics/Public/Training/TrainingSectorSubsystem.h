@@ -24,7 +24,7 @@ public:
 
 	/** Called before gameplay preload and any scheduled encounters. */
 	void Prepare();
-	bool SelectSector(int32 Id);
+	bool SelectSector(int32 Id, TOptional<int32> SeedOverride = TOptional<int32>());
 	bool HasActiveSector() const { return Active.IsSet(); }
 	/** An active sector keeps a wiped player squad in the fight: no death cinematic and no mission failure. */
 	bool SuppressesMissionEnd() const { return HasActiveSector(); }
