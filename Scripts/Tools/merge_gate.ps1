@@ -323,10 +323,51 @@ function Test-GateDesignerFiles([string]$RepoDir, [string]$BackupDir) {
     return $label
 }
 
+function Write-GateProgress($Timing, [string]$Stage) {
+    try {
+        if (-not $Timing -or $Timing.Preview -or -not $Timing.RepoDir) { return }
+        $logDir = Join-Path $Timing.RepoDir 'Saved/Logs'
+        $progressPath = Join-Path $logDir 'merge-gate-progress.json'
+        if (-not $Stage) {
+            if (Test-Path -LiteralPath $progressPath) { Remove-Item -LiteralPath $progressPath -Force -ErrorAction SilentlyContinue }
+            return
+        }
+        $order = @('Editor', 'Backup', 'Merge', 'Build', 'Tests', 'Worker smokes', 'Designer files')
+        $idx = [Array]::IndexOf($order, $Stage)
+        $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
+        $payload = [ordered]@{
+            stage = $Stage
+            stage_index = if ($idx -ge 0) { $idx + 1 } else { 1 }
+            stage_count = $order.Count
+            stage_started = $now
+            gate_started = if ($Timing.GateStarted) { [int64]$Timing.GateStarted } else { $now }
+            updated = $now
+        }
+        $payload | ConvertTo-Json -Compress | Set-Content -LiteralPath $progressPath -Encoding UTF8
+    } catch { }
+}
+
+function Write-GateHistory($RepoDir, [int]$ExitCode, $Seconds) {
+    try {
+        if (-not $RepoDir) { return }
+        $logDir = Join-Path $RepoDir 'Saved/Logs'
+        if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
+        $histPath = Join-Path $logDir 'merge-gate-history.jsonl'
+        $rec = [ordered]@{
+            at = (Get-Date -Format 's')
+            code = $ExitCode
+            stages = $Seconds
+        }
+        Add-Content -LiteralPath $histPath -Encoding UTF8 ($rec | ConvertTo-Json -Compress)
+    } catch { }
+}
+
 function Set-GateStage($Timing, [string]$Next) {
     if ($Timing.Stage) { $Timing.Seconds[$Timing.Stage] += $Timing.Clock.Elapsed.TotalSeconds }
     $Timing.Stage = $Next
     $Timing.Clock.Restart()
+    Write-GateProgress $Timing $Next
 }
 
 function Show-GateSummary($Stages, $Seconds) {
@@ -361,7 +402,7 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
     $scriptsDir = Split-Path $toolsDir -Parent
     $repoDir = Split-Path $scriptsDir -Parent
     $stages = [ordered]@{ Editor = 'pending'; Backup = 'pending'; Merge = 'pending'; Build = 'pending'; Tests = 'pending'; 'Worker smokes' = 'pending'; 'Designer files' = 'pending' }
-    $timing = @{ Stage = ''; Seconds = @{}; Clock = [Diagnostics.Stopwatch]::new() }
+    $timing = @{ Stage = ''; Seconds = @{}; Clock = [Diagnostics.Stopwatch]::new(); RepoDir = $repoDir; GateStarted = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); Preview = [bool]$Preview }
     Set-GateStage $timing 'Editor'
     $ownsLock = $false
     $code = 1
@@ -608,6 +649,7 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
             }
         }
         Set-GateStage $timing ''
+        if (-not $Preview) { Write-GateHistory $repoDir $code $timing.Seconds }
         if ($head) { Write-Host "Pre-merge SHA: $head" }
         if (-not $Preview) {
             Write-Host "Build log: $buildLog"
