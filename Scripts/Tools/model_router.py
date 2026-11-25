@@ -148,6 +148,9 @@ def classify(text, config, timeout=None):
         result["reason"] = "no level: main session"
         return result
     result.update(level=str(level), confidence=confidence)
+    gemini = config.get("gemini_antigravity") or {}
+    if gemini:
+        result["gemini_model"] = (gemini.get("by_level") or {}).get(str(level), gemini.get("default", "Hydrogen"))
     blocked = route_block_reason(result["level"], level_config, policy)
     if blocked:
         result.update(reason=blocked, policy_blocked=True)

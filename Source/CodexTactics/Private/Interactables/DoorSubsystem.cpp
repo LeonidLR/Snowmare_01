@@ -33,6 +33,7 @@
 #include "GameFramework/Character.h"
 #include "Interactables/DoorActor.h"
 #include "Interactables/LootCrateActor.h"
+#include "Navigation/CrowdFollowingComponent.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationData.h"
 #include "NavigationPath.h"
@@ -107,6 +108,7 @@ namespace DoorSubsystemLocal
 		ACharacter* Pawn = nullptr;
 		FVector Feet = FVector::ZeroVector;
 		FVector Velocity = FVector::ZeroVector;
+		FVector CrowdDirection = FVector::ZeroVector;
 		TArray<FVector> Path;
 	};
 
@@ -129,6 +131,10 @@ namespace DoorSubsystemLocal
 			if (Follow && Follow->GetStatus() == EPathFollowingStatus::Moving && Follow->GetPath().IsValid())
 			{
 				const TArray<FNavPathPoint>& Points = Follow->GetPath()->GetPathPoints();
+				if (const UCrowdFollowingComponent* Crowd = Cast<UCrowdFollowingComponent>(Follow); Crowd && Crowd->IsCrowdSimulationActive())
+				{
+					Sample.CrowdDirection = Crowd->GetCurrentDirection().GetSafeNormal2D();
+				}
 				Sample.Path.Add(Pawn->GetActorLocation());
 				for (int32 Index = FMath::Max(1, static_cast<int32>(Follow->GetNextPathIndex())); Index < Points.Num(); ++Index)
 				{
@@ -927,7 +933,13 @@ void UDoorSubsystem::TickAutoOpen(float DeltaTime)
 				continue;
 			}
 			bool bHeading = false;
-			if (Sample.Path.Num() >= 2)
+			if (!Sample.CrowdDirection.IsNearlyZero())
+			{
+				// Detour keeps the bends in its corridor. GetPathPoints can contain only the origin and goal.
+				const FVector Ahead = Sample.Feet + Sample.CrowdDirection * Tuning.ZoneDepthCm;
+				bHeading = DoorRules::PathCrossesDoorway({ Local, Door->ToLocal(Ahead) }, HalfWidth, Tuning.ZoneDepthCm);
+			}
+			else if (Sample.Path.Num() >= 2)
 			{
 				TArray<FVector2D> LocalPath;
 				LocalPath.Reserve(Sample.Path.Num());

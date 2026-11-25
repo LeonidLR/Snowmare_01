@@ -498,7 +498,12 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
             Set-GateStage $timing 'Build'
             Assert-GateEditorClosed $project
             if (Test-GateNeedsBuild $paths) {
-                powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $scriptsDir 'build.ps1') | Out-Host
+                # Designer 2026-11-25: compile on the worker (build_remote copies the DLLs back); local UBT only if the worker is unreachable (exit 2).
+                powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $scriptsDir 'build.ps1') -Remote worker | Out-Host
+                if ($LASTEXITCODE -eq 2) {
+                    Write-Host '[merge_gate] remote build unavailable (exit 2) - building locally'
+                    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $scriptsDir 'build.ps1') | Out-Host
+                }
                 if ($LASTEXITCODE -ne 0) { throw "Build failed (exit $LASTEXITCODE)." }
                 $stages.Build = 'PASS'
             } else {

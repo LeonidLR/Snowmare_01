@@ -284,7 +284,7 @@ def default_git_snapshot(repo_root: str) -> dict[str, Any]:
                     errors="replace",
                 )
                 for line in out.splitlines():
-                    br = line.lstrip("* ").strip()
+                    br = line.lstrip("*+ ").strip()  # "+" = checked out in another worktree (2026-11-25)
                     if br.startswith("remotes/origin/"):
                         br = br[len("remotes/origin/"):]
                     snapshot[target_key].add(br)
