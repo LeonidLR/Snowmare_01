@@ -32,6 +32,9 @@
 #include "Interactables/MantleNavigation.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
+#include "Tactics/CoverTraceRules.h"
 
 namespace MantleFenceRouteSmoke
 {
@@ -62,6 +65,9 @@ namespace MantleFenceRouteSmoke
 		bool bMantledHere = false;
 		MantleSmokeSites::FSite Site;
 		FVector Goal = FVector::ZeroVector;
+		int32 CoverCase = 0;
+		TMap<AOperativeCharacter*, int32> CoverMantles;
+		FCoverSlot CoverRequested;
 		TSet<const AActor*> Used;
 		/** B17-4: the way over the qualifying fence (EVariant) and the climb's frames. */
 		int32 Variant = 0;
@@ -183,6 +189,10 @@ namespace MantleFenceRouteSmoke
 			if (!Squad || !Squad->GetLeader() || !Mantle || !PC || !Nav || State->StageTime < 3.f || (!Mantle->HasGenerated() && State->StageTime < 240.f))
 			{
 				return true;
+			}
+			if (FParse::Param(FCommandLine::Get(), TEXT("FenceCover120")))
+			{
+				SmokeUtils::StopLevelPmc(World);
 			}
 			State->Leader = Squad->GetLeader();
 			Squad->EnterSoloMode();
@@ -351,7 +361,82 @@ namespace MantleFenceRouteSmoke
 				return true;
 			}
 			++State->Variant;
+			if (State->Variant == VariantCount && State->Passed > 0 && FParse::Param(FCommandLine::Get(), TEXT("FenceCover120")))
+			{
+				Next(*State, 5);
+				return true;
+			}
 			Next(*State, State->Variant < VariantCount && State->Passed > 0 ? 20 : 1);
+			return true;
+		}
+		case 5: // Prepare the cover order with a slot traced from the wrong face.
+		{
+			const bool bGroup = State->CoverCase >= 2;
+			const bool bReverse = (State->CoverCase % 2) != 0;
+			const FVector Direction = bReverse ? -State->Site.Dir : State->Site.Dir;
+			const FVector Start = bReverse ? State->Goal : State->Site.Feet;
+			const FVector Aim = State->Site.Probe.FacePoint + FVector(0.f, 0.f, 65.f);
+			State->CoverMantles.Reset();
+			if (bGroup)
+			{
+				Squad->ExitSoloMode();
+			}
+			Squad->SetFollowersHolding(true);
+			int32 MemberIndex = 0;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (!Member || (!bGroup && Member != Leader))
+				{
+					continue;
+				}
+				Member->StopOperative();
+				Member->LeaveCover(TEXT("fence smoke setup"));
+				Member->SetStance(EOperativeStance::Standing);
+				const FVector Feet = Start - Direction * (110.f * MemberIndex);
+				Member->TeleportTo(Feet + FVector(0.f, 0.f, Member->GetSimpleCollisionHalfHeight() + 5.f), Direction.Rotation(), false, true);
+				State->CoverMantles.Add(Member, Member->GetMantleCount());
+				++MemberIndex;
+			}
+			const bool bSlot = CoverTraceRules::FindCoverSlotAt(World, Aim, -Direction, State->CoverRequested)
+				&& State->CoverRequested.Height == ECoverHeight::LowCover && State->CoverRequested.WallActor == State->Site.Actor
+				&& !CoverTraceRules::IsOnApproachSide(State->CoverRequested, Start);
+			if (!bSlot)
+			{
+				Check(*State, false, FString::Printf(TEXT("cover case %d: far-side fence slot"), State->CoverCase));
+				return Finish(*State, false);
+			}
+			Next(*State, 6);
+			return true;
+		}
+		case 6:
+			if (State->StageTime >= 0.6f)
+			{
+				Squad->SetFollowersHolding(State->CoverCase < 2);
+				PC->ShowCoverPreview(Leader, State->CoverRequested);
+				PC->ConfirmCoverPreview(true);
+				Next(*State, 7);
+			}
+			return true;
+		case 7:
+		{
+			bool bNoClimb = true;
+			for (const TPair<AOperativeCharacter*, int32>& Pair : State->CoverMantles)
+			{
+				bNoClimb &= !Pair.Key->IsVaulting() && Pair.Key->GetMantleCount() == Pair.Value
+					&& !CoverTraceRules::IsOnApproachSide(State->CoverRequested, Pair.Key->GetActorLocation());
+			}
+			const bool bInCover = Leader->bInCover && Leader->GetCoverSlot().WallActor == State->Site.Actor;
+			if (bNoClimb && State->StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(*State, bNoClimb && bInCover, FString::Printf(TEXT("cover case %d: %d monitored, no climb %d, leader in cover %d"),
+				State->CoverCase, State->CoverMantles.Num(), bNoClimb, bInCover));
+			if (++State->CoverCase == 4)
+			{
+				return Finish(*State, true);
+			}
+			Next(*State, 5);
 			return true;
 		}
 		default:
