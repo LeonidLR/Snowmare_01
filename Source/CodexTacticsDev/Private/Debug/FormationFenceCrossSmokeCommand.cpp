@@ -165,6 +165,94 @@ namespace FormationFenceCrossSmoke
 		return true;
 	}
 
+	/** A point BackCm behind Origin along -Dir, still on the near side of the fence and on the navmesh. */
+	bool ProjectBack(UNavigationSystemV1& Nav, const FVector& Origin, const FVector& Dir, float BackCm, FVector& OutFeet)
+	{
+		FNavLocation OnNav;
+		if (!Nav.ProjectPointToNavigation(Origin - Dir * BackCm, OnNav, FVector(200.f, 200.f, 200.f)))
+		{
+			return false;
+		}
+		if (FMath::Abs(OnNav.Location.Z - Origin.Z) > 80.f)
+		{
+			return false;
+		}
+		const float AlongDir = static_cast<float>(FVector::DotProduct(OnNav.Location - Origin, Dir));
+		if (AlongDir > 40.f || AlongDir < -BackCm - 180.f)
+		{
+			return false;
+		}
+		OutFeet = OnNav.Location;
+		return true;
+	}
+
+	/**
+	 * A file on the near side: the leader at the stand-off, the others further back on a short path to him.
+	 * The rear man then starts outside the covered-approach arrive distance while the leader can reach the fence.
+	 * Returns the depth of the rearmost man. A blind teleport (the 10 m point was off the mesh) makes the move end as blocked.
+	 */
+	float PlaceColumn(UWorld* World, FState& State, const FVector& LeaderFeet, const FVector& Dir)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		const float WantedBack[3] = { 0.f, 450.f, 900.f };
+		FVector Placed[3] = { LeaderFeet, LeaderFeet, LeaderFeet };
+		float Back[3] = { 0.f, 0.f, 0.f };
+		float Spread = 0.f;
+		if (!Nav)
+		{
+			return 0.f;
+		}
+		for (int32 Index = 0; Index < State.Members.Num() && Index < 3; ++Index)
+		{
+			AOperativeCharacter* Operative = State.Members[Index].Operative.Get();
+			bool bFound = false;
+			for (float Try = WantedBack[Index]; Try >= 0.f && !bFound; Try -= 50.f)
+			{
+				FVector Feet = LeaderFeet;
+				if (Try > 1.f && !ProjectBack(*Nav, LeaderFeet, Dir, Try, Feet))
+				{
+					continue;
+				}
+				bool bClose = false;
+				for (int32 Prev = 0; Prev < Index; ++Prev)
+				{
+					bClose |= static_cast<float>(FVector::Dist2D(Feet, Placed[Prev])) < 280.f;
+				}
+				if (bClose)
+				{
+					continue;
+				}
+				if (Try > 40.f && Operative)
+				{
+					const FVector From = Feet + FVector(0.f, 0.f, 90.f);
+					const FVector To = LeaderFeet + FVector(0.f, 0.f, 90.f);
+					const UNavigationPath* Path = UNavigationSystemV1::FindPathToLocationSynchronously(World, From, To, Operative);
+					const float Straight = static_cast<float>(FVector::Dist2D(From, To));
+					if (!Path || !Path->IsValid() || Path->IsPartial() || Path->GetPathLength() > Straight * 1.6f + 150.f)
+					{
+						continue;
+					}
+				}
+				Placed[Index] = Feet;
+				Back[Index] = Try;
+				bFound = true;
+			}
+			if (Operative)
+			{
+				Operative->StopOperative();
+				Operative->LeaveCover(TEXT("G026 smoke setup"));
+				Operative->ClearPendingCover();
+				Operative->SetStance(EOperativeStance::Standing);
+				const float HalfHeight = Operative->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+				Operative->TeleportTo(Placed[Index] + FVector(0.f, 0.f, HalfHeight + 4.f), Dir.Rotation(), false, true);
+			}
+			Spread = FMath::Max(Spread, Back[Index]);
+			UE_LOG(LogCodexTactics, Display, TEXT("[FormationFenceCross] column %s %.0f cm back of the stand-off"),
+				Operative ? *Operative->DisplayName.ToString() : TEXT("?"), Back[Index]);
+		}
+		return Spread;
+	}
+
 	float MontageFraction(AOperativeCharacter& Operative)
 	{
 		USkeletalMeshComponent* Mesh = Operative.GetMesh();
@@ -399,23 +487,47 @@ namespace FormationFenceCrossSmoke
 			}
 			Check(*State, !Squad->IsSquadMantleActive() || Arrived == State->Members.Num(),
 				FString::Printf(TEXT("part 1: squad mantle still active %d after %.1f s"), Squad->IsSquadMantleActive() ? 1 : 0, State->StageTime));
-			for (const FMember& Member : State->Members)
+			for (FMember& Member : State->Members)
 			{
-				const AOperativeCharacter* Operative = Member.Operative.Get();
+				AOperativeCharacter* Operative = Member.Operative.Get();
 				if (!Operative)
 				{
 					Check(*State, false, TEXT("part 1: operative missing"));
 					continue;
 				}
-				const float Dist = static_cast<float>(FVector::Dist2D(FeetOf(*Operative), Member.Expected));
-				const float Straight = FMath::Max(100.f, static_cast<float>(FVector::Dist2D(Member.Start, Member.Expected)));
+				// Roles are reassigned by travel during the cross, so the slot is the one he holds once the leader is at the click.
+				FVector LiveSlot = Member.Expected;
+				float LiveYaw = 0.f;
+				if (Operative == Leader)
+				{
+					LiveSlot = State->Goal;
+				}
+				else
+				{
+					FVector Slot = FVector::ZeroVector;
+					float Yaw = 0.f;
+					if (Squad->GetFormationTarget(Operative, Slot, Yaw))
+					{
+						LiveSlot = Slot;
+						LiveYaw = Yaw;
+					}
+				}
+				const FVector Feet = FeetOf(*Operative);
+				const float Dist = static_cast<float>(FVector::Dist2D(Feet, LiveSlot));
+				const float StraightLive = static_cast<float>(FVector::Dist2D(Member.Start, LiveSlot));
+				const float StraightClick = static_cast<float>(FVector::Dist2D(Member.Start, Member.Expected));
+				// Places-by-travel can hand him a closer slot than the click assigned. The detour is the longer of the two straight lines.
+				const float Straight = FMath::Max(100.f, FMath::Max(StraightLive, StraightClick));
 				const bool bVault = Operative->GetMantleCount() > Member.MantlesBefore;
 				const bool bThere = Dist <= SlotRadiusCm;
 				const bool bShort = Member.Travel <= DetourLimit * Straight;
+				UE_LOG(LogCodexTactics, Display, TEXT("[FormationFenceCross] %s feet %s, live slot %s (yaw %.0f), click-time slot %s, straight live %.0f click %.0f"),
+					*Operative->DisplayName.ToString(), *Feet.ToCompactString(), *LiveSlot.ToCompactString(), LiveYaw, *Member.Expected.ToCompactString(),
+					StraightLive, StraightClick);
 				Check(*State, bThere && bVault && bShort, FString::Printf(
-					TEXT("part 1: %s within %.0f cm of his slot (%.0f), vaulted %d (mantles %+d, class %s), path %.0f cm <= %.1fx of %.0f, pending-at-click %d"),
+					TEXT("part 1: %s within %.0f cm of his slot (%.0f), vaulted %d (mantles %+d, class %s), path %.0f cm <= %.1fx of %.0f (live %.0f, click-time %.0f), pending-at-click %d"),
 					*Operative->DisplayName.ToString(), SlotRadiusCm, Dist, bVault ? 1 : 0, Operative->GetMantleCount() - Member.MantlesBefore,
-					*Operative->GetLastMantleClass().ToString(), Member.Travel, DetourLimit, Straight, Member.bPendingAtClick ? 1 : 0));
+					*Operative->GetLastMantleClass().ToString(), Member.Travel, DetourLimit, Straight, StraightLive, StraightClick, Member.bPendingAtClick ? 1 : 0));
 			}
 			UE_LOG(LogCodexTactics, Display, TEXT("[FormationFenceCross] part 1 leader destination %.0f cm from the click, squad mantle done %d"),
 				Leader ? FVector::Dist2D(Leader->GetLastMoveDestination(), State->Goal) : -1.f, Squad->GetSquadMantleDoneCount());
@@ -524,7 +636,9 @@ namespace FormationFenceCrossSmoke
 			Squad->ClearGroupSelection();
 			Squad->SetLeader(Leader);
 			Squad->SetFollowersHolding(false);
-			PlaceLine(World, *State, State->Site.Feet, State->Site.Dir);
+			// A file on the navmesh, not a fixed 10 m teleport (that point was off the mesh and the move ended blocked).
+			const float Spread = PlaceColumn(World, *State, State->Site.Feet, State->Site.Dir);
+			Check(*State, Spread >= 280.f, FString::Printf(TEXT("part 3: the file is staggered on nav (rear %.0f cm back)"), Spread));
 			const FVector Aim = State->Site.Probe.FacePoint + FVector(0.f, 0.f, 65.f);
 			FCoverSlot Slot;
 			bool bSlot = false;
