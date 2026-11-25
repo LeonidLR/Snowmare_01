@@ -28,8 +28,6 @@
 #include "Engine/World.h"
 #include "GameFlow/LevelExitSubsystem.h"
 #include "HAL/IConsoleManager.h"
-#include "Interactables/DoorActor.h"
-#include "Interactables/DoorSubsystem.h"
 #include "HAL/PlatformFileManager.h"
 #include "HAL/PlatformMisc.h"
 #include "LevelGen/BuildingWalkRules.h"
@@ -1434,8 +1432,7 @@ namespace LevelGenBuildingsSmoke
 			}
 		}
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda(
-			[WeakWorld = TWeakObjectPtr<UWorld>(World), Options, Deadline, WallStart,
-				bForceOpen = FParse::Param(FCommandLine::Get(), TEXT("LevelGenBuildingsSmokeDoorsOpen"))](float) mutable
+			[WeakWorld = TWeakObjectPtr<UWorld>(World), Options, Deadline, WallStart](float)
 			{
 				UWorld* MapWorld = WeakWorld.Get();
 				if (!MapWorld || FPlatformTime::Seconds() >= Deadline)
@@ -1448,25 +1445,6 @@ namespace LevelGenBuildingsSmoke
 				if (!Agent || !Nav || UNavigationSystemV1::IsNavigationBeingBuiltOrLocked(MapWorld))
 				{
 					return true;
-				}
-				if (bForceOpen)
-				{
-					bForceOpen = false;
-					const UDoorSubsystem* Doors = MapWorld->GetSubsystem<UDoorSubsystem>();
-					if (!Doors || !Doors->IsActive() || Doors->GetDoors().IsEmpty())
-					{
-						return Finish(TEXT("FAIL LevelGenBuildingsSmoke: no live doors for the force-open comparison"));
-					}
-					int32 Opened = 0;
-					for (ADoorActor* Door : Doors->GetDoors())
-					{
-						if (Door && Door->GetDoorState() != EDoorLeafState::Open && Door->ForceState(EDoorLeafState::Open, nullptr))
-						{
-							++Opened;
-						}
-					}
-					UE_LOG(LogCodexTactics, Display, TEXT("Smoke door comparison: forced %d of %d doors open"), Opened, Doors->GetDoors().Num());
-					return true; // Let navigation process the door modifiers before checking routes.
 				}
 				const ANavigationData* Data = Nav->GetNavDataForProps(Agent->GetNavAgentPropertiesRef(), Agent->GetActorLocation());
 				return Data ? CheckMap(*MapWorld, Options, *Agent, *Nav, *Data, WallStart) : true;
