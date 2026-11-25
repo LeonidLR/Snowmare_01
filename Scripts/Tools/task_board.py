@@ -377,6 +377,82 @@ def _message_matches_task(msg: dict[str, Any], task: dict[str, Any]) -> bool:
     return False
 
 
+_PROGRESS_RE = re.compile(r"\bPROGRESS\s+(\d+)\s*/\s*(\d+)(?:\s*\|\s*(.+))?", re.IGNORECASE)
+_PLAN_RE = re.compile(r"\bPLAN\b(.*)$", re.IGNORECASE | re.DOTALL)
+_PLAN_STEP_RE = re.compile(r"(?:^|[\s|;])(\d+)\)")
+_START_RE = re.compile(r"\bSTART\b")
+_FINISH_RE = re.compile(r"\bFINISH\b")
+
+
+def parse_progress_from_messages(messages: list[dict[str, Any]]) -> dict[str, Any]:
+    """Extracts latest PROGRESS/PLAN/START/FINISH state from a task's matched chat messages."""
+    prog_done: int | None = None
+    prog_total: int | None = None
+    prog_step = ""
+    prog_ts: float | None = None
+    plan_total: int | None = None
+    saw_start = False
+    saw_finish = False
+    activity_ts: float | None = None
+
+    for msg in messages:
+        text = str(msg.get("text") or "").strip()
+        ts = parse_iso_timestamp(msg.get("ts"))
+        m_prog = _PROGRESS_RE.search(text)
+        if m_prog:
+            done_v = int(m_prog.group(1))
+            total_v = int(m_prog.group(2))
+            if total_v > 0 and 0 <= done_v <= total_v:
+                prog_done = done_v
+                prog_total = total_v
+                prog_step = (m_prog.group(3) or "").strip()
+                prog_ts = ts
+                activity_ts = ts if ts is not None else activity_ts
+            continue
+        m_plan = _PLAN_RE.search(text)
+        if m_plan:
+            steps = [int(n) for n in _PLAN_STEP_RE.findall(m_plan.group(1))]
+            if steps and 1 <= max(steps) <= 50:
+                plan_total = max(steps)
+            activity_ts = ts if ts is not None else activity_ts
+            continue
+        if _START_RE.search(text):
+            saw_start = True
+            activity_ts = ts if ts is not None else activity_ts
+        if _FINISH_RE.search(text):
+            saw_finish = True
+            activity_ts = ts if ts is not None else activity_ts
+
+    if saw_finish:
+        final_total = prog_total or plan_total or 1
+        return {
+            "progress_done": final_total,
+            "progress_total": final_total,
+            "progress_step": "",
+            "progress_ts": activity_ts,
+        }
+    if prog_done is not None and prog_total is not None:
+        return {
+            "progress_done": prog_done,
+            "progress_total": prog_total,
+            "progress_step": prog_step,
+            "progress_ts": prog_ts or activity_ts,
+        }
+    if saw_start or plan_total is not None:
+        return {
+            "progress_done": 0,
+            "progress_total": plan_total,
+            "progress_step": "",
+            "progress_ts": activity_ts,
+        }
+    return {
+        "progress_done": None,
+        "progress_total": None,
+        "progress_step": "",
+        "progress_ts": None,
+    }
+
+
 def match_chat_for_task(task: dict[str, Any], messages: list[dict[str, Any]]) -> dict[str, Any]:
     matched = [m for m in messages if _message_matches_task(m, task)]
     if not matched:
@@ -388,6 +464,10 @@ def match_chat_for_task(task: dict[str, Any], messages: list[dict[str, Any]]) ->
             "last_chat_topic": "",
             "asked_question": False,
             "blocked": False,
+            "progress_done": None,
+            "progress_total": None,
+            "progress_step": "",
+            "progress_ts": None,
         }
     last = matched[-1]
     last_text = str(last.get("text") or "")
@@ -398,6 +478,7 @@ def match_chat_for_task(task: dict[str, Any], messages: list[dict[str, Any]]) ->
         and last_to in ("designer", "claude", "all")
     )
     blocked = bool(_BLOCKER_WORDS_RE.search(last_text.lower()))
+    prog = parse_progress_from_messages(matched)
     return {
         "chat_count": len(matched),
         "last_chat_ts": parse_iso_timestamp(last.get("ts")),
@@ -406,6 +487,7 @@ def match_chat_for_task(task: dict[str, Any], messages: list[dict[str, Any]]) ->
         "last_chat_topic": str(last.get("topic") or ""),
         "asked_question": asked_question,
         "blocked": blocked,
+        **prog,
     }
 
 
@@ -550,6 +632,11 @@ def build_task_board(
                 "last_chat_text": chat_info["last_chat_text"],
                 "last_chat_topic": chat_info["last_chat_topic"],
                 "asked_question": chat_info["asked_question"],
+                "blocked": chat_info["blocked"],
+                "progress_done": chat_info["progress_done"],
+                "progress_total": chat_info["progress_total"],
+                "progress_step": chat_info["progress_step"],
+                "progress_ts": chat_info["progress_ts"],
                 "last_activity_ts": last_act_ts,
                 "idle_min": idle_min,
                 "register_items": [

@@ -340,6 +340,75 @@ class TaskBoardTests(unittest.TestCase):
             httpd.server_close()
             thread.join(timeout=2)
 
+    def test_progress_parsing_and_chat_in_progress_window(self) -> None:
+        now = 1_700_000_000
+        ts1 = "2026-11-25T13:00:00+00:00"
+        ts2 = "2026-11-25T13:01:00+00:00"
+        ts3 = "2026-11-25T13:02:00+00:00"
+        ts4 = "2026-11-25T13:05:00+00:00"
+
+        # 1. PLAN with numbered steps -> 0/3 total
+        p_plan = task_board.parse_progress_from_messages(
+            [
+                {"ts": ts1, "text": "124 START"},
+                {"ts": ts2, "text": "124 PLAN | model: Hydrogen | 1) parser 2) UI 3) tests"},
+            ]
+        )
+        self.assertEqual(p_plan["progress_done"], 0)
+        self.assertEqual(p_plan["progress_total"], 3)
+        self.assertEqual(p_plan["progress_step"], "")
+        self.assertEqual(p_plan["progress_ts"], task_board.parse_iso_timestamp(ts2))
+
+        # 2. PROGRESS overrides PLAN, malformed PROGRESS is ignored
+        p_prog = task_board.parse_progress_from_messages(
+            [
+                {"ts": ts1, "text": "124 PLAN | 1) a 2) b 3) c 4) d"},
+                {"ts": ts2, "text": "124 PROGRESS 2/4 | A/B 300 seeds"},
+                {"ts": ts3, "text": "124 PROGRESS bad/line | ignore me"},
+                {"ts": ts4, "text": "124 PROGRESS 9/2 | invalid done > total"},
+            ]
+        )
+        self.assertEqual(p_prog["progress_done"], 2)
+        self.assertEqual(p_prog["progress_total"], 4)
+        self.assertEqual(p_prog["progress_step"], "A/B 300 seeds")
+        self.assertEqual(p_prog["progress_ts"], task_board.parse_iso_timestamp(ts2))
+
+        # 3. FINISH sets progress_done == progress_total
+        p_fin = task_board.parse_progress_from_messages(
+            [
+                {"ts": ts2, "text": "124 PROGRESS 2/5 | building"},
+                {"ts": ts4, "text": "124 FINISH | PASS | abcdef1 | done"},
+            ]
+        )
+        self.assertEqual(p_fin["progress_done"], 5)
+        self.assertEqual(p_fin["progress_total"], 5)
+        self.assertEqual(p_fin["progress_ts"], task_board.parse_iso_timestamp(ts4))
+
+        # 4. START/PLAN/PROGRESS in last 2h moves a branchless task to in_progress
+        st_recent, _, _ = task_board.compute_task_state(
+            has_report=False,
+            in_interim=False,
+            in_main=False,
+            asked_question=False,
+            blocked=False,
+            last_commit_ts=None,
+            last_chat_ts=now - 1800,
+            now_ts=now,
+        )
+        self.assertEqual(st_recent, "in_progress")
+
+        st_stale, _, _ = task_board.compute_task_state(
+            has_report=False,
+            in_interim=False,
+            in_main=False,
+            asked_question=False,
+            blocked=False,
+            last_commit_ts=None,
+            last_chat_ts=now - 9000,
+            now_ts=now,
+        )
+        self.assertEqual(st_stale, "queued")
+
 
 if __name__ == "__main__":
     unittest.main()
