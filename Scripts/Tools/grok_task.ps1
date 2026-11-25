@@ -32,7 +32,7 @@ $Log = if ($LogDir) { $LogDir } else { Join-Path $Repo "Saved\Orchestrator\grok_
 New-Item -ItemType Directory -Force $Log | Out-Null
 $Out = Join-Path $Log ("{0}-{1}.json" -f (Get-Date -Format "yyyyMMdd-HHmmss"), $Label)
 $Prompt = Get-Content $PromptFile -Raw -Encoding utf8
-$ArgsList = @("-p", $Prompt, "--cwd", $Tree, "-m", $Model, "--max-turns", "$MaxTurns", "--output-format", "json", "--always-approve",
+$ArgsList = @("-p", $Prompt, "--cwd", $Tree, "-m", $Model, "--max-turns", "$MaxTurns", "--output-format", "json", "--always-approve", "--background-wait-timeout", "5400",
     "--deny", "Bash(git push*)", "--deny", "Bash(git merge*)", "--deny", "Bash(git rebase main*)", "--deny", "Bash(git reset --hard*)",
     "--deny", "Bash(*Remove-Item*-Recurse*)", "--deny", "Bash(rm -rf*)")
 if ($Session) {
