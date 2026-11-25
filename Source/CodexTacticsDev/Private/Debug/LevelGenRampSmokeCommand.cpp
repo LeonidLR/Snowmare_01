@@ -584,11 +584,8 @@ namespace LevelGenRampSmoke
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s placed at %s (asked %s)%s%s"), *Member->DisplayName.ToString(), *At.ToCompactString(), *Spot.ToString(),
 				Index == 0 ? TEXT(" - at the back, the one sent up") : TEXT(""), !bFits ? TEXT(" - no spot in the mouth fits, the old one")
 				: Spot != First ? *FString::Printf(TEXT(" - instead of %s (behind a wall / off the navmesh)"), *First.ToString()) : TEXT(""));
+			Member->StopOperative();
 			Member->TeleportTo(At + FVector(0.f, 0.f, Member->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 5.f), FVector(Stair.Dir, 0.0).Rotation(), false, true);
-			if (AAIController* AI = Cast<AAIController>(Member->GetController()))
-			{
-				AI->StopMovement();
-			}
 		}
 		return Back;
 	}
@@ -644,16 +641,13 @@ namespace LevelGenRampSmoke
 			{
 				Squad->EnterSoloMode();
 			}
-			Squad->SetFollowersHolding(true);
 		}
-		else
+		else if (Squad->IsSoloMode())
 		{
-			if (Squad->IsSoloMode())
-			{
-				Squad->ExitSoloMode();
-			}
-			Squad->SetFollowersHolding(false);
+			Squad->ExitSoloMode();
 		}
+		// Keep the staged squad in place while the teleport settles between legs.
+		Squad->SetFollowersHolding(true);
 		Squad->SetSelectedGroup(TArray<AOperativeCharacter*>{ Squad->GetLeader() }, false);
 		State.Ordered = PlaceSquad(World, *Squad, Stair, State.GroundZ + Stair.LevelFrom * LevelHeightCm);
 		State.PhaseTime = 0.f;
@@ -758,6 +752,8 @@ namespace LevelGenRampSmoke
 			{
 				Squad->SetLeader(Ordered);
 			}
+			Squad->ResetFormationState(FVector(State.Stairs[Leg.Stair].Dir, 0.0));
+			Squad->SetFollowersHolding(Leg.Kind == ELegKind::Solo);
 			Click(World, Leg.Goal, Leg.Kind == ELegKind::Group);
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: leg %d / %d - %s %s: %s (selected, %d in the selection) clicked to %s"), State.Leg + 1, State.Legs.Num(),
 				*State.Stairs[Leg.Stair].Id, KindName(Leg.Kind), *Ordered->DisplayName.ToString(), Squad->GetSelectedGroup().Num(), *Leg.Goal.ToCompactString());
