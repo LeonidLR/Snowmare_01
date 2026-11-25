@@ -568,7 +568,7 @@ public:
 	 *  or WindowOrderRules::MoveOpensWindows), never for an autonomous order, a formation follow or a PMC fighter. */
 	bool IsWindowPathAllowed() const { return bWindowPathAllowed; }
 
-	/** G024: walk to ApproachFeet with whole windows closed, then climb through to LandingFeet. A different move drops it. */
+	/** G024: the order stays LandingFeet (the formation follows that). He walks to ApproachFeet first with whole windows closed, then climbs through. A different move drops it. */
 	void ArmWindowApproach(const FVector& ApproachFeet, const FVector& LandingFeet);
 
 	/** Smokes: climbs started / restored, the last climb's class / clip / gait / stop / refusal / landing error (cm) / cancel. */
@@ -2792,8 +2792,10 @@ private:
 	bool bMantlePathAllowed = false;
 	/** IsWindowPathAllowed. */
 	bool bWindowPathAllowed = false;
-	/** G024: the current move walks to the near face first. Cleared before the far-side leg so it does not divert twice. */
+	/** G024: a via to his own side is in flight. LastMoveDestination stays the landing, so the formation still aims inside. */
 	bool bWindowApproachPending = false;
+	/** Whole-window latch saved while that via walks with windows closed. Restored before the climb. */
+	bool bWindowApproachWindows = false;
 	/** Set while the far-side leg is being issued, so the aborted near-side path does not finish the order. */
 	bool bWindowApproachRelease = false;
 	FVector WindowApproachPoint = FVector::ZeroVector;
