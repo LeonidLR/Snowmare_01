@@ -80,6 +80,7 @@ public:
 	{
 		RecoverFromPanic(TEXT("load"), true);
 		Stress = 0.f;
+		CooldownRemaining = 0.f;
 	}
 
 	/** Real-time wave combat (panic and stress only build up there; Godot is_combat_active). */
@@ -102,6 +103,7 @@ private:
 	const AActor* FindNearestHeatSource(float& OutDistance) const;
 	int32 CountPanickedSquadMembers() const;
 	AOperativeCharacter* GetOperative() const;
+	bool IsSectorLowAmmoSuppressed() const;
 
 	float Stress = 0.f;
 	bool bPanicking = false;
@@ -111,6 +113,7 @@ private:
 	float FleePhaseTimer = 0.f;
 	float PanicTimer = 0.f;
 	float WarmthTimer = 0.f;
+	float CooldownRemaining = 0.f;
 	/** Stress shown on the name plate (50+). */
 	bool bStressShown = false;
 

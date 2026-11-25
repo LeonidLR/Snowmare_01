@@ -1008,6 +1008,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Общеотрядные правила паники и тепла")
 	int32 panic_max_panicked_members = 2;
 
+	/** Вероятность срабатывания паники при достижении 100 стресса (0.2 = в 5 раз реже; бросается один раз за событие). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Общеотрядные правила паники и тепла", meta = (UIMin = "0.0", UIMax = "1.0", ClampMin = "0.0", ClampMax = "1.0", Delta = "0.05"))
+	float panic_trigger_chance = 0.2f;
+
+	/** Задержка (в секундах) после окончания паники бойца, в течение которой он не может снова запаниковать. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Общеотрядные правила паники и тепла", meta = (UIMin = "0.0", ClampMin = "0.0"))
+	float panic_cooldown_seconds = 45.0f;
+
 	/** Скорость снижения стресса у бойцов рядом со спокойным командиром (аура лидерства, очков в сек). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Общеотрядные правила паники и тепла")
 	float panic_friendly_leader_aura_reduction = 10.0f;

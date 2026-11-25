@@ -46,6 +46,10 @@ struct CODEXTACTICS_API FPanicConfig
 	float HeatSourcePanicBreakTime = 2.5f;
 	/** Weight of the pull towards the nearest heat source while fleeing. */
 	float FleeTowardsHeatBias = 0.5f;
+	/** Chance (0..1) rolled once per trigger event when stress reaches 100 (0.2 = 5x fewer panics). */
+	float TriggerChance = 0.2f;
+	/** Per-operative cooldown (seconds) after a panic ends before another panic can trigger. */
+	float PostPanicCooldownSeconds = 45.f;
 };
 
 /** Pure panic rules (Godot panic_component.gd). */
@@ -83,9 +87,16 @@ namespace PanicRules
 		HoldOnLimit,
 		/** The leader holds on at 90 while subordinates panic. */
 		HoldOnLeader,
+		/** Per-operative post-panic cooldown is still active. */
+		HoldOnCooldown,
+		/** The trigger chance roll failed for this event. */
+		HoldOnChance,
 	};
 
 	CODEXTACTICS_API ETriggerVerdict GetTriggerVerdict(const FPanicConfig& Config, int32 PanickedNow, bool bIsLeader);
+	CODEXTACTICS_API ETriggerVerdict EvaluateTriggerAttempt(const FPanicConfig& Config, int32 PanickedNow, bool bIsLeader,
+		float CooldownRemaining, float Roll01);
+	CODEXTACTICS_API bool IsSectorResupplyPending(bool bSectorActive, bool bResupplyMode, int32 ReserveAmmo, int32 LowAmmoThreshold);
 
 	/**
 	 * Designer 2026-11-15 (board 062 / Task 071): Panic flight speed equals the normal speed of the operative's

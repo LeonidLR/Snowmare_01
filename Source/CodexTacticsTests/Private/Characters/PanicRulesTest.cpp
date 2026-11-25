@@ -46,6 +46,35 @@ bool FPanicTriggerRulesTest::RunTest(const FString&)
 	Config.MaxPanickedMembers = 2;
 	TestTrue(TEXT("Leader holds while others panic"), PanicRules::GetTriggerVerdict(Config, 1, true) == PanicRules::ETriggerVerdict::HoldOnLeader);
 	TestTrue(TEXT("A second member may panic under limit 2"), PanicRules::GetTriggerVerdict(Config, 1, false) == PanicRules::ETriggerVerdict::Panic);
+
+	// Trigger chance (default 0.2), per-operative cooldown (default 45 s), and fixed-seed determinism.
+	TestEqual(TEXT("Default trigger chance 0.2"), Config.TriggerChance, 0.2f, 0.001f);
+	TestEqual(TEXT("Default cooldown 45 s"), Config.PostPanicCooldownSeconds, 45.f, 0.001f);
+	TestTrue(TEXT("Cooldown blocks even on 0 roll"), PanicRules::EvaluateTriggerAttempt(Config, 0, false, 10.f, 0.f) == PanicRules::ETriggerVerdict::HoldOnCooldown);
+	TestTrue(TEXT("Roll 0.19 passes 0.2 chance"), PanicRules::EvaluateTriggerAttempt(Config, 0, false, 0.f, 0.19f) == PanicRules::ETriggerVerdict::Panic);
+	TestTrue(TEXT("Roll 0.20 fails 0.2 chance"), PanicRules::EvaluateTriggerAttempt(Config, 0, false, 0.f, 0.20f) == PanicRules::ETriggerVerdict::HoldOnChance);
+	TestTrue(TEXT("Limit takes priority over chance"), PanicRules::EvaluateTriggerAttempt(Config, 2, false, 0.f, 0.f) == PanicRules::ETriggerVerdict::HoldOnLimit);
+	Config.TriggerChance = 0.f;
+	TestTrue(TEXT("Zero chance always holds"), PanicRules::EvaluateTriggerAttempt(Config, 0, false, 0.f, 0.f) == PanicRules::ETriggerVerdict::HoldOnChance);
+	Config.TriggerChance = 1.f;
+	TestTrue(TEXT("Full chance always panics"), PanicRules::EvaluateTriggerAttempt(Config, 0, false, 0.f, 0.999f) == PanicRules::ETriggerVerdict::Panic);
+
+	// Determinism with fixed seed.
+	Config.TriggerChance = 0.2f;
+	FRandomStream StreamA(42), StreamB(42);
+	int32 HitsA = 0, HitsB = 0;
+	for (int32 i = 0; i < 20; ++i)
+	{
+		HitsA += PanicRules::EvaluateTriggerAttempt(Config, 0, false, 0.f, StreamA.FRand()) == PanicRules::ETriggerVerdict::Panic ? 1 : 0;
+		HitsB += PanicRules::EvaluateTriggerAttempt(Config, 0, false, 0.f, StreamB.FRand()) == PanicRules::ETriggerVerdict::Panic ? 1 : 0;
+	}
+	TestEqual(TEXT("Fixed seed deterministic count"), HitsA, HitsB);
+
+	// Sector resupply low-ammo suppression.
+	TestTrue(TEXT("Sector resupply suppresses low ammo"), PanicRules::IsSectorResupplyPending(true, true, 0, 5));
+	TestFalse(TEXT("Inactive sector does not suppress"), PanicRules::IsSectorResupplyPending(false, true, 0, 5));
+	TestFalse(TEXT("Non-resupply mode does not suppress"), PanicRules::IsSectorResupplyPending(true, false, 0, 5));
+	TestFalse(TEXT("Above threshold does not suppress"), PanicRules::IsSectorResupplyPending(true, true, 6, 5));
 	return true;
 }
 

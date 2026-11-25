@@ -16,6 +16,7 @@
 #include "Interactables/RadiusRingSubsystem.h"
 #include "Subsystems/CodexEventBus.h"
 #include "Survival/ColdSurvivalComponent.h"
+#include "Training/TrainingSectorSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 
@@ -87,6 +88,10 @@ void UPanicComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActor
 	{
 		ProcessPanicState(DeltaTime);
 	}
+	else if (CooldownRemaining > 0.f)
+	{
+		CooldownRemaining = FMath::Max(0.f, CooldownRemaining - DeltaTime);
+	}
 }
 
 void UPanicComponent::ProcessStress(float DeltaSeconds)
@@ -119,7 +124,8 @@ void UPanicComponent::ProcessStress(float DeltaSeconds)
 		return;
 	}
 	const UHealthComponent* Health = Operative->HealthComponent;
-	const int32 Ammo = Operative->UsesAmmo() ? Operative->ReserveAmmo : 999;
+	const bool bSuppressLowAmmo = IsSectorLowAmmoSuppressed();
+	const int32 Ammo = (Operative->UsesAmmo() && !bSuppressLowAmmo) ? Operative->ReserveAmmo : (Config.LowAmmoThreshold + 1);
 	const float Growth = PanicRules::GetStressGrowth(Config, Health->GetCurrentHealth() / FMath::Max(1.f, Health->GetMaxHealth()),
 		Operative->ColdLevel / 100.f, Ammo, GetNearestEnemyDistance(), PanicFortitudeOf(Operative));
 	Stress = PanicRules::StepStress(Config, Stress, Growth, DeltaSeconds);
@@ -145,10 +151,20 @@ void UPanicComponent::OnDamageTaken(float FinalDamage)
 	}
 }
 
+bool UPanicComponent::IsSectorLowAmmoSuppressed() const
+{
+	const AOperativeCharacter* Operative = GetOperative();
+	const UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(GetWorld());
+	return Operative && Training
+		&& PanicRules::IsSectorResupplyPending(Training->HasActiveSector(),
+			Training->GetFightConfig().AmmoMode == ESectorAmmoMode::Resupply,
+			Operative->ReserveAmmo, Config.LowAmmoThreshold);
+}
+
 void UPanicComponent::OnLowAmmo()
 {
 	const AOperativeCharacter* Operative = GetOperative();
-	if (!bEnabled || bPanicking || !IsCombatActive() || !Operative)
+	if (!bEnabled || bPanicking || !IsCombatActive() || !Operative || IsSectorLowAmmoSuppressed())
 	{
 		return;
 	}
@@ -167,13 +183,29 @@ void UPanicComponent::AttemptTriggerPanic()
 		return;
 	}
 	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
-	switch (PanicRules::GetTriggerVerdict(Config, CountPanickedSquadMembers(), Squad && Squad->GetLeader() == Operative))
+	const int32 PanickedNow = CountPanickedSquadMembers();
+	const bool bIsLeader = Squad && Squad->GetLeader() == Operative;
+	// Check cooldown and squad/leader limits before consuming a Combat random roll.
+	float Roll01 = 0.f;
+	if (CooldownRemaining <= 0.f && PanicRules::GetTriggerVerdict(Config, PanickedNow, bIsLeader) == PanicRules::ETriggerVerdict::Panic)
 	{
+		Roll01 = CodexRandom::FRandRange(ECodexRandomStream::Combat, this, 0.f, 1.f);
+	}
+	switch (PanicRules::EvaluateTriggerAttempt(Config, PanickedNow, bIsLeader, CooldownRemaining, Roll01))
+	{
+	case PanicRules::ETriggerVerdict::HoldOnCooldown:
+		Stress = FMath::Min(Stress, 90.f);
+		return;
 	case PanicRules::ETriggerVerdict::HoldOnLimit:
 		Stress = 95.f; // the limit is reached: he holds on with his last strength
 		return;
 	case PanicRules::ETriggerVerdict::HoldOnLeader:
 		Stress = 90.f; // subordinates panic: the leader holds on to the end
+		return;
+	case PanicRules::ETriggerVerdict::HoldOnChance:
+		Stress = 85.f; // drop below 100 so the chance is rolled once per trigger event, not per tick
+		UE_LOG(LogCodexTactics, Display, TEXT("[Panic] %s resisted trigger (roll %.2f >= chance %.2f)"),
+			*Operative->DisplayName.ToString(), Roll01, Config.TriggerChance);
 		return;
 	default:
 		break;
@@ -188,7 +220,7 @@ void UPanicComponent::AttemptTriggerPanic()
 	{
 		Reason += TEXT("[Frostbite] ");
 	}
-	if (Operative->UsesAmmo() && Operative->ReserveAmmo <= Config.LowAmmoThreshold)
+	if (Operative->UsesAmmo() && !IsSectorLowAmmoSuppressed() && Operative->ReserveAmmo <= Config.LowAmmoThreshold)
 	{
 		Reason += TEXT("[Out of ammo] ");
 	}
@@ -260,6 +292,7 @@ void UPanicComponent::RecoverFromPanic(const FString& Reason, bool bSilent)
 	Stress = 40.f;
 	PanicTimer = 0.f;
 	WarmthTimer = 0.f;
+	CooldownRemaining = FMath::Max(0.f, Config.PostPanicCooldownSeconds);
 	UpdateAura(false);
 	if (Operative)
 	{
