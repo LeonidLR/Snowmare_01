@@ -20,28 +20,21 @@ reset 11-28 09:00 UTC). No subagents (agent_guard) unless the designer says so.
 - Worker network: Tailscale may fall back to DERP after a PC move; a few `tailscale ping codex-worker` restore direct (1 ms).
 - Antigravity runs over the cable through C:/Users/Zephyrus15Duo/Tools/iphone-proxy (DoH fix 11-24).
 
-STATE 2026-11-24 21:30 - origin/main c5977a77
-- Pushed today: 085 Showcase smokes vs PMC, test_map knownFail fix, COLD OFF (cold_rate_mult 0 on X6 / Showcase / Lake, _cold_paused),
-  x6-arena (R1 + PMC loadout) + Gemini 073 fix, Codex 071 / 075 / 064 / 103 (low cover no longer vaulted on a face click), Grok G014
-  PMC grenade, X6 SECTORS (Gemini 105 data, Codex 106 runtime: walls + nav + clamp, Codex 107 Training Ground tab 'Тренировка ИИ'),
-  Codex 070. Sector grid 1-6 approved (top 1 2 3, bottom 4 5 6).
-- NIGHT (all FINISH by 07:30; review + merge in the morning, then send the designer a short how-to-start-fights note):
-  * Grok: G019 sector fight loop (rounds + ammo resupply, branch grok/G019-sector-rounds from local main) -> G016 windows (WIP 2957864c)
-    -> G018 doors; a background chain in the old session starts G016 / G018 after each run (if it died, relaunch by hand).
-  * Codex (back after 23:28): 110 Soviet 1-464 re-layout phases 3-5 (branch codex/110-soviet-1464; baseline Walk / Ramp reds on the
-    unchanged Showcase are PRE-EXISTING - judge vs baseline).
-  * Gemini Hydrogen: 111 night smoke sweep (23 daily smokes + SectorBoundarySmoke, slot1) + bisect LakePauseOrdersSmoke (passed 11-19,
-    fails now: 'Medic-Sapper runs the planned pause order'; not from the sectors merge).
-- Ready to merge (reviewed OK, tools only): gemini/108-gate-smokes 5994ceae (gate smoke mapping + daily list + LFS push),
-  gemini/109-night-loop-health 4ec718c8 (night loop health fixes; installing on the worker needs the designer's OK).
-- Parked: G015 PMC mines; Learning Agents night runs (designer: not now; branch gemini/102-la-reward-fix c5882e07 ready, honest A/B
-  showed no short-run difference).
-- Designer priorities: (1) fights in the X6 sectors from the morning of 11-25 (finite ammo + resupply + finite lives, rounds);
-  (2) finish the Soviet buildings (fights will be inside them); (3) doors; (4) windows. Ask him whether training fights are 3 v 3 or up
-  to 6 per squad (core: squad 3-6) - G019 is 3 v 3 now.
-- Promised for 11-25: one page listing every mechanic + recommended bucket (core / frozen / parked) + its test cost, against the core
-  line in memory game-core-statement.md; Hydrogen collects the data, the designer decides each.
-- Hydrogen trial tally 11-24: 5 tasks, code good, 4 process slips (archived map, unfair comparison, whole-file re-serialize, missed
-  its chat assignment) -> standing checklist chat #1104; always review before merge.
-- Uncommitted in main (designer): ABP_Operative.uasset (his aim-offset step), L_Gen_Depot_1_X6.json (his TG weather edits). Never commit.
+STATE 2026-11-25 ~07:45 - origin/main 28bec9cf (the night is done; lead v4 worked through it)
+- Pushed overnight: G019 sector rounds + ammo resupply, Codex 110 + 115 Soviet 1-464 generator, 112 LakePauseOrders fix, 113 FormationStair
+  smoke fix (preloaded Showcase PMC -> SmokeUtils::StopLevelPmc), Gemini 108 + 109, Grok G018 doors (not done: generator keys, PMC lock
+  choice, door save), Grok G016 window cover fire, Codex 116 RU fights how-to (docs/port/FIGHTS_HOWTO_RU.md, sent) + cold audit.
+- Showcase Kit map REBUILT in main + all 3 worker roots with the 1-464 houses (designer OK; backup Saved/Backups/showcase-kit-before-1464-
+  20261125-0546; the rebuild reset its LevelJson to monster waves - restored from main). Worker check: Walk 0/6, Ramp 33/36 - almost surely
+  the Showcase PMC squad fighting the walk squad (Codex's runs had no PMC) -> Codex 117 (StopLevelPmc in Walk / Ramp, prove 6/6 + 36/36 on
+  -Map Kit -ForceMap). Then rerun on slot1: CutawayClick, RoofCutawayStorey, CoverIndoor, FormationStair, Doors, DoorBreach,
+  WindowCoverFire, InteriorExit (that batch never ran - worker was busy with its own night loop).
+- Gemini (Hydrogen) silent since 21:52 yesterday - the designer restarts it with a prompt; its task: 105b sector fight check (inbox).
+- Decisions 11-25: training fights stay 3 v 3. Open: mechanics page from docs/port/codex/outbox/114-mechanics-inventory.md (66 mechanics)
+  with core / frozen / parked recommendations (promised); install 109 night loop on the worker (needs OK); docs/tools/training-ground-guide.md
+  was moved to Saved/Backups/untracked/agent-drops with 35 agent leftovers - ask the designer if it is his.
+- Never commit in main while merge_gate runs (memory no-commit-during-gate). Smokes of LevelGenBuildingsWalk / LevelGenRamp need
+  -SmokeExtra "-Map /Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit -ForceMap" (their default map is archived). In Git Bash export
+  MSYS_NO_PATHCONV=1 before passing /Game/... paths to PowerShell scripts.
+- Uncommitted in main (designer): ABP_Operative.uasset, L_Gen_Depot_1_X6.json (his TG weather edits). Never commit.
 ```
