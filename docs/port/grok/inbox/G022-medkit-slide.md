@@ -1,6 +1,7 @@
-# G022 - after a medkit the operative SLIDES (no leg animation) - designer bug 2026-11-25, AFTER G021
+# G022 - after a medkit the operative SLIDES (no leg animation) - designer bug 2026-11-25, BEFORE G021 (designer is playing now)
 
 Designer, main, /Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit: an operative was wounded, the designer gave him a medkit; the first-aid
+Repro 2/2: the designer repeated it on a second operative - same result, every medkit use.
 animation played, after it he moves without stepping - the capsule slides, locomotion does not play.
 Note: the designer has an UNCOMMITTED ABP_Operative.uasset in main - first repro on the COMMITTED ABP (your worktree); if it does not
 repro there, report that (then it is his ABP edit, not code) and stop.
