@@ -14,3 +14,13 @@ Designer wants, left -> right:
 Keep the status filter <select> in the same new order. No server / data changes. Check: screenshot of the tab (dark theme) before / after
 in the report; the page loads with no console errors (built-in browser at http://127.0.0.1:8765/ against your worktree copy of the file,
 or open the file directly). Stage only index.html by path. Report docs/port/gemini/outbox/124-board-columns.report.md + "124 FINISH | ..." in chat. Never push.
+
+ADDED (designer 2026-11-25): PROGRESS on every card in "В работе".
+- Agents post progress lines in chat: "<id> PROGRESS <done>/<total> | <current step>" (e.g. "G017 PROGRESS 3/5 | A/B 300 seeds on the worker").
+  Parse them in Scripts/Tools/task_board.py (match_chat_for_task already links chat lines to tasks): latest PROGRESS -> task fields
+  progress_done / progress_total / progress_step; PLAN with numbered steps "1) ... 2) ... 3)" -> progress_total if no PROGRESS yet;
+  START -> 0/total; FINISH -> full.
+- A task with a PROGRESS / PLAN / START line in the last 2 h counts as in_progress even without a new commit (today Grok's G017 shows
+  "queued" while it runs a 2-hour A/B on the worker).
+- Card UI: a thin bar (orange fill) + "3/5 · A/B 300 seeds" + "N мин назад".
+- pytest for the parser (PROGRESS / PLAN / START / FINISH, malformed lines ignored).
