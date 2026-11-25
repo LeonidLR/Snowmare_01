@@ -17,3 +17,9 @@ Branch gemini/122-sector2-panic from origin/main, worktree C:/Work/Lanes/CodexTa
       say in the report which asset fields he can tune.
 Smokes on the worker slot2 -Jobs 1: PanicSmoke (or the existing panic tests), SectorRoundsSmoke. Checklist #1104.
 Report docs/port/gemini/outbox/122-sector2-panic.report.md + "122 FINISH | ..." in chat. Never push.
+
+ADDED 2026-11-25 (designer, 3rd fight): 3. RESPAWN IN FRONT OF THE ENEMY - after his squad died, the round restart often put the new squad
+right in front of the PMC group, shot point-blank before he could act. Round restart (G019 code, start + post pick): the player start
+must be >= min_start_post_distance_m (data, default 40) from the PMC post AND have no line of sight to any PMC spawn point (trace eye
+height); pick another pair if not; if no pair qualifies, take the farthest and log a warning. Also give the player squad
+respawn_grace_s (data, default 3) during which PMC does not fire. Unit test for the pair choice; SectorRoundsSmoke checks the distance.
