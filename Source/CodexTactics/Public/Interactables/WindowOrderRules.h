@@ -20,6 +20,32 @@ struct CODEXTACTICS_API FWindowOrderTuning
 	bool bSoloRunInFightWindows = true;
 	bool bFormationRunInFightWindows = false;
 	bool bFormationFollowBrokenOnly = true;
+	/** Centimetres past the face on the operative's own side (the walk-up before the climb). */
+	float ApproachPastCm = 80.f;
+	/** Centimetres past the face on the far side. The order's landing. */
+	float LandingPastCm = 120.f;
+	/** This move is the climb when its goal is within this of the landing (the leader's target is the landing). */
+	float ApproachMatchCm = 200.f;
+	/** He has reached the near face when the walk stops within this of the approach point. */
+	float ApproachArriveCm = 150.f;
+};
+
+/**
+ * Which side of a window the operative is on, and the two feet points of a climb-in.
+ * Distances are centimetres. Z is copied from the operative location passed to ChooseSide.
+ */
+struct CODEXTACTICS_API FWindowSideChoice
+{
+	/** Unit horizontal axis through the opening: the shorter of the actor's forward and right. */
+	FVector Through = FVector::ForwardVector;
+	/** +1 when the operative stands on the +Through side of the centre. */
+	float OperativeSide = 1.f;
+	/** Feet on his side, ApproachPastCm past the face. */
+	FVector Approach = FVector::ZeroVector;
+	/** Feet on the other side, LandingPastCm past the face. */
+	FVector Landing = FVector::ZeroVector;
+	/** Yaw facing from the approach toward the landing. */
+	float Yaw = 0.f;
 };
 
 namespace WindowOrderRules
@@ -43,4 +69,11 @@ namespace WindowOrderRules
 	 * once the leader broke it (a broken window is an ordinary vault for everyone).
 	 */
 	CODEXTACTICS_API bool MayTakeWholeWindow(bool bWindowOrder, bool bFormationFollower, const FWindowOrderTuning& Tuning);
+
+	/**
+	 * The side he is on. Through is the shorter horizontal axis (actor forward when SizeX < SizeY, otherwise actor right),
+	 * so a long mesh forward does not pick the side. Approach is on his side of the centre; Landing is the other side.
+	 */
+	CODEXTACTICS_API FWindowSideChoice ChooseSide(const FVector& OperativeLocation, const FVector& Center, const FVector& ActorForward,
+		const FVector& ActorRight, float SizeX, float SizeY, float ApproachPastCm, float LandingPastCm);
 }

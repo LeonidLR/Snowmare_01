@@ -161,6 +161,7 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	if (!Leader)
 	{
+		bWindowClickApproach = false;
 		return;
 	}
 	// The leader first, then the others in selection order (Godot sorted_group).
@@ -171,6 +172,7 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 	Group.RemoveAll([](const AOperativeCharacter* Member) { return VehicleQueries::IsMounted(Member); });
 	if (Group.IsEmpty())
 	{
+		bWindowClickApproach = false;
 		return;
 	}
 	FVector Average = FVector::ZeroVector;
@@ -208,6 +210,11 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 		}
 		else
 		{
+			if (Index == 0 && bWindowClickApproach
+				&& FVector::Dist2D(Targets[Index], WindowClickLanding) <= WindowOrderRules::Get().ApproachMatchCm)
+			{
+				Group[Index]->ArmWindowApproach(WindowClickApproach, WindowClickLanding);
+			}
 			Group[Index]->OrderMoveTo(Targets[Index], bSprint);
 			// Sprint 06-B: where each operative was sent (a fading ping; the new order replaces the old pings).
 			if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
@@ -224,6 +231,7 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 			: FText::Format(LOCTEXT("GroupMove", "🏃 Group ({0} operatives) moving into position!"), Group.Num());
 		Messages->PostMessage(LOCTEXT("SquadSender", "SQUAD"), Line);
 	}
+	bWindowClickApproach = false;
 }
 
 void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
@@ -246,6 +254,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		return;
 	}
 	Squad->SetWindowOrder(false); // only the click on a window sill (below) opens the windows to the squad's paths
+	bWindowClickApproach = false;
 	// Ladders (docs/design/LADDERS.md 7.1): a click on a climbable ladder (its click proxy) = a move to the link point at its other end
 	// (the path then runs through the ladder's nav link); a decoration ladder has no proxy collision.
 	if (const ALadderActor* Ladder = Cast<ALadderActor>(Hit.GetActor()); Ladder && Ladder->IsClimbable())
@@ -515,8 +524,10 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	}
 	FVector WindowFeet;
 	float WindowYaw = 0.f;
+	FVector WindowApproach = FVector::ZeroVector;
+	bool bWindowApproachOnNav = false;
 	if (AActor* Sill = GetActiveTurnBased() ? nullptr : WindowBreakage::FindWindowSillAt(*GetWorld(), Hit); Sill
-		&& FindWindowSillTarget(*Sill, *Leader, WindowFeet, WindowYaw))
+		&& FindWindowSillTarget(*Sill, *Leader, WindowFeet, WindowYaw, &WindowApproach, &bWindowApproachOnNav))
 	{
 		UpdateWindowHover(nullptr, nullptr);
 		const FVector TraceStart = Hit.TraceStart;
@@ -526,8 +537,14 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		Hit.ImpactNormal = Hit.Normal = FVector::UpVector;
 		Hit.TraceStart = TraceStart;
 		Squad->SetWindowOrder(true);
-		UE_LOG(LogCodexTactics, Display, TEXT("Click on the window sill %s: through the window to %s (window paths open for this order)"), *Sill->GetName(),
-			*Hit.ImpactPoint.ToCompactString());
+		if (bWindowApproachOnNav)
+		{
+			bWindowClickApproach = true;
+			WindowClickApproach = WindowApproach;
+			WindowClickLanding = WindowFeet;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("Click on the window sill %s: through the window to %s%s (window paths open for this order)"), *Sill->GetName(),
+			*Hit.ImpactPoint.ToCompactString(), bWindowApproachOnNav ? TEXT(", approach on his side first") : TEXT(""));
 	}
 
 	// Mantling slice 1 (game designer 2026-11-15, trigger C; docs/design/MANTLING.md 11.6): in Solo a plain click on a reachable ledge top
@@ -875,31 +892,58 @@ namespace WindowHoverLocal
 		TEXT("Window hover silhouette: 1 = the climbing frame on the sill (default), 0 = standing past the window"));
 }
 
-bool ACodexTacticsPlayerController::FindWindowSillTarget(const AActor& Sill, const AOperativeCharacter& Operative, FVector& OutFeet, float& OutYaw) const
+bool ACodexTacticsPlayerController::FindWindowSillTarget(const AActor& Sill, const AOperativeCharacter& Operative, FVector& OutFeet, float& OutYaw,
+	FVector* OutApproach, bool* bOutApproachOnNav) const
 {
+	if (bOutApproachOnNav)
+	{
+		*bOutApproachOnNav = false;
+	}
 	const FBox Local = Sill.CalculateComponentsBoundingBoxInLocalSpace(false);
 	if (!Local.IsValid)
 	{
 		return false;
 	}
 	const FVector Size = Local.GetSize() * Sill.GetActorScale3D().GetAbs();
-	const FVector Across = (Size.X < Size.Y ? Sill.GetActorForwardVector() : Sill.GetActorRightVector()).GetSafeNormal2D();
-	const float Thickness = static_cast<float>(FMath::Min(Size.X, Size.Y));
 	const FVector Center = Sill.GetActorTransform().TransformPosition(Local.GetCenter());
-	const float Side = FVector::DotProduct(Operative.GetActorLocation() - Center, Across) >= 0.0 ? -1.f : 1.f;
-	const FVector Beyond = Center + Across * (Side * (Thickness * 0.5f + 120.f));
 	const float FeetZ = static_cast<float>(Operative.GetActorLocation().Z - Operative.GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
-	OutFeet = FVector(Beyond.X, Beyond.Y, FeetZ);
-	OutYaw = static_cast<float>((Across * Side).Rotation().Yaw);
+	const FVector Feet(Operative.GetActorLocation().X, Operative.GetActorLocation().Y, FeetZ);
+	const FWindowOrderTuning& Tuning = WindowOrderRules::Get();
+	const FWindowSideChoice Choice = WindowOrderRules::ChooseSide(Feet, Center, Sill.GetActorForwardVector(), Sill.GetActorRightVector(),
+		static_cast<float>(Size.X), static_cast<float>(Size.Y), Tuning.ApproachPastCm, Tuning.LandingPastCm);
+	OutFeet = Choice.Landing;
+	OutYaw = Choice.Yaw;
 	// The far side must be walkable ground at about his level (a window over a drop / into a wall is no way through).
-	if (const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
+	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	auto ProjectFeet = [Nav, FeetZ](FVector& Point) -> bool
 	{
+		if (!Nav)
+		{
+			return true;
+		}
 		FNavLocation OnNav;
-		if (!Nav->ProjectPointToNavigation(OutFeet, OnNav, FVector(60.f, 60.f, 120.f)) || FMath::Abs(OnNav.Location.Z - FeetZ) > 120.f)
+		if (!Nav->ProjectPointToNavigation(Point, OnNav, FVector(60.f, 60.f, 120.f)) || FMath::Abs(OnNav.Location.Z - FeetZ) > 120.f)
 		{
 			return false;
 		}
-		OutFeet = OnNav.Location;
+		Point = OnNav.Location;
+		return true;
+	};
+	if (!ProjectFeet(OutFeet))
+	{
+		return false;
+	}
+	if (OutApproach)
+	{
+		FVector Approach = Choice.Approach;
+		if (ProjectFeet(Approach))
+		{
+			*OutApproach = Approach;
+			if (bOutApproachOnNav)
+			{
+				*bOutApproachOnNav = true;
+			}
+		}
 	}
 	return UTrainingSectorSubsystem::Allows(GetWorld(), OutFeet, Operative.GetSimpleCollisionRadius() + 10.0);
 }

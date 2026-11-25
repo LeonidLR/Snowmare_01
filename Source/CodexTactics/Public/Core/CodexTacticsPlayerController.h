@@ -559,8 +559,13 @@ public:
 	/** The window / stair-up hover silhouettes (smokes; null before the first hover). */
 	const class ACoverGhostActor* GetWindowHoverGhost() const { return WindowGhost; }
 	const class ACoverGhostActor* GetStairHoverGhost() const { return StairGhost; }
-	/** Where a click on window sill Sill sends Operative: the navmesh point past the window on the side away from him (feet) and the yaw through it. */
-	bool FindWindowSillTarget(const AActor& Sill, const AOperativeCharacter& Operative, FVector& OutFeet, float& OutYaw) const;
+	/**
+	 * Where a click on window sill Sill sends Operative: the navmesh point on the far side (feet) and the yaw through it.
+	 * OutApproach, when set, receives the nav point on his own side. *bOutApproachOnNav is false when that side does not project
+	 * (the far landing is still returned).
+	 */
+	bool FindWindowSillTarget(const AActor& Sill, const AOperativeCharacter& Operative, FVector& OutFeet, float& OutYaw,
+		FVector* OutApproach = nullptr, bool* bOutApproachOnNav = nullptr) const;
 	/** The mantle hover ghost (smokes); null before the first hover. */
 	const class ACoverGhostActor* GetMantleHoverGhost() const { return MantleGhost; }
 	/** Smokes: the mantle hover set by the smoke stays up (PlayerTick does not follow the real cursor for it). */
@@ -1053,6 +1058,10 @@ private:
 	 *  cursor moves or the hover ages). */
 	UPROPERTY(Transient)
 	TObjectPtr<class ACoverGhostActor> MantleGhost;
+	/** G024: this click's near-side approach. OrderGroupMove arms the leader, then clears it. */
+	bool bWindowClickApproach = false;
+	FVector WindowClickApproach = FVector::ZeroVector;
+	FVector WindowClickLanding = FVector::ZeroVector;
 	/** The window hover silhouette (UpdateWindowHover) and the sill it stands for. */
 	UPROPERTY(Transient)
 	TObjectPtr<class ACoverGhostActor> WindowGhost;

@@ -207,12 +207,43 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		bSprinting = false;
 	}
 	ApplyMovementParams();
-	const EOperativeOrderResult Result = RequestMove(Destination);
+	FVector MoveGoal = Destination;
+	if (bWindowApproachPending)
+	{
+		const FWindowOrderTuning& WindowTuning = WindowOrderRules::Get();
+		if (FVector::Dist2D(Destination, WindowApproachLanding) <= WindowTuning.ApproachMatchCm)
+		{
+			// The far landing stays the order. This leg only walks to his own side, and must not enter another opening.
+			MoveGoal = WindowApproachPoint;
+			bWindowPathAllowed = false;
+		}
+		else
+		{
+			bWindowApproachPending = false;
+		}
+	}
+	EOperativeOrderResult Result = RequestMove(MoveGoal);
+	if (bWindowApproachPending && Result != EOperativeOrderResult::Accepted)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("%s: window approach unreachable, walking to the far side"), *DisplayName.ToString());
+		bWindowApproachPending = false;
+		const USquadSubsystem* WindowSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+		bWindowPathAllowed = !bAutonomousOrder && IsPlayerTeam() && WindowSquad && WindowSquad->IsWindowOrder();
+		Result = RequestMove(Destination);
+	}
 	bOwnMoveOrder = bHasMoveOrder; // rev 5g: his own order (the formation leaves him alone until it is done)
-	UE_LOG(LogCodexTactics, Display, TEXT("%s: move to (%.0f, %.0f)%s -> %s"), *DisplayName.ToString(), Destination.X, Destination.Y,
-		bSprinting ? TEXT(" sprint") : TEXT(""), Result == EOperativeOrderResult::Accepted ? TEXT("accepted")
+	UE_LOG(LogCodexTactics, Display, TEXT("%s: move to (%.0f, %.0f)%s%s -> %s"), *DisplayName.ToString(), MoveGoal.X, MoveGoal.Y,
+		bSprinting ? TEXT(" sprint") : TEXT(""), bWindowApproachPending ? TEXT(" (near side, windows closed)") : TEXT(""),
+		Result == EOperativeOrderResult::Accepted ? TEXT("accepted")
 		: Result == EOperativeOrderResult::Unreachable ? TEXT("unreachable") : TEXT("no controller"));
 	return Result;
+}
+
+void AOperativeCharacter::ArmWindowApproach(const FVector& ApproachFeet, const FVector& LandingFeet)
+{
+	bWindowApproachPending = true;
+	WindowApproachPoint = ApproachFeet;
+	WindowApproachLanding = LandingFeet;
 }
 
 EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, float Speed, float PathBrakingCm)
@@ -681,6 +712,11 @@ bool AOperativeCharacter::RetryBlockedOwnMove()
 
 void AOperativeCharacter::HandleMoveFinished()
 {
+	// The far-side leg aborts the near-side path. That completion is not an arrival.
+	if (bWindowApproachRelease)
+	{
+		return;
+	}
 	// During a wrap round the cover object (2026-10-20) he steers himself: a path following's end (an earlier move stopped) is no arrival.
 	if (ContinueCoverWrapOnArrival())
 	{
@@ -689,6 +725,30 @@ void AOperativeCharacter::HandleMoveFinished()
 	// Formation rules v2.1 bypass: the end of the walk to a waypoint round a wall is no arrival - the order goes on to its destination.
 	if (bSteeringOwnMove && ResumeOwnMove())
 	{
+		return;
+	}
+	// G024: he was walking to his own side of the ordered window. Climb in from there; do not keep the closed-window leg.
+	if (bWindowApproachPending)
+	{
+		const FWindowOrderTuning& WindowTuning = WindowOrderRules::Get();
+		const float Off = FVector::Dist2D(GetActorLocation(), WindowApproachPoint);
+		const bool bAtFace = Off <= WindowTuning.ApproachArriveCm;
+		const bool bRun = bSprinting;
+		const FVector Landing = WindowApproachLanding;
+		const FVector Dir = (Landing - GetActorLocation()).GetSafeNormal2D();
+		bWindowApproachPending = false;
+		if (!bAtFace)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("%s: window approach %.0f cm short, walking to the far side"), *DisplayName.ToString(), Off);
+		}
+		bWindowApproachRelease = true;
+		OrderMoveTo(Landing, bRun);
+		const bool bDeferred = GetWorld() && GetWorld()->GetTimerManager().IsTimerActive(PendingMoveTimer);
+		if (bAtFace && !bDeferred && !Dir.IsNearlyZero())
+		{
+			TryVault(Dir, /*bForceWhenBlocked*/ true);
+		}
+		bWindowApproachRelease = false;
 		return;
 	}
 	bSteeringOwnMove = false;
