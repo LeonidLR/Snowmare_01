@@ -2,6 +2,7 @@
 
 Designer, main, /Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit: an operative was wounded, the designer gave him a medkit; the first-aid
 Repro 2/2: the designer repeated it on a second operative - same result, every medkit use.
+Clue (fight 2): the sliding ends once the operative takes cover against a wall / peeks a corner - that state change resets whatever the medkit left stuck.
 animation played, after it he moves without stepping - the capsule slides, locomotion does not play.
 Note: the designer has an UNCOMMITTED ABP_Operative.uasset in main - first repro on the COMMITTED ABP (your worktree); if it does not
 repro there, report that (then it is his ABP edit, not code) and stop.
