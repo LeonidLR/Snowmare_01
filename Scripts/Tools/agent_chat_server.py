@@ -209,6 +209,7 @@ class AgentChatHandler(http.server.BaseHTTPRequestHandler):
                 except Exception:
                     use_cached = False
             if not use_cached:
+                importlib.reload(task_board)  # pick up task_board.py fixes without restarting the server (2026-11-25)
                 data = task_board.build_and_save_board(
                     repo_root=root_dir,
                     storage_dir=self.storage_dir,
