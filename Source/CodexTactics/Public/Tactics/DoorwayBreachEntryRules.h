@@ -47,6 +47,11 @@ namespace DoorwayBreachEntryRules
 	inline constexpr float HookDepthCm = 150.f;
 	/** ... this far past his jamb along the interior wall, cm. */
 	inline constexpr float HookSideCm = 100.f;
+	/**
+	 * A hook stops this far short of a measured room wall, cm. The navmesh keeps about this far off the wall, so a point closer
+	 * is unreachable (S01 d20: the engineer's hook at the east return, "move to (2525, -6536) -> unreachable").
+	 */
+	inline constexpr float HookWallClearCm = 70.f;
 	/** The centre man drives this far in ("three paces"), cm. */
 	inline constexpr float CentreDepthCm = 250.f;
 	/** Between one man's entry and the next one's, s. */
@@ -88,7 +93,8 @@ namespace DoorwayBreachEntryRules
 	 * The entry (section 7.2): the jamb men hook to their own side's interior corner - the right-hand one first, the left-hand one StaggerSeconds
 	 * later - the centre man drives CentreDepthCm in after them and crouches; rear security stays outside (no move). Roles[i] is the slot role
 	 * participant i holds, Positions[i] where he stands now (decides a jamb man's side; a stacked fallback jamb follows its jamb man in).
+	 * A valid Room pulls a hook back to HookWallClearCm inside that wall (a return wall beside a street door is closer than the full hook).
 	 */
 	CODEXTACTICS_API TArray<FDoorwayBreachEntryMove> PlanEntry(const FVector& Center, const FVector& Outward, float WidthCm, const TArray<EDoorwayBreachSlotRole>& Roles,
-		const TArray<FVector>& Positions);
+		const TArray<FVector>& Positions, const FDoorwayBreachRoom& Room = FDoorwayBreachRoom());
 }

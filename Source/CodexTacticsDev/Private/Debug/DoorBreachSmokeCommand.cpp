@@ -29,7 +29,6 @@
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/DoorwaySubsystem.h"
-#include "Tactics/DoorwayBreachEntryRules.h"
 #include "NavigationSystem.h"
 
 namespace DoorBreachSmoke
@@ -125,21 +124,7 @@ namespace DoorBreachSmoke
 			if (OnNav(World, Door.Center + Outward * Sign * ApproachCm, Stand) && OnNav(World, Door.Center + Outward * Sign * 45.f + Side, Jamb)
 				&& OnNav(World, Door.Center + Outward * Sign * 45.f - Side, Jamb) && OnNav(World, Door.Center - Outward * Sign * 300.f, Jamb))
 			{
-				// The entry's two hooks and the centre slot (DoorwayBreachEntryRules). A corner door can put one hook in the wall:
-				// that man never leaves his jamb and the room clears short (S01 d20, the engineer, 2 of 3).
-				const FVector Chosen = Outward * Sign;
-				const FVector In = -Chosen;
-				const FVector Right = FVector::CrossProduct(FVector::UpVector, In).GetSafeNormal();
-				const float HookSide = Door.WidthCm * 0.5f + DoorwayBreachEntryRules::HookSideCm;
-				FVector Hook;
-				const bool bEntry = OnNav(World, Door.Center + In * DoorwayBreachEntryRules::HookDepthCm + Right * HookSide, Hook)
-					&& OnNav(World, Door.Center + In * DoorwayBreachEntryRules::HookDepthCm - Right * HookSide, Hook)
-					&& OnNav(World, Door.Center + In * DoorwayBreachEntryRules::CentreDepthCm, Hook);
-				if (!bEntry)
-				{
-					continue;
-				}
-				State.Outward = Chosen;
+				State.Outward = Outward * Sign;
 				State.Stand = Stand;
 				return Door.bIsGate || Sign > 0.f; // a building door: from its outside only
 			}

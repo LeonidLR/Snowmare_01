@@ -44,7 +44,7 @@ namespace DoorwayBreachEntryRules
 	}
 
 	TArray<FDoorwayBreachEntryMove> PlanEntry(const FVector& Center, const FVector& Outward, float WidthCm, const TArray<EDoorwayBreachSlotRole>& Roles,
-		const TArray<FVector>& Positions)
+		const TArray<FVector>& Positions, const FDoorwayBreachRoom& Room)
 	{
 		TArray<FDoorwayBreachEntryMove> Moves;
 		const FVector In = EntryDirection(Outward);
@@ -54,6 +54,15 @@ namespace DoorwayBreachEntryRules
 			return Moves;
 		}
 		const float HalfWidth = FMath::Max(WidthCm, 0.f) * 0.5f;
+		// A measured room: the full hook can sit in the return wall (street doors). Stop short of that wall, on the navmesh.
+		const auto Fit = [&Room](float Wanted, float WallCm) -> float
+		{
+			if (!Room.bValid)
+			{
+				return Wanted;
+			}
+			return FMath::Min(Wanted, FMath::Max(InsideMinDepthCm, WallCm - HookWallClearCm));
+		};
 		// The jamb men: right-hand side first (man 1), then the left-hand side (man 2); a second man on one side follows the first one in.
 		TArray<int32> Jambs;
 		for (int32 Index = 0; Index < Roles.Num(); ++Index)
@@ -82,7 +91,8 @@ namespace DoorwayBreachEntryRules
 			FDoorwayBreachEntryMove Move;
 			Move.Participant = Index;
 			// The corner man hooks along his side's inner wall; a second man on that side (the stacked fallback) stops short of him.
-			Move.Destination = Center + In * (HookDepthCm - Already * 70.f) + Right * (Side * (HalfWidth + HookSideCm));
+			const float SideWall = Side > 0 ? Room.RightCm : Room.LeftCm;
+			Move.Destination = Center + In * Fit(HookDepthCm - Already * 70.f, Room.DepthCm) + Right * (Side * Fit(HalfWidth + HookSideCm, SideWall));
 			Move.LookDirection = (In - Right * Side).GetSafeNormal(); // his sector: the deep corner across the room from his side
 			Move.DelaySeconds = StaggerSeconds * Order++;
 			Moves.Add(Move);
@@ -93,7 +103,7 @@ namespace DoorwayBreachEntryRules
 			{
 				FDoorwayBreachEntryMove Move;
 				Move.Participant = Index;
-				Move.Destination = Center + In * CentreDepthCm;
+				Move.Destination = Center + In * Fit(CentreDepthCm, Room.DepthCm);
 				Move.LookDirection = In;
 				Move.DelaySeconds = StaggerSeconds * Order++;
 				Move.bCrouch = true;
