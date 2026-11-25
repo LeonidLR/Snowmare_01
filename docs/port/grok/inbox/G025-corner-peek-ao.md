@@ -30,3 +30,6 @@ CLARIFIED BY THE DESIGNER (11-25, read this as the spec for part 2):
    the AO range; plain ground scans stay level. Find the formation scan code (sector / wall scan look targets) and the AnimInstance AO pitch
    input. Smoke or a scripted check: formation walk past an X6 building -> recorded AO pitch > +10 deg at least once toward its upper
    windows, ~0 on open ground. Screenshot in the report.
+   CORRECTION (designer 11-25): on OPEN ground they must ALSO scan up and down - enemies will jump from above (roofs, ledges, trees).
+   So the formation scan sweeps pitch too everywhere (e.g. a slow up / level / down cycle per operative, desynced between operatives,
+   biased up toward high geometry when present). Smoke check: AO pitch range during an open-ground formation walk spans >= 20 deg.
