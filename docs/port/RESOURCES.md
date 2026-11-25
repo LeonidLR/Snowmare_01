@@ -48,3 +48,7 @@ Syntax: `<owner> <task> -> <new owner>`, one per line. Designer re-plan 2026-11-
 - codex 120 -> grok (2026-11-25: Codex out of credits; Grok takes the fence cover fix after G017)
 - codex 121 -> grok (2026-11-25: recording tactics, after G023)
 - grok G020 -> codex 117 (2026-11-25: cancelled - Codex finished 117 itself, merged b2b5e513)
+- grok G023 -> gemini (2026-11-25: Grok 60 % used at 17:00, resets 12-01; Grok keeps G026 / G022 / G025 only)
+- grok G027 -> gemini (2026-11-25: same budget reason)
+- grok G021 -> gemini (2026-11-25: same budget reason)
+- codex 121 -> gemini (2026-11-25: same budget reason; was moved to grok earlier)
