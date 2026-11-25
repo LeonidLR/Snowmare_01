@@ -245,17 +245,19 @@ function checkLaunchGuards(root: string, deps: TrainingLaunchDeps): { status: nu
   return null;
 }
 
-export function handleOpenEditor(root: string, deps: TrainingLaunchDeps = {}): { status: number; body: ObjectData } {
+export async function handleOpenEditor(root: string, deps: TrainingLaunchDeps = {}): Promise<{ status: number; body: ObjectData }> {
   const guard = checkLaunchGuards(root, deps);
   if (guard) return { status: guard.status, body: { error: guard.error } };
   const cmdPath = path.join(root, 'Scripts', 'Tools', 'open_editor_nozen.cmd');
-  if (!fs.existsSync(cmdPath)) {
-    return { status: 404, body: { error: 'Не найден скрипт запуска Scripts/Tools/open_editor_nozen.cmd' } };
-  }
+  // Lead 2026-11-25: no cmd.exe here - with Windows Terminal as the default console a detached cmd always opens a visible window.
+  // Same steps as the .cmd (Zen first, then the editor with -NoZenAutoLaunch), done directly; UnrealEditor.exe is a GUI app.
+  const ensureZen = deps.ensureZenReady ?? defaultEnsureZenReady;
+  await ensureZen();
+  const uprojectPath = path.join(root, 'CodexTactics.uproject');
+  const args = [uprojectPath, X6_MAP_PATH, '-NoZenAutoLaunch'];
   const runDetached = deps.spawnDetached ?? defaultSpawnDetached;
-  const args = ['/c', cmdPath, X6_MAP_PATH];
-  const pid = runDetached('cmd.exe', args, root);
-  return { status: 200, body: { pid: pid ?? null, cmdPath, command: 'cmd.exe', args } };
+  const pid = runDetached(UE_EDITOR_EXE, args, root);
+  return { status: 200, body: { pid: pid ?? null, cmdPath, command: UE_EDITOR_EXE, args } };
 }
 
 export async function handlePlaySector(
@@ -335,7 +337,7 @@ export function setupTrainingApi(use: Use, root: string, deps: TrainingLaunchDep
   use('/api/training/open-editor', async (req, res) => {
     try {
       if (req.method !== 'POST') return send(res, 405, { error: 'POST required' });
-      const result = handleOpenEditor(root, deps);
+      const result = await handleOpenEditor(root, deps);
       return send(res, result.status, result.body);
     } catch (error) {
       return send(res, 500, { error: error instanceof Error ? error.message : String(error) });

@@ -88,7 +88,7 @@ test('open-editor and play guards refuse unsafe launches and build expected comm
   assert.match(String(lanesRes.body.error), /Lanes/);
 
   // Guard 2: agent.lock refused
-  const lockRes = handleOpenEditor(root, {
+  const lockRes = await handleOpenEditor(root, {
     isLanesWorktree: () => false,
     readAgentLock: () => ({ agent: 'claude', purpose: 'build' }),
   });
@@ -106,7 +106,8 @@ test('open-editor and play guards refuse unsafe launches and build expected comm
 
   // OK: open-editor
   const spawned: Array<{ command: string; args: string[] }> = [];
-  const okEditor = handleOpenEditor(root, {
+  const okEditor = await handleOpenEditor(root, {
+    ensureZenReady: async () => {},
     isLanesWorktree: () => false,
     readAgentLock: () => null,
     isMainEditorRunning: () => false,
@@ -117,8 +118,8 @@ test('open-editor and play guards refuse unsafe launches and build expected comm
   });
   assert.equal(okEditor.status, 200);
   assert.equal(okEditor.body.pid, 4242);
-  assert.equal(spawned[0].command, 'cmd.exe');
-  assert.deepEqual(spawned[0].args, ['/c', path.join(root, 'Scripts', 'Tools', 'open_editor_nozen.cmd'), X6_MAP_PATH]);
+  assert.equal(spawned[0].command, UE_EDITOR_EXE);
+  assert.deepEqual(spawned[0].args, [path.join(root, 'CodexTactics.uproject'), X6_MAP_PATH, '-NoZenAutoLaunch']);
 
   // OK: play sector 3 (writes active_sector.json + ensures Zen + spawns UnrealEditor -game)
   let zenCalled = false;
