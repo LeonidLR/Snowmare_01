@@ -253,6 +253,48 @@ bool FTrainingSectorFightTest::RunTest(const FString&)
 	const int32 EndAt = Text.Find(TEXT("\"type\":\"round_end\""));
 	TestTrue(TEXT("round events merge ahead of an equal-time frame"), StartAt >= 0 && SnapAt > StartAt && EndAt > SnapAt);
 	TestTrue(TEXT("round end names the result"), Text.Contains(TEXT("\"result\":\"victory\"")) && Text.Contains(TEXT("\"sector_id\":5")) && Text.Contains(TEXT("\"rounds\":1")));
+
+	// Relocation config, no-contact timer gate, point preference, and session pmc_relocated event.
+	TestTrue(TEXT("relocate config defaults"), FMath::IsNearlyEqual(Plain.NoContactRelocateS, 90.f)
+		&& FMath::IsNearlyEqual(Plain.RelocateDistanceM, 40.f) && Plain.RelocateMaxPerRound == 3);
+	TestFalse(TEXT("no relocate during grace"), TrainingSectorRules::ShouldRelocateNoContact(100.0, 0.0, 90.f, 0, 3, true));
+	TestFalse(TEXT("no relocate before delay"), TrainingSectorRules::ShouldRelocateNoContact(89.9, 0.0, 90.f, 0, 3, false));
+	TestTrue(TEXT("relocate at delay"), TrainingSectorRules::ShouldRelocateNoContact(90.0, 0.0, 90.f, 0, 3, false));
+	TestFalse(TEXT("no relocate past max per round"), TrainingSectorRules::ShouldRelocateNoContact(200.0, 0.0, 90.f, 3, 3, false));
+
+	TArray<FSectorRelocateCandidate> Cand;
+	Cand.Add({ FVector(3800, 0, 0), 38.f, 38.f, false, true });   // idx 0: violates MinPlayerDistM=40
+	Cand.Add({ FVector(4100, 0, 0), 41.f, 41.f, true, true });    // idx 1: in band, has LOS + cover
+	Cand.Add({ FVector(4400, 0, 0), 44.f, 44.f, false, false });  // idx 2: in band, no LOS, no cover
+	Cand.Add({ FVector(4200, 0, 0), 42.f, 42.f, false, true });   // idx 3: in band, no LOS + cover (best)
+	const FSectorRelocatePick BestReloc = TrainingSectorRules::PickRelocatePoint(Cand, 40.f, 5.f, 40.f, 11);
+	TestTrue(TEXT("picks valid no-LOS cover candidate in band"), BestReloc.bValid && BestReloc.CandidateIndex == 3 && !BestReloc.bHasLos && !BestReloc.bFallback);
+
+	TArray<FSectorRelocateCandidate> LosOnly;
+	LosOnly.Add({ FVector(4300, 0, 0), 43.f, 43.f, true, false });
+	LosOnly.Add({ FVector(4050, 0, 0), 40.5f, 40.5f, true, true });
+	const FSectorRelocatePick FallbackReloc = TrainingSectorRules::PickRelocatePoint(LosOnly, 40.f, 5.f, 40.f, 11);
+	TestTrue(TEXT("LOS fallback picks closest cover in band"), FallbackReloc.bValid && FallbackReloc.CandidateIndex == 1 && FallbackReloc.bFallback);
+
+	TArray<FSectorRelocateCandidate> TooClose;
+	TooClose.Add({ FVector(3000, 0, 0), 30.f, 30.f, false, true });
+	TestFalse(TEXT("never violates min_start_post_distance_m"), TrainingSectorRules::PickRelocatePoint(TooClose, 40.f, 5.f, 40.f, 11).bValid);
+
+	FDemoRoundEvent RelocEvent;
+	RelocEvent.bPmcRelocated = true;
+	RelocEvent.Time = 1.5;
+	RelocEvent.RealTime = 1.5;
+	RelocEvent.SectorId = 5;
+	RelocEvent.Seed = 91;
+	RelocEvent.Round = 1;
+	RelocEvent.RelocateDistanceM = 41.5f;
+	RelocEvent.bRelocateLos = false;
+	Session.Rounds.Add(RelocEvent);
+	const FString WithReloc = SessionRecordingRules::SerializeSession(Session, TEXT("session"));
+	TestTrue(TEXT("session emits pmc_relocated with distance and los without inflating rounds"),
+		WithReloc.Contains(TEXT("\"type\":\"pmc_relocated\"")) && WithReloc.Contains(TEXT("\"distance_m\":41.5"))
+		&& WithReloc.Contains(TEXT("\"los\":false")) && WithReloc.Contains(TEXT("\"rounds\":1")));
+
 	FDemoSession Bare;
 	Bare.Frames.SetNum(1);
 	const FString Untouched = SessionRecordingRules::SerializeSession(Bare, TEXT("session"));
