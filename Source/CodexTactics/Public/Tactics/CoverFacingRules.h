@@ -45,6 +45,11 @@ struct CODEXTACTICS_API FCoverFacingConfig
 	/** At the corner but further from the edge than the stand-off by more than this: step closer (on entry / turn), cm. */
 	float CornerSnapToleranceCm = 15.f;
 	/**
+	 * CoverIndoor look (G025): the current hand stays until the look crosses the wall normal by more than this, degrees.
+	 * A look that sits on the normal does not flicker the pose.
+	 */
+	float CornerLookSideHysteresisDeg = 12.f;
+	/**
 	 * Corner shot only at targets behind the wall: a target is "around the corner" when it lies beyond the exposed edge
 	 * on its side and no further than this in front of the wall face, cm. Anything else on the open side gets a normal shot.
 	 */

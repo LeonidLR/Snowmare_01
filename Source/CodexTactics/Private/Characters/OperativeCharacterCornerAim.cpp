@@ -17,6 +17,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/PeekSightRules.h"
+#include "Tactics/CoverLookAoRules.h"
 #include "Combat/SightRules.h"
 #include "Combat/SuppressionSubsystem.h"
 #include "Combat/TacticalSightSubsystem.h"
@@ -335,8 +336,19 @@ bool AOperativeCharacter::IsCornerHoldSpot() const
 
 bool AOperativeCharacter::IsManualCornerPeekSpot() const
 {
-	return bManualCornerPeek && bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight != ECoverHeight::None
-		&& CoverFacing == ManualCornerPeekSide && bAtCoverCorner && CoverSlot.IsEdgeExposed(ManualCornerPeekSide);
+	const bool bOrderedEdge = bManualCornerPeek && bInCover && !bShimmying && !bCoverSnapPending
+		&& CurrentCoverHeight != ECoverHeight::None && CoverSlot.IsEdgeExposed(ManualCornerPeekSide);
+	if (!bOrderedEdge)
+	{
+		return false;
+	}
+	// A Shift-click look names the other hand (CoverFacing). He is still at the ordered edge:
+	// ending the peek here would drop the CoverIndoor pose on the first look past the normal.
+	if (bCornerLookPose && bHasManualLookPoint)
+	{
+		return true;
+	}
+	return CoverFacing == ManualCornerPeekSide && bAtCoverCorner;
 }
 
 EOperativeOrderResult AOperativeCharacter::OrderCornerPeek(ECoverFacing Side, float EdgeAlongCm)
@@ -370,6 +382,12 @@ EOperativeOrderResult AOperativeCharacter::OrderCornerPeek(ECoverFacing Side, fl
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: corner peek refused in turn-based (%.0f cm from the corner: a grid move first)"),
 			*DisplayName.ToString(), FMath::Abs(Stand - BodyAlong));
 		return EOperativeOrderResult::Refused;
+	}
+	// A new plain peek (the silhouette click) returns to the straight pose. A Shift-click look while already peeking
+	// does not come through here.
+	if (bCornerLookPose)
+	{
+		ClearManualLookPoint();
 	}
 	bool bThere = Order == CoverFacingRules::ECornerPeekOrder::PoseInPlace;
 	if (bCornerAimActive && CoverFacing != Side)
@@ -824,6 +842,11 @@ void AOperativeCharacter::UpdateOpenShotReturn()
 bool AOperativeCharacter::IsPeekingRoundCorner() const
 {
 	return bInCover && bCornerAimActive && (IsManualCornerPeekSpot() || IsCornerHoldSpot());
+}
+
+bool AOperativeCharacter::WantsCornerLookPose() const
+{
+	return CoverLookAoRules::WantsPose(bCornerLookPose && IsPeekingRoundCorner(), bHasManualLookPoint);
 }
 
 namespace OperativePeekSight

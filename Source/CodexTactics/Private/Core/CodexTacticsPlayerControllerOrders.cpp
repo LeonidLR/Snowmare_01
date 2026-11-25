@@ -607,12 +607,14 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	}
 	// Sprint 12: a click on a wall (Alt + click on a barricade / any object) = cover preview / confirm / shimmy; every
 	// other click drops a pending preview and goes on as before (a ground order also leaves the cover: OrderMoveTo).
-	if (TryHandleCoverClick(Hit, nullptr))
+	// A Shift-click while the corner peek is already up is a look point (the window, the ground), not another peek order.
+	const bool bShiftLookAtPeek = IsShiftModifierDown() && Leader->IsPeekingRoundCorner();
+	if (!bShiftLookAtPeek && TryHandleCoverClick(Hit, nullptr))
 	{
 		return;
 	}
 	// 2026-10-20: in cover, the ground within ~1 m round the same object = along its wall to that point (round its corners), in cover.
-	if (TryHandleCoverWrapClick(Hit))
+	if (!bShiftLookAtPeek && TryHandleCoverWrapClick(Hit))
 	{
 		return;
 	}

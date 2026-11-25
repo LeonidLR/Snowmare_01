@@ -79,6 +79,17 @@ namespace CoverIndoorSmoke
 		TSet<FString> ClipsSeen;
 		TWeakObjectPtr<ACameraActor> Camera;
 		TWeakObjectPtr<ATargetPoint> Target;
+		/** G025: four Shift-click looks (right/left, up/down) then a clear, per peek. */
+		int32 LookSample = 0;
+		double LookSince = -1.0;
+		bool bSawYawOff = false;
+		bool bSawPitchUp = false;
+		bool bSawPitchDown = false;
+		bool bLookSidesDiffer = false;
+		bool bLookSideLatched = false;
+		ECoverFacing LookSideLatched = ECoverFacing::Right;
+		/** The wall walk leaves the corner. One shimmy back to the slot the search found, then the peek. */
+		bool bReturnToEdge = false;
 	};
 
 	TSharedPtr<FRunner> Runner;
@@ -344,6 +355,14 @@ namespace CoverIndoorSmoke
 			R.bShotTaken = false;
 			R.KindsSeen.Reset();
 			R.ClipsSeen.Reset();
+			R.LookSample = 0;
+			R.LookSince = -1.0;
+			R.bSawYawOff = false;
+			R.bSawPitchUp = false;
+			R.bSawPitchDown = false;
+			R.bLookSidesDiffer = false;
+			R.bLookSideLatched = false;
+			R.bReturnToEdge = false;
 		};
 		auto ShotOnce = [&R](double At, double TNow, const TCHAR* Name)
 		{
@@ -573,11 +592,31 @@ namespace CoverIndoorSmoke
 				{
 					return;
 				}
-				R.bOrdered = true;
 				const FCoverSlot& Here = Op->GetCoverSlot();
 				if (!Here.HasExposedEdge())
 				{
-					Check(true, TEXT("peek skipped: this wall has no exposed edge"));
+					// The search found an edge; the wall walk left it. Shimmy back. A wall that never had one still skips.
+					if (!R.High.HasExposedEdge())
+					{
+						Check(true, TEXT("peek skipped: this wall has no exposed edge"));
+						if (bCrouch)
+						{
+							FindWindow(World, *Op, *Roofs, R);
+						}
+						Go(bCrouch ? EStep::Window : EStep::Crouch);
+						return;
+					}
+					if (!R.bReturnToEdge)
+					{
+						R.bReturnToEdge = true;
+						Check(Op->OrderTakeCover(R.High, false) == EOperativeOrderResult::Accepted, TEXT("shimmy back to the wall's exposed edge"));
+						return;
+					}
+					if (T < 14.0)
+					{
+						return;
+					}
+					Check(false, TEXT("the searched wall's exposed edge was not recovered"));
 					if (bCrouch)
 					{
 						FindWindow(World, *Op, *Roofs, R);
@@ -585,18 +624,103 @@ namespace CoverIndoorSmoke
 					Go(bCrouch ? EStep::Window : EStep::Crouch);
 					return;
 				}
+				R.bOrdered = true;
+				R.StepStart = Now; // the fire-pose wait starts when the peek is ordered, not during the return shimmy
 				const ECoverFacing Side = Here.IsEdgeExposed(ECoverFacing::Right) ? ECoverFacing::Right : ECoverFacing::Left;
 				const float Edge = Side == ECoverFacing::Right ? Here.RightEdgeDistanceCm : -Here.LeftEdgeDistanceCm;
 				Check(Op->OrderCornerPeek(Side, Edge) == EOperativeOrderResult::Accepted, FString::Printf(TEXT("%s corner peek ordered"), bCrouch ? TEXT("crouched") : TEXT("standing")));
 				return;
 			}
 			AimCamera(World, *Op, Op->GetCoverSlot());
-			ShotOnce(5.0, T, bCrouch ? TEXT("crouch_peek") : TEXT("stand_peek"));
-			if (T < 5.6)
+			if (!Anim->IsCoverInFirePose())
 			{
+				if (T < 8.0)
+				{
+					return;
+				}
+			}
+			else if (R.LookSample < 5)
+			{
+				// Right/left of the wall normal, up then down, then the plain click (the look clears).
+				struct FLook
+				{
+					float Side;
+					float Up;
+					const TCHAR* Name;
+				};
+				static const FLook Looks[] = {
+					{ 1.f, 1.f, TEXT("look_right_up") },
+					{ 1.f, -1.f, TEXT("look_right_down") },
+					{ -1.f, 1.f, TEXT("look_left_up") },
+					{ -1.f, -1.f, TEXT("look_left_down") },
+				};
+				const FCoverSlot& Here = Op->GetCoverSlot();
+				const FVector Normal = Here.WallNormal.GetSafeNormal();
+				const FVector Right = FVector::CrossProduct(FVector::UpVector, Normal).GetSafeNormal();
+				auto ApplyLook = [&](int32 Sample)
+				{
+					if (Sample >= 4)
+					{
+						Op->ClearManualLookPoint();
+						return;
+					}
+					const FLook& Look = Looks[Sample];
+					const float Up = Look.Up > 0.f ? 280.f : -90.f;
+					const FVector Point = Op->GetActorLocation() + Normal * 180.f + Right * (Look.Side * 420.f) + FVector(0.f, 0.f, Up);
+					Op->SetManualLookPoint(Point);
+				};
+				if (R.LookSince < 0.0)
+				{
+					R.LookSince = Now;
+					ApplyLook(0);
+					return;
+				}
+				if (Now - R.LookSince < 0.8)
+				{
+					return;
+				}
+				if (R.LookSample < 4)
+				{
+					if (FMath::Abs(Anim->AimYaw) > 8.f)
+					{
+						R.bSawYawOff = true;
+					}
+					if (Anim->AimPitch > 8.f)
+					{
+						R.bSawPitchUp = true;
+					}
+					if (Anim->AimPitch < -8.f)
+					{
+						R.bSawPitchDown = true;
+					}
+					if (!R.bLookSideLatched)
+					{
+						R.LookSideLatched = Op->CoverFacing;
+						R.bLookSideLatched = true;
+					}
+					else if (Op->CoverFacing != R.LookSideLatched)
+					{
+						R.bLookSidesDiffer = true;
+					}
+					Shot(FString::Printf(TEXT("%s_%s"), bCrouch ? TEXT("crouch") : TEXT("stand"), Looks[R.LookSample].Name));
+				}
+				else
+				{
+					Shot(bCrouch ? TEXT("crouch_peek_plain") : TEXT("stand_peek_plain"));
+				}
+				++R.LookSample;
+				R.LookSince = Now;
+				if (R.LookSample < 5)
+				{
+					ApplyLook(R.LookSample);
+				}
 				return;
 			}
 			Check(Anim->IsCoverInFirePose(), TEXT("in the fire stance at the corner"));
+			Check(R.bSawPitchUp && R.bSawPitchDown, FString::Printf(TEXT("%s look drives aim pitch up and down"), bCrouch ? TEXT("crouched") : TEXT("standing")));
+			Check(R.bLookSidesDiffer, TEXT("the look crosses the corner normal onto the other hand"));
+			Check(R.bSawYawOff, TEXT("the look drives aim yaw off centre"));
+			Check(!Op->WantsCornerLookPose(), TEXT("clearing the look returns to the plain peek"));
 			InSetCheck(bCrouch ? TEXT("crouched peek-aim") : TEXT("standing peek-aim"), TEXT("Aim"));
 			Check(!Anim->IsCoverOverTopFireSet(), TEXT("the corner uses the side peek set"));
 			if (bCrouch)

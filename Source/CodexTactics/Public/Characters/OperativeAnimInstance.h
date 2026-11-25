@@ -1302,6 +1302,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cover Animation Sets")
 	bool bCoverSetAimOffsetWired = false;
 
+	/** Last frame's corner-look pose, so the CoverIndoor set is chosen once when a Shift-click look starts or a plain peek returns. */
+	bool bCornerLookPoseApplied = false;
+
 	/** The cover set playing now ("" = the native clips). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover Animation Sets")
 	FString GetActiveCoverAnimSet() const { return ActiveCoverAnimSet; }
@@ -1323,6 +1326,9 @@ public:
 
 	/** The cover layer is in the fire-ready pose (idle -> fire played / fire_idle looping) - smokes. */
 	bool IsCoverInFirePose() const { return bCoverInFirePose; }
+
+	/** G025 exit: aim yaw goes to 0. Pitch goes to 0 unless a formation scan is keeping it. */
+	void ReleaseAimAxes(bool bClearPitch);
 	/**
 	 * What the mesh REALLY plays on FullBodySlot (smokes): the sequence of the highest-weight active montage, that
 	 * montage's blend weight, and the FullBody slot node's weight in the AnimGraph (a node missing / blended out = 0).
