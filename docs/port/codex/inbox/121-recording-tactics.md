@@ -15,3 +15,7 @@ Do (Source/CodexTactics recording code, SessionRecordingRules / DemoRecord - rea
    Run it on the 11-25 demo (old format: what can be detected) and on a new short PIE recording (new format: all three must show).
 4. unit tests for the pure tagger rules; the recording smoke(s) still PASS. BUILD ON THE WORKER. Branch codex/121-recording-tactics.
 Report + "121 FINISH | ..." in chat. Never push.
+
+ADDED 11-25: tag ALL patterns of docs/design/ai/DESIGNER_TACTICS_DOCTRINE_2026-11-25.md - also prone_then_crawl_to_cover,
+first_in_cover_overwatch (fires while an ally is moving to cover), flank_into_rear (> 120 deg around the target), unwatched_flank_seconds
+(no operative's look within 60 deg of a sector for > N s while moving), scan_pitch_range.
