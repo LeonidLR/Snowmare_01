@@ -213,9 +213,14 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	bOwnMoveOrder = bHasMoveOrder; // rev 5g: his own order (the formation leaves him alone until it is done)
 	if (bWindowApproachPending)
 	{
+		const USquadSubsystem* WindowSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+		// The column files through behind him (FormationWindowSmoke). An outside via parks the rear man on the near side: he never
+		// crosses. Solo, and a man ordered on his own, still walk to their own face with whole windows closed so nav cannot go around.
+		const bool bFormationLeader = WindowSquad && !WindowSquad->IsSoloMode() && WindowSquad->GetFormationLeader() == this
+			&& WindowSquad->GetMembers().Num() > 1;
 		const FWindowOrderTuning& WindowTuning = WindowOrderRules::Get();
 		const bool bThisWindow = FVector::Dist2D(Destination, WindowApproachLanding) <= WindowTuning.ApproachMatchCm;
-		if (Result == EOperativeOrderResult::Accepted && bHasMoveOrder && bThisWindow)
+		if (!bFormationLeader && Result == EOperativeOrderResult::Accepted && bHasMoveOrder && bThisWindow)
 		{
 			// This leg only walks to his own side, and must not enter another opening. SteerOwnMoveVia keeps the landing.
 			bWindowApproachWindows = bWindowPathAllowed;

@@ -568,7 +568,7 @@ public:
 	 *  or WindowOrderRules::MoveOpensWindows), never for an autonomous order, a formation follow or a PMC fighter. */
 	bool IsWindowPathAllowed() const { return bWindowPathAllowed; }
 
-	/** G024: the order stays LandingFeet (the formation follows that). He walks to ApproachFeet first with whole windows closed, then climbs through. A different move drops it. */
+	/** G024: the order stays LandingFeet. Solo, he walks to ApproachFeet first with whole windows closed, then climbs through. A formation leader keeps the open path so the column can file through. A different move drops it. */
 	void ArmWindowApproach(const FVector& ApproachFeet, const FVector& LandingFeet);
 
 	/** Smokes: climbs started / restored, the last climb's class / clip / gait / stop / refusal / landing error (cm) / cancel. */
