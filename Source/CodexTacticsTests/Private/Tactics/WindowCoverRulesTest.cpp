@@ -108,6 +108,14 @@ bool FWindowCoverMatchTest::RunTest(const FString& Parameters)
 	const FBox Sill(FVector(-60.f, -10.f, 0.f), FVector(60.f, 10.f, 90.f));
 	const FBox Pane = WindowBreakage::MakeOpeningBox(Sill);
 	TestTrue(TEXT("the opening box is the old literal"), Pane.Min.Equals(FVector(-70.f, -20.f, 95.f), 0.1f) && Pane.Max.Equals(FVector(70.f, 20.f, 230.f), 0.1f));
+	// A crouched muzzle (85 cm) aimed at the capsule centre misses the pane. Through the opening centre, it crosses.
+	const FVector CrouchMuzzle(120.f, 0.f, 85.f);
+	const FVector LowAim(-200.f, 0.f, 58.5f);
+	TestFalse(TEXT("a crouch shot at body height misses the opening"), FMath::LineBoxIntersection(Pane, CrouchMuzzle, LowAim, LowAim - CrouchMuzzle));
+	const FVector PaneCenter = Pane.GetCenter();
+	const FVector Through = (PaneCenter - CrouchMuzzle).GetSafeNormal();
+	const FVector FarAim = PaneCenter + Through * WindowBreakage::ThroughLandingCm;
+	TestTrue(TEXT("a crouch shot through the opening centre crosses the pane"), FMath::LineBoxIntersection(Pane, CrouchMuzzle, FarAim, FarAim - CrouchMuzzle));
 
 	TestTrue(TEXT("stopped in the opening: crouch"), WantsCrouch(true, false, false, true));
 	TestFalse(TEXT("shimmy does not crouch for the window"), WantsCrouch(true, true, false, false));

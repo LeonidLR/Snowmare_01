@@ -124,6 +124,8 @@ namespace WindowCoverRules
 		bool bInsideInterval = false;
 		bool bHasInterval = false;
 		int32 GlassRounds = 0;
+		/** Sampled when the sill is bound. A glazed pane ignores visibility, so the shot line cannot see it. */
+		EWindowGlassState Glass = EWindowGlassState::Missing;
 		EWindowCoverReject Reject = EWindowCoverReject::SolidWall;
 	};
 
@@ -189,8 +191,16 @@ namespace WindowCoverRules
 	CODEXTACTICS_API const TCHAR* RejectName(EWindowCoverReject Reject);
 
 	/**
+	 * Glass HideBrokenWindow would hide for this sill. Broken when the sill is tagged window_broken. Intact when a visible
+	 * window_glass actor or a kit window instance still stands over it. Missing when neither does. The pane often ignores
+	 * visibility (the grey builder's glazed pane), so this is not a trace.
+	 */
+	CODEXTACTICS_API EWindowGlassState GlassOver(const AActor& Sill);
+
+	/**
 	 * The shot line, skipping glass that is already broken (a hidden pane, or a kit instance shrunk by HideBrokenWindow).
-	 * Intact glass of Binding.Sill that the line meets inside the opening is reported and left in the way.
+	 * Intact glass of Binding.Sill is reported when the line crosses the opening: a colliding pane the trace meets, or a
+	 * pane with no visibility collision once the line has cleared the far face. A solid hit on the near side is the frame.
 	 */
 	CODEXTACTICS_API FWindowLineView TraceThroughWindow(UWorld& World, const AActor* Shooter, const FWindowCoverBinding& Binding,
 		const FVector& From, const FVector& To, const FCollisionQueryParams& Params);

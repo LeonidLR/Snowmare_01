@@ -355,6 +355,10 @@ void AOperativeCharacter::RefreshWindowCover(bool bForce)
 		Best.Reject = Match.Reject;
 	}
 
+	if (bFound && Best.Sill.IsValid())
+	{
+		Best.Glass = WindowCoverRules::GlassOver(*Best.Sill.Get());
+	}
 	const bool bWasConfirmed = WindowCover.bConfirmed;
 	WindowCover = bFound ? Best : WindowCoverRules::FWindowCoverBinding();
 	if (!bFound)

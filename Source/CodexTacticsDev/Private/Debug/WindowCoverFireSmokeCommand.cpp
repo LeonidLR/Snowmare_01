@@ -193,7 +193,7 @@ namespace WindowCoverFireSmoke
 		const TSoftClassPtr<AEnemyCharacter>* Soft = GameMode ? GameMode->EnemyClasses.Find(EEnemyArchetype::FrostHound) : nullptr;
 		UClass* Class = Soft ? Soft->LoadSynchronous() : nullptr;
 		FActorSpawnParameters Params;
-		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		AEnemyCharacter* Hound = nullptr;
 		{
 			const AEnemyCharacter::FScopedSpawnArchetype Scope(EEnemyArchetype::FrostHound);
@@ -202,6 +202,8 @@ namespace WindowCoverFireSmoke
 		if (Hound)
 		{
 			Hound->InitializeArchetype(EEnemyArchetype::FrostHound);
+			Hound->TeleportTo(At, FRotator::ZeroRotator, false, true);
+			Hound->SetActorEnableCollision(false);
 			Hound->SetActorTickEnabled(false);
 			Hound->CustomTimeDilation = 0.f;
 		}
@@ -435,16 +437,24 @@ namespace WindowCoverFireSmoke
 			}
 			if (Runner->StepFrame == 1)
 			{
-				const FCoverSlot Slot = Op->GetCoverSlot();
-				const FVector Far = Slot.WallPoint - Slot.WallNormal * 220.f;
-				Runner->Hound = SpawnParkedHound(*World, FVector(Far.X, Far.Y, Op->GetActorLocation().Z));
+				const FBox Opening = Op->GetWindowCover().Opening;
+				const FVector Muzzle = Op->GetMuzzleLocation();
+				const FVector Center = Opening.GetCenter();
+				const FVector Through = (Center - Muzzle).GetSafeNormal();
+				const FVector Far = Through.IsNearlyZero()
+					? Op->GetCoverSlot().WallPoint - Op->GetCoverSlot().WallNormal.GetSafeNormal2D() * WindowBreakage::ThroughLandingCm
+					: Center + Through * WindowBreakage::ThroughLandingCm;
+				Runner->Hound = SpawnParkedHound(*World, Far);
 				Check(Runner->Hound.IsValid(), TEXT("a parked hound stands on the far side"));
 				Runner->GlassActors = CountGlass(*World, *Sill);
 				Runner->bBrokenBeforeShot = Sill->ActorHasTag(FName(TEXT("window_broken")));
 				Op->bHasCoverThreat = true;
 				Op->CoverThreatLocation = Far;
-				UE_LOG(LogCodexTactics, Display, TEXT("WindowCoverFireSmoke: glass actors %d, already broken %d"),
-					Runner->GlassActors, Runner->bBrokenBeforeShot ? 1 : 0);
+				FCollisionQueryParams LineParams(SCENE_QUERY_STAT(WindowCoverFireSmoke), false, Op);
+				const WindowCoverRules::FWindowLineView View = WindowCoverRules::TraceThroughWindow(*World, Op, Op->GetWindowCover(), Op->GetCoverFireOrigin(), Far, LineParams);
+				UE_LOG(LogCodexTactics, Display, TEXT("WindowCoverFireSmoke: glass actors %d, already broken %d, through %d, intact %d, block %d, hit %s, glass %d"),
+					Runner->GlassActors, Runner->bBrokenBeforeShot ? 1 : 0, Op->IsWindowCoverShot(Far) ? 1 : 0, View.bIntactGlass ? 1 : 0,
+					View.bBlocking ? 1 : 0, *GetNameSafe(View.Actor.Get()), static_cast<int32>(Op->GetWindowCover().Glass));
 			}
 			if (Runner->StepFrame < 30)
 			{

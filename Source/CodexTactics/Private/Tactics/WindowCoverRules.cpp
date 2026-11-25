@@ -5,6 +5,7 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GameFramework/Actor.h"
 #include "Interactables/WindowBreakage.h"
 
@@ -49,6 +50,93 @@ namespace WindowCoverRules
 			const FBox Bounds = Mesh->GetStaticMesh() ? Mesh->GetStaticMesh()->GetBounds().GetBox().TransformBy(Instance) : FBox(Instance.GetLocation(), Instance.GetLocation());
 			return WindowBreakage::IsOverSill(SillBox, Bounds.GetCenter());
 		}
+
+		/** Enter and exit of the segment on the box, as fractions of From->To. False when the segment misses. */
+		bool SegmentCrossesBox(const FBox& Box, const FVector& From, const FVector& To, float& OutEnter, float& OutExit)
+		{
+			const FVector Delta = To - From;
+			float Enter = 0.f;
+			float Exit = 1.f;
+			for (int32 Axis = 0; Axis < 3; ++Axis)
+			{
+				const double Origin = From[Axis];
+				const double Direction = Delta[Axis];
+				const double MinB = Box.Min[Axis];
+				const double MaxB = Box.Max[Axis];
+				if (FMath::IsNearlyZero(Direction))
+				{
+					if (Origin < MinB || Origin > MaxB)
+					{
+						return false;
+					}
+					continue;
+				}
+				double Near = (MinB - Origin) / Direction;
+				double Far = (MaxB - Origin) / Direction;
+				if (Near > Far)
+				{
+					Swap(Near, Far);
+				}
+				Enter = FMath::Max(Enter, static_cast<float>(Near));
+				Exit = FMath::Min(Exit, static_cast<float>(Far));
+				if (Enter > Exit)
+				{
+					return false;
+				}
+			}
+			if (Exit < 0.f || Enter > 1.f)
+			{
+				return false;
+			}
+			OutEnter = FMath::Clamp(Enter, 0.f, 1.f);
+			OutExit = FMath::Clamp(Exit, 0.f, 1.f);
+			return true;
+		}
+	}
+
+	EWindowGlassState GlassOver(const AActor& Sill)
+	{
+		if (Sill.ActorHasTag(BrokenTag))
+		{
+			return EWindowGlassState::Broken;
+		}
+		UWorld* World = Sill.GetWorld();
+		const FBox SillBox = Sill.GetComponentsBoundingBox(true);
+		if (!World || !SillBox.IsValid)
+		{
+			return EWindowGlassState::Missing;
+		}
+		// The same pieces HideBrokenWindow hides. A window_glass actor ignores visibility, so it is found by the tag.
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			AActor* Actor = *It;
+			if (Actor != &Sill && IsGlassActorOver(Actor, SillBox) && !Actor->IsHidden())
+			{
+				return EWindowGlassState::Intact;
+			}
+			TInlineComponentArray<UInstancedStaticMeshComponent*> Components(Actor);
+			for (UInstancedStaticMeshComponent* Component : Components)
+			{
+				if (!Component->ComponentTags.Contains(KitWindowTag))
+				{
+					continue;
+				}
+				for (int32 Index = 0; Index < Component->GetInstanceCount(); ++Index)
+				{
+					FTransform Instance;
+					if (!Component->GetInstanceTransform(Index, Instance, /*bWorldSpace*/ true) || Instance.GetScale3D().GetMin() < 0.01)
+					{
+						continue;
+					}
+					const FBox Bounds = Component->GetStaticMesh() ? Component->GetStaticMesh()->GetBounds().GetBox().TransformBy(Instance) : FBox(Instance.GetLocation(), Instance.GetLocation());
+					if (WindowBreakage::IsOverSill(SillBox, Bounds.GetCenter()))
+					{
+						return EWindowGlassState::Intact;
+					}
+				}
+			}
+		}
+		return EWindowGlassState::Missing;
 	}
 
 	bool SameWallSide(const FVector& SlotNormal, const FVector& OpeningNormal)
@@ -282,11 +370,30 @@ namespace WindowCoverRules
 			}
 			if (bIntactActor || bIntactKit)
 			{
-				const FVector Delta = Hit.ImpactPoint - From;
+				// The pane can sit just in front of the opening box. The shot counts when the whole line crosses that box.
+				const FVector Delta = To - From;
 				View.bIntactGlass = !Delta.IsNearlyZero() && Binding.Opening.IsValid
-					&& FMath::LineBoxIntersection(Binding.Opening, From, Hit.ImpactPoint, Delta);
+					&& FMath::LineBoxIntersection(Binding.Opening, From, To, Delta);
 			}
 			break;
+		}
+		// Glazed panes ignore visibility (build_levelgen_map COLLISION_VISUAL_GLASS). A line that clears the far face of
+		// the opening still spends the round on that glass. A solid hit before the far face is the frame and stays in the way.
+		if (!View.bIntactGlass && !bBroken && Binding.Glass == EWindowGlassState::Intact && Binding.Opening.IsValid)
+		{
+			float Enter = 0.f;
+			float Exit = 0.f;
+			if (SegmentCrossesBox(Binding.Opening, From, To, Enter, Exit))
+			{
+				const float Length = static_cast<float>(FVector::Dist(From, To));
+				const float ExitCm = Exit * Length;
+				const float HitCm = View.bBlocking ? static_cast<float>(FVector::Dist(From, View.ImpactPoint)) : Length + WindowBreakage::OpeningBottomCm;
+				if (HitCm > ExitCm)
+				{
+					View.bIntactGlass = true;
+					View.ImpactPoint = FMath::Lerp(From, To, (Enter + Exit) * 0.5f);
+				}
+			}
 		}
 		return View;
 	}
