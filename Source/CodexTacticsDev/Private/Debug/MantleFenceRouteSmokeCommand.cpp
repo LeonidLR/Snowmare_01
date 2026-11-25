@@ -371,7 +371,19 @@ namespace MantleFenceRouteSmoke
 		}
 		case 5: // Prepare the cover order with a slot traced from the wrong face.
 		{
-			const bool bGroup = State->CoverCase >= 2;
+			if (State->CoverCase == 4)
+			{
+				const FVector RecordedJersey(2568.f, -9520.f, 0.f);
+				State->Site = MantleSmokeSites::FindSite(World, Leader, TEXT("jersey"), 95.f, StandOffCm, RecordedJersey, {}, true, GoalOffCm, false);
+				if (!State->Site.bFound)
+				{
+					Check(*State, false, TEXT("a 95 cm Jersey barrier with navigable approaches on both sides"));
+					return Finish(*State, false);
+				}
+				State->Goal = State->Site.Probe.FacePoint + State->Site.Dir * (60.f + GoalOffCm);
+				State->Goal.Z = State->Site.Feet.Z;
+			}
+			const bool bGroup = (State->CoverCase % 4) >= 2;
 			const bool bReverse = (State->CoverCase % 2) != 0;
 			const FVector Direction = bReverse ? -State->Site.Dir : State->Site.Dir;
 			const FVector Start = bReverse ? State->Goal : State->Site.Feet;
@@ -411,7 +423,7 @@ namespace MantleFenceRouteSmoke
 		case 6:
 			if (State->StageTime >= 0.6f)
 			{
-				Squad->SetFollowersHolding(State->CoverCase < 2);
+				Squad->SetFollowersHolding((State->CoverCase % 4) < 2);
 				PC->ShowCoverPreview(Leader, State->CoverRequested);
 				PC->ConfirmCoverPreview(true);
 				Next(*State, 7);
@@ -432,7 +444,7 @@ namespace MantleFenceRouteSmoke
 			}
 			Check(*State, bNoClimb && bInCover, FString::Printf(TEXT("cover case %d: %d monitored, no climb %d, leader in cover %d"),
 				State->CoverCase, State->CoverMantles.Num(), bNoClimb, bInCover));
-			if (++State->CoverCase == 4)
+			if (++State->CoverCase == 8)
 			{
 				return Finish(*State, true);
 			}
