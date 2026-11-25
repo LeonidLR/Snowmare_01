@@ -115,7 +115,13 @@ namespace PanicSmoke
 			}
 			// The data (DA_GameBalanceConfig): one panicking member, the core squad far more resistant than the recruit.
 			const UPanicComponent* LeaderPanic = Leader->PanicComponent;
-			const UPanicComponent* RecruitPanic = Susanin->PanicComponent;
+			UPanicComponent* RecruitPanic = Susanin->PanicComponent;
+			if (RecruitPanic)
+			{
+				// Deterministic trigger for the smoke's flight/cower/recovery/prone checks.
+				RecruitPanic->Config.TriggerChance = 1.f;
+				RecruitPanic->Config.PostPanicCooldownSeconds = 0.f;
+			}
 			Check(State, LeaderPanic && RecruitPanic && RecruitPanic->Config.MaxPanickedMembers == 1
 				&& LeaderPanic->Config.StressGainMultiplier * 2.f <= RecruitPanic->Config.StressGainMultiplier,
 				FString::Printf(TEXT("data: max panicked %d, stress gain commander %.2f vs recruit %.2f"),
@@ -142,6 +148,7 @@ namespace PanicSmoke
 			// The engineer at 100 stress cannot panic too (limit 1): he holds on at 95.
 			if (AOperativeCharacter* Engineer = State.Engineer.Get(); Engineer && Engineer->PanicComponent)
 			{
+				Engineer->PanicComponent->Config.TriggerChance = 1.f;
 				Engineer->PanicComponent->SetStressForTesting(99.f);
 				Engineer->PanicComponent->OnDamageTaken(30.f);
 				Check(State, !Engineer->PanicComponent->IsPanicking() && FMath::IsNearlyEqual(Engineer->PanicComponent->GetStress(), 95.f, 0.5f),

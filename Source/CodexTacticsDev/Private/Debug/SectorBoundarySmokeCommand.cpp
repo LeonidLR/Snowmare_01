@@ -10,8 +10,12 @@
 #include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "Training/TrainingSectorSubsystem.h"
 
 namespace SectorBoundarySmoke
@@ -27,6 +31,7 @@ namespace SectorBoundarySmoke
 		FVector Goal = FVector::ZeroVector;
 		bool bOrdered = false;
 		bool bSawPmc = false;
+		bool bCheckStarts = false;
 	};
 
 	bool Finish(bool bPass, const TCHAR* What)
@@ -75,6 +80,72 @@ namespace SectorBoundarySmoke
 		return Best < TNumericLimits<double>::Max();
 	}
 
+	bool CheckAllStartsAndPosts(UWorld& World)
+	{
+		const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(&World);
+		FString Raw;
+		const FString JsonPath = FPaths::ProjectContentDir() / TEXT("Data/LevelJson/L_Gen_Depot_1_X6.sectors.json");
+		if (!Nav || !FFileHelper::LoadFileToString(Raw, *JsonPath))
+		{
+			return Finish(false, TEXT("cannot load L_Gen_Depot_1_X6.sectors.json or nav"));
+		}
+		TSharedPtr<FJsonObject> Root;
+		if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Raw), Root) || !Root)
+		{
+			return Finish(false, TEXT("cannot parse sectors json"));
+		}
+		TArray<FString> Errors;
+		const TArray<FTrainingSector> Sectors = TrainingSectorRules::ParseSectors(*Root, Errors);
+		int32 BadCount = 0;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(SectorStartCheck), false);
+		for (TActorIterator<AOperativeCharacter> It(&World); It; ++It)
+		{
+			Params.AddIgnoredActor(*It);
+		}
+		auto CheckSpot = [&](const FString& Label, const FVector& Pos)
+		{
+			FHitResult Hit;
+			const bool bHit = World.LineTraceSingleByChannel(Hit, FVector(Pos.X, Pos.Y, 2000.0), FVector(Pos.X, Pos.Y, -500.0), ECC_WorldStatic, Params);
+			const double GroundZ = bHit ? Hit.ImpactPoint.Z : -9999.0;
+			const FString HitName = bHit && Hit.GetActor() ? Hit.GetActor()->GetName() : TEXT("none");
+			const FString CompName = bHit && Hit.GetComponent() ? Hit.GetComponent()->GetName() : TEXT("none");
+			FNavLocation OnNav;
+			const bool bOnNav = Nav->ProjectPointToNavigation(FVector(Pos.X, Pos.Y, bHit ? GroundZ : Pos.Z), OnNav, FVector(160.0, 160.0, 180.0));
+			const double NavZ = bOnNav ? OnNav.Location.Z : -9999.0;
+			const bool bBad = !bOnNav || !bHit || GroundZ > 110.0 || NavZ > 110.0 || !TrainingSectorRules::Contains(FBox2D(FVector2D(-1e9, -1e9), FVector2D(1e9, 1e9)), Pos);
+			if (bBad)
+			{
+				++BadCount;
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[SectorCheck] %s %s xy=(%.0f,%.0f) ground_z=%.1f nav_z=%.1f on_nav=%d hit=%s/%s"),
+				bBad ? TEXT("BAD") : TEXT("OK "), *Label, Pos.X, Pos.Y, GroundZ, NavZ, bOnNav ? 1 : 0, *HitName, *CompName);
+		};
+		for (const FTrainingSector& S : Sectors)
+		{
+			for (int32 i = 0; i < S.Starts.Num(); ++i)
+			{
+				const FRotator Facing(0.0, S.Starts[i].Yaw, 0.0);
+				for (int32 Slot = 0; Slot < 3; ++Slot)
+				{
+					const FVector Pos = S.Starts[i].Position + Facing.RotateVector(FVector(0.0, Slot * 120.0, 0.0));
+					CheckSpot(FString::Printf(TEXT("s%d start[%d] slot%d"), S.Id, i, Slot), Pos);
+				}
+			}
+			for (int32 i = 0; i < S.Posts.Num(); ++i)
+			{
+				const FRotator Facing(0.0, S.Posts[i].YawDeg, 0.0);
+				const FVector Right = FRotationMatrix(Facing).GetScaledAxis(EAxis::Y);
+				for (int32 Slot = 0; Slot < 3; ++Slot)
+				{
+					const FVector Pos = S.Posts[i].Pos + Right * ((Slot - 1) * 150.0);
+					CheckSpot(FString::Printf(TEXT("s%d post[%d](%s) slot%d"), S.Id, i, *S.Posts[i].Id, Slot), Pos);
+				}
+			}
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[SectorCheck] total bad slots: %d"), BadCount);
+		return Finish(true, TEXT("sector starts and posts checked"));
+	}
+
 	bool Step(TSharedRef<FState> State)
 	{
 		UWorld* World = State->World.Get();
@@ -101,6 +172,10 @@ namespace SectorBoundarySmoke
 		if (!Leader || UNavigationSystemV1::IsNavigationBeingBuiltOrLocked(World))
 		{
 			return State->Time < 30.f || Finish(false, TEXT("the sector navigation or squad never became ready"));
+		}
+		if (State->bCheckStarts)
+		{
+			return CheckAllStartsAndPosts(*World);
 		}
 		for (AOperativeCharacter* Member : Squad->GetMembers())
 		{
@@ -148,7 +223,7 @@ namespace SectorBoundarySmoke
 		return State->Time < 105.f || Finish(false, TEXT("the move did not arrive at the edge with one PMC squad inside"));
 	}
 
-	void Run(const TArray<FString>&, UWorld* World)
+	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		if (!World)
 		{
@@ -156,6 +231,14 @@ namespace SectorBoundarySmoke
 		}
 		const TSharedRef<FState> State = MakeShared<FState>();
 		State->World = World;
+		for (const FString& Arg : Args)
+		{
+			int32 Val = 0;
+			if (FParse::Value(*Arg, TEXT("CheckStarts="), Val) && Val != 0)
+			{
+				State->bCheckStarts = true;
+			}
+		}
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float) { return Step(State); }), Interval);
 	}
 

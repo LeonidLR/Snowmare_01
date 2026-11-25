@@ -204,6 +204,8 @@ namespace TrainingSectorFight
 		Out.RoundRestartDelayS = Read(TEXT("round_restart_delay_s"), Out.RoundRestartDelayS);
 		Out.RoundTimeLimitS = Read(TEXT("round_time_limit_s"), Out.RoundTimeLimitS);
 		Out.ResupplyDelayS = Read(TEXT("resupply_delay_s"), Out.ResupplyDelayS);
+		Out.MinStartPostDistanceM = Read(TEXT("min_start_post_distance_m"), Out.MinStartPostDistanceM);
+		Out.RespawnGraceS = Read(TEXT("respawn_grace_s"), Out.RespawnGraceS);
 		FString Mode;
 		if (Json.TryGetStringField(TEXT("ammo_mode"), Mode))
 		{
@@ -272,6 +274,55 @@ FSectorPair TrainingSectorRules::PickRoundPair(int32 StartCount, int32 PostCount
 		Index = (Index + 1) % Count;
 	}
 	return { Index / PostCount, Index % PostCount };
+}
+
+FSectorPair TrainingSectorRules::PickSafeRoundPair(const FTrainingSector& Sector, int32 Seed, int32 RoundIndex, const FSectorPair& Previous,
+	float MinDistanceM, TFunctionRef<bool(const FSectorPair&)> HasLosFn, bool* bOutFallback)
+{
+	if (bOutFallback)
+	{
+		*bOutFallback = false;
+	}
+	if (Sector.Starts.IsEmpty() || Sector.Posts.IsEmpty())
+	{
+		return {};
+	}
+	const double MinDistCm = FMath::Max(0.f, MinDistanceM) * 100.0;
+	TArray<FSectorPair> Safe;
+	FSectorPair Farthest{0, 0};
+	double FarthestDist = -1.0;
+	for (int32 s = 0; s < Sector.Starts.Num(); ++s)
+	{
+		for (int32 p = 0; p < Sector.Posts.Num(); ++p)
+		{
+			const FSectorPair Candidate{s, p};
+			const double Dist = FVector::Dist2D(Sector.Starts[s].Position, Sector.Posts[p].Pos);
+			if (Dist > FarthestDist || (FMath::IsNearlyEqual(Dist, FarthestDist, 1.0) && Farthest == Previous && !(Candidate == Previous)))
+			{
+				FarthestDist = Dist;
+				Farthest = Candidate;
+			}
+			if (Dist >= MinDistCm && !HasLosFn(Candidate))
+			{
+				Safe.Add(Candidate);
+			}
+		}
+	}
+	if (Safe.IsEmpty())
+	{
+		if (bOutFallback)
+		{
+			*bOutFallback = true;
+		}
+		return Farthest;
+	}
+	if (Safe.Num() > 1)
+	{
+		Safe.RemoveAll([&Previous](const FSectorPair& P) { return P == Previous; });
+	}
+	const int32 StreamSeed = static_cast<int32>(static_cast<uint32>(Seed) * 17u + static_cast<uint32>(RoundIndex) * 101u + 3u);
+	FRandomStream Stream(StreamSeed);
+	return Safe[Stream.RandRange(0, Safe.Num() - 1)];
 }
 
 void TrainingSectorRules::ApplyPair(const FTrainingSector& Sector, const FSectorPair& Pair, int32 Seed, FTrainingSectorStart& Start, FPmcEncounterSpec& Squad)

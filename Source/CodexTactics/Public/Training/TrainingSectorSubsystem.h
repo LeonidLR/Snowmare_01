@@ -24,7 +24,7 @@ public:
 
 	/** Called before gameplay preload and any scheduled encounters. */
 	void Prepare();
-	bool SelectSector(int32 Id);
+	bool SelectSector(int32 Id, TOptional<int32> SeedOverride = TOptional<int32>());
 	bool HasActiveSector() const { return Active.IsSet(); }
 	/** An active sector keeps a wiped player squad in the fight: no death cinematic and no mission failure. */
 	bool SuppressesMissionEnd() const { return HasActiveSector(); }
@@ -71,9 +71,11 @@ private:
 	double RoundStartedAt = 0.0;
 	double IntermissionUntil = 0.0;
 	double BannerUntil = -1.0;
+	double RespawnGraceUntil = -1.0;
 	bool bRespawnApplied = false;
 
 	bool IsTrainingMap() const;
+	bool HasStartPostLos(const FTrainingSector& Sector, const FSectorPair& Pair) const;
 	bool BuildBoundary(const FTrainingSector& Sector, TArray<TWeakObjectPtr<AActor>>& Out) const;
 	void BeginFight(int32 Seed);
 	void EndFight();

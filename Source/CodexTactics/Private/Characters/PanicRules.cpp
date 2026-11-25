@@ -30,6 +30,8 @@ namespace PanicRules
 		Config.HeatSourceCalmRate = Number(TEXT("panic_heat_source_calm_rate"), Config.HeatSourceCalmRate);
 		Config.HeatSourcePanicBreakTime = Number(TEXT("panic_heat_source_panic_break_time"), Config.HeatSourcePanicBreakTime);
 		Config.FleeTowardsHeatBias = Number(TEXT("panic_flee_towards_heat_bias"), Config.FleeTowardsHeatBias);
+		Config.TriggerChance = FMath::Clamp(Number(TEXT("panic_trigger_chance"), Config.TriggerChance), 0.f, 1.f);
+		Config.PostPanicCooldownSeconds = FMath::Max(0.f, Number(TEXT("panic_cooldown_seconds"), Config.PostPanicCooldownSeconds));
 		if (Prefix.IsEmpty())
 		{
 			return Config;
@@ -50,6 +52,8 @@ namespace PanicRules
 		Config.FleeDistance = Own(TEXT("panic_flee_distance"), Config.FleeDistance);
 		Config.MinDuration = Own(TEXT("panic_min_duration"), Config.MinDuration);
 		Config.MaxDuration = Own(TEXT("panic_max_duration"), Config.MaxDuration);
+		Config.TriggerChance = FMath::Clamp(Own(TEXT("panic_trigger_chance"), Config.TriggerChance), 0.f, 1.f);
+		Config.PostPanicCooldownSeconds = FMath::Max(0.f, Own(TEXT("panic_cooldown_seconds"), Config.PostPanicCooldownSeconds));
 		return Config;
 	}
 
@@ -110,6 +114,30 @@ namespace PanicRules
 			return ETriggerVerdict::HoldOnLeader;
 		}
 		return ETriggerVerdict::Panic;
+	}
+
+	ETriggerVerdict EvaluateTriggerAttempt(const FPanicConfig& Config, int32 PanickedNow, bool bIsLeader, float CooldownRemaining, float Roll01)
+	{
+		if (CooldownRemaining > 0.f)
+		{
+			return ETriggerVerdict::HoldOnCooldown;
+		}
+		const ETriggerVerdict BaseVerdict = GetTriggerVerdict(Config, PanickedNow, bIsLeader);
+		if (BaseVerdict != ETriggerVerdict::Panic)
+		{
+			return BaseVerdict;
+		}
+		const float Chance = FMath::Clamp(Config.TriggerChance, 0.f, 1.f);
+		if (Chance <= 0.f || (Chance < 1.f && Roll01 >= Chance))
+		{
+			return ETriggerVerdict::HoldOnChance;
+		}
+		return ETriggerVerdict::Panic;
+	}
+
+	bool IsSectorResupplyPending(bool bSectorActive, bool bResupplyMode, int32 ReserveAmmo, int32 LowAmmoThreshold)
+	{
+		return bSectorActive && bResupplyMode && ReserveAmmo <= LowAmmoThreshold;
 	}
 
 	float PanicFleeSpeed(EOperativeStance Stance, CriticalWoundRules::EWoundTier WoundTier,
