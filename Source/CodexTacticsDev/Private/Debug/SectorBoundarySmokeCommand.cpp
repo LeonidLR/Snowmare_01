@@ -97,10 +97,14 @@ namespace SectorBoundarySmoke
 		TArray<FString> Errors;
 		const TArray<FTrainingSector> Sectors = TrainingSectorRules::ParseSectors(*Root, Errors);
 		int32 BadCount = 0;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(SectorStartCheck), false);
+		for (TActorIterator<AOperativeCharacter> It(&World); It; ++It)
+		{
+			Params.AddIgnoredActor(*It);
+		}
 		auto CheckSpot = [&](const FString& Label, const FVector& Pos)
 		{
 			FHitResult Hit;
-			const FCollisionQueryParams Params(SCENE_QUERY_STAT(SectorStartCheck), false);
 			const bool bHit = World.LineTraceSingleByChannel(Hit, FVector(Pos.X, Pos.Y, 2000.0), FVector(Pos.X, Pos.Y, -500.0), ECC_WorldStatic, Params);
 			const double GroundZ = bHit ? Hit.ImpactPoint.Z : -9999.0;
 			const FString HitName = bHit && Hit.GetActor() ? Hit.GetActor()->GetName() : TEXT("none");
