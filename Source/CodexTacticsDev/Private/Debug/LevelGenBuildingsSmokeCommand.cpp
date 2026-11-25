@@ -1383,7 +1383,7 @@ namespace LevelGenBuildingsSmoke
 			const FVector At = Leader ? Feet(*Leader) : Leg.Start;
 			const FVector2D FromSill(At - Leg.Sill.GetValue());
 			const FVector2D Outside(Leg.Start - Leg.Sill.GetValue());
-			if (Leader && BuildingWalkRules::IsArrived(At, Walk.WindowExit) && FVector2D::DotProduct(FromSill, Outside) < 0.0)
+			if (Leader && !Leader->IsVaulting() && BuildingWalkRules::IsArrived(At, Walk.WindowExit) && FVector2D::DotProduct(FromSill, Outside) < 0.0)
 			{
 				OrderLeg(Walk, *World);
 			}
