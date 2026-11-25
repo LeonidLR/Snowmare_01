@@ -10,11 +10,12 @@ Branch: `gemini/126-rpg-engineer` (from `origin/main` `d4856826`)
   - `Content/Data/LevelJson/L_Gen_Depot_1_X6.sectors.json`: added `"launcher_rockets_per_round": 2` at top level (read by `FSectorFightConfig::LauncherRocketsPerRound`).
   - `Content/Data/AI/pmc_operators.json`: already had `"ammo": { "rpg7": 1 }` (`1` loaded + `1` spare = `2`).
 - **Pure Rules** (`Source/CodexTactics/Public/Combat/LauncherRules.h`, `Private/Combat/LauncherRules.cpp`):
-  - Added `LauncherRules::DefaultRocketsPerRound = 2`, `CapAmmo(Clip, Reserve, MaxRockets)`, and `CapReserveToAdd(CurrentClip, CurrentReserve, AddCount, MaxRockets)`.
-- **Runtime Enforcement**:
-  - `OperativeCharacterWeapons.cpp`: `InitArsenal`, `EquipWeapon`, and `AddAmmo` (including `ExtraAmmo` loot) clamp launcher clip + reserve to `LauncherCap(*this)` (`LauncherRocketsPerRound` when in an active sector, else `2`).
-  - `OperativeCharacterSniper.cpp`: `AddArsenalWeapon` clamps launcher clip + reserve to `2`.
-  - `TrainingSectorSubsystem::RefillReserves`: already skips `Op->IsLauncherEquipped()` and only refills `CurrentWeapon`, so launchers are never refilled mid-round in `ammo_mode == "resupply"`.
+  - Added `LauncherRules::DefaultRocketsPerRound = 2`, `CapAmmo(Clip, Reserve, MaxRockets, FiredThisRound)`, and `CapReserveToAdd(CurrentClip, CurrentReserve, AddCount, MaxRockets, FiredThisRound)` so `FiredThisRound + Clip + Reserve <= MaxRockets`.
+- **Runtime Enforcement (Player + PMC)**:
+  - `OperativeCharacter.h` / `OperativeCharacterLauncher.cpp`: added per-operative `RocketsFiredThisRound` counter, incremented on every `FireLauncherAt` shot, and reset only at round start in `UTrainingSectorSubsystem::TryStartRound` (`ResetLauncherRoundCounter()`).
+  - `OperativeCharacterWeapons.cpp` / `OperativeCharacterSniper.cpp`: `InitArsenal`, `AddArsenalWeapon`, `EquipWeapon`, and `AddAmmo` (including `ExtraAmmo` loot) enforce `cap - fired - held` (`CapAmmo` / `CapReserveToAdd`).
+  - **PMC carriers**: `UPmcSquadSubsystem::SpawnFighter` spawns an `AOperativeCharacter` (so `RocketsFiredThisRound` starts at `0`) and sets `"rpg7"` reserve via `AOperativeCharacter::AddAmmo`, which enforces the same `cap - fired - held` budget.
+  - `TrainingSectorSubsystem::RefillReserves`: skips `Op->IsLauncherEquipped()` and only refills `CurrentWeapon`, so launchers are never refilled mid-round in `ammo_mode == "resupply"`.
 
 ## 2. Engineer Second Weapon (`m16`) & Auto Range Switch
 

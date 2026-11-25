@@ -564,6 +564,10 @@ void UTrainingSectorSubsystem::TryStartRound(double Now)
 	{
 		return;
 	}
+	for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+	{
+		It->ResetLauncherRoundCounter();
+	}
 	++RoundNumber;
 	RoundStartedAt = Now;
 	RespawnGraceUntil = (RoundNumber > 1 && Fight.RespawnGraceS > 0.f) ? (Now + Fight.RespawnGraceS) : -1.0;

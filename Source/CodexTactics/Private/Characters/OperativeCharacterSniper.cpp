@@ -174,7 +174,8 @@ void AOperativeCharacter::AddArsenalWeapon(UWeaponDataAsset* Weapon, int32 Reser
 	}
 	if (Weapon->Stats.Handling == EWeaponHandling::Launcher || Weapon->WeaponId == TEXT("rpg7"))
 	{
-		const LauncherRules::FLauncherAmmoCap Capped = LauncherRules::CapAmmo(Ammo.Clip, Ammo.Reserve);
+		const LauncherRules::FLauncherAmmoCap Capped = LauncherRules::CapAmmo(Ammo.Clip, Ammo.Reserve,
+			LauncherRules::DefaultRocketsPerRound, RocketsFiredThisRound);
 		Ammo.Clip = Capped.Clip;
 		Ammo.Reserve = Capped.Reserve;
 	}

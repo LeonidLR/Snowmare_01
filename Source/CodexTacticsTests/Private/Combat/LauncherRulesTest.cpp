@@ -161,6 +161,9 @@ bool FRpgRulesTest::RunTest(const FString&)
 	TestEqual(TEXT("cap add when full (1+1) -> 0"), LauncherRules::CapReserveToAdd(1, 1, 5, 2), 0);
 	TestEqual(TEXT("cap add when 1+0 -> 1"), LauncherRules::CapReserveToAdd(1, 0, 5, 2), 1);
 	TestEqual(TEXT("cap add when 0+0 -> 2"), LauncherRules::CapReserveToAdd(0, 0, 5, 2), 2);
+	TestEqual(TEXT("fire 2 -> AddAmmo(5) -> holds 0"), LauncherRules::CapReserveToAdd(0, 0, 5, 2, 2), 0);
+	TestEqual(TEXT("fire 1 -> AddAmmo(5) -> at most 1"), LauncherRules::CapReserveToAdd(0, 0, 5, 2, 1), 1);
+	TestEqual(TEXT("fire 2 -> CapAmmo -> 0+0"), LauncherRules::CapAmmo(1, 1, 2, 2).Clip + LauncherRules::CapAmmo(1, 1, 2, 2).Reserve, 0);
 	return true;
 }
 

@@ -374,11 +374,18 @@ namespace SectorRoundsSmoke
 				{
 					return Finish(false, TEXT("RpgCapEngineer: AddAmmo exceeded rpg7 cap 2"));
 				}
-				// Spend both rockets and verify resupply never refills rpg7.
+				// Spend both rockets (2 fired this round) and verify AddAmmo + resupply never refill rpg7.
 				Commander->SwitchToWeaponById(TEXT("rpg7"));
 				Commander->CurrentClip = 0;
 				Commander->ReserveAmmo = 0;
 				Commander->AmmoInventory.FindOrAdd(TEXT("rpg7")) = { 0, 0 };
+				Commander->NoteRocketFiredForTesting();
+				Commander->NoteRocketFiredForTesting();
+				Commander->AddAmmo(TEXT("rpg7"), 5);
+				if (Commander->GetAmmoState(TEXT("rpg7")).Clip + Commander->GetAmmoState(TEXT("rpg7")).Reserve != 0)
+				{
+					return Finish(false, TEXT("RpgCapEngineer: AddAmmo refilled rpg7 after 2 fired"));
+				}
 				Commander->AutoSwitchOnEmpty();
 				if (Commander->IsLauncherEquipped())
 				{

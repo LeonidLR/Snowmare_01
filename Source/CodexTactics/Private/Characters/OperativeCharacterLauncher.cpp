@@ -109,6 +109,7 @@ bool AOperativeCharacter::FireLauncherAt(AActor* Target, bool bRagingShot)
 		Projectiles->Fire(Launch);
 	}
 	++LauncherShots;
+	++RocketsFiredThisRound;
 	LauncherNoTargetSeconds = 0.f;
 	if (LauncherStrikeTarget.IsValid())
 	{

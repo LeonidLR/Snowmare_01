@@ -74,7 +74,8 @@ void AOperativeCharacter::EquipWeapon(UWeaponDataAsset* NewWeapon)
 		ReserveAmmo = CurrentWeapon->Stats.Ammo.ReserveAmmo;
 		if (OperativeWeaponsLocal::IsLauncherWeapon(CurrentWeapon))
 		{
-			const LauncherRules::FLauncherAmmoCap Capped = LauncherRules::CapAmmo(CurrentClip, ReserveAmmo, OperativeWeaponsLocal::LauncherCap(*this));
+			const LauncherRules::FLauncherAmmoCap Capped = LauncherRules::CapAmmo(CurrentClip, ReserveAmmo,
+				OperativeWeaponsLocal::LauncherCap(*this), RocketsFiredThisRound);
 			CurrentClip = Capped.Clip;
 			ReserveAmmo = Capped.Reserve;
 		}
@@ -110,7 +111,8 @@ void AOperativeCharacter::InitArsenal(const TArray<UWeaponDataAsset*>& Weapons, 
 				: (Weapon->WeaponId == TEXT("pistol") ? 24 : FMath::Max(0, Weapon->Stats.Ammo.ReserveAmmo));
 			if (OperativeWeaponsLocal::IsLauncherWeapon(Weapon))
 			{
-				const LauncherRules::FLauncherAmmoCap Capped = LauncherRules::CapAmmo(Ammo.Clip, Ammo.Reserve, OperativeWeaponsLocal::LauncherCap(*this));
+				const LauncherRules::FLauncherAmmoCap Capped = LauncherRules::CapAmmo(Ammo.Clip, Ammo.Reserve,
+					OperativeWeaponsLocal::LauncherCap(*this), RocketsFiredThisRound);
 				Ammo.Clip = Capped.Clip;
 				Ammo.Reserve = Capped.Reserve;
 			}
@@ -123,7 +125,8 @@ void AOperativeCharacter::InitArsenal(const TArray<UWeaponDataAsset*>& Weapons, 
 		{
 			if (OperativeWeaponsLocal::IsLauncherId(*this, It.Key().ToString()))
 			{
-				Ammo->Reserve += LauncherRules::CapReserveToAdd(Ammo->Clip, Ammo->Reserve, It.Value(), OperativeWeaponsLocal::LauncherCap(*this));
+				Ammo->Reserve += LauncherRules::CapReserveToAdd(Ammo->Clip, Ammo->Reserve, It.Value(),
+					OperativeWeaponsLocal::LauncherCap(*this), RocketsFiredThisRound);
 			}
 			else
 			{
@@ -259,16 +262,17 @@ void AOperativeCharacter::AddAmmo(const FString& WeaponId, int32 Count)
 		const int32 Cap = OperativeWeaponsLocal::LauncherCap(*this);
 		if (CurrentWeapon && CurrentWeapon->WeaponId == WeaponId)
 		{
-			ReserveAmmo += LauncherRules::CapReserveToAdd(CurrentClip, ReserveAmmo, Count, Cap);
+			ReserveAmmo += LauncherRules::CapReserveToAdd(CurrentClip, ReserveAmmo, Count, Cap, RocketsFiredThisRound);
 		}
 		else if (FWeaponAmmoState* Ammo = AmmoInventory.Find(WeaponId))
 		{
-			Ammo->Reserve += LauncherRules::CapReserveToAdd(Ammo->Clip, Ammo->Reserve, Count, Cap);
+			Ammo->Reserve += LauncherRules::CapReserveToAdd(Ammo->Clip, Ammo->Reserve, Count, Cap, RocketsFiredThisRound);
 		}
 		else
 		{
 			int32& Extra = ExtraAmmo.FindOrAdd(FName(*WeaponId));
-			Extra = FMath::Clamp(Extra + Count, 0, Cap);
+			const int32 Budget = FMath::Max(0, Cap - RocketsFiredThisRound);
+			Extra = FMath::Clamp(Extra + Count, 0, Budget);
 		}
 		return;
 	}
