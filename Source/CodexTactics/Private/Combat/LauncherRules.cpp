@@ -47,4 +47,23 @@ namespace LauncherRules
 		default: return FString();
 		}
 	}
+
+	FLauncherAmmoCap CapAmmo(int32 Clip, int32 Reserve, int32 MaxRockets, int32 FiredThisRound)
+	{
+		const int32 Budget = FMath::Max(0, FMath::Max(0, MaxRockets) - FMath::Max(0, FiredThisRound));
+		const int32 ClampedClip = FMath::Clamp(Clip, 0, Budget);
+		const int32 ClampedReserve = FMath::Clamp(Reserve, 0, FMath::Max(0, Budget - ClampedClip));
+		return { ClampedClip, ClampedReserve };
+	}
+
+	int32 CapReserveToAdd(int32 CurrentClip, int32 CurrentReserve, int32 AddCount, int32 MaxRockets, int32 FiredThisRound)
+	{
+		if (AddCount <= 0)
+		{
+			return 0;
+		}
+		const int32 Budget = FMath::Max(0, FMath::Max(0, MaxRockets) - FMath::Max(0, FiredThisRound));
+		const int32 Have = FMath::Max(0, CurrentClip) + FMath::Max(0, CurrentReserve);
+		return FMath::Clamp(AddCount, 0, FMath::Max(0, Budget - Have));
+	}
 }

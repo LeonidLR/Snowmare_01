@@ -44,6 +44,13 @@ bool FSidearmRulesTest::RunTest(const FString&)
 	TestTrue(TEXT("... at 3 s"), ShouldReturnToPrimary(Config, true, 3.f, false));
 	TestTrue(TEXT("... at once when the pistol is dry"), ShouldReturnToPrimary(Config, true, 0.f, true));
 	TestFalse(TEXT("... never for a pistol the player chose"), ShouldReturnToPrimary(Config, false, 10.f, true));
+
+	// Shotgun <-> M16 range switch with hysteresis (<= 12 m shotgun, > 15 m rifle, 12..15 m keep).
+	TestTrue(TEXT("m16 at 12 m -> shotgun"), ChooseShotgunOrRifle(Config, 1200.f, true, true, TEXT("m16")) == EShotgunRifleSwitch::SwitchToShotgun);
+	TestTrue(TEXT("m16 at 13 m -> keep m16"), ChooseShotgunOrRifle(Config, 1300.f, true, true, TEXT("m16")) == EShotgunRifleSwitch::Keep);
+	TestTrue(TEXT("shotgun at 14 m (hysteresis) -> keep shotgun"), ChooseShotgunOrRifle(Config, 1400.f, true, true, TEXT("shotgun")) == EShotgunRifleSwitch::Keep);
+	TestTrue(TEXT("shotgun at 16 m -> m16"), ChooseShotgunOrRifle(Config, 1600.f, true, true, TEXT("shotgun")) == EShotgunRifleSwitch::SwitchToRifle);
+	TestTrue(TEXT("player picked weapon -> keep"), ChooseShotgunOrRifle(Config, 3000.f, true, true, TEXT("shotgun"), true) == EShotgunRifleSwitch::Keep);
 	// Parse: values, a bad value kept at the default.
 	const TSharedRef<FJsonObject> Block = MakeShared<FJsonObject>();
 	Block->SetBoolField(TEXT("enabled"), true);

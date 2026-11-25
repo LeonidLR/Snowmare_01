@@ -1195,6 +1195,8 @@ public:
 	bool TryDrawSidearm();
 	/** The sidearm drawn by the rule goes back to the primary (which then reloads) after the holster time without a target / when dry. */
 	void UpdateSidearmReturn(float DeltaTime);
+	/** Auto-switches between shotgun (<= 12 m) and m16 (> 15 m) with hysteresis unless the player picked a weapon. */
+	void UpdateShotgunRifleChoice();
 	/** He holds the sidearm the rule drew (not a weapon the player chose). */
 	bool IsSidearmDrawnByRule() const { return bSidearmDrawnByRule; }
 	/** Sidearm draws by the rule since spawn (for the smokes). */
@@ -3507,6 +3509,9 @@ public:
 	ELauncherRefusal GetLastLauncherRefusal() const { return LastLauncherRefusal; }
 	int32 GetLauncherShots() const { return LauncherShots; }
 	int32 GetLauncherRefusals() const { return LauncherRefusals; }
+	int32 GetRocketsFiredThisRound() const { return RocketsFiredThisRound; }
+	void ResetLauncherRoundCounter() { RocketsFiredThisRound = 0; }
+	void NoteRocketFiredForTesting() { ++RocketsFiredThisRound; }
 
 	/**
 	 * The loaded rocket on the tube (the weapon's "visual.loaded_round_mesh", 2026-11-09): shown while a round is in the tube, hidden from the shot,
@@ -3554,6 +3559,7 @@ private:
 	ELauncherRefusal LastLauncherRefusal = ELauncherRefusal::None;
 	int32 LauncherShots = 0;
 	int32 LauncherRefusals = 0;
+	int32 RocketsFiredThisRound = 0;
 	double LauncherLastWarningTime = -100.0;
 
 public:

@@ -185,7 +185,7 @@ bool FWeaponLoadoutProjectTest::RunTest(const FString&)
 	TestEqual(TEXT("three roles"), WeaponTuning::GetLastReport().Loadouts, 3);
 	TArray<FString> Engineer;
 	TestTrue(TEXT("engineer listed"), WeaponLoadoutRules::Find(TEXT("engineer"), Engineer));
-	TestTrue(TEXT("engineer: shotgun, pistol, grenade"), Engineer == TArray<FString>({ TEXT("shotgun"), TEXT("pistol"), TEXT("grenade") }));
+	TestTrue(TEXT("engineer: shotgun, m16, pistol, grenade"), Engineer == TArray<FString>({ TEXT("shotgun"), TEXT("m16"), TEXT("pistol"), TEXT("grenade") }));
 	TArray<FString> Commander;
 	// The RPG-7 (the game designer 2026-11-09: only the Commander in our squad): his second weapon, the selector X cycles to it.
 	TestTrue(TEXT("commander: m16, rpg7 (the designer), pistol, grenade"), WeaponLoadoutRules::Find(TEXT("commander"), Commander)

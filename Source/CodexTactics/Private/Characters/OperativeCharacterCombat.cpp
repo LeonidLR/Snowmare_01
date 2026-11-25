@@ -839,6 +839,10 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 	}
 
 	// Raging: a random enemy in reach is sprayed (Godot rage_comp.get_chaotic_target, cover 1).
+	if (bAutoFire && !bRaging)
+	{
+		UpdateShotgunRifleChoice();
+	}
 	FShootCandidate Shot;
 	if (AActor* Chaotic = bRaging ? RageComponent->GetChaoticTarget() : nullptr)
 	{

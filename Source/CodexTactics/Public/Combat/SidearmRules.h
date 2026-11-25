@@ -30,6 +30,16 @@ struct CODEXTACTICS_API FSidearmConfig
 	 * CornerHoldSmoke: the corner man drew the pistol instead of ducking back to reload).
 	 */
 	bool bReloadInCover = true;
+	/** Engineer / dual-carrier auto switch: shotgun at <= ShotgunSwitchRangeM, rifle past ShotgunSwitchBackRangeM (hysteresis). */
+	float ShotgunSwitchRangeM = 12.f;
+	float ShotgunSwitchBackRangeM = 15.f;
+};
+
+enum class EShotgunRifleSwitch : uint8
+{
+	Keep,
+	SwitchToShotgun,
+	SwitchToRifle
 };
 
 namespace SidearmRules
@@ -52,4 +62,8 @@ namespace SidearmRules
 
 	/** Back to the primary? The sidearm was drawn by the rule and either no target for HolsterAfterSeconds or the sidearm is dry. */
 	CODEXTACTICS_API bool ShouldReturnToPrimary(const FSidearmConfig& Config, bool bDrawnByRule, float SecondsWithoutTarget, bool bSidearmDry);
+
+	/** Auto choice between shotgun (<= ShotgunSwitchRangeM) and rifle (> ShotgunSwitchBackRangeM) with hysteresis. */
+	CODEXTACTICS_API EShotgunRifleSwitch ChooseShotgunOrRifle(const FSidearmConfig& Config, float NearestEnemyCm, bool bHasShotgun, bool bHasRifle,
+		const FString& CurrentWeaponId, bool bPlayerPicked = false);
 }
