@@ -19,3 +19,14 @@ Designer: "the look-fix (Shift-click) mechanic is one of the best we made - poli
 Tests: unit tests for side choice / yaw clamp / reset rule; screenshots both sides stand + crouch. CoverIndoorSmoke, FormationWallHugSmoke,
 MantleSmoke paths PASS. BUILD ONLY ON THE WORKER, foreground, PROGRESS lines. Branch grok/G025-look-polish from origin/main.
 Report docs/port/grok/outbox/G025-look-polish.report.md + "G025 FINISH | ...". Never push.
+
+CLARIFIED BY THE DESIGNER (11-25, read this as the spec for part 2):
+- A plain click on the corner-peek silhouette -> the CURRENT pose (he peeks straight ahead), unchanged.
+- AFTER that, Shift-clicks that move the look point -> switch to the CoverIndoor pack animation and drive its aim offset with BOTH yaw and
+  PITCH: right-up, right-down, left-up, left-down are different poses (the AO blend space axes). Look at a window above -> torso / arms
+  aim up; at the ground nearby -> down. Back to the plain pose only on a new plain click / leaving the corner.
+4. FORMATION SCAN PITCH: while the squad moves in formation the operatives scan only left-right (yaw). Add vertical scanning: when a scan
+   target is a window / roof edge / higher floor in range, the head / torso aim offset also pitches up (and down for a lower level), within
+   the AO range; plain ground scans stay level. Find the formation scan code (sector / wall scan look targets) and the AnimInstance AO pitch
+   input. Smoke or a scripted check: formation walk past an X6 building -> recorded AO pitch > +10 deg at least once toward its upper
+   windows, ~0 on open ground. Screenshot in the report.
