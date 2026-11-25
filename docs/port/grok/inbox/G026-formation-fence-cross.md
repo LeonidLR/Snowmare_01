@@ -20,3 +20,9 @@ even knock him down AFTER landing - never cancel the traversal and teleport him 
 suppression / panic / cover-reaction order interrupting the mantle montage, root-motion / warp target reset, an abort that restores the
 start transform). Smoke: operative vaulting an X6 fence takes 3 hits at 30 %, 60 %, 90 % of the clip -> ends on the far side, never
 moved back toward the start by > 20 cm. Unit test for the "traversal is not interruptible" rule.
+
+ADDED 2 (designer 11-25): FORMATION COVER AT A FENCE - squad in formation, crouch silhouette at the fence, double click: the first operative
+runs to his slot and STANDS there waiting until the others arrive, then crouches. Expected: every operative crouches into his low-cover slot
+the moment HE arrives (no waiting for the group; the group cover / wall-sector logic may still assign slots). Find the "wait for the
+squad" gate (group cover arrival, formation hold, settle check). Smoke: 3 in formation, group cover order at an X6 fence -> each one's
+stance is crouched within 0.5 s of his own arrival.
