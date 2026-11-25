@@ -61,6 +61,10 @@ struct CODEXTACTICS_API FDeathRagdollConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Ragdoll", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float RootLaunchSpeedFraction = 0.75f;
 
+	/** Designer 2026-11-25: a fighter killed while lying (prone / knocked down) is not thrown back - the launch is scaled by this. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Ragdoll", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float ProneImpulseScale = 0.15f;
+
 	/**
 	 * Seconds after death during which every body's linear speed (3D) is held under the launch speed limit: the launch flight.
 	 * 1.5 s (067, measured): with 0.6 s a blast target's hand reached 901 cm/s at 0.66 s on landing; the whole simulation

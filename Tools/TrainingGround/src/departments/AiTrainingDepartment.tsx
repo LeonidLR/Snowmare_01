@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { LayoutView } from './LayoutView';
 import { planTransform, toScreen } from '../levelgen/planView';
 import { X6 } from '../aiTraining/trainingTypes';
-import type { TrainingData, TrainingMapId, TrainingSector, TrainingSelection } from '../aiTraining/trainingTypes';
+import type { SectorFightRow, SectorFightStats, TrainingData, TrainingMapId, TrainingSector, TrainingSelection } from '../aiTraining/trainingTypes';
 
 const API = '/api/ai-training';
 const panel = 'rounded-xl border border-slate-800 bg-slate-900/70';
@@ -114,6 +114,74 @@ function HowtoMemo({ markdown }: { markdown: string }) {
           }
           return <p key={index} className="leading-relaxed text-slate-300">{renderInlineMarkdown(line)}</p>;
         })}
+      </div>
+    </section>
+  );
+}
+
+function SectorStatsTable({ stats, selectedSector, onSelectSector }: {
+  stats: SectorFightStats;
+  selectedSector: number;
+  onSelectSector: (sector: number) => void;
+}) {
+  const formatDate = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('ru-RU') : '—';
+  const renderRow = (row: SectorFightRow, kind: 'sector' | 'noSector' | 'total') => {
+    const isFewest = Boolean(row.fewest);
+    const isSelected = row.sector !== null && row.sector === selectedSector;
+    return (
+      <tr key={row.label}
+        onClick={row.sector !== null ? () => onSelectSector(row.sector!) : undefined}
+        className={
+          (kind === 'total' ? 'border-t-2 border-slate-700 font-semibold text-slate-100 bg-slate-950/60 ' : 'border-t border-slate-800/80 ')
+          + (isFewest ? 'bg-amber-950/35 ' : '')
+          + (isSelected ? 'ring-1 ring-inset ring-cyan-400/70 ' : '')
+          + (row.sector !== null ? 'cursor-pointer hover:bg-slate-800/50' : '')
+        }>
+        <td className="px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>{row.label}</span>
+            {isFewest && (
+              <span className="rounded bg-amber-400/20 px-1.5 py-0.5 text-[11px] font-semibold text-amber-300 ring-1 ring-amber-400/40">
+                сыграйте сюда
+              </span>
+            )}
+          </div>
+        </td>
+        <td className="px-3 py-2 text-right tabular-nums">{row.sessions}</td>
+        <td className="px-3 py-2 text-right tabular-nums font-medium">{row.rounds}</td>
+        <td className="px-3 py-2 text-right tabular-nums text-slate-300">
+          {row.wins} / {row.losses} / {row.draws}
+        </td>
+        <td className="px-3 py-2 text-right tabular-nums">{row.minutes.toFixed(1)}</td>
+        <td className="px-3 py-2 text-right tabular-nums text-slate-400">{formatDate(row.lastPlayed)}</td>
+      </tr>
+    );
+  };
+
+  return (
+    <section className={panel + ' mt-4 p-4'} aria-label="Статистика боёв по секторам X6">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-bold text-slate-50">Сыгранные бои по секторам X6</h2>
+        <span className="text-xs text-slate-400">Saved/Demos/*.jsonl (L_Gen_Depot_1_X6)</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-left text-xs text-slate-200">
+          <thead>
+            <tr className="border-b border-slate-800 text-[11px] uppercase tracking-wide text-slate-400">
+              <th className="px-3 py-2">Сектор</th>
+              <th className="px-3 py-2 text-right">Сессии</th>
+              <th className="px-3 py-2 text-right">Раунды</th>
+              <th className="px-3 py-2 text-right">П / Пр / Н</th>
+              <th className="px-3 py-2 text-right">Минуты</th>
+              <th className="px-3 py-2 text-right">Последняя игра</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stats.sectors.map((row) => renderRow(row, 'sector'))}
+            {stats.noSector.sessions > 0 && renderRow(stats.noSector, 'noSector')}
+            {renderRow(stats.total, 'total')}
+          </tbody>
+        </table>
       </div>
     </section>
   );
@@ -281,6 +349,7 @@ export function AiTrainingDepartment() {
           </section>
         </aside>
       </div>
+      {data.sectorStats && <SectorStatsTable stats={data.sectorStats} selectedSector={draft.sector} onSelectSector={choose} />}
     </main>
   );
 }

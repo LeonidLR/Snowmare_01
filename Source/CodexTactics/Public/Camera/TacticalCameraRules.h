@@ -158,6 +158,9 @@ struct CODEXTACTICS_API FTacticalCameraConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pan", meta = (ClampMin = "0"))
 	float EdgeScrollMargin = 30.f;
 
+	/** Designer 2026-11-25: the cursor must stay at a screen edge this long before the edge pan starts (no pan on a passing cursor). */
+	float EdgeScrollDelaySeconds = 2.0f;
+
 	/** Reference distance for drag-pan scaling, cm (Godot base camera distance). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pan", meta = (ClampMin = "1"))
 	float BaseDistance = 2610.f;

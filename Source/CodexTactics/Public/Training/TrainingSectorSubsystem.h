@@ -40,6 +40,7 @@ public:
 
 	FVector PlacePlayer(const FVector& Feet, double HalfHeight) const;
 	void MovePlayersToSector(bool bOnlyOutside) const;
+	void RecordShot(const class AOperativeCharacter& Shooter, const AActor* Target, bool bHit);
 
 private:
 	struct FSectorFighterWatch
@@ -68,6 +69,10 @@ private:
 	int32 ScoreDraw = 0;
 	int32 RoundKillsPlayer = 0;
 	int32 RoundKillsPmc = 0;
+	int32 RoundShotsPlayer[4]{};
+	int32 RoundHitsPlayer[4]{};
+	int32 RoundShotsPmc[4]{};
+	int32 RoundHitsPmc[4]{};
 	double RoundStartedAt = 0.0;
 	double IntermissionUntil = 0.0;
 	double BannerUntil = -1.0;

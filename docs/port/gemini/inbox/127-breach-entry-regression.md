@@ -1,4 +1,4 @@
-# Gemini 127 (router first; Carbon for the final fix check) - door breach ENTRY regressed: the squad clumps instead of clearing corners (designer 2026-11-25) - right after 125
+# Gemini 127 (router first; Neon reviews the Hydrogen diff before FINISH) - door breach ENTRY regressed: the squad clumps instead of clearing corners (designer 2026-11-25) - right after 125
 
 Designer: in formation the squad stacks at the door correctly. Then "enter" (click inside): it USED to work - #1 enters and clears the
 RIGHT corner, #2 clears the LEFT corner, #3 enters the middle. NOW they clump into a pile and walk in together. "The mechanic was

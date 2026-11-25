@@ -11,6 +11,7 @@
   "max_launch_speed_cm_s": 600.0,
   "max_launch_speed_explosive_cm_s": 900.0,
   "root_launch_speed_fraction": 0.75,
+  "prone_impulse_scale": 0.15,
   "launch_clamp_window_s": 1.5,
   "max_angular_speed_rad_s": 10.0,
   "reference_body_mass_kg": 80.0,
@@ -44,5 +45,11 @@
       "bAllowRagdoll": false,
       "fallback_mode": "ExplodeFX"
     }
+  },
+  "corpse_loot": {
+    "ammo_mag_min_fraction": 0.2,
+    "ammo_mag_max_fraction": 0.6,
+    "medkit_chance": 0.1,
+    "grenade_chance": 0.05
   }
 }

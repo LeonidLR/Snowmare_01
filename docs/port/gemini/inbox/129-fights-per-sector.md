@@ -8,5 +8,5 @@ Show in the tab a small table per sector 1..6 for X6 (L_Gen_Depot_1_X6): session
 last played date; a row "всего"; highlight the sector with the FEWEST rounds ("сыграйте сюда"). Read the files on each tab open (cache by
 file mtime); a truncated / bad line must not break the table. Only the footer + header + round_end lines are needed - do not parse snaps.
 Test: node --test --test-concurrency=2 on the new test file only, with fixture jsonl files (complete, aborted, no-sector, truncated).
-Dev server check on --port 5180+ and STOP it afterwards. Router first; Carbon self-review before FINISH.
+Dev server check on --port 5180+ and STOP it afterwards. Router first; Neon review of the Hydrogen diff before FINISH.
 Report docs/port/gemini/outbox/129-fights-per-sector.report.md + "129 FINISH | ...". Never push.

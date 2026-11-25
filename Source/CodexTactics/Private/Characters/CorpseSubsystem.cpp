@@ -260,7 +260,13 @@ bool UCorpseSubsystem::TryActivateDeathRagdoll(
 	// The bodies start with the animation's bone velocities (a hound's running forearm: 702 cm/s in the frame of death): clamp first.
 	CorpseTuning::ClampRagdollBodySpeeds(Mesh, MaxLaunchSpeed);
 	const FVector InitialVel = Mesh->GetPhysicsLinearVelocity(PelvisBone);
-	const FVector DeltaV = FDeathRagdollRules::ClampLaunchVelocityChange(InitialVel, Impulse / EffectiveMass, RootSpeedLimit);
+	FVector DeltaV = FDeathRagdollRules::ClampLaunchVelocityChange(InitialVel, Impulse / EffectiveMass, RootSpeedLimit);
+	// Designer 2026-11-25: lying on the ground (prone / knocked down) -> no backward flight.
+	if (const AOperativeCharacter* Op = Cast<AOperativeCharacter>(Character);
+		Op && (Op->GetStance() == EOperativeStance::Prone || Op->IsKnockedDown()))
+	{
+		DeltaV *= RagdollConfig.ProneImpulseScale;
+	}
 
 	// Cap angular velocity to prevent high-speed rotational limb whip
 	for (FBodyInstance* BodyInst : Mesh->Bodies)

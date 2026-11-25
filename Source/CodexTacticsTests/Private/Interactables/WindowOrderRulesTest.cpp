@@ -75,9 +75,74 @@ bool FWindowOrderFileTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("solo_run_in_fight_windows"), File.bSoloRunInFightWindows, Code.bSoloRunInFightWindows);
 	TestEqual(TEXT("formation_run_in_fight_windows"), File.bFormationRunInFightWindows, Code.bFormationRunInFightWindows);
 	TestEqual(TEXT("formation_follow_broken_only"), File.bFormationFollowBrokenOnly, Code.bFormationFollowBrokenOnly);
+	TestTrue(TEXT("approach_past_cm"), FMath::IsNearlyEqual(File.ApproachPastCm, Code.ApproachPastCm));
+	TestTrue(TEXT("landing_past_cm"), FMath::IsNearlyEqual(File.LandingPastCm, Code.LandingPastCm));
+	TestTrue(TEXT("approach_match_cm"), FMath::IsNearlyEqual(File.ApproachMatchCm, Code.ApproachMatchCm));
+	TestTrue(TEXT("approach_arrive_cm"), FMath::IsNearlyEqual(File.ApproachArriveCm, Code.ApproachArriveCm));
 	const FWindowOrderTuning Flipped = WindowOrderRules::Parse(TEXT("{\"formation_follow_broken_only\": 0}"));
 	TestFalse(TEXT("a 0 in the file switches it off"), Flipped.bFormationFollowBrokenOnly);
 	TestTrue(TEXT("missing keys keep the defaults"), Flipped.bSoloGroupCombatWindows);
+	TestTrue(TEXT("missing distances keep the defaults"), FMath::IsNearlyEqual(Flipped.ApproachPastCm, Code.ApproachPastCm));
+	const FWindowOrderTuning Near = WindowOrderRules::Parse(TEXT("{\"approach_past_cm\": 40}"));
+	TestTrue(TEXT("approach_past_cm is read"), FMath::IsNearlyEqual(Near.ApproachPastCm, 40.f));
+	TestTrue(TEXT("the other distance stays"), FMath::IsNearlyEqual(Near.LandingPastCm, Code.LandingPastCm));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWindowOrderSideTest, "CodexTactics.Interactables.WindowOrder.SideIsTheOperatives",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWindowOrderSideTest::RunTest(const FString& Parameters)
+{
+	const FVector Forward(1.f, 0.f, 0.f);
+	const FVector Right(0.f, 1.f, 0.f);
+	const FVector Center(0.f, 0.f, 10.f);
+	{
+		const FWindowSideChoice Choice = WindowOrderRules::ChooseSide(FVector(0.f, 200.f, 90.f), Center, Forward, Right, 150.f, 30.f, 80.f, 120.f);
+		TestTrue(TEXT("long forward: the thin axis is +Right, not the mesh forward"), FVector::DotProduct(Choice.Through, Right) > 0.99f);
+		TestTrue(TEXT("approach stays on the wall centre along the wall"), FMath::IsNearlyEqual(Choice.Approach.X, Center.X, 0.1f));
+		TestTrue(TEXT("approach is on his +Right side"), Choice.Approach.Y > Center.Y + 80.f);
+		TestTrue(TEXT("landing is on the other side"), Choice.Landing.Y < Center.Y - 100.f);
+		const FVector Facing = FRotator(0.f, Choice.Yaw, 0.f).Vector();
+		TestTrue(TEXT("yaw faces the landing"), FVector::DotProduct(Facing, (Choice.Landing - Choice.Approach).GetSafeNormal2D()) > 0.99f);
+	}
+	{
+		const FWindowSideChoice Choice = WindowOrderRules::ChooseSide(FVector(0.f, -200.f, 90.f), Center, Forward, Right, 150.f, 30.f, 80.f, 120.f);
+		TestTrue(TEXT("the other side flips the approach onto -Right"), Choice.Approach.Y < Center.Y - 80.f);
+		TestTrue(TEXT("and the landing onto +Right"), Choice.Landing.Y > Center.Y + 100.f);
+	}
+	{
+		const FWindowSideChoice Choice = WindowOrderRules::ChooseSide(FVector(-200.f, 50.f, 90.f), Center, Forward, Right, 30.f, 150.f, 80.f, 120.f);
+		TestTrue(TEXT("thin forward: through is -or +forward, not the long right"), FVector::DotProduct(Choice.Through, Forward) > 0.99f);
+		TestTrue(TEXT("approach is on his -forward side"), Choice.Approach.X < Center.X - 80.f);
+		TestTrue(TEXT("landing is on +forward"), Choice.Landing.X > Center.X + 100.f);
+		TestTrue(TEXT("his along-wall offset is not copied"), FMath::IsNearlyEqual(Choice.Approach.Y, Center.Y, 0.1f));
+		TestTrue(TEXT("Z is his feet"), FMath::IsNearlyEqual(Choice.Approach.Z, 90.f, 0.1f));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWindowOrderQueueTest, "CodexTactics.Interactables.WindowOrder.QueueFollowsTheLeaderThrough",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWindowOrderQueueTest::RunTest(const FString& Parameters)
+{
+	const FVector Approach(80.f, 0.f, 10.f);
+	const FVector Landing(-120.f, 0.f, 10.f);
+	TestFalse(TEXT("the leader still on the near side: the column waits"), WindowOrderRules::QueueThroughWindow(Approach, Landing, Approach, 0, 150.f).IsSet());
+	TestFalse(TEXT("the leader on the plane: still waiting"), WindowOrderRules::QueueThroughWindow(Approach, Landing, (Approach + Landing) * 0.5f, 0, 150.f).IsSet());
+	const TOptional<FVector> First = WindowOrderRules::QueueThroughWindow(Approach, Landing, Landing, 0, 150.f);
+	const TOptional<FVector> Second = WindowOrderRules::QueueThroughWindow(Approach, Landing, Landing, 1, 150.f);
+	TestTrue(TEXT("the leader on the far side: the first follower has a place"), First.IsSet());
+	TestTrue(TEXT("and the second"), Second.IsSet());
+	if (First.IsSet() && Second.IsSet())
+	{
+		const FVector Through = (Landing - Approach).GetSafeNormal2D();
+		TestTrue(TEXT("the first place is past the landing, inside"), FVector::DotProduct(*First - Landing, Through) > 140.f);
+		TestTrue(TEXT("the second is further in, the queue"), FVector::DotProduct(*Second - *First, Through) > 140.f);
+		TestTrue(TEXT("Z stays the landing"), FMath::IsNearlyEqual(First->Z, Landing.Z, 0.1f));
+	}
+	TestFalse(TEXT("a bad rank waits"), WindowOrderRules::QueueThroughWindow(Approach, Landing, Landing, -1, 150.f).IsSet());
 	return true;
 }
 

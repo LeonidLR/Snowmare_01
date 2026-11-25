@@ -15,6 +15,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
+#include "Interactables/LootCrateActor.h"
 #include "Misc/CommandLine.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
@@ -451,6 +452,10 @@ void UTrainingSectorSubsystem::BeginFight(int32 Seed)
 	ScoreDraw = 0;
 	RoundKillsPlayer = 0;
 	RoundKillsPmc = 0;
+	FMemory::Memzero(RoundShotsPlayer);
+	FMemory::Memzero(RoundHitsPlayer);
+	FMemory::Memzero(RoundShotsPmc);
+	FMemory::Memzero(RoundHitsPmc);
 	Banner.Empty();
 	BannerUntil = -1.0;
 	RoundStartedAt = 0.0;
@@ -564,6 +569,10 @@ void UTrainingSectorSubsystem::TryStartRound(double Now)
 	RespawnGraceUntil = (RoundNumber > 1 && Fight.RespawnGraceS > 0.f) ? (Now + Fight.RespawnGraceS) : -1.0;
 	RoundKillsPlayer = 0;
 	RoundKillsPmc = 0;
+	FMemory::Memzero(RoundShotsPlayer);
+	FMemory::Memzero(RoundHitsPlayer);
+	FMemory::Memzero(RoundShotsPmc);
+	FMemory::Memzero(RoundHitsPmc);
 	Watched.Reset();
 	Phase = ESectorRoundPhase::Fighting;
 	NoteKills();
@@ -666,8 +675,13 @@ void UTrainingSectorSubsystem::TickFighting(double Now)
 	Phase = ESectorRoundPhase::Intermission;
 	IntermissionUntil = Now + Fight.RoundRestartDelayS;
 	RecordRound(false, Result, Now - RoundStartedAt);
-	UE_LOG(LogCodexTactics, Display, TEXT("[TrainingSector] Round %d end %s kills %d/%d restart in %.1f s"), RoundNumber,
-		TrainingSectorRules::RoundEndName(Result), RoundKillsPlayer, RoundKillsPmc, Fight.RoundRestartDelayS);
+	UE_LOG(LogCodexTactics, Display, TEXT("[TrainingSector] Round %d end %s kills %d/%d playerShots=%d+%d+%d+%d(%d+%d+%d+%d) pmcShots=%d+%d+%d+%d(%d+%d+%d+%d) restart in %.1f s"),
+		RoundNumber, TrainingSectorRules::RoundEndName(Result), RoundKillsPlayer, RoundKillsPmc,
+		RoundShotsPlayer[0], RoundShotsPlayer[1], RoundShotsPlayer[2], RoundShotsPlayer[3],
+		RoundHitsPlayer[0], RoundHitsPlayer[1], RoundHitsPlayer[2], RoundHitsPlayer[3],
+		RoundShotsPmc[0], RoundShotsPmc[1], RoundShotsPmc[2], RoundShotsPmc[3],
+		RoundHitsPmc[0], RoundHitsPmc[1], RoundHitsPmc[2], RoundHitsPmc[3],
+		Fight.RoundRestartDelayS);
 }
 
 void UTrainingSectorSubsystem::TickIntermission(double Now)
@@ -713,6 +727,21 @@ bool UTrainingSectorSubsystem::RespawnRound()
 			if (Op && !Op->IsActorBeingDestroyed())
 			{
 				Op->Destroy();
+			}
+		}
+		TArray<ALootCrateActor*> StaleCorpseLoot;
+		for (TActorIterator<ALootCrateActor> It(World); It; ++It)
+		{
+			if (*It && It->ActorHasTag(TEXT("CorpseLoot")))
+			{
+				StaleCorpseLoot.Add(*It);
+			}
+		}
+		for (ALootCrateActor* Crate : StaleCorpseLoot)
+		{
+			if (Crate && !Crate->IsActorBeingDestroyed())
+			{
+				Crate->Destroy();
 			}
 		}
 		Encounters->RestartSchedule();
@@ -833,6 +862,26 @@ void UTrainingSectorSubsystem::RefillReserves(double Now)
 	}
 }
 
+void UTrainingSectorSubsystem::RecordShot(const AOperativeCharacter& Shooter, const AActor* Target, bool bHit)
+{
+	if (Phase != ESectorRoundPhase::Fighting || !Target)
+	{
+		return;
+	}
+	const float DistM = static_cast<float>(FVector::Dist2D(Shooter.GetActorLocation(), Target->GetActorLocation())) / 100.f;
+	const int32 Bucket = FDemoRoundEvent::BucketForDistanceM(DistM);
+	if (Shooter.IsPlayerTeam())
+	{
+		++RoundShotsPlayer[Bucket];
+		if (bHit) { ++RoundHitsPlayer[Bucket]; }
+	}
+	else
+	{
+		++RoundShotsPmc[Bucket];
+		if (bHit) { ++RoundHitsPmc[Bucket]; }
+	}
+}
+
 void UTrainingSectorSubsystem::RecordRound(bool bStart, ESectorRoundEnd Result, double Duration) const
 {
 	USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this);
@@ -849,6 +898,10 @@ void UTrainingSectorSubsystem::RecordRound(bool bStart, ESectorRoundEnd Result, 
 	Event.PostIndex = CurrentPair.PostIndex;
 	Event.KillsPlayer = RoundKillsPlayer;
 	Event.KillsPmc = RoundKillsPmc;
+	FMemory::Memcpy(Event.ShotsPlayer, RoundShotsPlayer, sizeof(RoundShotsPlayer));
+	FMemory::Memcpy(Event.HitsPlayer, RoundHitsPlayer, sizeof(RoundHitsPlayer));
+	FMemory::Memcpy(Event.ShotsPmc, RoundShotsPmc, sizeof(RoundShotsPmc));
+	FMemory::Memcpy(Event.HitsPmc, RoundHitsPmc, sizeof(RoundHitsPmc));
 	Event.ScoreVictory = ScoreVictory;
 	Event.ScoreDefeat = ScoreDefeat;
 	Event.ScoreDraw = ScoreDraw;

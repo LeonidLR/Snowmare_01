@@ -18,3 +18,7 @@ Observed PMC behaviour (good, keep): they tried the tunnel under the bridges and
 
 Uses: G025 scan pitch (1), 121 tagger events (fallback_to_cover_after_contact, high_ground, distract_and_flank; add: prone_then_crawl_to_cover,
 first_in_cover_overwatch, flank_into_rear, unwatched_flank_seconds), PMC commander / squad orders, trainer reward terms (later).
+7. LURE INTO THE OPEN + SNIPER (designer 11-25, needs the player sniper rifle - planned NEXT WEEK, week of 2026-11-30): one or two fighters
+   draw the enemy (fall back / back off / run), the enemy follows into open ground, a sniper on a distant (high) position kills them.
+   Also the counter-weight to the PMC sniper. Tagger: lure_then_snipe (ally retreats while engaged, enemy advances > N m into open ground,
+   a long-range kill from a different ally within T s).

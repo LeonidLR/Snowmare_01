@@ -183,6 +183,15 @@ public:
 	/** A fallen operative's remains (BindRemainsBody). */
 	bool IsRemains() const { return bRemains; }
 
+	/** Configures this remains container as a hostile PMC corpse with one-time randomized loot for the searcher. */
+	void ConfigureHostileRemains(TArray<FString> BodyWeaponIds, TMap<FString, int32> ClipSizesByWeapon, int32 Seed);
+	bool IsHostileRemains() const { return bHostileRemains; }
+	bool IsRemainsSearched() const { return bRemainsSearched; }
+
+	/** Subtle Fresnel rim highlight on RemainsBody while hovered by the cursor. */
+	void SetRemainsHovered(bool bHovered);
+	bool IsRemainsHovered() const { return bRemainsHovered; }
+
 	/** The fallen operative's name (empty for a supply crate). */
 	const FText& GetRemainsOwnerName() const { return RemainsOwnerName; }
 
@@ -228,8 +237,21 @@ private:
 
 	/** Refit tick of the remains' box while the death clip settles. */
 	void TickRemainsFit();
+	void RollHostileLootForSearcher(const AOperativeCharacter* Searcher);
 
 	bool bRemains = false;
+	bool bHostileRemains = false;
+	bool bRemainsSearched = false;
+	bool bHostileLootRolled = false;
+	TArray<FString> HostileBodyWeapons;
+	TMap<FString, int32> HostileBodyClipSizes;
+	int32 HostileLootSeed = 0;
+
+	bool bRemainsHovered = false;
+	UPROPERTY(Transient)
+	TObjectPtr<class UMaterialInstanceDynamic> RemainsHoverOverlay;
+	TWeakObjectPtr<class UMaterialInterface> PreviousRemainsOverlay;
+
 	FText RemainsOwnerName;
 	TWeakObjectPtr<USkeletalMeshComponent> RemainsBody;
 	FTimerHandle RemainsFitTimer;

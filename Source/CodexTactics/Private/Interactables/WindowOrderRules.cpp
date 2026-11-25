@@ -20,6 +20,15 @@ namespace WindowOrderRulesLocal
 			Out = Value != 0.0;
 		}
 	}
+
+	void ReadCm(const TSharedPtr<FJsonObject>& Json, const TCHAR* Key, float& Out)
+	{
+		double Value = 0.0;
+		if (Json->TryGetNumberField(Key, Value) && Value > 0.0)
+		{
+			Out = static_cast<float>(Value);
+		}
+	}
 }
 
 FString WindowOrderRules::FilePath()
@@ -41,6 +50,10 @@ FWindowOrderTuning WindowOrderRules::Parse(const FString& JsonText)
 	ReadFlag(Json, TEXT("solo_run_in_fight_windows"), Tuning.bSoloRunInFightWindows);
 	ReadFlag(Json, TEXT("formation_run_in_fight_windows"), Tuning.bFormationRunInFightWindows);
 	ReadFlag(Json, TEXT("formation_follow_broken_only"), Tuning.bFormationFollowBrokenOnly);
+	ReadCm(Json, TEXT("approach_past_cm"), Tuning.ApproachPastCm);
+	ReadCm(Json, TEXT("landing_past_cm"), Tuning.LandingPastCm);
+	ReadCm(Json, TEXT("approach_match_cm"), Tuning.ApproachMatchCm);
+	ReadCm(Json, TEXT("approach_arrive_cm"), Tuning.ApproachArriveCm);
 	return Tuning;
 }
 
@@ -79,4 +92,41 @@ bool WindowOrderRules::MoveOpensWindows(bool bSolo, int32 SelectedCount, int32 S
 bool WindowOrderRules::MayTakeWholeWindow(bool bWindowOrder, bool bFormationFollower, const FWindowOrderTuning& Tuning)
 {
 	return bWindowOrder && !(bFormationFollower && Tuning.bFormationFollowBrokenOnly);
+}
+
+FWindowSideChoice WindowOrderRules::ChooseSide(const FVector& OperativeLocation, const FVector& Center, const FVector& ActorForward,
+	const FVector& ActorRight, float SizeX, float SizeY, float ApproachPastCm, float LandingPastCm)
+{
+	FWindowSideChoice Choice;
+	const FVector Raw = (SizeX < SizeY ? ActorForward : ActorRight).GetSafeNormal2D();
+	Choice.Through = Raw.IsNearlyZero() ? FVector::ForwardVector : Raw;
+	const float Half = 0.5f * FMath::Min(FMath::Abs(SizeX), FMath::Abs(SizeY));
+	const float SideDot = FVector::DotProduct(FVector(OperativeLocation.X - Center.X, OperativeLocation.Y - Center.Y, 0.f), Choice.Through);
+	Choice.OperativeSide = SideDot >= 0.f ? 1.f : -1.f;
+	const float ApproachSpan = Half + FMath::Max(0.f, ApproachPastCm);
+	const float LandingSpan = Half + FMath::Max(0.f, LandingPastCm);
+	Choice.Approach = Center + Choice.Through * (Choice.OperativeSide * ApproachSpan);
+	Choice.Landing = Center - Choice.Through * (Choice.OperativeSide * LandingSpan);
+	Choice.Approach.Z = OperativeLocation.Z;
+	Choice.Landing.Z = OperativeLocation.Z;
+	Choice.Yaw = static_cast<float>((-Choice.Through * Choice.OperativeSide).Rotation().Yaw);
+	return Choice;
+}
+
+TOptional<FVector> WindowOrderRules::QueueThroughWindow(const FVector& Approach, const FVector& Landing, const FVector& LeaderLocation,
+	int32 Rank, float SpacingCm)
+{
+	const FVector Through = (Landing - Approach).GetSafeNormal2D();
+	if (Through.IsNearlyZero() || Rank < 0 || SpacingCm < 0.f)
+	{
+		return {};
+	}
+	const FVector Mid = (Approach + Landing) * 0.5f;
+	if (FVector::DotProduct(LeaderLocation - Mid, Through) <= 0.f)
+	{
+		return {};
+	}
+	FVector Place = Landing + Through * (static_cast<float>(Rank + 1) * SpacingCm);
+	Place.Z = Landing.Z;
+	return Place;
 }
