@@ -30,6 +30,7 @@
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformFileManager.h"
 #include "HAL/PlatformMisc.h"
+#include "Interactables/WindowBreakage.h"
 #include "LevelGen/BuildingWalkRules.h"
 #include "Misc/CommandLine.h"
 #include "Misc/FileHelper.h"
@@ -60,6 +61,7 @@ namespace LevelGenBuildingsSmoke
 		const TCHAR* Kind;
 		FVector Position;
 		FBox2D Bounds;
+		TOptional<FVector> Sill;
 	};
 
 	struct FBuildingFrame
@@ -212,11 +214,11 @@ namespace LevelGenBuildingsSmoke
 		TArray<FTarget> Doors;
 		FJsonObjects WalkEntrances;
 		const FJsonObjects& Openings = Array(Building, TEXT("openings"));
+		TSharedPtr<FJsonValue> QuietWindow;
 		if (bWalk)
 		{
 			FString QuietId;
 			Building.TryGetStringField(TEXT("quiet_entry"), QuietId);
-			TSharedPtr<FJsonValue> QuietWindow;
 			for (const auto& Value : Openings)
 			{
 				const FJsonObject& Opening = *Value->AsObject();
@@ -270,8 +272,13 @@ namespace LevelGenBuildingsSmoke
 			{
 				Id = FString::Printf(TEXT("door_%d"), Doors.Num() + 1);
 			}
-			Doors.Add({ Id, TEXT("door"), FVector(Frame.Rotate(Local + Normals[Edge] * DoorStandOff, Frame.Rotation),
-				GroundZ + Door.GetIntegerField(TEXT("floor")) * StoreyHeight), Box });
+			const double FloorZ = GroundZ + Door.GetIntegerField(TEXT("floor")) * StoreyHeight;
+			FTarget& Start = Doors.Add_GetRef({ Id, TEXT("door"), FVector(Frame.Rotate(Local + Normals[Edge] * DoorStandOff, Frame.Rotation), FloorZ), Box });
+			double SillHeight = 0.0;
+			if (Value == QuietWindow && Door.TryGetNumberField(TEXT("sill_height"), SillHeight))
+			{
+				Start.Sill = FVector(Point(Door, TEXT("pos")), FloorZ + SillHeight);
+			}
 		}
 		return Doors;
 	}
@@ -477,7 +484,7 @@ namespace LevelGenBuildingsSmoke
 	// Walk mode (S2.9 / P0b)
 
 	enum class ELegKind : uint8 { Walk, EntrySolo, EntrySquad };
-	enum class EWalkPhase : uint8 { Settle, Place, Wait, Run, Done };
+	enum class EWalkPhase : uint8 { Settle, Place, Wait, Window, Run, Done };
 
 	constexpr double TeleportSettleSeconds = 1.0;
 	constexpr double SoloHoldSeconds = 0.3;  // the leader within the arrival radius this long = arrived
@@ -506,6 +513,7 @@ namespace LevelGenBuildingsSmoke
 		FString Role;
 		/** Walk legs: teleport the leader to Start first (the building's first leg; after a failed leg). Entry legs always teleport. */
 		bool bFirstOfBuilding = false;
+		TOptional<FVector> Sill;
 		FVector Start = FVector::ZeroVector;
 		bool bStartOk = false;
 		FVector Goal = FVector::ZeroVector;
@@ -559,6 +567,7 @@ namespace LevelGenBuildingsSmoke
 		// The running leg
 		bool bTeleported = false;
 		double LegStart = 0.0;
+		FVector WindowExit = FVector::ZeroVector;
 		FVector LastLeaderPos = FVector::ZeroVector;
 		TArray<FBuildingWalkProgress> Progress;
 		TArray<double> OkSince;
@@ -675,6 +684,10 @@ namespace LevelGenBuildingsSmoke
 				Leg.To = Stop->Id;
 				Leg.ToKind = Stop->Kind;
 				Leg.bFirstOfBuilding = bFirst;
+				if (bFirst)
+				{
+					Leg.Sill = Doors[0].Sill;
+				}
 				Leg.Start = Start;
 				Leg.bStartOk = true;
 				FNavLocation GoalNav;
@@ -1091,6 +1104,33 @@ namespace LevelGenBuildingsSmoke
 		Walk.Phase = EWalkPhase::Wait;
 	}
 
+	bool OrderWindowEntry(FWalk& Walk, UWorld& World)
+	{
+		const FLeg& Leg = Walk.Legs[Walk.Leg];
+		AOperativeCharacter* Leader = Member(Walk, 0);
+		ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World.GetFirstPlayerController());
+		FHitResult Probe;
+		Probe.Location = Probe.ImpactPoint = Leg.Sill.GetValue();
+		Probe.bBlockingHit = true;
+		AActor* Sill = WindowBreakage::FindWindowSillAt(World, Probe);
+		float Yaw = 0.f;
+		if (!Leader || !PC || !Sill || !PC->FindWindowSillTarget(*Sill, *Leader, Walk.WindowExit, Yaw))
+		{
+			return false;
+		}
+
+		const FBox Box = Sill->GetComponentsBoundingBox(true);
+		const FVector Top(Box.GetCenter().X, Box.GetCenter().Y, Box.Max.Z);
+		FHitResult Hit(Sill, nullptr, Top, FVector::UpVector);
+		Hit.bBlockingHit = true;
+		Hit.Location = Top;
+		Hit.TraceStart = Feet(*Leader) + FVector(0.0, 0.0, 600.0);
+		PC->HandlePlayerClick(Hit);
+		Walk.PhaseStart = Now(World);
+		Walk.Phase = EWalkPhase::Window;
+		return true;
+	}
+
 	void OrderLeg(FWalk& Walk, UWorld& World)
 	{
 		FLeg& Leg = Walk.Legs[Walk.Leg];
@@ -1325,9 +1365,34 @@ namespace LevelGenBuildingsSmoke
 		case EWalkPhase::Wait:
 			if (T - Walk.PhaseStart >= (Walk.bTeleported ? TeleportSettleSeconds : 0.25))
 			{
-				OrderLeg(Walk, *World);
+				FLeg& Leg = Walk.Legs[Walk.Leg];
+				if (!Leg.Sill.IsSet())
+				{
+					OrderLeg(Walk, *World);
+				}
+				else if (!OrderWindowEntry(Walk, *World))
+				{
+					EndLeg(Walk, *World, false, TEXT("the quiet entry window has no usable sill"), Leg.Start);
+				}
 			}
 			return true;
+		case EWalkPhase::Window:
+		{
+			const AOperativeCharacter* Leader = Member(Walk, 0);
+			const FLeg& Leg = Walk.Legs[Walk.Leg];
+			const FVector At = Leader ? Feet(*Leader) : Leg.Start;
+			const FVector2D FromSill(At - Leg.Sill.GetValue());
+			const FVector2D Outside(Leg.Start - Leg.Sill.GetValue());
+			if (Leader && BuildingWalkRules::IsArrived(At, Walk.WindowExit) && FVector2D::DotProduct(FromSill, Outside) < 0.0)
+			{
+				OrderLeg(Walk, *World);
+			}
+			else if (T - Walk.PhaseStart > BuildingWalkRules::LegLimitSeconds(FVector::Dist2D(Leg.Start, Walk.WindowExit)))
+			{
+				EndLeg(Walk, *World, false, TEXT("the leader did not cross the quiet entry window"), At);
+			}
+			return true;
+		}
 		case EWalkPhase::Run:
 			RunLeg(Walk, *World);
 			return true;
