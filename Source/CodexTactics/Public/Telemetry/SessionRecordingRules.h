@@ -9,6 +9,12 @@ enum class EDemoRoundResult : uint8 { None, Victory, Defeat, Draw };
 
 struct FDemoRoundEvent
 {
+	static constexpr int32 ShotBuckets = 4; // 0-10m, 10-25m, 25-50m, 50+m
+	static int32 BucketForDistanceM(float DistM)
+	{
+		return DistM < 10.f ? 0 : (DistM < 25.f ? 1 : (DistM < 50.f ? 2 : 3));
+	}
+
 	double Time = 0.;
 	double RealTime = 0.;
 	int32 SectorId = 0;
@@ -21,6 +27,10 @@ struct FDemoRoundEvent
 	int32 ScoreVictory = 0;
 	int32 ScoreDefeat = 0;
 	int32 ScoreDraw = 0;
+	int32 ShotsPlayer[ShotBuckets]{};
+	int32 HitsPlayer[ShotBuckets]{};
+	int32 ShotsPmc[ShotBuckets]{};
+	int32 HitsPmc[ShotBuckets]{};
 	float DurationS = 0.f;
 	EDemoRoundResult Result = EDemoRoundResult::None;
 	bool bStart = true;

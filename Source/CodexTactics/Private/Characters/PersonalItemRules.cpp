@@ -2,6 +2,11 @@
 
 #define LOCTEXT_NAMESPACE "PersonalItemRules"
 
+bool PersonalItemRules::IsFood(EPersonalItem Item)
+{
+	return Item == EPersonalItem::CannedFood || Item == EPersonalItem::Bread || Item == EPersonalItem::Chocolate;
+}
+
 FPersonalItemEffect PersonalItemRules::GetEffect(EPersonalItem Item)
 {
 	switch (Item)
@@ -14,8 +19,22 @@ FPersonalItemEffect PersonalItemRules::GetEffect(EPersonalItem Item)
 	}
 }
 
-bool PersonalItemRules::CanUse(float Health, float MaxHealth, float Cold)
+FPersonalItemEffect PersonalItemRules::GetEffectiveEffect(EPersonalItem Item, CriticalWoundRules::EWoundTier WoundTier)
 {
+	const FPersonalItemEffect Base = GetEffect(Item);
+	if (IsFood(Item) && (WoundTier == CriticalWoundRules::EWoundTier::Heavy || WoundTier == CriticalWoundRules::EWoundTier::Critical))
+	{
+		return { 0.f, Base.Warmth };
+	}
+	return Base;
+}
+
+bool PersonalItemRules::CanUse(float Health, float MaxHealth, float Cold, EPersonalItem Item, CriticalWoundRules::EWoundTier WoundTier)
+{
+	if (IsFood(Item) && (WoundTier == CriticalWoundRules::EWoundTier::Heavy || WoundTier == CriticalWoundRules::EWoundTier::Critical))
+	{
+		return Cold > 0.f;
+	}
 	return !(Health >= MaxHealth && Cold <= 0.f);
 }
 
