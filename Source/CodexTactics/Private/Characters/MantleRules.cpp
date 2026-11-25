@@ -852,6 +852,33 @@ bool MantleRules::IsHeavyHit(const FMantleConfig& Config, float FinalDamage)
 	return Config.HeavyHitDamage > 0.f && FinalDamage >= Config.HeavyHitDamage;
 }
 
+bool MantleRules::TraversalCompletes(ETraversalInterrupt Interrupt)
+{
+	switch (Interrupt)
+	{
+	case ETraversalInterrupt::Hit:
+	case ETraversalInterrupt::Knockdown:
+	case ETraversalInterrupt::MontageStopped:
+		return true;
+	case ETraversalInterrupt::Death:
+	case ETraversalInterrupt::EndPlay:
+	default:
+		return false;
+	}
+}
+
+bool MantleRules::ResumeKeepsTheLanding(const FVector& Start, const FVector& Landing, const FVector& Asked, float ShortCm)
+{
+	const FVector Dir = (Landing - Start).GetSafeNormal2D();
+	if (Dir.IsNearlyZero())
+	{
+		return true;
+	}
+	const float LandingAlong = static_cast<float>(FVector::DotProduct(Landing - Start, Dir));
+	const float AskedAlong = static_cast<float>(FVector::DotProduct(Asked - Start, Dir));
+	return AskedAlong + ShortCm >= LandingAlong;
+}
+
 bool MantleRules::NeedsDownLink(const FMantleConfig& Config, float HeightCm)
 {
 	return HeightCm > 0.f && HeightCm < Config.LinkDownBelowCm;

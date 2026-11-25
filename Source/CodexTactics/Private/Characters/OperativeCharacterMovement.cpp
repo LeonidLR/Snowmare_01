@@ -364,14 +364,29 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 		bMantleOrderPending = false;
 	}
 	// Mantling (OperativeCharacterMantle.cpp): a new order mid-climb is walked to from the landing (like the ladder / the drop).
+	// G026: an order short of the landing (an under-fire sidestep) does not replace the resume target.
 	if (bMantling)
 	{
-		MantleResumeTarget = InDestination;
-		bMantleResume = true;
-		bMantleStopAfter = false;
-		bMantleResumeOwnOrder = !bFormationMove;
-		LastMoveDestination = InDestination;
-		bHasMoveOrder = true;
+		if (MantleRules::ResumeKeepsTheLanding(MantleBaseFeet, MantleLandingFeet, InDestination))
+		{
+			MantleResumeTarget = InDestination;
+			bMantleResume = true;
+			bMantleStopAfter = false;
+			bMantleResumeOwnOrder = !bFormationMove;
+			LastMoveDestination = InDestination;
+			bHasMoveOrder = true;
+		}
+		return EOperativeOrderResult::Accepted;
+	}
+	if (bVaulting)
+	{
+		if (MantleRules::ResumeKeepsTheLanding(VaultStart, VaultLanding, InDestination))
+		{
+			VaultResumeTarget = InDestination;
+			bVaultResume = true;
+			LastMoveDestination = InDestination;
+			bHasMoveOrder = true;
+		}
 		return EOperativeOrderResult::Accepted;
 	}
 	// Coming down off a mantle top (batch 2): a new order is walked to after the landing.

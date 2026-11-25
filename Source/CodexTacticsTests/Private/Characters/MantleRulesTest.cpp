@@ -310,6 +310,16 @@ bool FMantleRulesLinksTest::RunTest(const FString&)
 	TestEqual(TEXT("a 420 cm wreck side: three links"), Wreck.Num(), 3);
 	TestTrue(TEXT("... symmetric, inside the margins"), Wreck.Num() == 3 && FMath::IsNearlyEqual(Wreck[0], -165.f) && FMath::IsNearlyEqual(Wreck[2], 165.f));
 	TestEqual(TEXT("a 5 m parapet run: capped at links.max_per_face"), MantleRules::LinkOffsets(Config, 5000.f, 45.f).Num(), 4);
+	TestTrue(TEXT("a hit finishes the climb"), MantleRules::TraversalCompletes(MantleRules::ETraversalInterrupt::Hit));
+	TestTrue(TEXT("a knockdown finishes the climb"), MantleRules::TraversalCompletes(MantleRules::ETraversalInterrupt::Knockdown));
+	TestTrue(TEXT("a stopped clip finishes the climb"), MantleRules::TraversalCompletes(MantleRules::ETraversalInterrupt::MontageStopped));
+	TestFalse(TEXT("death releases him where he is"), MantleRules::TraversalCompletes(MantleRules::ETraversalInterrupt::Death));
+	TestFalse(TEXT("leaving play releases him where he is"), MantleRules::TraversalCompletes(MantleRules::ETraversalInterrupt::EndPlay));
+	const FVector Base(0.f, 0.f, 0.f);
+	const FVector Landing(0.f, 400.f, 0.f);
+	TestTrue(TEXT("a goal past the landing is kept"), MantleRules::ResumeKeepsTheLanding(Base, Landing, FVector(0.f, 900.f, 0.f)));
+	TestTrue(TEXT("the landing itself is kept"), MantleRules::ResumeKeepsTheLanding(Base, Landing, Landing));
+	TestFalse(TEXT("a sidestep short of the landing is refused"), MantleRules::ResumeKeepsTheLanding(Base, Landing, FVector(0.f, 100.f, 0.f)));
 	return true;
 }
 
