@@ -381,16 +381,16 @@ namespace DoorsSmoke
 			State->Leader = Squad->GetLeader();
 			Leader = State->Leader.Get();
 			Check(*State, Doors->GetDoors().Num() > 0, FString::Printf(TEXT("A: %d doors adopted from the builder leaves"), Doors->GetDoors().Num()));
-			State->FrontS01 = Doors->FindDoor(TEXT("S01_open"), TEXT("S01_open_f0_d19"));
-			State->BackS01 = Doors->FindDoor(TEXT("S01_open"), TEXT("S01_open_f0_d20"));
-			State->LockedS03 = Doors->FindDoor(TEXT("S03_locked_door"), TEXT("S03_locked_door_f0_d19"));
-			State->GableS03 = Doors->FindDoor(TEXT("S03_locked_door"), TEXT("S03_locked_door_f0_d20"));
-			State->FrontS09 = Doors->FindDoor(TEXT("S09_broken_back_windows"), TEXT("S09_broken_back_windows_f0_d19"));
-			State->GableS09 = Doors->FindDoor(TEXT("S09_broken_back_windows"), TEXT("S09_broken_back_windows_f0_d20"));
-			State->FrontS04 = Doors->FindDoor(TEXT("S04_rubble_escape"), TEXT("S04_rubble_escape_f0_d19"));
-			Check(*State, State->FrontS09.IsValid() && State->FrontS09->GetDoorState() == EDoorLeafState::Locked, TEXT("A: S09 front door d19 is LOCKED"));
-			Check(*State, State->GableS09.IsValid() && State->GableS09->GetDoorState() == EDoorLeafState::Locked, TEXT("A: S09 gable door d20 is LOCKED (story 9)"));
-			Check(*State, State->FrontS04.IsValid() && State->FrontS04->GetDoorState() == EDoorLeafState::Closed, TEXT("A: S04 door d19 is CLOSED"));
+			State->FrontS01 = Doors->FindDoor(TEXT("S01_open"), TEXT("S01_open_f0_d_court"));
+			State->BackS01 = Doors->FindDoor(TEXT("S01_open"), TEXT("S01_open_f0_d_gable_u0"));
+			State->LockedS03 = Doors->FindDoor(TEXT("S03_locked_door"), TEXT("S03_locked_door_f0_d_court"));
+			State->GableS03 = Doors->FindDoor(TEXT("S03_locked_door"), TEXT("S03_locked_door_f0_d_gable_uL"));
+			State->FrontS09 = Doors->FindDoor(TEXT("S09_broken_back_windows"), TEXT("S09_broken_back_windows_f0_d_court"));
+			State->GableS09 = Doors->FindDoor(TEXT("S09_broken_back_windows"), TEXT("S09_broken_back_windows_f0_d_gable_uL"));
+			State->FrontS04 = Doors->FindDoor(TEXT("S04_rubble_escape"), TEXT("S04_rubble_escape_f0_d_court"));
+			Check(*State, State->FrontS09.IsValid() && State->FrontS09->GetDoorState() == EDoorLeafState::Locked, TEXT("A: S09 front door d_court is LOCKED"));
+			Check(*State, State->GableS09.IsValid() && State->GableS09->GetDoorState() == EDoorLeafState::Locked, TEXT("A: S09 gable door d_gable_uL is LOCKED (story 9)"));
+			Check(*State, State->FrontS04.IsValid() && State->FrontS04->GetDoorState() == EDoorLeafState::Closed, TEXT("A: S04 door d_court is CLOSED"));
 			if (!State->FrontS09.IsValid() || !State->GableS09.IsValid() || !State->FrontS04.IsValid())
 			{
 				return Finish(*State, false);
@@ -399,10 +399,10 @@ namespace DoorsSmoke
 			ADoorActor* Back = State->BackS01.Get();
 			ADoorActor* Locked = State->LockedS03.Get();
 			ADoorActor* Gable = State->GableS03.Get();
-			Check(*State, Front && Front->GetDoorState() == EDoorLeafState::Closed, TEXT("A: S01 door d19 is a CLOSED door"));
-			Check(*State, Back && Back->GetDoorState() == EDoorLeafState::Closed, TEXT("A: S01 door d20 is a CLOSED door"));
-			Check(*State, Locked && Locked->GetDoorState() == EDoorLeafState::Locked, TEXT("A: S03 front door d19 is LOCKED (story 3)"));
-			Check(*State, Gable && Gable->GetDoorState() == EDoorLeafState::Closed, TEXT("A: S03 gable door d20 is CLOSED (the quiet way)"));
+			Check(*State, Front && Front->GetDoorState() == EDoorLeafState::Closed, TEXT("A: S01 door d_court is a CLOSED door"));
+			Check(*State, Back && Back->GetDoorState() == EDoorLeafState::Closed, TEXT("A: S01 door d_gable_u0 is a CLOSED door"));
+			Check(*State, Locked && Locked->GetDoorState() == EDoorLeafState::Locked, TEXT("A: S03 front door d_court is LOCKED (story 3)"));
+			Check(*State, Gable && Gable->GetDoorState() == EDoorLeafState::Closed, TEXT("A: S03 gable door d_gable_uL is CLOSED (the quiet way)"));
 			// Door strength (designer 2026-11-22): from the layout roles (the smoke makes story locks steel, see Run).
 			{
 				int32 ByStrength[3] = { 0, 0, 0 };
@@ -543,7 +543,7 @@ namespace DoorsSmoke
 			{
 				return Finish(*State, false);
 			}
-			Check(*State, Front->GetWidthCm() > 140.f && Front->GetWidthCm() < 160.f, FString::Printf(TEXT("A: S01 d19 is %.0f cm wide (150, a pair of leaves)"), Front->GetWidthCm()));
+			Check(*State, Front->GetWidthCm() > 140.f && Front->GetWidthCm() < 160.f, FString::Printf(TEXT("A: S01 d_court is %.0f cm wide (150, a pair of leaves)"), Front->GetWidthCm()));
 			Check(*State, Cast<ADoorActor>(TraceAcross(World, *Front)) == Front, TEXT("A: the closed door blocks sight across its doorway"));
 			// Navmesh: through the closed door (priced) yes; through the locked one no.
 			bool bCrosses = false;
@@ -645,14 +645,15 @@ namespace DoorsSmoke
 			{
 				Check(*State, !Cold->IsOpeningOpen(Front->GetBuildingId(), Front->GetOpeningId()), TEXT("C: the cold shelter sees it sealed"));
 			}
-			// D: the squad in formation outside the other S01 door, ordered 3 m inside.
+			// D: the squad in formation outside the other S01 door, ordered inside far enough (F1-hall past F1-living) for every Column / Confined follower to clear the doorway.
 			ADoorActor* Back = State->BackS01.Get();
 			const float BackIn = InsideSign(World, *Back);
 			FVector Stand, Inside;
 			if (!OnNav(World, Back->GetActorLocation() - Back->GetNormal() * (BackIn * 350.f), Stand)
-				|| !OnNav(World, Back->GetActorLocation() + Back->GetNormal() * (BackIn * 250.f), Inside))
+				|| (!OnNav(World, FVector(2320.f, -6380.f, Stand.Z), Inside)
+					&& !OnNav(World, Back->GetActorLocation() + Back->GetNormal() * (BackIn * 250.f), Inside)))
 			{
-				Check(*State, false, TEXT("D: navmesh points outside / inside the S01 d20 door"));
+				Check(*State, false, TEXT("D: navmesh points outside / inside the S01 d_gable_u0 door"));
 				return Finish(*State, false);
 			}
 			Squad->SetFollowersHolding(false);
