@@ -30,7 +30,8 @@ try {
     $head = (& git -C $ProjectDir rev-parse HEAD).Trim()
     # Uncommitted tracked changes (staged + unstaged) as one binary patch.
     $patch = Join-Path $tmp "ship.patch"
-    & git -C $ProjectDir diff HEAD --binary "--output=$patch"   # git writes the bytes itself (no console re-encoding)
+    # Only what the compile needs (2026-11-25): an uncommitted LFS .uasset (the designer's ABP) made "git apply" fail on the worker (exit 2).
+    & git -C $ProjectDir diff HEAD --binary "--output=$patch" -- Source Config Plugins "*.uproject" "*.Build.cs" "*.Target.cs"   # git writes the bytes itself
     $patchArg = $(if ((Test-Path $patch) -and (Get-Item $patch).Length -gt 0) { $patch } else { "" })
     # Untracked files the build sees (new .cpp / .h, Build.cs, config) - repo-relative paths kept in the zip.
     $untracked = @(& git -C $ProjectDir ls-files --others --exclude-standard -- Source Config)
