@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import math
 import os
 import sys
 import unittest
@@ -58,6 +59,19 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         self.assertEqual(len(interiors), layout_interior_count)
         # Parapets cut around LAD_B_house exit on East edge -> >= 5 parapet pieces instead of 4 uncut sides
         self.assertGreaterEqual(len(parapets), 5)
+
+    def test_wall_backed_roof_ladder_uses_the_planned_landing(self):
+        layout = self._load("gen_story_showcase")
+        roof_ladder_id = "LAD_S07_roof_outside_roof"
+        ladder = next(ladder for ladder in layout["ladders"] if ladder["id"] == roof_ladder_id)
+        frame = next(frame for frame in builder.levelgen_ladders.ladder_frames(layout) if frame["id"] == roof_ladder_id)
+        self.assertIsNotNone(frame["backing"])
+
+        spec = next(spec for spec in builder.plan(layout) if spec["label"] == roof_ladder_id)
+        top_inset = math.dist(frame["pos"], ladder["top"])
+        self.assertGreater(top_inset, 49.1)
+        self.assertAlmostEqual(spec.get("top_standoff", 49.1), top_inset)
+        self.assertAlmostEqual(spec.get("top_exit_standoff", 40.0), top_inset)
 
     def test_train_2_hatches_loopholes_and_ladder_standoff(self):
         layout = self._load("L_Gen_Train_2")

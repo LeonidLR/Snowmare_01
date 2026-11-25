@@ -47,6 +47,10 @@ struct CODEXTACTICS_API FRuntimeDoorway
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Doorway")
 	bool bOnMandatoryRoute = false;
+
+	/** Layout role ("entry", "room", ...). Empty on a schema v1 doorway. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Doorway")
+	FString Role;
 };
 
 /**

@@ -338,6 +338,8 @@ public:
 	int32 GetBreachEnteredCount() const;
 	/** The doorway of the session / the preview (smokes). */
 	const FString& GetBreachDoorwayId() const { return Breach.DoorwayId; }
+	/** The doorway the cursor preview is armed on, before the click commits (smokes). */
+	const FString& GetBreachPreviewDoorwayId() const { return BreachPreview.DoorwayId; }
 	/** The breach ghost (smokes): how many silhouettes it shows. */
 	int32 GetBreachGhostCount() const;
 	/** One tick of the breach session (PlayerTick). */

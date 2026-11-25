@@ -12,6 +12,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "SmokeUtils.h"
 #include "AIController.h"
 #include "Camera/RoofCutawaySubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -60,6 +61,7 @@ namespace FormationStairSmoke
 		int32 Passed = 0;
 		TArray<FCase> Cases;
 		int32 CaseIndex = 0;
+		int32 InitialSquadSize = 0;
 		/** After the stair legs: case 1 again with a door on its way locked (Lead 2026-11-23) - the click must send the leader to try it. */
 		bool bLockedWay = false;
 		TArray<TWeakObjectPtr<ADoorActor>> LockedDoors;
@@ -232,6 +234,14 @@ namespace FormationStairSmoke
 			return true;
 		}
 		FRunner& R = *Runner;
+		const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+		if (R.InitialSquadSize > 0 && Members.Num() != R.InitialSquadSize)
+		{
+			Check(false, FString::Printf(TEXT("the initial formation remains intact (expected %d members, found %d)"),
+				R.InitialSquadSize, Members.Num()));
+			Finish();
+			return true;
+		}
 		switch (R.Step)
 		{
 		case EStep::Warmup:
@@ -241,6 +251,13 @@ namespace FormationStairSmoke
 			}
 			return true;
 		case EStep::Plan:
+			R.InitialSquadSize = Members.Num();
+			if (R.InitialSquadSize < 2)
+			{
+				Check(false, TEXT("a formation with a leader and at least one follower"));
+				Finish();
+				return true;
+			}
 			PlanCases(*World, *Roofs);
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %d stair cases"), R.Cases.Num());
 			if (R.Cases.IsEmpty())
@@ -271,7 +288,6 @@ namespace FormationStairSmoke
 				{
 					Squad->ExitSoloMode();
 				}
-				const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
 				UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 				for (int32 Index = 0; Index < Members.Num(); ++Index)
 				{
@@ -361,14 +377,13 @@ namespace FormationStairSmoke
 				return true;
 			}
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: case %d/%d %s storey %d -> %d: from %s to %s (formation, %d men)"), R.CaseIndex + 1, R.Cases.Num(), *C.Building,
-				C.From, C.From + 1, *C.Start.ToCompactString(), *C.Goal.ToCompactString(), Squad->GetMembers().Num());
+				C.From, C.From + 1, *C.Start.ToCompactString(), *C.Goal.ToCompactString(), Members.Num());
 			Go(EStep::Walk);
 			return true;
 		}
 		case EStep::Walk:
 		{
 			const FCase& C = R.Cases[R.CaseIndex];
-			const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
 			bool bAll = true;
 			for (const AOperativeCharacter* Member : Members)
 			{
@@ -437,12 +452,10 @@ namespace FormationStairSmoke
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		Runner = MakeShared<FRunner>();
-		for (const TCHAR* Name : { TEXT("Codex.Pressure.Enabled"), TEXT("Codex.Pmc.Encounters") })
+		SmokeUtils::StopLevelPmc(World);
+		if (IConsoleVariable* Pressure = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.Enabled")))
 		{
-			if (IConsoleVariable* Var = IConsoleManager::Get().FindConsoleVariable(Name))
-			{
-				Var->Set(0, ECVF_SetByConsole);
-			}
+			Pressure->Set(0, ECVF_SetByConsole);
 		}
 		Runner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddLambda([]() { Tick(); });
 		UE_LOG(LogCodexTactics, Display, TEXT("FormationStairSmoke: start"));
