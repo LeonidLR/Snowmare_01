@@ -39,4 +39,6 @@ export interface TrainingData {
   sectors: TrainingSector[];
   layout: GenLayout | null;
   runs: TrainingRun[];
+  howto?: string;
+  editorCmdPath?: string;
 }

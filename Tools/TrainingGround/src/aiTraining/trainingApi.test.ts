@@ -3,7 +3,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { readTrainingData, readTrainingSectors, writeTrainingSelection } from '../../server/trainingApi.ts';
+import {
+  handleOpenEditor,
+  handlePlaySector,
+  readTrainingData,
+  readTrainingSectors,
+  UE_EDITOR_EXE,
+  writeTrainingSelection,
+  X6_MAP_PATH,
+} from '../../server/trainingApi.ts';
 import { X6 } from './trainingTypes.ts';
 
 test('only kept maps and real sectors can be saved; level files are left intact', (t) => {
@@ -48,4 +56,95 @@ test('only kept maps and real sectors can be saved; level files are left intact'
   put('Saved/Arena/arena.json', JSON.stringify({ schema: 'codex.pmc_arena/1', map: '/Game/Maps/' + X6, started_utc: '2026-11-24T16:00:00Z' }));
   assert.deepEqual(readTrainingData(root).runs.map(({ source, map, sector }) => [source, map, sector]),
     [['arena', X6, null], ['demo', X6, 5]]);
+});
+
+test('open-editor and play guards refuse unsafe launches and build expected commands when clear', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tg-launch-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const put = (relative: string, text: string) => {
+    const file = path.join(root, relative);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, text);
+    return file;
+  };
+  put('docs/port/FIGHTS_HOWTO_RU.md', '# Как запустить\n1. Выберите сектор.\n');
+  put('Scripts/Tools/open_editor_nozen.cmd', '@echo off\n');
+  const positions = [{ pos: [100, 200, 0], yaw: 45 }, { pos: [300, 400, 0], yaw: 65 }];
+  const sector = {
+    id: 3, name: 'Sector 3', box_cm: { min: [0, 0], max: [6100, 7200] }, size_m: [61, 72],
+    starts: positions, pmc_posts: positions.map((point, i) => ({ ...point, id: 'p' + i, kind: 'street' })),
+    pmc_squad: { count: 3, posture: 'patrol', weights: 'pmc_commander.json' },
+    contents: { enterable_buildings: 2, covers: { wall: 4 }, fences_m: 7, ladders: 1 },
+  };
+  put('Content/Data/LevelJson/' + X6 + '.sectors.json', JSON.stringify({ map: X6, sectors: [sector] }));
+
+  const data = readTrainingData(root);
+  assert.match(data.howto ?? '', /Как запустить/);
+  assert.ok((data.editorCmdPath ?? '').endsWith('open_editor_nozen.cmd'));
+
+  // Guard 1: Lanes worktree refused
+  const lanesRes = await handlePlaySector(root, { sector: 3 }, { isLanesWorktree: () => true });
+  assert.equal(lanesRes.status, 403);
+  assert.match(String(lanesRes.body.error), /Lanes/);
+
+  // Guard 2: agent.lock refused
+  const lockRes = handleOpenEditor(root, {
+    isLanesWorktree: () => false,
+    readAgentLock: () => ({ agent: 'claude', purpose: 'build' }),
+  });
+  assert.equal(lockRes.status, 409);
+  assert.match(String(lockRes.body.error), /agent\.lock/);
+
+  // Guard 3: running main editor/game refused
+  const runningRes = await handlePlaySector(root, { sector: 3 }, {
+    isLanesWorktree: () => false,
+    readAgentLock: () => null,
+    isMainEditorRunning: () => true,
+  });
+  assert.equal(runningRes.status, 409);
+  assert.match(String(runningRes.body.error), /уже запущены/);
+
+  // OK: open-editor
+  const spawned: Array<{ command: string; args: string[] }> = [];
+  const okEditor = handleOpenEditor(root, {
+    isLanesWorktree: () => false,
+    readAgentLock: () => null,
+    isMainEditorRunning: () => false,
+    spawnDetached: (command, args) => {
+      spawned.push({ command, args });
+      return 4242;
+    },
+  });
+  assert.equal(okEditor.status, 200);
+  assert.equal(okEditor.body.pid, 4242);
+  assert.equal(spawned[0].command, 'cmd.exe');
+  assert.deepEqual(spawned[0].args, ['/c', path.join(root, 'Scripts', 'Tools', 'open_editor_nozen.cmd'), X6_MAP_PATH]);
+
+  // OK: play sector 3 (writes active_sector.json + ensures Zen + spawns UnrealEditor -game)
+  let zenCalled = false;
+  const okPlay = await handlePlaySector(root, { sector: 3 }, {
+    isLanesWorktree: () => false,
+    readAgentLock: () => null,
+    isMainEditorRunning: () => false,
+    ensureZenReady: async () => { zenCalled = true; },
+    spawnDetached: (command, args) => {
+      spawned.push({ command, args });
+      return 5150;
+    },
+  });
+  assert.equal(zenCalled, true);
+  assert.equal(okPlay.status, 200);
+  assert.equal(okPlay.body.pid, 5150);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, 'Saved/Training/active_sector.json'), 'utf8')), { map: X6, sector: 3 });
+  assert.equal(spawned[1].command, UE_EDITOR_EXE);
+  assert.deepEqual(spawned[1].args, [
+    path.join(root, 'CodexTactics.uproject'),
+    X6_MAP_PATH,
+    '-game',
+    '-Sector=3',
+    '-windowed',
+    '-ResX=1600',
+    '-ResY=900',
+    '-NoZenAutoLaunch',
+  ]);
 });
