@@ -176,13 +176,13 @@ bool FCoverCornerPoseSnapTest::RunTest(const FString& Parameters)
 {
 	using namespace CoverFacingRules;
 	const FCoverFacingConfig Config;
-	// Edge 70 cm away on the facing side (right: pack _L, stand-off 57 cm): at the corner, within the snap tolerance.
+	// Edge 70 cm away on the facing side (right: pack _L): at the corner, within the snap tolerance of the stand-off.
 	const FCoverSlot Near = CoverFacingTest::MakeCoverFacingSlot(false, 0.f, true, 70.f);
 	float Shift = -1.f;
 	TestTrue(TEXT("edge 0.7 m on the facing side: corner pose"), IsAtCorner(Near, ECoverFacing::Right, Config));
-	TestFalse(TEXT("... no snap needed (13 cm over the stand-off)"), ShouldSnapToCorner(Near, ECoverFacing::Right, Shift, Config));
+	TestFalse(TEXT("... no snap needed (inside the snap tolerance of the stand-off)"), ShouldSnapToCorner(Near, ECoverFacing::Right, Shift, Config));
 	TestFalse(TEXT("facing the other (closed) side: no corner pose"), IsAtCorner(Near, ECoverFacing::Left, Config));
-	// Edge 1.6 m away: walk towards it, stopping the pack _L stand-off (57 cm) short of the measured edge.
+	// Edge 1.6 m away: walk towards it, stopping the pack _L stand-off short of the measured edge.
 	const FCoverSlot Mid = CoverFacingTest::MakeCoverFacingSlot(false, 0.f, true, 160.f);
 	TestFalse(TEXT("edge 1.6 m away: not yet at the corner"), IsAtCorner(Mid, ECoverFacing::Right, Config));
 	TestTrue(TEXT("edge 1.6 m away: snap"), ShouldSnapToCorner(Mid, ECoverFacing::Right, Shift, Config));
@@ -316,11 +316,11 @@ bool FCoverCornerPeekLowCoverTest::RunTest(const FString& Parameters)
 		&& Side == ECoverFacing::Right && FMath::IsNearlyEqual(Edge, 430.f));
 	Probe.Height = ECoverHeight::HighCover;
 	TestFalse(TEXT("a probe of another height is not his wall"), FindPeekEdge(LongLow, FVector(-45.f, 420.f, 50.f), &Probe, Side, Edge));
-	// Low cover = crouched: the crouched stand-offs (pack _L 65, _R 49) and the near-edge rule at both ends.
+	// Low cover = crouched: the crouched stand-offs and the near-edge rule at both ends.
 	for (const ECoverFacing End : { ECoverFacing::Left, ECoverFacing::Right })
 	{
 		const float StandOff = CornerStandOff(End, true, Config);
-		TestEqual(TEXT("crouched stand-off"), StandOff, End == ECoverFacing::Right ? 65.f : 49.f, 0.01f);
+		TestEqual(TEXT("crouched stand-off"), StandOff, End == ECoverFacing::Right ? Config.CrouchStandOffPackLCm : Config.CrouchStandOffPackRCm, 0.01f);
 		FCoverSlot AtEnd = CoverFacingTest::MakeCoverFacingSlot(End == ECoverFacing::Left, StandOff, End == ECoverFacing::Right, StandOff);
 		AtEnd.Height = ECoverHeight::LowCover;
 		const float EdgeAlong = End == ECoverFacing::Right ? StandOff : -StandOff;
@@ -338,29 +338,46 @@ bool FCoverCornerStandOffPerClipSideTest::RunTest(const FString& Parameters)
 {
 	using namespace CoverFacingRules;
 	const FCoverFacingConfig Config;
-	// Measured 2026-10-06: the pack _L peek (his right corner) steps the body ~69 cm out standing / 77 crouched, the _R
-	// one (his left corner) ~40 / 61 cm; the stand-off is that minus a 12 cm margin.
-	TestEqual(TEXT("his right corner, standing (pack _L)"), CornerStandOff(ECoverFacing::Right, false, Config), 57.f, 0.01f);
-	TestEqual(TEXT("his left corner, standing (pack _R)"), CornerStandOff(ECoverFacing::Left, false, Config), 28.f, 0.01f);
-	TestEqual(TEXT("his right corner, crouched (pack _L)"), CornerStandOff(ECoverFacing::Right, true, Config), 65.f, 0.01f);
-	TestEqual(TEXT("his left corner, crouched (pack _R)"), CornerStandOff(ECoverFacing::Left, true, Config), 49.f, 0.01f);
-	TestTrue(TEXT("each stand-off leaves the body past the measured edge"), 69.f - CornerStandOff(ECoverFacing::Right, false, Config) >= 10.f
-		&& 40.f - CornerStandOff(ECoverFacing::Left, false, Config) >= 10.f && 77.f - CornerStandOff(ECoverFacing::Right, true, Config) >= 10.f
-		&& 61.f - CornerStandOff(ECoverFacing::Left, true, Config) >= 10.f);
+	// X6 2026-11-25: the outer clavicle leads the 2026-10-06 pelvis step (69/40 standing, 77/61 crouched). The stand-off is
+	// the measured clavicle step (84/52 standing, 92/74 crouched) minus 18 cm, so the shoulder stays within 25 cm of the
+	// edge and the pelvis stays past it.
+	TestEqual(TEXT("his right corner, standing (pack _L)"), CornerStandOff(ECoverFacing::Right, false, Config), 66.f, 0.01f);
+	TestEqual(TEXT("his left corner, standing (pack _R)"), CornerStandOff(ECoverFacing::Left, false, Config), 34.f, 0.01f);
+	TestEqual(TEXT("his right corner, crouched (pack _L)"), CornerStandOff(ECoverFacing::Right, true, Config), 74.f, 0.01f);
+	TestEqual(TEXT("his left corner, crouched (pack _R)"), CornerStandOff(ECoverFacing::Left, true, Config), 56.f, 0.01f);
+	TestTrue(TEXT("the pelvis stays past the measured edge"), 69.f - CornerStandOff(ECoverFacing::Right, false, Config) >= 0.f
+		&& 40.f - CornerStandOff(ECoverFacing::Left, false, Config) >= 0.f && 77.f - CornerStandOff(ECoverFacing::Right, true, Config) >= 0.f
+		&& 61.f - CornerStandOff(ECoverFacing::Left, true, Config) >= 0.f);
+	TestTrue(TEXT("the X6 clavicle step lands the shoulder within 20 cm"), 83.8f - CornerStandOff(ECoverFacing::Right, false, Config) <= 20.f
+		&& 52.3f - CornerStandOff(ECoverFacing::Left, false, Config) <= 20.f && 91.8f - CornerStandOff(ECoverFacing::Right, true, Config) <= 20.f
+		&& 73.5f - CornerStandOff(ECoverFacing::Left, true, Config) <= 20.f);
 
-	// The same edge 80 cm away on either side: the short-stepping _R side walks closer, the _L side stays.
+	// The same edge 80 cm away. His right stand-off is 66, so 80 - 66 = 14 sits inside the 15 cm snap
+	// tolerance: already at the corner, no walk away and no step. His left (34 standing, 56 crouched) is still short.
 	float Shift = -1.f;
 	const FCoverSlot Both = CoverFacingTest::MakeCoverFacingSlot(true, 80.f, true, 80.f);
-	TestTrue(TEXT("right edge 0.8 m: steps 23 cm closer"), ShouldSnapToCorner(Both, ECoverFacing::Right, Shift, Config, false));
-	TestEqual(TEXT("... by edge - 57"), Shift, 23.f, 0.01f);
-	TestTrue(TEXT("left edge 0.8 m (stand-off 28): steps 52 cm closer"), ShouldSnapToCorner(Both, ECoverFacing::Left, Shift, Config, false));
-	TestEqual(TEXT("... by edge - 28"), Shift, 52.f, 0.01f);
-	TestTrue(TEXT("left edge 0.8 m crouched (stand-off 49): 31 cm"), ShouldSnapToCorner(Both, ECoverFacing::Left, Shift, Config, true));
-	TestEqual(TEXT("... by edge - 49"), Shift, 31.f, 0.01f);
+	TestFalse(TEXT("right edge 0.8 m: inside the snap tolerance of the right stand-off"), ShouldSnapToCorner(Both, ECoverFacing::Right, Shift, Config, false));
+	TestEqual(TEXT("... no step"), Shift, 0.f, 0.01f);
+	TestTrue(TEXT("left edge 0.8 m: steps closer"), ShouldSnapToCorner(Both, ECoverFacing::Left, Shift, Config, false));
+	TestEqual(TEXT("... by edge - the left stand-off"), Shift, 80.f - Config.StandStandOffPackRCm, 0.01f);
+	TestTrue(TEXT("left edge 0.8 m crouched: steps closer"), ShouldSnapToCorner(Both, ECoverFacing::Left, Shift, Config, true));
+	TestEqual(TEXT("... by edge - the crouched left stand-off"), Shift, 80.f - Config.CrouchStandOffPackRCm, 0.01f);
 	// Already nearer than the stand-off: never walks away from the edge.
 	const FCoverSlot Close = CoverFacingTest::MakeCoverFacingSlot(true, 40.f, true, 40.f);
-	TestFalse(TEXT("edge 0.4 m, stand-off 57: no walk away"), ShouldSnapToCorner(Close, ECoverFacing::Right, Shift, Config, false));
+	TestFalse(TEXT("edge 0.4 m, inside the stand-off: no walk away"), ShouldSnapToCorner(Close, ECoverFacing::Right, Shift, Config, false));
 	TestEqual(TEXT("... shift 0"), Shift, 0.f, 0.01f);
+
+	// Nav projection slides the probed feet toward the corner; the stand pulls them back and leaves a point already short of it.
+	FCoverSlot Slid = CoverFacingTest::MakeCoverFacingSlot(true, 80.f, true, 80.f);
+	Slid.WorldLocation = FVector(0.f, 70.f, 0.f); // right edge at +80, stand-off point would be further in
+	const float Pulled = PullCornerFeetBackToStand(Slid, ECoverFacing::Right, FVector(-45.f, 0.f, 90.f), FVector(0.f, 1.f, 0.f), 40.f);
+	TestEqual(TEXT("feet 30 cm past the stand are pulled back"), Pulled, 30.f, 0.01f);
+	TestEqual(TEXT("... onto the stand"), static_cast<float>(Slid.WorldLocation.Y), 40.f, 0.01f);
+	TestEqual(TEXT("already short of the stand: no pull"), PullCornerFeetBackToStand(Slid, ECoverFacing::Right, FVector(-45.f, 0.f, 90.f), FVector(0.f, 1.f, 0.f), 40.f), 0.f, 0.01f);
+	FCoverSlot SlidLeft = Slid;
+	SlidLeft.WorldLocation = FVector(0.f, -70.f, 0.f);
+	TestEqual(TEXT("left side: feet past the stand come back"), PullCornerFeetBackToStand(SlidLeft, ECoverFacing::Left, FVector(-45.f, 0.f, 90.f), FVector(0.f, 1.f, 0.f), -40.f), 30.f, 0.01f);
+	TestEqual(TEXT("... onto the left stand"), static_cast<float>(SlidLeft.WorldLocation.Y), -40.f, 0.01f);
 	return true;
 }
 

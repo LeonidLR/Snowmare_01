@@ -389,6 +389,7 @@ EOperativeOrderResult AOperativeCharacter::OrderCornerPeek(ECoverFacing Side, fl
 		}
 		else
 		{
+			CoverFacingRules::PullCornerFeetBackToStand(Target, Side, CoverSlot.WallPoint, CoverSlot.RightTangent(), Stand);
 			TGuardValue<bool> Ordering(bCornerPeekOrdering, true);
 			const EOperativeOrderResult Result = OrderShimmyTo(Target);
 			if (Result != EOperativeOrderResult::Accepted)

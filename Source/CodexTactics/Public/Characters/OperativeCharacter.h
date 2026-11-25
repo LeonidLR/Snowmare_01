@@ -2120,17 +2120,17 @@ public:
 	int32 GetCoverOpenShots() const { return CoverOpenShots; }
 
 	/**
-	 * Corner stand-off per pack clip side and stance, cm (FCoverFacingConfig defaults, measured 2026-10-06: the peek
-	 * clip's body step-out minus 12 cm). _L plays at his own right corner, _R at his left.
+	 * Corner stand-off per pack clip side and stance, cm (FCoverFacingConfig defaults). _L plays at his own right corner,
+	 * _R at his left. X6 2026-11-25: the outer shoulder, not the 2026-10-06 pelvis step, stays within 25 cm of the edge.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
-	float CoverStandOffStandPackLCm = 57.f;
+	float CoverStandOffStandPackLCm = 66.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
-	float CoverStandOffStandPackRCm = 28.f;
+	float CoverStandOffStandPackRCm = 34.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
-	float CoverStandOffCrouchPackLCm = 65.f;
+	float CoverStandOffCrouchPackLCm = 74.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
-	float CoverStandOffCrouchPackRCm = 49.f;
+	float CoverStandOffCrouchPackRCm = 56.f;
 
 	/** The facing rules' config with this operative's tunables (stand-offs). */
 	FCoverFacingConfig GetCoverFacingConfig() const;

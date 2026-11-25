@@ -41,14 +41,14 @@ bool FCoverCrouchClipSidesTest::RunTest(const FString&)
 	TestEqual(TEXT("threat right, crouch-shimmy left: crch walk_bwd_loop_R"), ShimmyClipIndex(ECoverFacing::Right, false), 1);
 	TestEqual(TEXT("threat left, crouch-shimmy left: crch walk_fwd_loop_R"), ShimmyClipIndex(ECoverFacing::Left, true), 1);
 	TestEqual(TEXT("threat left, crouch-shimmy right: crch walk_bwd_loop_L"), ShimmyClipIndex(ECoverFacing::Left, false), 0);
-	// Crouched corner stand-offs = the crouched peek's pelvis step-out (77 / 61 cm) minus 12 cm.
+	// Crouched corner stand-offs: the X6 clavicle step (92 / 74 cm) minus 18 cm. The 2026-10-07 pelvis steps were 77 / 61.
 	const FCoverFacingConfig Config;
-	TestEqual(TEXT("crouched at his right corner (crch _L, 77 cm out)"), CornerStandOff(ECoverFacing::Right, true, Config), 65.f, 0.01f);
-	TestEqual(TEXT("crouched at his left corner (crch _R, 61 cm out)"), CornerStandOff(ECoverFacing::Left, true, Config), 49.f, 0.01f);
+	TestEqual(TEXT("crouched at his right corner (crch _L)"), CornerStandOff(ECoverFacing::Right, true, Config), 74.f, 0.01f);
+	TestEqual(TEXT("crouched at his left corner (crch _R)"), CornerStandOff(ECoverFacing::Left, true, Config), 56.f, 0.01f);
 	float Shift = 0.f;
 	TestTrue(TEXT("crouched, right edge 1.2 m: steps to the crouched stand-off"),
 		ShouldSnapToCorner(CoverCrouchTest::MakeSlot(ECoverHeight::HighCover, true, 120.f), ECoverFacing::Right, Shift, Config, true));
-	TestEqual(TEXT("... 55 cm"), Shift, 55.f, 0.01f);
+	TestEqual(TEXT("... edge minus the crouched right stand-off"), Shift, 120.f - Config.CrouchStandOffPackLCm, 0.01f);
 	return true;
 }
 

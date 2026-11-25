@@ -18,8 +18,9 @@
  * wall (its enter clip starts facing it), so pack _L = the operative's own RIGHT hand as he stands back to the wall
  * (+RightTangent, ECoverFacing::Right; screen-left when he faces the default camera) and _R = his own left. Clip arrays
  * stay [_L, _R]: index 0 = ECoverFacing::Right, 1 = ECoverFacing::Left (ClipIndex). An edge a little further is walked
- * to automatically; he stops short of it by the stand-off of the clip side that plays there (the _L peek steps ~69 cm
- * out, the _R one ~40 cm, standing). Pure rules, tested in CodexTactics.Tactics.Cover.ShimmyFacesThreat /
+ * to automatically; he stops short of it by the stand-off of the clip side that plays there (the _L peek's pelvis
+ * steps ~69 cm out, the _R one ~40 cm, standing; the outer shoulder leads that). Pure rules, tested in
+ * CodexTactics.Tactics.Cover.ShimmyFacesThreat /
  * ThreatSideFlipHysteresis / CornerPoseAndSnap / ThreatPriority / CornerStandOffPerClipSide / CornerShotOnlyBehindWall.
  */
 struct CODEXTACTICS_API FCoverFacingConfig
@@ -31,15 +32,16 @@ struct CODEXTACTICS_API FCoverFacingConfig
 	/** An exposed edge on the facing side up to this far away is walked to automatically on entry / turn, cm. */
 	float AutoCornerSnapCm = 200.f;
 	/**
-	 * Corner stand-off: he stops this far short of the measured edge (the probes step 40 cm, the real edge lies within the
-	 * last step), per pack clip side and stance = the peek clip's body (pelvis) step-out minus a 12 cm margin, so head and
-	 * muzzle clear the edge even when the real edge lies right at the measured distance. Measured 2026-10-06: standing _L
-	 * +69 cm (his right corner), _R 40 cm (his left); crouched _L 77 cm, _R 61 cm. cm.
+	 * Corner stand-off: he stops this far short of the measured edge, per pack clip side and stance. The 2026-10-06 pelvis
+	 * steps (standing _L 69 cm / _R 40, crouched _L 77 / _R 61) left the pelvis 12 cm past the edge; on X6 (2026-11-25) the
+	 * outer clavicle leads that pose (standing 84 / 52 cm, crouched 92 / 74, the _R figures include the 11 cm extra lean)
+	 * and landed 25-32 cm past the edge. The stand-off is that clavicle step minus 18 cm: the shoulder stays inside the
+	 * 25 cm gate and the pelvis stays past the edge. cm.
 	 */
-	float StandStandOffPackLCm = 57.f;
-	float StandStandOffPackRCm = 28.f;
-	float CrouchStandOffPackLCm = 65.f;
-	float CrouchStandOffPackRCm = 49.f;
+	float StandStandOffPackLCm = 66.f;
+	float StandStandOffPackRCm = 34.f;
+	float CrouchStandOffPackLCm = 74.f;
+	float CrouchStandOffPackRCm = 56.f;
 	/** At the corner but further from the edge than the stand-off by more than this: step closer (on entry / turn), cm. */
 	float CornerSnapToleranceCm = 15.f;
 	/**
@@ -333,6 +335,13 @@ namespace CoverFacingRules
 		float& OutEdgeAlongCm, const FCoverPeekConfig& Config = FCoverPeekConfig());
 	/** Where he stands for the peek, along the wall from the same origin as EdgeAlongCm: StandOffCm short of the edge, on its inner side. */
 	CODEXTACTICS_API float CornerPeekStandAlong(ECoverFacing Side, float EdgeAlongCm, float StandOffCm);
+
+	/**
+	 * A corner probe's feet must not sit closer to the exposed edge than StandAlongCm (nav projection keeps the along of a
+	 * nearby point and slides the stand toward the corner; X6 high left, 2026-11-25, 6 cm). Depth and the wall point stay.
+	 * Returns how far the feet were pulled back, cm (0 when they were already at the stand or further in).
+	 */
+	CODEXTACTICS_API float PullCornerFeetBackToStand(FCoverSlot& Slot, ECoverFacing Side, const FVector& Origin, const FVector& Right, float StandAlongCm);
 
 	/**
 	 * Rev 5d (user bug 2026-10-14): a click on the peek edge of HIS OWN wall wins over the "a click near an operative picks him"

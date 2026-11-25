@@ -1,0 +1,675 @@
+// Dev-only measurement of G025 (designer, X6 fight 2026-11-25): at a block corner ("at the corner - covering it", the
+// run-and-peek arrival) the commander sinks into the wall and stands well to the right of the edge. Both hands, stand
+// and crouch. Gate: the outer shoulder within 25 cm of the exposed edge, capsule and skin penetration <= 2 cm.
+// The stand slot is the same probe as ACodexTacticsPlayerController::ResolveCornerStandSlot (that method is private).
+//   Scripts/smoke_parallel.ps1 -Commands CornerSlotSmoke -Remote off
+
+#include "CoreMinimal.h"
+
+#if !UE_BUILD_SHIPPING
+
+#include "SmokeUtils.h"
+#include "Characters/EnemyCharacter.h"
+#include "Characters/OperativeAnimInstance.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Core/CodexTacticsPlayerController.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
+#include "HAL/IConsoleManager.h"
+#include "HAL/PlatformMisc.h"
+#include "Misc/CoreDelegates.h"
+#include "Tactics/CoverFacingRules.h"
+#include "Tactics/CoverTraceRules.h"
+
+namespace CornerSlotSmoke
+{
+	constexpr float MaxShoulderFromEdgeCm = 25.f;
+	constexpr float MaxPenetrationCm = 2.f;
+	constexpr int32 SettleFrames = 45;
+	constexpr int32 WalkFrames = 60 * 8;
+	constexpr int32 PoseFrames = 60 * 4;
+
+	enum class EStep : uint8 { Warmup, Scan, Begin, WaitWalk, WaitPose, Done };
+
+	struct FPick
+	{
+		bool bValid = false;
+		FCoverSlot Base;
+		FCoverSlot Mid;
+		FCoverSlot Corner;
+		ECoverFacing Side = ECoverFacing::Right;
+		float EdgeAlong = 0.f;
+		float StandAlong = 0.f;
+		FVector Edge = FVector::ZeroVector;
+		FVector BoxCorner = FVector::ZeroVector;
+		float Thickness = 0.f;
+		float Dist = 0.f;
+		FString Name;
+	};
+
+	struct FCase
+	{
+		const TCHAR* Label = TEXT("");
+		bool bLow = false;
+		ECoverFacing Side = ECoverFacing::Right;
+		bool bRunPeek = true;
+	};
+
+	struct FRunner
+	{
+		EStep Step = EStep::Warmup;
+		int32 Frame = 0;
+		int32 StepFrame = 0;
+		int32 Failures = 0;
+		int32 CaseIndex = 0;
+		int32 Settled = 0;
+		bool bForced = false;
+		SmokeUtils::FPreloadGate Preload;
+		TWeakObjectPtr<UWorld> World;
+		TWeakObjectPtr<AOperativeCharacter> Leader;
+		FPick HighRight;
+		FPick HighLeft;
+		FPick LowRight;
+		FPick LowLeft;
+		FDelegateHandle EndFrameHandle;
+	};
+
+	TSharedPtr<FRunner> Runner;
+
+	const FCase Cases[] = {
+		{ TEXT("run-peek high right stand"), false, ECoverFacing::Right, true },
+		{ TEXT("run-peek high left stand"), false, ECoverFacing::Left, true },
+		{ TEXT("run-peek low right crouch"), true, ECoverFacing::Right, true },
+		{ TEXT("run-peek low left crouch"), true, ECoverFacing::Left, true },
+		{ TEXT("in-cover high right stand"), false, ECoverFacing::Right, false },
+		{ TEXT("in-cover high left stand"), false, ECoverFacing::Left, false },
+		{ TEXT("in-cover low right crouch"), true, ECoverFacing::Right, false },
+		{ TEXT("in-cover low left crouch"), true, ECoverFacing::Left, false },
+	};
+
+	void Check(bool bOk, const FString& What)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: %s"), bOk ? TEXT("ok  ") : TEXT("FAIL"), *What);
+		Runner->Failures += bOk ? 0 : 1;
+	}
+
+	void Finish()
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), Runner->Failures == 0 ? TEXT("PASS") : TEXT("FAIL"));
+		FCoreDelegates::OnEndFrame.Remove(Runner->EndFrameHandle);
+		Runner->Step = EStep::Done;
+		FPlatformMisc::RequestExit(false, TEXT("CornerSlotSmoke"));
+	}
+
+	void Go(EStep Step)
+	{
+		Runner->Step = Step;
+		Runner->StepFrame = 0;
+		Runner->Settled = 0;
+	}
+
+	FPick& PickFor(bool bLow, ECoverFacing Side)
+	{
+		if (bLow)
+		{
+			return Side == ECoverFacing::Right ? Runner->LowRight : Runner->LowLeft;
+		}
+		return Side == ECoverFacing::Right ? Runner->HighRight : Runner->HighLeft;
+	}
+
+	/** Same probes as ACodexTacticsPlayerController::ResolveCornerStandSlot. */
+	FCoverSlot ResolveStand(UWorld* World, const FCoverSlot& Base, ECoverFacing Side, float StandAlong)
+	{
+		const FVector Right = Base.RightTangent();
+		FCoverSlot Corner;
+		for (const float Back : { 0.f, 20.f, 40.f, 60.f })
+		{
+			const float Along = StandAlong + (Side == ECoverFacing::Right ? -Back : Back);
+			if (CoverTraceRules::FindShimmySlot(World, Base, Base.WallPoint + Right * Along, Corner)
+				&& (!Base.WallActor.IsValid() || Corner.WallActor == Base.WallActor))
+			{
+				CoverFacingRules::PullCornerFeetBackToStand(Corner, Side, Base.WallPoint, Right, Along);
+				return Corner;
+			}
+		}
+		Corner = Base;
+		Corner.WorldLocation += Right * StandAlong;
+		Corner.WallPoint += Right * StandAlong;
+		CoverFacingRules::PullCornerFeetBackToStand(Corner, Side, Base.WallPoint, Right, StandAlong);
+		return Corner;
+	}
+
+	float InwardCm(const FVector& Point, const FPick& Pick)
+	{
+		const FVector Right = Pick.Base.RightTangent();
+		const float Along = static_cast<float>(FVector::DotProduct(Point - Pick.Base.WallPoint, Right));
+		return Pick.Side == ECoverFacing::Right ? Pick.EdgeAlong - Along : Along - Pick.EdgeAlong;
+	}
+
+	/** Centimetres of Point behind the face that blocks a trace from the open side. 0 when the point is in front of that face. */
+	float PenetrationCm(UWorld& World, const FVector& Point, const FVector& Normal, const AActor* Ignore)
+	{
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(CornerSlotSmoke), false);
+		if (Ignore)
+		{
+			Params.AddIgnoredActor(Ignore);
+		}
+		const FVector Start = Point + Normal * 120.f;
+		FHitResult Hit;
+		if (!World.LineTraceSingleByChannel(Hit, Start, Point - Normal * 40.f, ECC_Visibility, Params))
+		{
+			return 0.f;
+		}
+		if (FVector::DotProduct(Hit.ImpactNormal, Normal) < 0.5f)
+		{
+			return 0.f;
+		}
+		const float Past = static_cast<float>(FVector::Dist(Start, Point) - FVector::Dist(Start, Hit.ImpactPoint));
+		return Past > MaxPenetrationCm ? Past : FMath::Max(0.f, Past);
+	}
+
+	void ArmMesh(AOperativeCharacter& Operative)
+	{
+		if (USkeletalMeshComponent* Mesh = Operative.GetMesh())
+		{
+			Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+			Mesh->bPauseAnims = false;
+		}
+	}
+
+	void Put(AOperativeCharacter& Operative, const FVector& Feet, const FVector& Facing)
+	{
+		if (Operative.bInCover)
+		{
+			Operative.LeaveCover(TEXT("CornerSlotSmoke"));
+		}
+		Operative.StopOperative();
+		const float Half = Operative.GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+		Operative.TeleportTo(Feet + FVector(0.f, 0.f, Half + 6.f), Facing.Rotation(), false, true);
+	}
+
+	float Score(const FPick& Pick)
+	{
+		return Pick.bValid ? (Pick.Thickness >= 35.f ? 100000.f : 0.f) - Pick.Dist : -1.0e9f;
+	}
+
+	void Consider(UWorld& World, AOperativeCharacter& Leader, AStaticMeshActor& Actor, const FVector& Normal, const FVector& Tangent,
+		float HalfLength, float Thickness, float EndSign, const FVector& FaceOrigin, bool bWantLow)
+	{
+		const FVector Click = FaceOrigin + Normal * 50.f + Tangent * EndSign * FMath::Max(0.f, HalfLength - 70.f) + FVector(0.f, 0.f, 110.f);
+		FCoverSlot Slot;
+		if (!CoverTraceRules::FindCoverSlotAt(&World, Click, -Normal, Slot) || !Slot.IsValid())
+		{
+			return;
+		}
+		if (FVector::DotProduct(Slot.WallNormal.GetSafeNormal2D(), Normal) < 0.8f)
+		{
+			return;
+		}
+		const bool bLow = Slot.Height == ECoverHeight::LowCover;
+		if (bLow != bWantLow || Slot.Height == ECoverHeight::None)
+		{
+			return;
+		}
+		const bool bRight = FVector::DotProduct(Slot.RightTangent(), Tangent * EndSign) > 0.5f;
+		ECoverFacing Side = ECoverFacing::Right;
+		float EdgeAlong = 0.f;
+		if (bRight)
+		{
+			if (!Slot.bRightEdgeExposed || Slot.RightEdgeDistanceCm > 160.f)
+			{
+				return;
+			}
+			Side = ECoverFacing::Right;
+			EdgeAlong = Slot.RightEdgeDistanceCm;
+		}
+		else
+		{
+			if (!Slot.bLeftEdgeExposed || Slot.LeftEdgeDistanceCm > 160.f)
+			{
+				return;
+			}
+			Side = ECoverFacing::Left;
+			EdgeAlong = -Slot.LeftEdgeDistanceCm;
+		}
+		const float StandOff = CoverFacingRules::CornerStandOff(Side, bLow, Leader.GetCoverFacingConfig());
+		const float Stand = CoverFacingRules::CornerPeekStandAlong(Side, EdgeAlong, StandOff);
+		FPick Pick;
+		Pick.bValid = true;
+		Pick.Base = Slot;
+		Pick.Side = Side;
+		Pick.EdgeAlong = EdgeAlong;
+		Pick.StandAlong = Stand;
+		Pick.Corner = ResolveStand(&World, Slot, Side, Stand);
+		Pick.Edge = Slot.WallPoint + Slot.RightTangent() * EdgeAlong;
+		Pick.BoxCorner = FaceOrigin + Tangent * EndSign * HalfLength;
+		Pick.Thickness = Thickness;
+		Pick.Dist = static_cast<float>(FVector::Dist2D(Pick.Corner.WorldLocation, Leader.GetActorLocation()));
+		Pick.Name = Actor.GetName();
+		const FVector MidClick = FaceOrigin + Normal * 50.f + Tangent * EndSign * FMath::Max(0.f, HalfLength - 220.f) + FVector(0.f, 0.f, 110.f);
+		if (!CoverTraceRules::FindCoverSlotAt(&World, MidClick, -Normal, Pick.Mid) || !Pick.Mid.IsValid()
+			|| FVector::DotProduct(Pick.Mid.WallNormal.GetSafeNormal2D(), Normal) < 0.8f)
+		{
+			Pick.Mid = Slot;
+		}
+		FPick& Best = PickFor(bWantLow, Side);
+		if (Score(Pick) > Score(Best))
+		{
+			Best = Pick;
+		}
+	}
+
+	void Scan(UWorld& World, AOperativeCharacter& Leader)
+	{
+		const float FeetZ = static_cast<float>(Leader.GetActorLocation().Z - Leader.GetSimpleCollisionHalfHeight());
+		struct FCand
+		{
+			AStaticMeshActor* Actor = nullptr;
+			float Dist = 0.f;
+			float Thick = 0.f;
+			float HalfLength = 0.f;
+			FVector FaceOrigin = FVector::ZeroVector;
+			FVector Normal = FVector::ForwardVector;
+			FVector Tangent = FVector::RightVector;
+		};
+		TArray<FCand> Cands;
+		for (TActorIterator<AStaticMeshActor> It(&World); It; ++It)
+		{
+			AStaticMeshActor* Actor = *It;
+			if (!Actor || Actor->ActorHasTag(FName(TEXT("interior"))))
+			{
+				continue;
+			}
+			const FBox Local = Actor->CalculateComponentsBoundingBoxInLocalSpace(false);
+			if (!Local.IsValid)
+			{
+				continue;
+			}
+			const FTransform Transform = Actor->GetActorTransform();
+			const FVector Size = Local.GetSize();
+			const FVector AxisX = Transform.TransformVector(FVector(Size.X, 0.f, 0.f));
+			const FVector AxisY = Transform.TransformVector(FVector(0.f, Size.Y, 0.f));
+			const float LenX = static_cast<float>(AxisX.Size2D());
+			const float LenY = static_cast<float>(AxisY.Size2D());
+			const float Height = static_cast<float>(Transform.TransformVector(FVector(0.f, 0.f, Size.Z)).Size());
+			const float Long = FMath::Max(LenX, LenY);
+			const float Thick = FMath::Min(LenX, LenY);
+			const FVector Centre = Transform.TransformPosition(Local.GetCenter());
+			const float Bottom = static_cast<float>(Centre.Z) - Height * 0.5f;
+			if (Height < 50.f || Long < 180.f || Long > 8000.f || Thick < 8.f || Thick > 2500.f || FMath::Abs(Bottom - FeetZ) > 80.f)
+			{
+				continue;
+			}
+			FCand Cand;
+			Cand.Actor = Actor;
+			Cand.Dist = static_cast<float>(FVector::Dist2D(Centre, Leader.GetActorLocation()));
+			Cand.Thick = Thick;
+			Cand.HalfLength = Long * 0.5f;
+			Cand.Tangent = (LenX >= LenY ? AxisX : AxisY).GetSafeNormal2D();
+			Cand.Normal = (LenX >= LenY ? AxisY : AxisX).GetSafeNormal2D();
+			Cand.FaceOrigin = FVector(Centre.X, Centre.Y, Bottom);
+			Cands.Add(Cand);
+		}
+		Cands.Sort([](const FCand& A, const FCand& B)
+		{
+			const int32 RankA = A.Thick >= 35.f ? 0 : 1;
+			const int32 RankB = B.Thick >= 35.f ? 0 : 1;
+			if (RankA != RankB)
+			{
+				return RankA < RankB;
+			}
+			return A.Dist < B.Dist;
+		});
+		const int32 Limit = FMath::Min(Cands.Num(), 28);
+		for (int32 Index = 0; Index < Limit; ++Index)
+		{
+			const FCand& Cand = Cands[Index];
+			for (const float NormalSign : { 1.f, -1.f })
+			{
+				const FVector Normal = Cand.Normal * NormalSign;
+				const FVector Origin = Cand.FaceOrigin + Normal * (Cand.Thick * 0.5f);
+				for (const float EndSign : { 1.f, -1.f })
+				{
+					Consider(World, Leader, *Cand.Actor, Normal, Cand.Tangent, Cand.HalfLength, Cand.Thick, EndSign, Origin, false);
+					Consider(World, Leader, *Cand.Actor, Normal, Cand.Tangent, Cand.HalfLength, Cand.Thick, EndSign, Origin, true);
+				}
+			}
+		}
+		auto LogPick = [](const TCHAR* Which, const FPick& Pick)
+		{
+			if (!Pick.bValid)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: no corner for %s"), Which);
+				return;
+			}
+			const float SlotIn = InwardCm(Pick.Corner.WorldLocation, Pick);
+			const float Depth = static_cast<float>(FVector::DotProduct(Pick.Corner.WorldLocation - Pick.Corner.WallPoint, Pick.Corner.WallNormal.GetSafeNormal2D()));
+			const float BoxGap = static_cast<float>(FVector::DotProduct(Pick.Edge - Pick.BoxCorner, Pick.Base.RightTangent()));
+			const bool bFallback = FVector::DistSquared2D(Pick.Corner.WorldLocation, Pick.Base.WorldLocation + Pick.Base.RightTangent() * Pick.StandAlong) < 1.f;
+			UE_LOG(LogCodexTactics, Display,
+				TEXT("Smoke info: %s %s thick %.0f dist %.0f | stand-off along %.0f slot inward %.1f depth %.1f | probe edge vs box %.1f | fallback %d | %s"),
+				Which, *Pick.Name, Pick.Thickness, Pick.Dist, Pick.StandAlong, SlotIn, Depth, BoxGap, bFallback ? 1 : 0, *Pick.Edge.ToCompactString());
+		};
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: scanned %d ground meshes, traced %d"), Cands.Num(), Limit);
+		LogPick(TEXT("high right"), Runner->HighRight);
+		LogPick(TEXT("high left"), Runner->HighLeft);
+		LogPick(TEXT("low right"), Runner->LowRight);
+		LogPick(TEXT("low left"), Runner->LowLeft);
+	}
+
+	bool PoseReady(const AOperativeCharacter& Operative)
+	{
+		const UOperativeAnimInstance* Anim = Operative.GetMesh() ? Cast<UOperativeAnimInstance>(Operative.GetMesh()->GetAnimInstance()) : nullptr;
+		const bool bPose = !Anim || Anim->IsCoverInFirePose() || Operative.IsCoverEntryPeekStance();
+		return Operative.bInCover && !Operative.bShimmying && Operative.GetVelocity().SizeSquared2D() < FMath::Square(30.f)
+			&& (Operative.IsPeekingRoundCorner() || Operative.IsCornerAimActive() || Operative.IsCoverEntryPeekStance()) && bPose;
+	}
+
+	void Measure(UWorld& World, AOperativeCharacter& Operative, const FPick& Pick, const TCHAR* Label)
+	{
+		const FVector Normal = Pick.Corner.WallNormal.GetSafeNormal2D();
+		const FVector Capsule = Operative.GetActorLocation();
+		const float Radius = Operative.GetSimpleCollisionRadius();
+		const float CapsuleIn = InwardCm(Capsule, Pick);
+		const float CapsulePen = PenetrationCm(World, Capsule - Normal * Radius, Normal, &Operative);
+		float ShoulderIn = 0.f;
+		float PelvisIn = 0.f;
+		bool bPelvis = false;
+		float WorstPen = CapsulePen;
+		FString Shoulder = TEXT("none");
+		FString WorstBone = TEXT("capsule");
+		USkeletalMeshComponent* Mesh = Operative.GetMesh();
+		if (Mesh)
+		{
+			Mesh->RefreshBoneTransforms();
+		}
+		const TCHAR* Bones[] = { TEXT("clavicle_r"), TEXT("clavicle_l"), TEXT("pelvis"), TEXT("head"), TEXT("hand_r"), TEXT("hand_l"), TEXT("spine_03") };
+		float BestShoulder = TNumericLimits<float>::Max();
+		for (const TCHAR* Bone : Bones)
+		{
+			if (!Mesh || Mesh->GetBoneIndex(FName(Bone)) == INDEX_NONE)
+			{
+				continue;
+			}
+			const FVector At = Mesh->GetBoneLocation(FName(Bone));
+			const float In = InwardCm(At, Pick);
+			const float Pen = PenetrationCm(World, At, Normal, &Operative);
+			if (Pen > WorstPen)
+			{
+				WorstPen = Pen;
+				WorstBone = Bone;
+			}
+			if (FString(Bone).Equals(TEXT("pelvis")))
+			{
+				PelvisIn = In;
+				bPelvis = true;
+			}
+			if (FString(Bone).Contains(TEXT("clavicle")) && In < BestShoulder)
+			{
+				BestShoulder = In;
+				ShoulderIn = In;
+				Shoulder = Bone;
+			}
+		}
+		const UOperativeAnimInstance* Anim = Mesh ? Cast<UOperativeAnimInstance>(Mesh->GetAnimInstance()) : nullptr;
+		const FString Clip = Anim && Anim->GetCoverLoopClip() ? Anim->GetCoverLoopClip()->GetName() : FString(TEXT("-"));
+		const FString Set = Anim ? Anim->GetActiveCoverAnimSet() : FString();
+		UE_LOG(LogCodexTactics, Display,
+			TEXT("Smoke measure %s: shoulder %s inward %.1f (abs %.1f) | pelvis %s inward %.1f | capsule inward %.1f pen %.1f | worst pen %.1f (%s) | mesh off %.1f | stance %d peek %d aim %d | set '%s' clip %s"),
+			Label, *Shoulder, ShoulderIn, FMath::Abs(ShoulderIn), bPelvis ? TEXT("yes") : TEXT("no"), PelvisIn, CapsuleIn, CapsulePen, WorstPen, *WorstBone, Operative.GetCoverEntryMeshOffset().Size(),
+			static_cast<int32>(Operative.GetStance()), Operative.IsPeekingRoundCorner() ? 1 : 0, Operative.IsCornerAimActive() ? 1 : 0,
+			Set.IsEmpty() ? TEXT("m4") : *Set, *Clip);
+		const bool bShoulder = Shoulder != TEXT("none") && FMath::Abs(ShoulderIn) <= MaxShoulderFromEdgeCm;
+		Check(bShoulder, FString::Printf(TEXT("%s: outer shoulder %.1f cm from the edge (limit %.0f)"), Label, FMath::Abs(ShoulderIn), MaxShoulderFromEdgeCm));
+		Check(WorstPen <= MaxPenetrationCm, FString::Printf(TEXT("%s: penetration %.1f cm (%s, limit %.0f)"), Label, WorstPen, *WorstBone, MaxPenetrationCm));
+	}
+
+	bool BeginCase(UWorld& World, AOperativeCharacter& Operative)
+	{
+		const FCase& Case = Cases[Runner->CaseIndex];
+		const FPick& Pick = PickFor(Case.bLow, Case.Side);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: case %d %s"), Runner->CaseIndex, Case.Label);
+		if (!Pick.bValid)
+		{
+			Check(false, FString::Printf(TEXT("%s: no X6 corner of that hand and height"), Case.Label));
+			return false;
+		}
+		ArmMesh(Operative);
+		const FVector Normal = Pick.Corner.WallNormal.GetSafeNormal2D();
+		const FVector Face = (-Normal).GetSafeNormal2D();
+		if (Case.bRunPeek)
+		{
+			Put(Operative, Pick.Corner.WorldLocation + Normal * 280.f, Face);
+			const EOperativeOrderResult Result = Operative.OrderTakeCoverForPeek(Pick.Corner, Pick.Edge, false);
+			Check(Result == EOperativeOrderResult::Accepted, FString::Printf(TEXT("%s: run-peek order accepted (%d)"), Case.Label, static_cast<int32>(Result)));
+			return Result == EOperativeOrderResult::Accepted;
+		}
+		Put(Operative, Pick.Mid.WorldLocation + Normal * 220.f, Face);
+		const EOperativeOrderResult Result = Operative.OrderTakeCover(Pick.Mid, false);
+		Check(Result == EOperativeOrderResult::Accepted, FString::Printf(TEXT("%s: cover order accepted (%d)"), Case.Label, static_cast<int32>(Result)));
+		return Result == EOperativeOrderResult::Accepted;
+	}
+
+	bool OrderPeekFromCover(AOperativeCharacter& Operative, const FCase& Case, const FPick& Pick)
+	{
+		ECoverFacing Side = Case.Side;
+		float Edge = 0.f;
+		if (!CoverFacingRules::FindPeekEdge(Operative.GetCoverSlot(), Pick.Edge, &Pick.Base, Side, Edge))
+		{
+			Check(false, FString::Printf(TEXT("%s: the held slot has no peek edge"), Case.Label));
+			return false;
+		}
+		const EOperativeOrderResult Result = Operative.OrderCornerPeek(Side, Edge);
+		Check(Result == EOperativeOrderResult::Accepted, FString::Printf(TEXT("%s: corner peek accepted (%d)"), Case.Label, static_cast<int32>(Result)));
+		return Result == EOperativeOrderResult::Accepted;
+	}
+
+	void ForceOntoSlot(AOperativeCharacter& Operative, const FPick& Pick)
+	{
+		if (Operative.bInCover)
+		{
+			Operative.LeaveCover(TEXT("CornerSlotSmoke force"));
+		}
+		Operative.StopOperative();
+		const FVector Normal = Pick.Corner.WallNormal.GetSafeNormal2D();
+		const float Half = Operative.GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+		Operative.TeleportTo(Pick.Corner.WorldLocation + FVector(0.f, 0.f, Half + 6.f), (-Normal).Rotation(), false, true);
+		Operative.OrderTakeCoverForPeek(Pick.Corner, Pick.Edge, false);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: forced onto the corner slot (the walk did not arrive)"));
+	}
+
+	void Tick()
+	{
+		if (!Runner.IsValid() || Runner->Step == EStep::Done)
+		{
+			return;
+		}
+		UWorld* World = Runner->World.Get();
+		if (!World)
+		{
+			Check(false, TEXT("the world is gone"));
+			Finish();
+			return;
+		}
+		switch (Runner->Preload.Poll(World))
+		{
+		case SmokeUtils::EPreloadGate::Waiting:
+			return;
+		case SmokeUtils::EPreloadGate::Failed:
+			Check(false, Runner->Preload.FailReason);
+			Finish();
+			return;
+		default:
+			break;
+		}
+		++Runner->Frame;
+		++Runner->StepFrame;
+		if (Runner->Frame > 60 * 150)
+		{
+			Check(false, TEXT("time out"));
+			Finish();
+			return;
+		}
+		if (Runner->Frame % 60 == 0)
+		{
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				SmokeUtils::ParkEnemyFarAway(*It);
+			}
+		}
+		switch (Runner->Step)
+		{
+		case EStep::Warmup:
+			if (Runner->StepFrame < 90)
+			{
+				return;
+			}
+			if (USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
+			{
+				Squad->EnterSoloMode();
+				Runner->Leader = Squad->GetLeader();
+				if (AOperativeCharacter* Leader = Runner->Leader.Get())
+				{
+					for (AOperativeCharacter* Member : Squad->GetMembers())
+					{
+						if (Member && Member != Leader)
+						{
+							Member->StopOperative();
+							Member->TeleportTo(Leader->GetActorLocation() + FVector(8000.f, 0.f, 0.f), FRotator::ZeroRotator, false, true);
+						}
+					}
+				}
+			}
+			if (!Runner->Leader.IsValid())
+			{
+				Check(false, TEXT("no squad leader"));
+				Finish();
+				return;
+			}
+			Go(EStep::Scan);
+			return;
+		case EStep::Scan:
+			Scan(*World, *Runner->Leader);
+			Runner->CaseIndex = 0;
+			Go(EStep::Begin);
+			return;
+		case EStep::Begin:
+			if (Runner->CaseIndex >= UE_ARRAY_COUNT(Cases))
+			{
+				Finish();
+				return;
+			}
+			Runner->bForced = false;
+			if (!BeginCase(*World, *Runner->Leader))
+			{
+				++Runner->CaseIndex;
+				Go(EStep::Begin);
+				return;
+			}
+			Go(Cases[Runner->CaseIndex].bRunPeek ? EStep::WaitPose : EStep::WaitWalk);
+			return;
+		case EStep::WaitWalk:
+		{
+			AOperativeCharacter* Operative = Runner->Leader.Get();
+			const FCase& Case = Cases[Runner->CaseIndex];
+			if (Operative && Operative->bInCover && !Operative->bShimmying && Operative->GetVelocity().SizeSquared2D() < FMath::Square(30.f))
+			{
+				if (OrderPeekFromCover(*Operative, Case, PickFor(Case.bLow, Case.Side)))
+				{
+					Go(EStep::WaitPose);
+				}
+				else
+				{
+					++Runner->CaseIndex;
+					Go(EStep::Begin);
+				}
+				return;
+			}
+			if (Runner->StepFrame > WalkFrames)
+			{
+				Check(false, FString::Printf(TEXT("%s: did not reach the wall"), Case.Label));
+				++Runner->CaseIndex;
+				Go(EStep::Begin);
+			}
+			return;
+		}
+		case EStep::WaitPose:
+		{
+			AOperativeCharacter* Operative = Runner->Leader.Get();
+			const FCase& Case = Cases[Runner->CaseIndex];
+			const FPick& Pick = PickFor(Case.bLow, Case.Side);
+			if (!Operative)
+			{
+				Check(false, FString::Printf(TEXT("%s: the leader is gone"), Case.Label));
+				Finish();
+				return;
+			}
+			if (PoseReady(*Operative))
+			{
+				++Runner->Settled;
+				if (Runner->Settled >= SettleFrames)
+				{
+					Measure(*World, *Operative, Pick, Case.Label);
+					++Runner->CaseIndex;
+					Go(EStep::Begin);
+				}
+				return;
+			}
+			Runner->Settled = 0;
+			if (!Runner->bForced && Case.bRunPeek && Runner->StepFrame > WalkFrames)
+			{
+				Runner->bForced = true;
+				ForceOntoSlot(*Operative, Pick);
+				Runner->StepFrame = 0;
+				return;
+			}
+			if (!Case.bRunPeek && Runner->StepFrame > WalkFrames)
+			{
+				Check(false, FString::Printf(TEXT("%s: the peek pose did not settle"), Case.Label));
+				if (Operative->bInCover)
+				{
+					Measure(*World, *Operative, Pick, Case.Label);
+				}
+				++Runner->CaseIndex;
+				Go(EStep::Begin);
+				return;
+			}
+			if (Runner->bForced && Runner->StepFrame > PoseFrames)
+			{
+				Check(false, FString::Printf(TEXT("%s: the peek pose did not settle"), Case.Label));
+				if (Operative->bInCover)
+				{
+					Measure(*World, *Operative, Pick, Case.Label);
+				}
+				++Runner->CaseIndex;
+				Go(EStep::Begin);
+			}
+			return;
+		}
+		default:
+			return;
+		}
+	}
+
+	void Run(const TArray<FString>& /*Args*/, UWorld* World)
+	{
+		Runner = MakeShared<FRunner>();
+		Runner->World = World;
+		if (IConsoleVariable* Pressure = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.Enabled")))
+		{
+			Pressure->Set(0, ECVF_SetByConsole);
+		}
+		SmokeUtils::StopLevelPmc(World);
+		Runner->EndFrameHandle = FCoreDelegates::OnEndFrame.AddLambda([]() { Tick(); });
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: CornerSlotSmoke started"));
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs Command(
+		TEXT("CodexTactics.CornerSlotSmoke"),
+		TEXT("Dev smoke: G025 corner slot on X6 blocks, both hands, stand and crouch. Shoulder <= 25 cm from the edge, penetration <= 2 cm."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
+}
+
+#endif
