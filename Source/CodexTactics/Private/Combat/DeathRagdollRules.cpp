@@ -100,6 +100,8 @@ bool FDeathRagdollRules::LoadConfigFromJson(const FString& JsonContent, FDeathRa
 	ReadNonNegative(TEXT("timeout_freeze_max_speed_cm_s"), OutConfig.TimeoutFreezeMaxSpeedCmS);
 	ReadPositive(TEXT("root_launch_speed_fraction"), OutConfig.RootLaunchSpeedFraction);
 	OutConfig.RootLaunchSpeedFraction = FMath::Min(OutConfig.RootLaunchSpeedFraction, 1.0f);
+	ReadPositive(TEXT("prone_impulse_scale"), OutConfig.ProneImpulseScale);
+	OutConfig.ProneImpulseScale = FMath::Clamp(OutConfig.ProneImpulseScale, 0.0f, 1.0f);
 	ReadNonNegative(TEXT("launch_clamp_window_s"), OutConfig.LaunchClampWindowSeconds);
 	ReadPositive(TEXT("max_angular_speed_rad_s"), OutConfig.MaxAngularSpeedRadS);
 	ReadPositive(TEXT("reference_body_mass_kg"), OutConfig.ReferenceBodyMassKg);

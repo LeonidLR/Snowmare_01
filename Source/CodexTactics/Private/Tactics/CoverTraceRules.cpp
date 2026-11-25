@@ -333,9 +333,11 @@ namespace CoverTraceRules
 		return true;
 	}
 
-	bool FaceDoubleClickStaysCover(bool bLowCover, bool bClimbStandsOnTop)
+	bool FaceDoubleClickStaysCover(bool bLowCover, bool /*bClimbStandsOnTop*/)
 	{
-		return bLowCover && !bClimbStandsOnTop;
+		// Designer 2026-11-25: a double click on the low-cover (crouch) silhouette is ALWAYS cover, also on a deep-topped block.
+		// Climbing is the top-hover order only.
+		return bLowCover;
 	}
 
 	bool FindShimmySlot(UWorld* World, const FCoverSlot& Current, const FVector& ClickPoint, FCoverSlot& OutSlot, const FCoverTraceConfig& Config,

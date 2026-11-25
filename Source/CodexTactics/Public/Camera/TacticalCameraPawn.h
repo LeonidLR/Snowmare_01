@@ -261,6 +261,8 @@ private:
 	bool bKeyPanning = false;
 	/** The cursor sat in the screen-edge band last frame (Camera.Pan.Edge, same scheme). */
 	bool bEdgePanning = false;
+	/** Seconds the cursor has stayed in the edge-scroll margin (resets when it leaves); the pan starts at EdgeScrollDelaySeconds. */
+	float EdgeDwellSeconds = 0.f;
 	/** Cursor position of the previous drag frame, viewport pixels (Godot event.relative is in pixels). */
 	FVector2D LastDragCursor = FVector2D::ZeroVector;
 	bool bHasLastDragCursor = false;

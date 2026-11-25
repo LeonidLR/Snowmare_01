@@ -581,6 +581,12 @@ void ATacticalCameraPawn::UpdatePan(float RealDelta)
 				EdgeInput = FVector2D::ZeroVector;
 			}
 		}
+		// Designer 2026-11-25: dwell at the edge before panning.
+		EdgeDwellSeconds = EdgeInput.IsNearlyZero() ? 0.f : EdgeDwellSeconds + RealDelta;
+		if (EdgeDwellSeconds < Config.EdgeScrollDelaySeconds)
+		{
+			EdgeInput = FVector2D::ZeroVector;
+		}
 	}
 	Input = KeyInput + EdgeInput;
 	if (!Input.IsNearlyZero())
