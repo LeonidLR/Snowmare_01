@@ -479,6 +479,11 @@ namespace WindowCoverFireSmoke
 			Runner->ClipBefore = Op->CurrentClip;
 			Runner->HealthBefore = Health->GetCurrentHealth();
 			Runner->RoundsBefore = Op->GetWindowCoverGlassRounds();
+			// The kit level gives the squad infinite ammo, which hides the cartridge. Off, so the glass round can leave the clip.
+			if (IConsoleVariable* Ammo = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Cheat.InfiniteAmmo")))
+			{
+				Ammo->Set(0, ECVF_SetByConsole);
+			}
 			Op->bForceHitForTesting = true;
 			Op->ColdLevel = 0.f;
 			const bool bFirst = Op->ShootAtTarget(Hound, 1.f);
@@ -490,7 +495,8 @@ namespace WindowCoverFireSmoke
 			if (Runner->bFirstWasGlass)
 			{
 				Check(Rounds == Runner->RoundsBefore + 1, TEXT("the first cartridge is spent on the glass"));
-				Check(Op->CurrentClip == Runner->ClipBefore - 1, TEXT("the glass cartridge leaves the clip"));
+				Check(Op->CurrentClip == Runner->ClipBefore - 1,
+					FString::Printf(TEXT("the glass cartridge leaves the clip (%d -> %d)"), Runner->ClipBefore, Op->CurrentClip));
 				Check(!bFirst, TEXT("the glass round does not hit the hound"));
 			}
 			else if (!bBroken && HealthNow < Runner->HealthBefore)
