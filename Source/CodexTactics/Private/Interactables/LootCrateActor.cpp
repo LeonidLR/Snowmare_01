@@ -166,6 +166,101 @@ bool ALootCrateActor::HandleDirectInteraction(AOperativeCharacter* Leader)
 	return true;
 }
 
+void ALootCrateActor::ConfigureHostileRemains(TArray<FString> BodyWeaponIds, TMap<FString, int32> ClipSizesByWeapon, int32 Seed)
+{
+	bHostileRemains = true;
+	bRemainsSearched = false;
+	bHostileLootRolled = false;
+	HostileBodyWeapons = MoveTemp(BodyWeaponIds);
+	HostileBodyClipSizes = MoveTemp(ClipSizesByWeapon);
+	HostileLootSeed = Seed;
+	Contents.DestroyAll();
+	Stash->Clear();
+}
+
+void ALootCrateActor::RollHostileLootForSearcher(const AOperativeCharacter* Searcher)
+{
+	if (!bRemains || !bHostileRemains || bHostileLootRolled)
+	{
+		return;
+	}
+	bHostileLootRolled = true;
+	TArray<FString> SearcherWeapons;
+	if (Searcher)
+	{
+		if (Searcher->CurrentWeapon && !Searcher->CurrentWeapon->WeaponId.IsEmpty())
+		{
+			SearcherWeapons.AddUnique(Searcher->CurrentWeapon->WeaponId);
+		}
+		for (const UWeaponDataAsset* Weapon : Searcher->AvailableWeapons)
+		{
+			if (Weapon && !Weapon->WeaponId.IsEmpty())
+			{
+				SearcherWeapons.AddUnique(Weapon->WeaponId);
+			}
+		}
+		for (const FString& BonusId : Searcher->BonusItems)
+		{
+			if (!BonusId.IsEmpty())
+			{
+				SearcherWeapons.AddUnique(BonusId);
+			}
+		}
+	}
+	Contents = CorpseLootRules::BuildHostileRemainsContents(
+		HostileBodyWeapons,
+		SearcherWeapons,
+		HostileBodyClipSizes,
+		HostileLootSeed,
+		CorpseLootRules::GetCorpseLootConfig());
+	Stash->Clear();
+}
+
+void ALootCrateActor::SetRemainsHovered(bool bHovered)
+{
+	const bool bEffectiveHover = bRemains && bHovered && !IsLooted();
+	if (bRemainsHovered == bEffectiveHover)
+	{
+		return;
+	}
+	bRemainsHovered = bEffectiveHover;
+	USkeletalMeshComponent* Body = RemainsBody.Get();
+	if (!Body)
+	{
+		PreviousRemainsOverlay.Reset();
+		return;
+	}
+	if (bEffectiveHover)
+	{
+		if (!RemainsHoverOverlay)
+		{
+			if (UMaterialInterface* Fresnel = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/Materials/M_TargetFresnel.M_TargetFresnel")))
+			{
+				RemainsHoverOverlay = UMaterialInstanceDynamic::Create(Fresnel, this);
+			}
+		}
+		if (RemainsHoverOverlay)
+		{
+			RemainsHoverOverlay->SetVectorParameterValue(TEXT("Color"), FLinearColor(1.0f, 0.85f, 0.45f, 0.35f));
+			RemainsHoverOverlay->SetScalarParameterValue(TEXT("Intensity"), 0.25f);
+			UMaterialInterface* CurrentOverlay = Body->GetOverlayMaterial();
+			if (CurrentOverlay != RemainsHoverOverlay.Get())
+			{
+				PreviousRemainsOverlay = CurrentOverlay;
+			}
+			Body->SetOverlayMaterial(RemainsHoverOverlay);
+		}
+	}
+	else
+	{
+		if (RemainsHoverOverlay && Body->GetOverlayMaterial() == RemainsHoverOverlay.Get())
+		{
+			Body->SetOverlayMaterial(PreviousRemainsOverlay.Get());
+		}
+		PreviousRemainsOverlay.Reset();
+	}
+}
+
 FActionMenuRequest ALootCrateActor::BuildActionMenu(const AOperativeCharacter* Leader) const
 {
 	const FText Squad = LOCTEXT("SquadSpeaker", "SQUAD");
@@ -339,6 +434,23 @@ void ALootCrateActor::FinishOpening()
 		ResetSession();
 		return;
 	}
+	if (bRemains && bHostileRemains)
+	{
+		RollHostileLootForSearcher(SessionOperative.Get());
+		if (Contents.IsEmpty() && Stash->IsEmpty())
+		{
+			bRemainsSearched = true;
+			SetRemainsHovered(false);
+			if (const AOperativeCharacter* Searcher = SessionOperative.Get())
+			{
+				PostLine(Searcher->DisplayName, FText::Format(
+					LOCTEXT("HostileNothingFound", "🔍 {0} searched {1}'s body: nothing usable found."),
+					Searcher->DisplayName, RemainsOwnerName));
+			}
+			ResetSession();
+			return;
+		}
+	}
 	SessionState = ELootSessionState::Open;
 	UInteractionSubsystem* Interactions = GetWorld()->GetSubsystem<UInteractionSubsystem>();
 	if (Interactions)
@@ -361,6 +473,11 @@ void ALootCrateActor::MarkOpen()
 
 void ALootCrateActor::HandleDialogClosed()
 {
+	if (bRemains && (bHostileRemains ? (bHostileLootRolled || SessionState == ELootSessionState::Open) : (Contents.IsEmpty() && Stash->IsEmpty())))
+	{
+		bRemainsSearched = true;
+		SetRemainsHovered(false);
+	}
 	if (SessionState == ELootSessionState::Open)
 	{
 		ResetSession();
@@ -501,6 +618,11 @@ FText ALootCrateActor::TakeItem(ELootItem Item, AOperativeCharacter* Collector)
 	default: Collector->AddAmmo(AmmoKey(Item).ToString(), Count); break;
 	}
 	UpdateVisuals();
+	if (bRemains && Contents.IsEmpty() && Stash->IsEmpty())
+	{
+		bRemainsSearched = true;
+		SetRemainsHovered(false);
+	}
 	// Tutorial / tools: "ItemLooted" + "ItemLooted.<Item>" (the A1 heat-pack loot lesson completes on ItemLooted.HeatPack).
 	if (const UEnum* ItemEnum = StaticEnum<ELootItem>())
 	{
@@ -515,9 +637,18 @@ void ALootCrateActor::TakeAll(AOperativeCharacter* Collector)
 	{
 		return;
 	}
+	if (bRemains && bHostileRemains)
+	{
+		RollHostileLootForSearcher(Collector);
+	}
 	for (const FLootEntry& Entry : GetItems())
 	{
 		TakeItem(Entry.Item, Collector);
+	}
+	if (bRemains && (bHostileRemains || (Contents.IsEmpty() && Stash->IsEmpty())))
+	{
+		bRemainsSearched = true;
+		SetRemainsHovered(false);
 	}
 	UpdateVisuals();
 }
@@ -596,7 +727,19 @@ TArray<FLootEntry> ALootCrateActor::GetItems() const
 
 bool ALootCrateActor::IsLooted() const
 {
-	return bDestroyed || (Contents.IsEmpty() && Stash->IsEmpty());
+	if (bDestroyed)
+	{
+		return true;
+	}
+	if (bRemains)
+	{
+		if (bRemainsSearched)
+		{
+			return true;
+		}
+		return !bHostileRemains && Contents.IsEmpty() && Stash->IsEmpty();
+	}
+	return Contents.IsEmpty() && Stash->IsEmpty();
 }
 
 int32 ALootCrateActor::GetStoredCount(ETransferItem Item) const
@@ -634,12 +777,6 @@ void ALootCrateActor::TickRemainsFit()
 	if (!Body)
 	{
 		GetWorldTimerManager().ClearTimer(RemainsFitTimer);
-		return;
-	}
-	// The bones are only refreshed while the body is drawn (or always ticks its pose): a body that died / was loaded off screen keeps the
-	// box where it is until the camera sees it, then the fit counts down.
-	if (Body->VisibilityBasedAnimTickOption != EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones && !Body->WasRecentlyRendered(0.5f))
-	{
 		return;
 	}
 	RefitRemainsBox();

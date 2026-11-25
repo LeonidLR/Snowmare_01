@@ -1344,4 +1344,5 @@ private:
 	bool bBoxSelecting = false;
 	FVector2D BoxStart = FVector2D::ZeroVector;
 	FVector2D BoxCurrent = FVector2D::ZeroVector;
+	TWeakObjectPtr<class ALootCrateActor> HoveredRemainsActor;
 };

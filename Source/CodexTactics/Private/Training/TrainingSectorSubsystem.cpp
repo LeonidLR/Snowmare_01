@@ -15,6 +15,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
+#include "Interactables/LootCrateActor.h"
 #include "Misc/CommandLine.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
@@ -713,6 +714,21 @@ bool UTrainingSectorSubsystem::RespawnRound()
 			if (Op && !Op->IsActorBeingDestroyed())
 			{
 				Op->Destroy();
+			}
+		}
+		TArray<ALootCrateActor*> StaleCorpseLoot;
+		for (TActorIterator<ALootCrateActor> It(World); It; ++It)
+		{
+			if (*It && It->ActorHasTag(TEXT("CorpseLoot")))
+			{
+				StaleCorpseLoot.Add(*It);
+			}
+		}
+		for (ALootCrateActor* Crate : StaleCorpseLoot)
+		{
+			if (Crate && !Crate->IsActorBeingDestroyed())
+			{
+				Crate->Destroy();
 			}
 		}
 		Encounters->RestartSchedule();
