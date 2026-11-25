@@ -94,6 +94,19 @@ class MainGuardTest(unittest.TestCase):
             self.assertTrue(headless_state.allowed)
             self.assertTrue(headless_state.free)
 
+            # Designer's editor open in sibling CodexTactics-play also blocks main
+            play_uproject = str((root.parent / "CodexTactics-play" / "CodexTactics.uproject").resolve())
+            play_state = md.read_main_state(
+                main_root=root,
+                lane_root=root,
+                pid_alive_fn=lambda _: False,
+                editor_procs_fn=lambda: [{"ProcessId": 9001, "CommandLine": f'"UnrealEditor.exe" "{play_uproject}"'}],
+                worktrees_fn=lambda r: [r],
+            )
+            self.assertFalse(play_state.allowed)
+            self.assertFalse(play_state.free)
+            self.assertIn("Editor open", play_state.reason)
+
     def test_stale_vs_live_local_lock(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

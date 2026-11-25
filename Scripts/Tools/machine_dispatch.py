@@ -185,12 +185,20 @@ def has_open_designer_editor(
     lane_root: Optional[Path] = None,
     process_reader: Callable[[], list[dict[str, object]]] = query_local_editor_processes,
 ) -> tuple[bool, str]:
-    """Check whether the designer's CodexTactics editor is open using Test-GateEditorCommandLine."""
-    targets = [str((main_root / "CodexTactics.uproject").resolve())]
+    """Check whether the designer's CodexTactics editor is open in main or CodexTactics-play."""
+    candidates = [
+        (main_root / "CodexTactics.uproject").resolve(),
+        (main_root.parent / "CodexTactics-play" / "CodexTactics.uproject").resolve(),
+    ]
     if lane_root is not None:
-        lane_uproject = str((lane_root / "CodexTactics.uproject").resolve())
-        if lane_uproject.lower() != targets[0].lower():
-            targets.append(lane_uproject)
+        candidates.append((lane_root / "CodexTactics.uproject").resolve())
+    targets: list[str] = []
+    seen: set[str] = set()
+    for path in candidates:
+        key = str(path).lower()
+        if key not in seen:
+            seen.add(key)
+            targets.append(str(path))
 
     try:
         editors = process_reader()
