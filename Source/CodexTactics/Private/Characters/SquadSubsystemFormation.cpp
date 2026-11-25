@@ -29,6 +29,7 @@
 #include "Formation/FormationWallSectorRules.h"
 #include "Data/SquadWallTuning.h"
 #include "Environment/EnvironmentRules.h"
+#include "Interactables/WindowOrderRules.h"
 #include "Environment/EnvironmentSubsystem.h"
 #include "GameFramework/Pawn.h"
 #include "HAL/IConsoleManager.h"
@@ -1164,6 +1165,26 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 		{
 			SlotLocation = KeepSlotOffRamp(LeaderRef, ResolveReachableSlot(LeaderRef, FVector(Kept.X, Kept.Y, LeaderFloorZ),
 				/*bLeaderSide*/ FormationGuardRuntime::IsEnabled(), Operative.GetActorLocation()));
+		}
+	}
+	// G024: an explicit window order. Once the leader is through that window, the column files in behind him. Until then
+	// the slots stay where the formation put them, on his side, so nobody crosses before he breaks the pane.
+	if (LeaderRef.IsWindowFileActive())
+	{
+		int32 Rank = 0;
+		for (int32 Index = 0; Index < Followers.Num(); ++Index)
+		{
+			if (Followers[Index].Operative.Get() == &Operative)
+			{
+				Rank = Index;
+				break;
+			}
+		}
+		if (const TOptional<FVector> Queued = WindowOrderRules::QueueThroughWindow(LeaderRef.GetWindowApproachPoint(),
+			LeaderRef.GetWindowApproachLanding(), LeaderRef.GetActorLocation(), Rank, FormationTuning::Get().ColumnSpacing))
+		{
+			SlotLocation.X = Queued->X;
+			SlotLocation.Y = Queued->Y;
 		}
 	}
 	FrameGivenByMember.Add(Follower.Operative, FVector2D(SlotLocation));

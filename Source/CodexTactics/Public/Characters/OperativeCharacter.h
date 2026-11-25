@@ -568,6 +568,13 @@ public:
 	 *  or WindowOrderRules::MoveOpensWindows), never for an autonomous order, a formation follow or a PMC fighter. */
 	bool IsWindowPathAllowed() const { return bWindowPathAllowed; }
 
+	/** G024: the order stays LandingFeet. He walks to ApproachFeet first with whole windows closed, then climbs through. An explicit window order does this in formation too; an automatic move does not arm it. A different move drops it. */
+	void ArmWindowApproach(const FVector& ApproachFeet, const FVector& LandingFeet);
+	/** The climb is still this order: followers file through it once he is on the far side (WindowOrderRules::QueueThroughWindow). */
+	bool IsWindowFileActive() const { return bWindowFileActive; }
+	const FVector& GetWindowApproachPoint() const { return WindowApproachPoint; }
+	const FVector& GetWindowApproachLanding() const { return WindowApproachLanding; }
+
 	/** Smokes: climbs started / restored, the last climb's class / clip / gait / stop / refusal / landing error (cm) / cancel. */
 	int32 GetMantleCount() const { return MantleCount; }
 	int32 GetMantleRestoreCount() const { return MantleRestoreCount; }
@@ -2789,6 +2796,16 @@ private:
 	bool bMantlePathAllowed = false;
 	/** IsWindowPathAllowed. */
 	bool bWindowPathAllowed = false;
+	/** G024: a via to his own side is in flight. LastMoveDestination stays the landing. */
+	bool bWindowApproachPending = false;
+	/** G024: this order is an explicit window climb. Stays set after the via so the column can file through. */
+	bool bWindowFileActive = false;
+	/** Whole-window latch saved while that via walks with windows closed. Restored before the climb. */
+	bool bWindowApproachWindows = false;
+	/** Set while the far-side leg is being issued, so the aborted near-side path does not finish the order. */
+	bool bWindowApproachRelease = false;
+	FVector WindowApproachPoint = FVector::ZeroVector;
+	FVector WindowApproachLanding = FVector::ZeroVector;
 	int32 MantleCount = 0;
 	int32 MantleRestoreCount = 0;
 	int32 MantleRotation = 0;

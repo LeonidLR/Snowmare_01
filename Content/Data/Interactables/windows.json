@@ -9,5 +9,13 @@
   "formation_run_in_fight_windows": 0,
   "_formation_run_in_fight_windows": "Rule 2: the formation never takes a whole window on its own - a run in a fight opens none (1 = the 2026-11-22 behaviour).",
   "formation_follow_broken_only": 1,
-  "_formation_follow_broken_only": "Rule 2: on the leader's window order the followers go through only once he has broken it (0: they may take the whole window too)."
+  "_formation_follow_broken_only": "Rule 2: on the leader's window order the followers go through only once he has broken it (0: they may take the whole window too).",
+  "approach_past_cm": 80,
+  "_approach_past_cm": "G024: the climb-in walks to this many centimetres past the face on the operative's own side before the vault. Inside the 125 cm vault probe.",
+  "landing_past_cm": 120,
+  "_landing_past_cm": "G024: the order's landing, this many centimetres past the face on the far side (the old 120 cm past-face point).",
+  "approach_match_cm": 200,
+  "_approach_match_cm": "G024: a move whose goal is within this of the landing is that climb (the leader's target is the landing itself).",
+  "approach_arrive_cm": 150,
+  "_approach_arrive_cm": "G024: the near face counts as reached when the walk stops within this of the approach point."
 }
