@@ -3,7 +3,7 @@
 // enterable building (Saved/LevelGen/buildings_smoke_<map>.json).
 // walk=1 / -LevelGenBuildingsSmokeWalk / CodexTactics.LevelGenBuildingsWalkSmoke (S2.9 / P0b, docs/design/levelgen/S2_ROOMS_PLAN.md,
 // risk rows 1 and 4; building-route-model.md F5): after the path check the squad leader really WALKS every building in Solo (the
-// player's click, ACodexTacticsPlayerController::HandleWorldHit, as LevelGenRampSmoke orders it): from the first exterior door approach
+// player's click, ACodexTacticsPlayerController::HandleWorldHit, as LevelGenRampSmoke orders it): from an accessible exterior approach
 // to each storey landing and the walkable roof in storey order; then per flat entry (units[].entries, BuildingWalkRules) a solo leg and a
 // squad leg (squad mode, the same click: the formation follows) from the room outside the flat to the flat's room behind the door - gate
 // squad <= 2 x solo. Per leg: arrived (80 cm, storey Z), game seconds, navmesh path length, walked length, stuck (no progress 4 s) + where.
@@ -207,10 +207,43 @@ namespace LevelGenBuildingsSmoke
 		return Targets;
 	}
 
-	TArray<FTarget> MakeDoorStarts(const FJsonObject& Building, const FBuildingFrame& Frame, double GroundZ)
+	TArray<FTarget> MakeDoorStarts(const FJsonObject& Building, const FBuildingFrame& Frame, double GroundZ, bool bWalk = false)
 	{
 		TArray<FTarget> Doors;
-		for (const auto& Value : Array(Building, TEXT("doors")))
+		FJsonObjects WalkEntrances;
+		const FJsonObjects& Openings = Array(Building, TEXT("openings"));
+		if (bWalk)
+		{
+			FString QuietId;
+			Building.TryGetStringField(TEXT("quiet_entry"), QuietId);
+			TSharedPtr<FJsonValue> QuietWindow;
+			for (const auto& Value : Openings)
+			{
+				const FJsonObject& Opening = *Value->AsObject();
+				FString Role, State;
+				Opening.TryGetStringField(TEXT("role"), Role);
+				Opening.TryGetStringField(TEXT("state"), State);
+				if (Role == TEXT("entry") && State != TEXT("locked") && State != TEXT("sealed") && State != TEXT("barricaded"))
+				{
+					WalkEntrances.Add(Value);
+				}
+				else if (State == TEXT("broken") && !QuietId.IsEmpty())
+				{
+					FString Id, Kind;
+					if (Opening.TryGetStringField(TEXT("id"), Id) && Id == QuietId
+						&& Opening.TryGetStringField(TEXT("kind"), Kind) && Kind == TEXT("window"))
+					{
+						QuietWindow = Value;
+					}
+				}
+			}
+			// S09 locks both entry doors and names the broken window in the quiet route.
+			if (WalkEntrances.IsEmpty() && QuietWindow)
+			{
+				WalkEntrances.Add(QuietWindow);
+			}
+		}
+		for (const auto& Value : bWalk && !Openings.IsEmpty() ? WalkEntrances : Array(Building, TEXT("doors")))
 		{
 			const FJsonObject& Door = *Value->AsObject();
 			const FVector2D Local = Frame.Rotate(Point(Door, TEXT("pos")), -Frame.Rotation);
@@ -598,7 +631,7 @@ namespace LevelGenBuildingsSmoke
 		Record.Frame = FBuildingFrame{ FBox2D(Point(Footprint[0]->AsArray()), Point(Footprint[1]->AsArray())), 0.0 };
 		Building.TryGetNumberField(TEXT("rotation"), Record.Frame.Rotation);
 		const FBuildingFrame& Frame = Record.Frame;
-		const TArray<FTarget> Doors = MakeDoorStarts(Building, Frame, GroundZ);
+		const TArray<FTarget> Doors = MakeDoorStarts(Building, Frame, GroundZ, /*bWalk*/ true);
 		const TArray<FTarget> Targets = MakeTargets(Building, Frame, GroundZ);
 		const auto AddLeg = [&Walk, &Record, BuildingIndex]() -> FLeg&
 		{
@@ -608,11 +641,11 @@ namespace LevelGenBuildingsSmoke
 			return Leg;
 		};
 
-		// 1. The walk: the first exterior door approach -> every storey landing -> the walkable roof, in storey order.
+		// 1. The walk: an accessible exterior approach -> every storey landing -> the walkable roof, in storey order.
 		FNavLocation DoorNav;
 		if (Doors.IsEmpty())
 		{
-			Record.PlanError = TEXT("no exterior door");
+			Record.PlanError = TEXT("no walkable exterior entrance");
 			Record.PlanErrorPos = FVector(Frame.Footprint.GetCenter(), GroundZ);
 		}
 		else if (!Project(Nav, Data, Frame, Doors[0], true, DoorNav))
