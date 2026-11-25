@@ -1,4 +1,5 @@
 #include "Tactics/CoverTraceRules.h"
+#include "Tactics/CoverWrapRules.h"
 #include "Vehicles/VehiclePawn.h"
 
 #include "Combat/EnemyGhostActor.h"
@@ -260,7 +261,14 @@ namespace CoverTraceRules
 				// Keep the wall distance: the projection may pull the point along the normal; clamp it to 35..90 cm off the wall.
 				const float Off = FVector::DotProduct(OnNav.Location - Chest.ImpactPoint, Normal);
 				const FVector Fixed = OnNav.Location + Normal * (FMath::Clamp(Off, Config.SlotOffsetCm - 10.f, Config.SlotOffsetCm * 2.f) - Off);
-				OutSlot.WorldLocation = FVector(Fixed.X, Fixed.Y, OnNav.Location.Z);
+				// The projection extent reaches a fence top. A low-cover order's feet stay on the ground.
+				float SlotZ = OnNav.Location.Z;
+				if (Height == ECoverHeight::LowCover && WallTopCm > 0.f
+					&& SlotZ > GroundZ + WallTopCm * Config.LowCoverSlotMaxAboveGroundFraction)
+				{
+					SlotZ = GroundZ;
+				}
+				OutSlot.WorldLocation = FVector(Fixed.X, Fixed.Y, SlotZ);
 			}
 		}
 		// Corners: probes along the wall, from 60 cm off the surface back into it.
@@ -301,6 +309,33 @@ namespace CoverTraceRules
 			}
 		}
 		return true;
+	}
+
+	bool IsOnApproachSide(const FCoverSlot& Slot, const FVector& Position)
+	{
+		return FVector2D::DotProduct(FVector2D(Position - Slot.WallPoint), FVector2D(Slot.WallNormal)) >= 0.0;
+	}
+
+	bool ResolveLowCoverApproach(UWorld* World, const FVector& Position, FCoverSlot& Slot)
+	{
+		if (Slot.Height != ECoverHeight::LowCover || IsOnApproachSide(Slot, Position))
+		{
+			return true;
+		}
+		FCoverSlot Near;
+		if (!FindCoverSlotAt(World, Slot.WallPoint, Slot.WallNormal, Near) || Near.Height != ECoverHeight::LowCover
+			|| !CoverWrapWorld::IsSameObject(Slot, Near) || !IsOnApproachSide(Near, Position)
+			|| FVector2D::DotProduct(FVector2D(Near.WallNormal), FVector2D(Slot.WallNormal)) >= 0.0)
+		{
+			return false;
+		}
+		Slot = MoveTemp(Near);
+		return true;
+	}
+
+	bool FaceDoubleClickStaysCover(bool bLowCover, bool bClimbStandsOnTop)
+	{
+		return bLowCover && !bClimbStandsOnTop;
 	}
 
 	bool FindShimmySlot(UWorld* World, const FCoverSlot& Current, const FVector& ClickPoint, FCoverSlot& OutSlot, const FCoverTraceConfig& Config,

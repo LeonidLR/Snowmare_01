@@ -36,6 +36,11 @@ struct CODEXTACTICS_API FCoverTraceConfig
 	float MaxWallNormalZ = 0.3f;
 	/** Navmesh projection extent for the slot. */
 	FVector NavProjectExtent = FVector(60.f, 60.f, 150.f);
+	/**
+	 * A low-cover slot whose nav projection sits higher than this fraction of the wall is on the obstacle top
+	 * (the extent reaches the fence). Snap the feet back to the ground so the order cannot stand on the fence.
+	 */
+	float LowCoverSlotMaxAboveGroundFraction = 0.5f;
 	/** Two slots are on the same wall when their normals agree this much and their planes lie this close, cm. */
 	float SameWallNormalDot = 0.9f;
 	float SameWallPlaneDistanceCm = 40.f;
@@ -98,6 +103,18 @@ namespace CoverTraceRules
 	 */
 	CODEXTACTICS_API bool FindCoverSlotAt(UWorld* World, const FVector& CursorHitPoint, const FVector& TraceDirection, FCoverSlot& OutSlot,
 		const FCoverTraceConfig& Config = FCoverTraceConfig(), const TArray<const AActor*>& IgnoredActors = TArray<const AActor*>());
+
+	/** True when the approach starts on the occupied side of the slot plane. */
+	CODEXTACTICS_API bool IsOnApproachSide(const FCoverSlot& Slot, const FVector& Position);
+
+	/** Reprobe the near face of a low obstacle when the selected face is on the opposite side. */
+	CODEXTACTICS_API bool ResolveLowCoverApproach(UWorld* World, const FVector& Position, FCoverSlot& Slot);
+
+	/**
+	 * A double click on a cover face stays the cover order when the face is low cover and the climb would go over it
+	 * (a fence) rather than stand on a deep top (a wreck). A high face keeps the run-climb.
+	 */
+	CODEXTACTICS_API bool FaceDoubleClickStaysCover(bool bLowCover, bool bClimbStandsOnTop);
 
 	/**
 	 * A shimmy target on the same wall as Current: the click projected onto the wall line, traced again (the wall may

@@ -33,7 +33,7 @@ void AOperativeCharacter::UpdateVaultTrigger(float DeltaTime)
 	const AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController());
 	const UPathFollowingComponent* PathFollowing = AIController ? AIController->GetPathFollowingComponent() : nullptr;
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-	if (!PathFollowing || PathFollowing->GetStatus() != EPathFollowingStatus::Moving || Stance == EOperativeStance::Prone
+	if (bInCover || !PathFollowing || PathFollowing->GetStatus() != EPathFollowingStatus::Moving || Stance == EOperativeStance::Prone
 		|| VaultCooldown > 0.f || (Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased))
 	{
 		BlockedTimer = 0.f;
@@ -98,10 +98,12 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 	{
 		return false;
 	}
-	// The knee probe reaches beyond the cover destination. Do not vault the obstacle we are about
-	// to use from this side. A route approaching its opposite face may still cross it.
-	if (bHasPendingCover && PendingCoverSlot.WallActor.Get() == Front.GetActor()
-		&& FVector::DotProduct(Location - PendingCoverSlot.WallPoint, PendingCoverSlot.WallNormal) >= 0.f)
+	// A player's low-cover approach never auto-vaults. The knee probe can hit past the slot or hit another piece of the fence.
+	// EnterCover clears the pending flag, so the hold also covers the operative already crouched at the fence.
+	if ((IsPlayerTeam() && bInCover && GetCoverSlot().Height == ECoverHeight::LowCover)
+		|| (bHasPendingCover && ((IsPlayerTeam() && PendingCoverSlot.Height == ECoverHeight::LowCover)
+			|| (PendingCoverSlot.WallActor.Get() == Front.GetActor()
+				&& FVector::DotProduct(Location - PendingCoverSlot.WallPoint, PendingCoverSlot.WallNormal) >= 0.f))))
 	{
 		return false;
 	}

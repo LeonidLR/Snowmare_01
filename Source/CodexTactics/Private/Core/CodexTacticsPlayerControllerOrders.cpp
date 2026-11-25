@@ -28,6 +28,7 @@
 #include "Combat/QuickFireRules.h"
 #include "Combat/SuppressionSubsystem.h"
 #include "Core/PlayerCommands.h"
+#include "Tactics/CoverTraceRules.h"
 #include "Tactics/LookHoldRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
@@ -557,6 +558,18 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			MantleFaceClickActor = Hit.GetActor();
 			bClimbClick = !bFaceClick || bDoubleClick;
 			bRunClimb = bDoubleClick;
+		}
+		// Task 120: a double click on a low fence's face (the crouch silhouette) is cover on this side. A deep top and a high face still climb.
+		if (bClimbClick && bFaceClick && MantleNavigation::IsBatch2Enabled())
+		{
+			FCoverSlot FaceSlot;
+			FMantleClickPlan ClimbPlan;
+			const bool bLowCover = FindCoverSlotForHit(Hit, FaceSlot) && FaceSlot.Height == ECoverHeight::LowCover;
+			const bool bStandsOnTop = Leader->PlanMantleClick(Hit, ClimbPlan) && ClimbPlan.bTop;
+			if (CoverTraceRules::FaceDoubleClickStaysCover(bLowCover, bStandsOnTop))
+			{
+				bClimbClick = false;
+			}
 		}
 		FString MantleWhy;
 		// R17-1: the formation (the leader + his followers) / the box selection climbs in turns, the leader first (one man: his own climb).

@@ -37,6 +37,16 @@ bool FCoverTraceHeightTest::RunTest(const FString&)
 	A.Height = ECoverHeight::HighCover;
 	TestTrue(TEXT("facing along the normal: yaw 180"), FMath::IsNearlyEqual(FacingYaw(A), 180.f, 0.01f));
 	TestTrue(TEXT("right tangent of a -X normal is -Y"), A.RightTangent().Equals(FVector(0.f, -1.f, 0.f), 0.001f));
+	A.WallPoint = FVector(100.f, 20.f, 80.f);
+	A.Height = ECoverHeight::LowCover;
+	TestTrue(TEXT("the side of the low cover towards its normal is usable"), IsOnApproachSide(A, FVector(50.f, 20.f, 10.f)));
+	TestFalse(TEXT("the opposite face must be reprobed"), IsOnApproachSide(A, FVector(150.f, 20.f, 10.f)));
+	A.WallNormal = -A.WallNormal;
+	TestTrue(TEXT("reversing the face selects the other approach"), IsOnApproachSide(A, FVector(150.f, 20.f, 10.f)));
+	TestTrue(TEXT("a low fence face whose climb goes over stays cover"), FaceDoubleClickStaysCover(true, false));
+	TestFalse(TEXT("a low face whose climb stands on the top still climbs"), FaceDoubleClickStaysCover(true, true));
+	TestFalse(TEXT("a high face still climbs"), FaceDoubleClickStaysCover(false, false));
+	TestFalse(TEXT("a high face that stands on top still climbs"), FaceDoubleClickStaysCover(false, true));
 	TestEqual(TEXT("high cover enters standing"), CoverRules::DefaultStanceFor(ECoverHeight::HighCover), EOperativeStance::Standing);
 	TestEqual(TEXT("low cover enters crouched"), CoverRules::DefaultStanceFor(ECoverHeight::LowCover), EOperativeStance::Crouching);
 	return true;

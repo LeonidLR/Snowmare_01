@@ -356,6 +356,11 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 		}
 		return false;
 	}
+	if (!TurnBased && !CoverTraceRules::ResolveLowCoverApproach(GetWorld(), Operative->GetActorLocation(), Slot))
+	{
+		HideCoverPreview();
+		return true; // an unavailable cover approach must not become a movement order
+	}
 	// Turn-based: the slot snaps to the nearest free cell of the grid.
 	if (TurnBased && TurnBased->GetGrid())
 	{
@@ -889,7 +894,12 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 	const FCoverSlot Slot = CoverPreviewSlot;
 	// A switchable preview commits the slot its ghost shows (the resolved corner, its arrival side), double or slow confirm alike.
 	const bool bPreviewSwitchable = bCoverPreviewSwitchable;
-	const FCoverSlot Target = bPreviewSwitchable ? CoverPreviewResolvedSlot : Slot;
+	FCoverSlot Target = bPreviewSwitchable ? CoverPreviewResolvedSlot : Slot;
+	if (Operative && !GetActiveTurnBased() && !CoverTraceRules::ResolveLowCoverApproach(GetWorld(), Operative->GetActorLocation(), Target))
+	{
+		HideCoverPreview();
+		return;
+	}
 	const ECoverFacing Arrival = CoverPreviewArrivalFacing;
 	FDemoOrderScope Demo(this, EDemoOrderKind::Cover, Operative, Target.WorldLocation, bDoubleClick, false, &Target);
 	HideCoverPreview();
@@ -1142,8 +1152,12 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 	// Into a slot: the same order as the single one (OrderTakeCover / the planned walk + SetPendingCover), always a run.
 	// The wall-edge cover switch (2026-10-20): the direct order's leader dashes in through the run-in clip, the others follow the
 	// group cover rules at that wall.
-	auto SendToSlot = [&](AOperativeCharacter* Member, const FCoverSlot& MemberSlot, bool bPrimary)
+	auto SendToSlot = [&](AOperativeCharacter* Member, FCoverSlot MemberSlot, bool bPrimary)
 	{
+		if (!CoverTraceRules::ResolveLowCoverApproach(World, Member->GetActorLocation(), MemberSlot))
+		{
+			return false;
+		}
 		const bool bMemberSwitch = bPrimary && bLeaderSwitch;
 		const FCoverWrapPlan* MemberWrap = bPrimary ? LeaderWrap : nullptr;
 		if (bPlan)
@@ -1762,7 +1776,8 @@ bool ACodexTacticsPlayerController::UpdateStealthWallHover(AOperativeCharacter* 
 				const bool bSideSlot = !bVehicle && ResolveWallSideSlot(*Hit, HoverSlot, WallSide);
 				const bool bSlotOk = bSideSlot
 					|| ((bVehicle || FMath::Abs(Hit->ImpactNormal.Z) <= 0.3f) && FindCoverSlotForHit(*Hit, HoverSlot));
-				if (!bSlotOk || !HoverSlot.IsValid() || (Operative->bInCover && CoverTraceRules::IsSameWall(Operative->GetCoverSlot(), HoverSlot)))
+				if (!bSlotOk || !HoverSlot.IsValid() || !CoverTraceRules::ResolveLowCoverApproach(GetWorld(), Operative->GetActorLocation(), HoverSlot)
+					|| (Operative->bInCover && CoverTraceRules::IsSameWall(Operative->GetCoverSlot(), HoverSlot)))
 				{
 					HoverSlot = FCoverSlot();
 				}

@@ -6,11 +6,12 @@
 // Checks: the map got its mantle links (none dropped by the links.max_total cap); up to MaxFences 135 cm fences whose way round is longer than
 // the mantle area's entering cost by links.entering_cost_cm: the fence carries a link; a ground click beyond it (the controller's
 // HandleWorldHit) makes the Solo leader mantle over it (high_fence_over) and arrive within the time limit.
-// B17-4 (designer 2026-11-17: "his body passes THROUGH the fence first, only then the vault clip plays"): on that fence four ways over it -
+// B17-4 (designer 2026-11-17: "his body passes THROUGH the fence first, only then the vault clip plays"): on that fence four ways -
 // the ground click beyond (the path's link, walking), a double ground click beyond (the link, running), a double click on the fence's face
-// (the run climb order) and a click on its top (the walk climb order; skipped when the camera cannot hit the 10 cm top) - each time, before
-// the clip's hand plant neither the pelvis nor the capsule's centre is past the fence's near face plane, and at the plant the nearer hand is on
-// the fence's top (within align.hand_edge_tolerance_cm of the grip).
+// and a click on its top (the walk climb order; skipped when the camera cannot hit the 10 cm top). Task 120: the face double click is the
+// crouch cover order and must stay on the near side. The path and top orders still climb; before the clip's hand plant neither the pelvis
+// nor the capsule's centre is past the fence's near face plane, and at the plant the nearer hand is on the fence's top
+// (within align.hand_edge_tolerance_cm of the grip).
 
 #include "CoreMinimal.h"
 
@@ -32,6 +33,9 @@
 #include "Interactables/MantleNavigation.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
+#include "Tactics/CoverTraceRules.h"
 
 namespace MantleFenceRouteSmoke
 {
@@ -62,6 +66,9 @@ namespace MantleFenceRouteSmoke
 		bool bMantledHere = false;
 		MantleSmokeSites::FSite Site;
 		FVector Goal = FVector::ZeroVector;
+		int32 CoverCase = 0;
+		TMap<AOperativeCharacter*, int32> CoverMantles;
+		FCoverSlot CoverRequested;
 		TSet<const AActor*> Used;
 		/** B17-4: the way over the qualifying fence (EVariant) and the climb's frames. */
 		int32 Variant = 0;
@@ -79,7 +86,7 @@ namespace MantleFenceRouteSmoke
 		{
 		case PathWalk: return TEXT("path link, walking (a ground click beyond)");
 		case PathRun: return TEXT("path link, running (a double ground click beyond)");
-		case FaceDoubleClick: return TEXT("run climb order (a double click on its face)");
+		case FaceDoubleClick: return TEXT("cover order (a double click on its face)");
 		default: return TEXT("walk climb order (a click on its top)");
 		}
 	}
@@ -183,6 +190,10 @@ namespace MantleFenceRouteSmoke
 			if (!Squad || !Squad->GetLeader() || !Mantle || !PC || !Nav || State->StageTime < 3.f || (!Mantle->HasGenerated() && State->StageTime < 240.f))
 			{
 				return true;
+			}
+			if (FParse::Param(FCommandLine::Get(), TEXT("FenceCover120")))
+			{
+				SmokeUtils::StopLevelPmc(World);
 			}
 			State->Leader = Squad->GetLeader();
 			Squad->EnterSoloMode();
@@ -311,6 +322,23 @@ namespace MantleFenceRouteSmoke
 			const FVector Feet = FeetOf(*Leader);
 			const bool bMantled = Leader->GetMantleCount() > State->MantlesBefore;
 			const bool bPath = State->Variant == PathWalk || State->Variant == PathRun;
+			if (State->Variant == FaceDoubleClick)
+			{
+				// Task 120: the crouch silhouette on a thin fence is cover, on the side he started from.
+				const FCoverSlot& Held = Leader->GetCoverSlot();
+				const bool bCover = Leader->bInCover && Held.Height == ECoverHeight::LowCover && Held.WallActor == State->Site.Actor
+					&& Leader->GetStance() == EOperativeStance::Crouching && CoverTraceRules::IsOnApproachSide(Held, State->Site.Feet)
+					&& !bMantled && !Leader->IsVaulting() && !Leader->IsMantling();
+				if (!bCover && State->StageTime < ArriveLimitSeconds)
+				{
+					return true;
+				}
+				Check(*State, bCover, FString::Printf(TEXT("%s: a double click on its face stays low cover on the near side, crouched, no climb (mantle %s, in cover %d)"),
+					*GetNameSafe(State->Site.Actor.Get()), bMantled ? *Leader->GetLastMantleClass().ToString() : TEXT("none"), Leader->bInCover ? 1 : 0));
+				State->bSampling = false;
+				Next(*State, 4);
+				return true;
+			}
 			const bool bThere = bPath ? FVector::Dist2D(Feet, State->Goal) <= ArriveRadiusCm && !Leader->IsMantling() : bMantled && !Leader->IsMantling();
 			if (!bThere && State->StageTime < ArriveLimitSeconds)
 			{
@@ -351,7 +379,99 @@ namespace MantleFenceRouteSmoke
 				return true;
 			}
 			++State->Variant;
+			if (State->Variant == VariantCount && State->Passed > 0 && FParse::Param(FCommandLine::Get(), TEXT("FenceCover120")))
+			{
+				Next(*State, 5);
+				return true;
+			}
 			Next(*State, State->Variant < VariantCount && State->Passed > 0 ? 20 : 1);
+			return true;
+		}
+		case 5: // Prepare the cover order with a slot traced from the wrong face.
+		{
+			if (State->CoverCase == 4)
+			{
+				const FVector RecordedJersey(2568.f, -9520.f, 0.f);
+				State->Site = MantleSmokeSites::FindSite(World, Leader, TEXT("jersey"), 95.f, StandOffCm, RecordedJersey, {}, true, GoalOffCm, false);
+				if (!State->Site.bFound)
+				{
+					Check(*State, false, TEXT("a 95 cm Jersey barrier with navigable approaches on both sides"));
+					return Finish(*State, false);
+				}
+				State->Goal = State->Site.Probe.FacePoint + State->Site.Dir * (60.f + GoalOffCm);
+				State->Goal.Z = State->Site.Feet.Z;
+			}
+			const bool bGroup = (State->CoverCase % 4) >= 2;
+			const bool bReverse = (State->CoverCase % 2) != 0;
+			const FVector Direction = bReverse ? -State->Site.Dir : State->Site.Dir;
+			const FVector Start = bReverse ? State->Goal : State->Site.Feet;
+			const FVector Aim = State->Site.Probe.FacePoint + FVector(0.f, 0.f, 65.f);
+			State->CoverMantles.Reset();
+			if (bGroup)
+			{
+				Squad->ExitSoloMode();
+			}
+			Squad->SetFollowersHolding(true);
+			int32 MemberIndex = 0;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (!Member || (!bGroup && Member != Leader))
+				{
+					continue;
+				}
+				Member->StopOperative();
+				Member->LeaveCover(TEXT("fence smoke setup"));
+				Member->SetStance(EOperativeStance::Standing);
+				const FVector Feet = Start - Direction * (110.f * MemberIndex);
+				Member->TeleportTo(Feet + FVector(0.f, 0.f, Member->GetSimpleCollisionHalfHeight() + 5.f), Direction.Rotation(), false, true);
+				State->CoverMantles.Add(Member, Member->GetMantleCount());
+				++MemberIndex;
+			}
+			const bool bSlot = CoverTraceRules::FindCoverSlotAt(World, Aim, -Direction, State->CoverRequested)
+				&& State->CoverRequested.Height == ECoverHeight::LowCover && State->CoverRequested.WallActor == State->Site.Actor
+				&& !CoverTraceRules::IsOnApproachSide(State->CoverRequested, Start);
+			if (!bSlot)
+			{
+				Check(*State, false, FString::Printf(TEXT("cover case %d: far-side fence slot"), State->CoverCase));
+				return Finish(*State, false);
+			}
+			Next(*State, 6);
+			return true;
+		}
+		case 6:
+			if (State->StageTime >= 0.6f)
+			{
+				Squad->SetFollowersHolding((State->CoverCase % 4) < 2);
+				PC->ShowCoverPreview(Leader, State->CoverRequested);
+				PC->ConfirmCoverPreview(true);
+				Next(*State, 7);
+			}
+			return true;
+		case 7:
+		{
+			bool bNoClimb = true;
+			bool bCrouched = true;
+			for (const TPair<AOperativeCharacter*, int32>& Pair : State->CoverMantles)
+			{
+				bNoClimb &= !Pair.Key->IsVaulting() && Pair.Key->GetMantleCount() == Pair.Value
+					&& !CoverTraceRules::IsOnApproachSide(State->CoverRequested, Pair.Key->GetActorLocation());
+				bCrouched &= Pair.Key->GetStance() == EOperativeStance::Crouching;
+			}
+			const bool bSlotCover = Leader->bInCover && Leader->GetCoverSlot().WallActor == State->Site.Actor;
+			// A formation group cover is the wall layout: crouched at the wall, facing out, not a solo cover slot.
+			const bool bGroup = (State->CoverCase % 4) >= 2;
+			const bool bHeld = bSlotCover || (bGroup && bCrouched);
+			if (!(bNoClimb && bHeld) && State->StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(*State, bNoClimb && bHeld, FString::Printf(TEXT("cover case %d: %d monitored, no climb %d, held %d (slot %d, crouched %d)"),
+				State->CoverCase, State->CoverMantles.Num(), bNoClimb ? 1 : 0, bHeld ? 1 : 0, bSlotCover ? 1 : 0, bCrouched ? 1 : 0));
+			if (++State->CoverCase == 8)
+			{
+				return Finish(*State, true);
+			}
+			Next(*State, 5);
 			return true;
 		}
 		default:
