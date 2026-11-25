@@ -450,18 +450,23 @@ namespace MantleFenceRouteSmoke
 		case 7:
 		{
 			bool bNoClimb = true;
+			bool bCrouched = true;
 			for (const TPair<AOperativeCharacter*, int32>& Pair : State->CoverMantles)
 			{
 				bNoClimb &= !Pair.Key->IsVaulting() && Pair.Key->GetMantleCount() == Pair.Value
 					&& !CoverTraceRules::IsOnApproachSide(State->CoverRequested, Pair.Key->GetActorLocation());
+				bCrouched &= Pair.Key->GetStance() == EOperativeStance::Crouching;
 			}
-			const bool bInCover = Leader->bInCover && Leader->GetCoverSlot().WallActor == State->Site.Actor;
-			if (bNoClimb && State->StageTime < 8.f)
+			const bool bSlotCover = Leader->bInCover && Leader->GetCoverSlot().WallActor == State->Site.Actor;
+			// A formation group cover is the wall layout: crouched at the wall, facing out, not a solo cover slot.
+			const bool bGroup = (State->CoverCase % 4) >= 2;
+			const bool bHeld = bSlotCover || (bGroup && bCrouched);
+			if (!(bNoClimb && bHeld) && State->StageTime < 8.f)
 			{
 				return true;
 			}
-			Check(*State, bNoClimb && bInCover, FString::Printf(TEXT("cover case %d: %d monitored, no climb %d, leader in cover %d"),
-				State->CoverCase, State->CoverMantles.Num(), bNoClimb, bInCover));
+			Check(*State, bNoClimb && bHeld, FString::Printf(TEXT("cover case %d: %d monitored, no climb %d, held %d (slot %d, crouched %d)"),
+				State->CoverCase, State->CoverMantles.Num(), bNoClimb ? 1 : 0, bHeld ? 1 : 0, bSlotCover ? 1 : 0, bCrouched ? 1 : 0));
 			if (++State->CoverCase == 8)
 			{
 				return Finish(*State, true);
