@@ -39,6 +39,24 @@ namespace PeekSightRules
 		return Base.IsNearlyZero() ? Base : FRotator(0.f, Base.Rotation().Yaw + YawDeg, 0.f).Vector().GetSafeNormal2D();
 	}
 
+	float LookYawDeg(const FVector& Eye, const FVector& BaseDirection, const FVector& LookPoint, float MaxAbsDeg)
+	{
+		const FVector Base = BaseDirection.GetSafeNormal2D();
+		const FVector Delta = (LookPoint - Eye).GetSafeNormal2D();
+		if (Base.IsNearlyZero() || Delta.IsNearlyZero())
+		{
+			return 0.f;
+		}
+		const float Degrees = FRotator::NormalizeAxis(static_cast<float>(Delta.Rotation().Yaw - Base.Rotation().Yaw));
+		const float Limit = FMath::Max(0.f, MaxAbsDeg);
+		return FMath::Clamp(Degrees, -Limit, Limit);
+	}
+
+	float PeekConeYawDeg(bool bHasLook, float LookYaw, float AppliedAimYawDeg)
+	{
+		return bHasLook ? LookYaw : AppliedAimYawDeg;
+	}
+
 	bool IsInCone(const FPeekSightConfig& Config, const FVector& Eye, const FVector& Direction, const FVector& Target)
 	{
 		return IsInCone(Config, Eye, Direction, Target, Config.RangeCm);

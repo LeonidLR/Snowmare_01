@@ -829,6 +829,16 @@ namespace OperativePeekSight
 {
 	static TAutoConsoleVariable<int32> CVarPeekSight(TEXT("Codex.Sight.Peek"), 1,
 		TEXT("Peek sight (2026-10-19): 1 a peeking operative sees from his leaned-out eyes in the peek cone (and is seen there); 0 the old rule (his capsule's eyes only)"));
+
+	// G025: the Shift-click look turns this cone. 180 deg follows the look on the short arc; the aim-offset clamp is the later animation step.
+	static FVector ConeDirection(const AOperativeCharacter& Operative, const FVector& Eye, const FVector& Base, float AnimYaw)
+	{
+		FVector Look = FVector::ZeroVector;
+		const bool bLook = Operative.GetManualLookPoint(Look);
+		const float Yaw = PeekSightRules::PeekConeYawDeg(bLook,
+			bLook ? PeekSightRules::LookYawDeg(Eye, Base, Look, 180.f) : 0.f, AnimYaw);
+		return PeekSightRules::TwistedDirection(Base, Yaw);
+	}
 }
 
 EPeekSightPose AOperativeCharacter::GetPeekSightPose() const
@@ -855,12 +865,13 @@ bool AOperativeCharacter::GetPeekSight(FVector& OutEye, FVector& OutDirection) c
 		// 2026-10-20: and out in front of the wall's face line where the clip's head is (CornerLeanDepthCm, measured on the head bone).
 		OutEye = PeekSightRules::CornerLeanEyePoint(PeekSightConfig,
 			CoverRules::CornerLeanPoint(CoverSlot, CoverFacing, Feet + FVector(0.f, 0.f, EyeCm), CoverRules::GetConfig().CornerPeekOffsetCm), CoverSlot.WallNormal);
-		OutDirection = PeekSightRules::TwistedDirection(CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg), GetAppliedAimYaw());
+		OutDirection = OperativePeekSight::ConeDirection(*this, OutEye,
+			CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg), GetAppliedAimYaw());
 		return true;
 	}
-	// Over the top of a low wall: the head above its top, looking across it.
+	// Over the top of a low wall: the head above its top, looking across it. A Shift-click look turns this cone too; with no look the aim stays across the wall.
 	OutEye = PeekSightRules::OverTopEyePoint(PeekSightConfig, Feet, CoverSlot.WallNormal, EyeCm, CoverSlot.WallTopCm);
-	OutDirection = (-CoverSlot.WallNormal).GetSafeNormal2D();
+	OutDirection = OperativePeekSight::ConeDirection(*this, OutEye, (-CoverSlot.WallNormal).GetSafeNormal2D(), 0.f);
 	return true;
 }
 

@@ -105,6 +105,19 @@ namespace PeekSightRules
 	/** BaseDirection turned by YawDeg (the upper-body twist), planar unit. */
 	CODEXTACTICS_API FVector TwistedDirection(const FVector& BaseDirection, float YawDeg);
 
+	/**
+	 * Signed yaw, degrees, from BaseDirection at Eye toward LookPoint (short arc, + to his right, the same sign as
+	 * AimOffsetRules::YawToTarget), clamped to +-MaxAbsDeg. 0 when either direction is degenerate.
+	 * G025: a Shift-click look turns the peek cone by this yaw. 180 follows the look; the aim-offset clamp is not applied here.
+	 */
+	CODEXTACTICS_API float LookYawDeg(const FVector& Eye, const FVector& BaseDirection, const FVector& LookPoint, float MaxAbsDeg);
+
+	/**
+	 * Yaw the peek cone applies. A held look replaces the anim twist (adding them swings the cone past the look).
+	 * Without a look, the anim twist (AOperativeCharacter::GetAppliedAimYaw) stays.
+	 */
+	CODEXTACTICS_API float PeekConeYawDeg(bool bHasLook, float LookYaw, float AppliedAimYawDeg);
+
 	/** Target lies in the peek cone (enabled, planar distance <= Config.RangeCm, within HalfAngleDeg of Direction). */
 	CODEXTACTICS_API bool IsInCone(const FPeekSightConfig& Config, const FVector& Eye, const FVector& Direction, const FVector& Target);
 
