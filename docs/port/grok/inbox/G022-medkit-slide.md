@@ -14,3 +14,9 @@ Do: 1) repro smoke (wound -> medkit -> move 5 m; FAIL if speed > 50 cm/s while t
 the first-aid slot weight > 0.1 after the montage end); 2) fix the cause; 3) unit test for the pure part; worker smokes FirstAid*,
 the new repro, MovementSmoke. BUILD ONLY ON THE WORKER (Scripts/build.ps1 -Remote worker).
 Report docs/port/grok/outbox/G022-medkit-slide.report.md + "G022 FINISH | ..." in chat. Never push, never touch main / maps / .uasset.
+
+ADDED (designer 11-25): an operative IN COVER (behind a wall / fence) cannot use a medkit on himself - "very hard to work with". Allow
+self-treatment (and treating an ally next to him) while in cover: play the first-aid montage in the cover pose (crouched / stand-at-wall),
+stay in the cover slot, no stepping out; after it ends he is back in the same cover state (and NOT sliding - the original G022 bug).
+Find the gate (first-aid availability check: bInCover / busy-in-cover / stance rule). The design rule "a heavily wounded operative cannot
+treat himself" stays as it is. Smoke: wounded operative in low cover and at a wall -> medkit -> HP up, still in cover, legs animate after.
