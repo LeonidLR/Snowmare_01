@@ -33,12 +33,33 @@ export interface TrainingRun {
   sector: number | null;
 }
 
+export interface SectorFightRow {
+  sector: number | null;
+  label: string;
+  sessions: number;
+  rounds: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  minutes: number;
+  lastPlayed: string | null;
+  fewest?: boolean;
+}
+
+export interface SectorFightStats {
+  sectors: SectorFightRow[];
+  noSector: SectorFightRow;
+  total: SectorFightRow;
+  recommendedSector: number | null;
+}
+
 export interface TrainingData {
   maps: typeof TRAINING_MAPS;
   active: TrainingSelection;
   sectors: TrainingSector[];
   layout: GenLayout | null;
   runs: TrainingRun[];
+  sectorStats?: SectorFightStats;
   howto?: string;
   editorCmdPath?: string;
 }
