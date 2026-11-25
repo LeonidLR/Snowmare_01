@@ -13,3 +13,10 @@ slots within 20 s, each crossed by a vault (no detour > 1.5x the straight distan
 name the cause. Fix; keep 120's rule (a Cover order never vaults). MantleFenceRouteSmoke, FormationWallHugSmoke, LowCoverMoveLakeSmoke PASS.
 BUILD ONLY ON THE WORKER, foreground, PROGRESS lines. Branch grok/G026-formation-fence from origin/main.
 Report docs/port/grok/outbox/G026-formation-fence.report.md + "G026 FINISH | ...". Never push.
+
+ADDED (designer 11-25, same fight): UNDER FIRE DURING A VAULT the operative who was almost over the fence is snapped BACK to the start of
+the vault. Expected: once a vault / mantle has started it always completes to the far side (a hit may play an additive flinch, take damage,
+even knock him down AFTER landing - never cancel the traversal and teleport him back). Find what cancels it (hit reaction / knockdown /
+suppression / panic / cover-reaction order interrupting the mantle montage, root-motion / warp target reset, an abort that restores the
+start transform). Smoke: operative vaulting an X6 fence takes 3 hits at 30 %, 60 %, 90 % of the clip -> ends on the far side, never
+moved back toward the start by > 20 cm. Unit test for the "traversal is not interruptible" rule.
