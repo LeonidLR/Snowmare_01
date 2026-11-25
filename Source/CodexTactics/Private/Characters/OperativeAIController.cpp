@@ -2,7 +2,11 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/OperativeCrowdFollowingComponent.h"
 #include "CodexTactics.h"
+#include "AI/Navigation/NavQueryFilter.h"
 #include "HAL/IConsoleManager.h"
+#include "Interactables/MantleNavigation.h"
+#include "Interactables/VaultNavigation.h"
+#include "NavigationData.h"
 #include "Navigation/CrowdFollowingComponent.h"
 
 AOperativeAIController::AOperativeAIController(const FObjectInitializer& ObjectInitializer)
@@ -21,6 +25,29 @@ void AOperativeAIController::OnPossess(APawn* InPawn)
 		Crowd->SetCrowdSeparationWeight(2.f);
 		Crowd->SetCrowdAvoidanceQuality(ECrowdAvoidanceQuality::High);
 	}
+}
+
+void AOperativeAIController::FindPathForMoveRequest(const FAIMoveRequest& MoveRequest, FPathFindingQuery& Query, FNavPathSharedPtr& OutPath) const
+{
+	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(GetPawn());
+	const ANavigationData* NavData = Query.NavData.Get();
+	if (NavData && Operative && Operative->IsPlayerTeam() && Operative->HasPendingCover()
+		&& Operative->GetPendingCoverSlot().Height == ECoverHeight::LowCover)
+	{
+		const FSharedConstNavQueryFilter Original = Query.QueryFilter ? Query.QueryFilter : NavData->GetDefaultQueryFilter();
+		FSharedNavQueryFilter Filter = Original->GetCopy();
+		for (const UClass* Area : { UNavArea_Mantle::StaticClass(), UNavArea_Vault::StaticClass(), UNavArea_WindowVault::StaticClass() })
+		{
+			const int32 Id = NavData->GetAreaID(Area);
+			if (Id != INDEX_NONE)
+			{
+				Filter->SetExcludedArea(static_cast<uint8>(Id));
+			}
+		}
+		Query.QueryFilter = Filter;
+		Query.SetAllowPartialPaths(false);
+	}
+	Super::FindPathForMoveRequest(MoveRequest, Query, OutPath);
 }
 
 void AOperativeAIController::OnMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result)

@@ -82,9 +82,11 @@ namespace
 		TEXT("CornerPeekEntryYawBlendSeconds); 0: the old entry - the enter clip spins him to the wall and back first (the 2026-11-01 bug; A/B)."));
 }
 
-EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Slot, bool bSprint)
+EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& RequestedSlot, bool bSprint)
 {
-	if (!Slot.IsValid() || !UTrainingSectorSubsystem::Allows(GetWorld(), Slot.WorldLocation, GetSimpleCollisionRadius() + 10.0))
+	FCoverSlot Slot = RequestedSlot;
+	if (!Slot.IsValid() || (IsPlayerTeam() && !CoverTraceRules::ResolveLowCoverApproach(GetWorld(), GetActorLocation(), Slot))
+		|| !UTrainingSectorSubsystem::Allows(GetWorld(), Slot.WorldLocation, GetSimpleCollisionRadius() + 10.0))
 	{
 		return EOperativeOrderResult::Unreachable;
 	}

@@ -98,10 +98,10 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 	{
 		return false;
 	}
-	// The knee probe reaches beyond the cover destination. Do not vault the obstacle we are about
-	// to use from this side. A route approaching its opposite face may still cross it.
-	if (bHasPendingCover && PendingCoverSlot.WallActor.Get() == Front.GetActor()
-		&& FVector::DotProduct(Location - PendingCoverSlot.WallPoint, PendingCoverSlot.WallNormal) >= 0.f)
+	// A player's low-cover approach never auto-vaults. The knee probe can hit past the slot or hit another piece of the fence.
+	if (bHasPendingCover && ((IsPlayerTeam() && PendingCoverSlot.Height == ECoverHeight::LowCover)
+		|| (PendingCoverSlot.WallActor.Get() == Front.GetActor()
+			&& FVector::DotProduct(Location - PendingCoverSlot.WallPoint, PendingCoverSlot.WallNormal) >= 0.f)))
 	{
 		return false;
 	}

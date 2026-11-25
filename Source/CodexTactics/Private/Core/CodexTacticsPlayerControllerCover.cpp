@@ -356,6 +356,11 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 		}
 		return false;
 	}
+	if (!TurnBased && !CoverTraceRules::ResolveLowCoverApproach(GetWorld(), Operative->GetActorLocation(), Slot))
+	{
+		HideCoverPreview();
+		return true; // an unavailable cover approach must not become a movement order
+	}
 	// Turn-based: the slot snaps to the nearest free cell of the grid.
 	if (TurnBased && TurnBased->GetGrid())
 	{

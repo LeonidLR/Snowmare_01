@@ -1,4 +1,5 @@
 #include "Tactics/CoverTraceRules.h"
+#include "Tactics/CoverWrapRules.h"
 #include "Vehicles/VehiclePawn.h"
 
 #include "Combat/EnemyGhostActor.h"
@@ -300,6 +301,28 @@ namespace CoverTraceRules
 				OutSlot.RightEdgeDistanceCm = EdgeDistance;
 			}
 		}
+		return true;
+	}
+
+	bool IsOnApproachSide(const FCoverSlot& Slot, const FVector& Position)
+	{
+		return FVector2D::DotProduct(FVector2D(Position - Slot.WallPoint), FVector2D(Slot.WallNormal)) >= 0.0;
+	}
+
+	bool ResolveLowCoverApproach(UWorld* World, const FVector& Position, FCoverSlot& Slot)
+	{
+		if (Slot.Height != ECoverHeight::LowCover || IsOnApproachSide(Slot, Position))
+		{
+			return true;
+		}
+		FCoverSlot Near;
+		if (!FindCoverSlotAt(World, Slot.WallPoint, Slot.WallNormal, Near) || Near.Height != ECoverHeight::LowCover
+			|| !CoverWrapWorld::IsSameObject(Slot, Near) || !IsOnApproachSide(Near, Position)
+			|| FVector2D::DotProduct(FVector2D(Near.WallNormal), FVector2D(Slot.WallNormal)) >= 0.0)
+		{
+			return false;
+		}
+		Slot = MoveTemp(Near);
 		return true;
 	}
 

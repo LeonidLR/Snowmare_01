@@ -99,6 +99,12 @@ namespace CoverTraceRules
 	CODEXTACTICS_API bool FindCoverSlotAt(UWorld* World, const FVector& CursorHitPoint, const FVector& TraceDirection, FCoverSlot& OutSlot,
 		const FCoverTraceConfig& Config = FCoverTraceConfig(), const TArray<const AActor*>& IgnoredActors = TArray<const AActor*>());
 
+	/** True when the approach starts on the occupied side of the slot plane. */
+	CODEXTACTICS_API bool IsOnApproachSide(const FCoverSlot& Slot, const FVector& Position);
+
+	/** Reprobe the near face of a low obstacle when the selected face is on the opposite side. */
+	CODEXTACTICS_API bool ResolveLowCoverApproach(UWorld* World, const FVector& Position, FCoverSlot& Slot);
+
 	/**
 	 * A shimmy target on the same wall as Current: the click projected onto the wall line, traced again (the wall may
 	 * end before it). False when the click leaves the wall.
