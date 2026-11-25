@@ -67,6 +67,36 @@ namespace CorpseLootRules
 	 */
 	CODEXTACTICS_API FLootContents BuildRemainsContents(const FCarriedGear& Gear);
 
+	/** Data-driven drop tuning for hostile PMC corpses (Content/Data/Combat/death_ragdoll.json -> "corpse_loot"). */
+	struct FCorpseRandomLootConfig
+	{
+		float AmmoMagMinFraction = 0.2f;
+		float AmmoMagMaxFraction = 0.6f;
+		float MedkitChance = 0.1f;
+		float GrenadeChance = 0.05f;
+	};
+
+	/** Parses the optional "corpse_loot" block from death_ragdoll.json JSON text; preserves defaults if omitted. */
+	CODEXTACTICS_API bool ParseCorpseLootConfig(const FString& JsonContent, FCorpseRandomLootConfig& OutConfig);
+
+	/** Returns the active corpse_loot config (loads death_ragdoll.json unless overridden for testing). */
+	CODEXTACTICS_API FCorpseRandomLootConfig GetCorpseLootConfig();
+
+	/** Overrides the corpse_loot config in tests; pass nullptr to clear override. */
+	CODEXTACTICS_API void SetCorpseLootConfigForTesting(const FCorpseRandomLootConfig* OverrideConfig);
+
+	/**
+	 * Builds randomized loot for a hostile PMC body searched once:
+	 * - 20-60% of a magazine of ammo for each lootable weapon the body carried that the searcher can use.
+	 * - Rare rolls for a medkit (default 10%) and a grenade (default 5%).
+	 */
+	CODEXTACTICS_API FLootContents BuildHostileRemainsContents(
+		TConstArrayView<FString> BodyWeaponIds,
+		TConstArrayView<FString> SearcherUsableWeapons,
+		const TMap<FString, int32>& ClipSizesByWeapon,
+		int32 Seed,
+		const FCorpseRandomLootConfig& Config);
+
 	/** "Remains: <name>" (the crate name, glossary «Останки»). */
 	CODEXTACTICS_API FText GetRemainsName(const FText& OperativeName);
 

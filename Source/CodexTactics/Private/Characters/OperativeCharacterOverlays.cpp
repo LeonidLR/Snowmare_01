@@ -22,6 +22,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "Interactables/BarricadeActor.h"
+#include "Interactables/LootCrateActor.h"
 #include "Interactables/RadiusRingSubsystem.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "HAL/IConsoleManager.h"
@@ -362,10 +363,14 @@ int32 AOperativeCharacter::ClearBodyOverlays(const TCHAR* Why)
 		TInlineComponentArray<UMeshComponent*> Meshes(Actor);
 		for (UMeshComponent* MeshComponent : Meshes)
 		{
-			if (MeshComponent && MeshComponent->GetOverlayMaterial())
+			if (UMaterialInterface* Overlay = MeshComponent ? MeshComponent->GetOverlayMaterial() : nullptr)
 			{
+				if (const ALootCrateActor* HoverCrate = Cast<ALootCrateActor>(Overlay->GetOuter()); HoverCrate && HoverCrate->IsRemainsHovered())
+				{
+					continue;
+				}
 				UE_LOG(LogCodexTactics, Display, TEXT("%s (%s): overlay %s taken off %s"), *DisplayName.ToString(), Why,
-					*GetNameSafe(MeshComponent->GetOverlayMaterial()), *MeshComponent->GetName());
+					*GetNameSafe(Overlay), *MeshComponent->GetName());
 				MeshComponent->SetOverlayMaterial(nullptr);
 				++Removed;
 			}

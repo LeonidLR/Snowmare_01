@@ -1,5 +1,9 @@
 #include "Misc/AutomationTest.h"
+#include "Engine/World.h"
 #include "Interactables/CorpseLootRules.h"
+#include "Interactables/LootCrateActor.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -144,6 +148,86 @@ bool FCorpseLootTextTest::RunTest(const FString&)
 	TestEqual(TEXT("Crate name"), CorpseLootRules::GetRemainsName(Name).ToString(), FString(TEXT("Remains: Medic-Sapper")));
 	TestEqual(TEXT("Prompt"), CorpseLootRules::GetSearchPrompt(Name, false), FString(TEXT("[Click] Search the body: Medic-Sapper")));
 	TestEqual(TEXT("Searched"), CorpseLootRules::GetSearchPrompt(Name, true), FString(TEXT("[Searched] Body: Medic-Sapper (empty)")));
+	return true;
+}
+
+CORPSE_LOOT_TEST(FHostileCorpseLootConfigTest, "HostileConfigAndAmmoRange")
+bool FHostileCorpseLootConfigTest::RunTest(const FString&)
+{
+	const FString ConfigPath = FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Data/Combat/death_ragdoll.json"));
+	FString JsonContent;
+	TestTrue(TEXT("Read death_ragdoll.json"), FFileHelper::LoadFileToString(JsonContent, *ConfigPath));
+	CorpseLootRules::FCorpseRandomLootConfig Config;
+	TestTrue(TEXT("Parsed corpse_loot from death_ragdoll.json"), CorpseLootRules::ParseCorpseLootConfig(JsonContent, Config));
+	TestEqual(TEXT("ammo_mag_min_fraction"), Config.AmmoMagMinFraction, 0.2f);
+	TestEqual(TEXT("ammo_mag_max_fraction"), Config.AmmoMagMaxFraction, 0.6f);
+	TestEqual(TEXT("medkit_chance"), Config.MedkitChance, 0.1f);
+	TestEqual(TEXT("grenade_chance"), Config.GrenadeChance, 0.05f);
+
+	const TArray<FString> BodyWeapons = { TEXT("m16"), TEXT("shotgun"), TEXT("knife") };
+	const TArray<FString> SearcherWeapons = { TEXT("m16"), TEXT("pistol") };
+	TMap<FString, int32> ClipSizes;
+	ClipSizes.Add(TEXT("m16"), 30);
+	ClipSizes.Add(TEXT("shotgun"), 8);
+
+	// Same seed is deterministic; only intersection weapons (m16) drop 20-60% of 30 rounds (6..18).
+	const FLootContents First = CorpseLootRules::BuildHostileRemainsContents(BodyWeapons, SearcherWeapons, ClipSizes, 42, Config);
+	const FLootContents Second = CorpseLootRules::BuildHostileRemainsContents(BodyWeapons, SearcherWeapons, ClipSizes, 42, Config);
+	TestEqual(TEXT("Determinism m16 ammo"), First.GetCount(ELootItem::RifleAmmo), Second.GetCount(ELootItem::RifleAmmo));
+	TestEqual(TEXT("Determinism shotgun excluded"), First.GetCount(ELootItem::ShotgunAmmo), 0);
+
+	int32 MedkitHits = 0;
+	int32 GrenadeHits = 0;
+	for (int32 Seed = 1; Seed <= 200; ++Seed)
+	{
+		const FLootContents Rolled = CorpseLootRules::BuildHostileRemainsContents(BodyWeapons, SearcherWeapons, ClipSizes, Seed, Config);
+		const int32 Rounds = Rolled.GetCount(ELootItem::RifleAmmo);
+		TestTrue(*FString::Printf(TEXT("Seed %d m16 rounds (%d) in [6, 18]"), Seed, Rounds), Rounds >= 6 && Rounds <= 18);
+		TestEqual(TEXT("Unusable shotgun excluded"), Rolled.GetCount(ELootItem::ShotgunAmmo), 0);
+		TestEqual(TEXT("Pistol not carried by body excluded"), Rolled.GetCount(ELootItem::PistolAmmo), 0);
+		TestTrue(TEXT("No weapon drop on hostile body"), Rolled.BonusWeaponId.IsEmpty());
+		MedkitHits += Rolled.GetCount(ELootItem::Medkit);
+		GrenadeHits += Rolled.GetCount(ELootItem::Grenade);
+	}
+	TestTrue(*FString::Printf(TEXT("Medkit rare drop observed (%d/200)"), MedkitHits), MedkitHits > 0 && MedkitHits < 60);
+	TestTrue(*FString::Printf(TEXT("Grenade rare drop observed (%d/200)"), GrenadeHits), GrenadeHits > 0 && GrenadeHits < 40);
+
+	// Zero chances + no usable overlap -> empty roll cleanly.
+	CorpseLootRules::FCorpseRandomLootConfig ZeroConfig = Config;
+	ZeroConfig.MedkitChance = 0.f;
+	ZeroConfig.GrenadeChance = 0.f;
+	const FLootContents EmptyRoll = CorpseLootRules::BuildHostileRemainsContents({ TEXT("shotgun") }, { TEXT("m16") }, ClipSizes, 7, ZeroConfig);
+	TestTrue(TEXT("No overlap + 0 rare chances = empty"), EmptyRoll.IsEmpty());
+	return true;
+}
+
+CORPSE_LOOT_TEST(FHostileCorpseSearchOnceTest, "HostileSearchedOnceAndHoverState")
+bool FHostileCorpseSearchOnceTest::RunTest(const FString&)
+{
+	UWorld* World = UWorld::CreateWorld(EWorldType::Game, false);
+	TestNotNull(TEXT("Transient world"), World);
+	if (!World)
+	{
+		return false;
+	}
+	ALootCrateActor* Remains = World->SpawnActor<ALootCrateActor>();
+	TestNotNull(TEXT("Spawned remains actor"), Remains);
+	if (Remains)
+	{
+		Remains->BindRemainsBody(nullptr, FText::FromString(TEXT("PMC-1")));
+		Remains->ConfigureHostileRemains({ TEXT("shotgun") }, { { TEXT("shotgun"), 8 } }, 17);
+		// Before search: even if empty for searcher, unsearched hostile remains are still searchable once and highlightable.
+		TestFalse(TEXT("Unsearched hostile remains not looted yet"), Remains->IsLooted());
+		Remains->SetRemainsHovered(true);
+		TestTrue(TEXT("Hover active before search"), Remains->IsRemainsHovered());
+		// After search marks searched: second search refused, prompt turns searched, hover turns off.
+		Remains->MarkOpen();
+		Remains->HandleDialogClosed();
+		TestTrue(TEXT("Marked searched on close"), Remains->IsRemainsSearched());
+		TestTrue(TEXT("IsLooted true after search"), Remains->IsLooted());
+		TestFalse(TEXT("Hover cleared once looted"), Remains->IsRemainsHovered());
+	}
+	World->DestroyWorld(false);
 	return true;
 }
 

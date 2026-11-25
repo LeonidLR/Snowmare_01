@@ -123,10 +123,12 @@ void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSour
 				Corpses->RegisterCorpse(this);
 			}
 		}
+		SpawnRemainsLoot();
 		return;
 	}
 	if (bSectorRound)
 	{
+		SpawnRemainsLoot();
 		return;
 	}
 	if (!bDefeat)
@@ -434,16 +436,38 @@ void AOperativeCharacter::SpawnRemainsLoot()
 	// his hands - only those (user decision 2026-10-26, CorpseLootRules::IsRemainsItem: no matches, heat packs, flares, firewood or
 	// set-up items). 2026-10-26: the M16 rounds were read from AmmoInventory, which holds only the weapons NOT in his hands (the M16 in
 	// hand gave 0 / stale rounds).
+	const bool bHostile = !IsPlayerTeam();
 	CorpseLootRules::FCarriedGear Gear;
-	for (uint8 Index = 0; Index <= static_cast<uint8>(LastTransferItem); ++Index)
+	TArray<FString> HostileWeapons;
+	TMap<FString, int32> HostileClipSizes;
+	if (bHostile)
 	{
-		const ETransferItem Item = static_cast<ETransferItem>(Index);
-		const FString WeaponId = TransferRules::GetAmmoWeaponId(Item);
-		const int32 Clip = WeaponId.IsEmpty() ? 0 : FMath::Max(0, GetAmmoState(WeaponId).Clip);
-		Gear.Items.Add(Item, FMath::Max(0, TransferRules::GetAvailable(*this, Item)) + Clip);
+		if (CurrentWeapon && !CurrentWeapon->WeaponId.IsEmpty())
+		{
+			HostileWeapons.AddUnique(CurrentWeapon->WeaponId);
+			HostileClipSizes.Add(CurrentWeapon->WeaponId, CurrentWeapon->MaxClipSize);
+		}
+		for (const UWeaponDataAsset* Weapon : AvailableWeapons)
+		{
+			if (Weapon && !Weapon->WeaponId.IsEmpty())
+			{
+				HostileWeapons.AddUnique(Weapon->WeaponId);
+				HostileClipSizes.Add(Weapon->WeaponId, Weapon->MaxClipSize);
+			}
+		}
 	}
-	Gear.Grenades = GrenadesCount;
-	Gear.WeaponId = CurrentWeapon ? CurrentWeapon->WeaponId : FString();
+	else
+	{
+		for (uint8 Index = 0; Index <= static_cast<uint8>(LastTransferItem); ++Index)
+		{
+			const ETransferItem Item = static_cast<ETransferItem>(Index);
+			const FString WeaponId = TransferRules::GetAmmoWeaponId(Item);
+			const int32 Clip = WeaponId.IsEmpty() ? 0 : FMath::Max(0, GetAmmoState(WeaponId).Clip);
+			Gear.Items.Add(Item, FMath::Max(0, TransferRules::GetAvailable(*this, Item)) + Clip);
+		}
+		Gear.Grenades = GrenadesCount;
+		Gear.WeaponId = CurrentWeapon ? CurrentWeapon->WeaponId : FString();
+	}
 	// Spawned at his feet, then fitted to his lying body (ALootCrateActor::BindRemainsBody); the box never touches the navmesh.
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 	ALootCrateActor* Remains = GetWorld()->SpawnActorDeferred<ALootCrateActor>(ALootCrateActor::StaticClass(),
@@ -453,10 +477,23 @@ void AOperativeCharacter::SpawnRemainsLoot()
 		return;
 	}
 	Remains->Box->SetCanEverAffectNavigation(false);
-	Remains->Contents = CorpseLootRules::BuildRemainsContents(Gear);
+	if (bHostile)
+	{
+		Remains->Contents.DestroyAll();
+	}
+	else
+	{
+		Remains->Contents = CorpseLootRules::BuildRemainsContents(Gear);
+	}
 	Remains->FinishSpawning(FTransform(GetActorRotation(), Feet + FVector(0.f, 0.f, 40.f)));
 	Remains->BindRemainsBody(GetMesh(), DisplayName);
-	UE_LOG(LogCodexTactics, Display, TEXT("%s's remains: %d item stacks, box %s at %s (capsule at %s)"), *DisplayName.ToString(), Remains->GetItems().Num(),
+	if (bHostile)
+	{
+		const int32 LootSeed = static_cast<int32>(HashCombineFast(GetTypeHash(GetName()), static_cast<uint32>(FMath::Rand())));
+		Remains->ConfigureHostileRemains(MoveTemp(HostileWeapons), MoveTemp(HostileClipSizes), LootSeed);
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("%s's %s remains: %d item stacks, box %s at %s (capsule at %s)"), *DisplayName.ToString(),
+		bHostile ? TEXT("hostile") : TEXT("squad"), Remains->GetItems().Num(),
 		*Remains->Box->GetUnscaledBoxExtent().ToCompactString(), *Remains->GetActorLocation().ToCompactString(), *GetActorLocation().ToCompactString());
 }
 

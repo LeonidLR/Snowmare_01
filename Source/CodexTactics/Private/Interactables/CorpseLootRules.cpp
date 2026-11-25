@@ -1,7 +1,13 @@
 #include "Interactables/CorpseLootRules.h"
 
 #include "Data/WeaponRoster.h"
+#include "Dom/JsonObject.h"
 #include "Interactables/ItemStashComponent.h"
+#include "Math/RandomStream.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 #define LOCTEXT_NAMESPACE "CorpseLootRules"
 
@@ -102,6 +108,149 @@ FLootContents CorpseLootRules::BuildRemainsContents(const FCarriedGear& Gear)
 	}
 	Contents.Grenades = FMath::Max(0, Gear.Grenades);
 	Contents.BonusWeaponId = IsLootableWeapon(Gear.WeaponId) ? Gear.WeaponId : FString();
+	return Contents;
+}
+
+namespace CorpseLootRulesInternal
+{
+	bool bHasOverride = false;
+	CorpseLootRules::FCorpseRandomLootConfig OverrideConfig;
+
+	bool FindAmmoTransferItem(const FString& WeaponId, ETransferItem& OutItem)
+	{
+		static const ETransferItem AmmoItems[] = {
+			ETransferItem::RifleAmmo,
+			ETransferItem::PistolAmmo,
+			ETransferItem::ShotgunAmmo,
+			ETransferItem::FlameFuel,
+			ETransferItem::CryoAmmo,
+			ETransferItem::PlasmaAmmo
+		};
+		for (const ETransferItem Candidate : AmmoItems)
+		{
+			if (TransferRules::GetAmmoWeaponId(Candidate) == WeaponId)
+			{
+				OutItem = Candidate;
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
+bool CorpseLootRules::ParseCorpseLootConfig(const FString& JsonContent, FCorpseRandomLootConfig& OutConfig)
+{
+	OutConfig = FCorpseRandomLootConfig();
+	TSharedPtr<FJsonObject> Root;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonContent);
+	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		return false;
+	}
+	const TSharedPtr<FJsonObject>* LootObject = nullptr;
+	if (!Root->TryGetObjectField(TEXT("corpse_loot"), LootObject) || !LootObject || !LootObject->IsValid())
+	{
+		return true;
+	}
+	double Value = 0.0;
+	if ((*LootObject)->TryGetNumberField(TEXT("ammo_mag_min_fraction"), Value))
+	{
+		OutConfig.AmmoMagMinFraction = FMath::Clamp(static_cast<float>(Value), 0.f, 1.f);
+	}
+	if ((*LootObject)->TryGetNumberField(TEXT("ammo_mag_max_fraction"), Value))
+	{
+		OutConfig.AmmoMagMaxFraction = FMath::Clamp(static_cast<float>(Value), 0.f, 1.f);
+	}
+	OutConfig.AmmoMagMaxFraction = FMath::Max(OutConfig.AmmoMagMinFraction, OutConfig.AmmoMagMaxFraction);
+	if ((*LootObject)->TryGetNumberField(TEXT("medkit_chance"), Value))
+	{
+		OutConfig.MedkitChance = FMath::Clamp(static_cast<float>(Value), 0.f, 1.f);
+	}
+	if ((*LootObject)->TryGetNumberField(TEXT("grenade_chance"), Value))
+	{
+		OutConfig.GrenadeChance = FMath::Clamp(static_cast<float>(Value), 0.f, 1.f);
+	}
+	return true;
+}
+
+CorpseLootRules::FCorpseRandomLootConfig CorpseLootRules::GetCorpseLootConfig()
+{
+	if (CorpseLootRulesInternal::bHasOverride)
+	{
+		return CorpseLootRulesInternal::OverrideConfig;
+	}
+	FCorpseRandomLootConfig Config;
+	const FString ConfigPath = FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Data/Combat/death_ragdoll.json"));
+	FString JsonContent;
+	if (FFileHelper::LoadFileToString(JsonContent, *ConfigPath))
+	{
+		ParseCorpseLootConfig(JsonContent, Config);
+	}
+	return Config;
+}
+
+void CorpseLootRules::SetCorpseLootConfigForTesting(const FCorpseRandomLootConfig* InOverrideConfig)
+{
+	if (InOverrideConfig)
+	{
+		CorpseLootRulesInternal::OverrideConfig = *InOverrideConfig;
+		CorpseLootRulesInternal::bHasOverride = true;
+	}
+	else
+	{
+		CorpseLootRulesInternal::bHasOverride = false;
+	}
+}
+
+FLootContents CorpseLootRules::BuildHostileRemainsContents(
+	TConstArrayView<FString> BodyWeaponIds,
+	TConstArrayView<FString> SearcherUsableWeapons,
+	const TMap<FString, int32>& ClipSizesByWeapon,
+	int32 Seed,
+	const FCorpseRandomLootConfig& Config)
+{
+	FLootContents Contents;
+	Contents.DestroyAll();
+	FRandomStream Stream(Seed);
+
+	const float MinFrac = FMath::Clamp(Config.AmmoMagMinFraction, 0.f, 1.f);
+	const float MaxFrac = FMath::Clamp(FMath::Max(MinFrac, Config.AmmoMagMaxFraction), 0.f, 1.f);
+
+	TArray<FString> RolledWeapons;
+	for (const FString& WeaponId : BodyWeaponIds)
+	{
+		if (!IsLootableWeapon(WeaponId) || RolledWeapons.Contains(WeaponId))
+		{
+			continue;
+		}
+		RolledWeapons.Add(WeaponId);
+		if (!SearcherUsableWeapons.Contains(WeaponId))
+		{
+			continue;
+		}
+		ETransferItem AmmoItem = ETransferItem::RifleAmmo;
+		if (!CorpseLootRulesInternal::FindAmmoTransferItem(WeaponId, AmmoItem))
+		{
+			continue;
+		}
+		const int32* ExplicitClip = ClipSizesByWeapon.Find(WeaponId);
+		const int32 ClipSize = (ExplicitClip && *ExplicitClip > 0) ? *ExplicitClip : TransferRules::GetAmmoPack(AmmoItem);
+		if (ClipSize > 0 && MaxFrac > 0.f)
+		{
+			const float Fraction = Stream.FRandRange(MinFrac, MaxFrac);
+			const int32 Rounds = FMath::Max(1, FMath::RoundToInt(static_cast<float>(ClipSize) * Fraction));
+			Contents.AddCount(ItemStash::ToLootItem(AmmoItem), Rounds);
+		}
+	}
+
+	if (Config.MedkitChance > 0.f && Stream.GetFraction() < Config.MedkitChance)
+	{
+		Contents.Medkits += 1;
+	}
+	if (Config.GrenadeChance > 0.f && Stream.GetFraction() < Config.GrenadeChance)
+	{
+		Contents.Grenades += 1;
+	}
 	return Contents;
 }
 

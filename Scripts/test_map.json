@@ -17,7 +17,7 @@
     "TutorialAmbushLakeMineSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "TurnArenaLakeSmoke", "TurnArenaYardSmoke",
     "EnvironmentLakeSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "WeatherLakeSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke", "SnowIndoorSmoke",
     "StartLightingSmoke", "StartSnowSmoke", "FormationWallHugSmoke", "StartFlickerSmoke", "LevelGenBuildingsSmoke", "RoofCutawayStoreySmoke", "CutawayClickSmoke",
-    "SectorBoundarySmoke", "SectorRoundsSmoke",
+    "SectorBoundarySmoke", "SectorRoundsSmoke", "CorpseSearchSmoke",
     "DropLinkReachSmoke", "ColdIndoorsSmoke", "WindowStairHoverSmoke", "FormationStairSmoke", "FormationWindowSmoke", "CoverIndoorSmoke",
     "DoorsSmoke", "DoorBreachSmoke", "WindowCoverFireSmoke", "WindowDetourSmoke"
   ],
@@ -32,6 +32,7 @@
     "_comment": "Smokes known to pass only on a re-run, name -> reason (smoke_parallel prints them apart from NEW flaky ones). Goal: empty. Cleanup day 2026-10-15 fixed CornerHold, TurnBasedAim, Knockdown, Cover, LevelWave, GroupSelect, TurnBlastDeath, EnemyTactics (+ Panic, SquadControl, VisionCone failing) - see docs/port/KNOWN_GAPS.md (the old HANDOFF section 9)."
   },
   "smokeOptions": {
+    "CorpseSearchSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "timeout": 300, "_why": "Task 130: hover Fresnel + walk-to-body search + once-only hostile PMC loot + sector fallen squad member remains"},
     "CoverIndoorSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 300, "_why": "Indoor cover animation sets and outdoor M4 control. Generated Riffle clips are needed. Requires the untracked Kit map, provided in the main checkout and both worker roots. The smoke runner reports map missing elsewhere."},
     "DoorsSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 600, "_why": "G018: openable doors on the kept kit showcase. The grey L_Gen_StoryShowcase was archived in 061."},
     "DoorBreachSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 600, "_why": "G018: doorway stack-up retargeted off archived L_Gen_Depot_1 onto the kept kit showcase."},
@@ -621,9 +622,9 @@
     },
     {
       "name": "loot",
-      "globs": ["Source/**/Interactables/Loot*", "Source/**/UI/LootDialog*", "Source/**/Interactables/CorpseLoot*", "Source/**/Debug/FallenGearSmoke*"],
+      "globs": ["Source/**/Interactables/Loot*", "Source/**/UI/LootDialog*", "Source/**/Interactables/CorpseLoot*", "Source/**/Debug/FallenGearSmoke*", "Source/**/Debug/CorpseSearchSmoke*", "Content/Data/Combat/death_ragdoll.json"],
       "tests": ["CodexTactics.Loot", "CodexTactics.Transfer"],
-      "smokes": ["SaveCoverageLakeSmoke", "LakePauseOrdersSmoke"]
+      "smokes": ["CorpseSearchSmoke", "SaveCoverageLakeSmoke", "LakePauseOrdersSmoke"]
     },
     {
       "name": "shotgun-d1",

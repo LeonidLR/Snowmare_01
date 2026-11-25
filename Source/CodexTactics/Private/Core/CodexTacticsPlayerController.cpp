@@ -458,7 +458,20 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 			Exits->SetHoveredArrow(HoveredExit);
 		}
 		// 2026-10-26: a fallen operative's remains (his body) under the cursor show the hand too - a click searches him.
-		const ALootCrateActor* HoveredRemains = bCursorHit ? Cast<ALootCrateActor>(TrapHit.GetActor()) : nullptr;
+		ALootCrateActor* HoveredRemains = bCursorHit ? Cast<ALootCrateActor>(TrapHit.GetActor()) : nullptr;
+		ALootCrateActor* ActiveHoveredRemains = (HoveredRemains && HoveredRemains->IsRemains()) ? HoveredRemains : nullptr;
+		if (HoveredRemainsActor.Get() != ActiveHoveredRemains)
+		{
+			if (ALootCrateActor* PreviousRemains = HoveredRemainsActor.Get())
+			{
+				PreviousRemains->SetRemainsHovered(false);
+			}
+			HoveredRemainsActor = ActiveHoveredRemains;
+			if (ActiveHoveredRemains)
+			{
+				ActiveHoveredRemains->SetRemainsHovered(true);
+			}
+		}
 		// Openable doors (switch on): a door leaf / its doorway under the cursor shows the hand - a click works the door (never a cover hug).
 		const UDoorSubsystem* HoverDoors = GetWorld()->GetSubsystem<UDoorSubsystem>();
 		const bool bDoorHover = bCursorHit && HoverDoors && HoverDoors->IsActive() && HoverDoors->FindClickedDoor(TrapHit) != nullptr;
