@@ -41,6 +41,7 @@
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverRules.h"
 #include "Telemetry/RunTelemetrySubsystem.h"
+#include "Training/TrainingSectorSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 
 namespace OperativeFireTrace
@@ -1237,6 +1238,10 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	NoteShotAim(Target, bBlindShot ? BlindAimPoint : (bExposedAimShot ? ExposedAimPoint : Target->GetActorLocation()), bBlindShot);
 	OnWeaponFired.Broadcast(this, Target, bHit);
 	OnWeaponFiredNative.Broadcast(this, Target, bHit);
+	if (UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(GetWorld()))
+	{
+		Training->RecordShot(*this, Target, bHit);
+	}
 
 	// Godot _spawn_muzzle_tracer: to the target, or deflected next to it on a miss (suppressed: x the suppression spread).
 	// A peeking man's exposed head and shoulder (fix/corner-peek-standoff): the round flies to the part that shows, not into his corner.

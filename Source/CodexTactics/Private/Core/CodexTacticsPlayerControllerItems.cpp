@@ -152,6 +152,12 @@ void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
 		Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("ItemMissing", "{0} has no {1} in personal inventory!"),
 			Leader->DisplayName, PersonalItemRules::GetMissingName(Item)));
 	}
+	else if (PersonalItemRules::IsFood(Item)
+		&& (Leader->GetWoundTier() == CriticalWoundRules::EWoundTier::Heavy || Leader->GetWoundTier() == CriticalWoundRules::EWoundTier::Critical)
+		&& Leader->ColdLevel <= 0.f)
+	{
+		Messages->PostMessage(Leader->DisplayName, LOCTEXT("FoodHeavyWound", "Food cannot heal heavy or critical wounds — use a medkit!"));
+	}
 	else
 	{
 		Messages->PostMessage(Leader->DisplayName, LOCTEXT("ItemFull", "Operative's health and warmth are already 100%!"));

@@ -33,14 +33,18 @@ bool AOperativeCharacter::UsePersonalItem(EPersonalItem Item)
 		UTacticalHeatSubsystem* Heat = GetWorld() ? GetWorld()->GetSubsystem<UTacticalHeatSubsystem>() : nullptr;
 		return Heat && Heat->UseHeatPack(this, this);
 	}
+	const CriticalWoundRules::EWoundTier WoundTier = GetWoundTier();
 	if (GetItemCount(Item) <= 0 || !HealthComponent
-		|| !PersonalItemRules::CanUse(HealthComponent->GetCurrentHealth(), HealthComponent->GetMaxHealth(), ColdLevel))
+		|| !PersonalItemRules::CanUse(HealthComponent->GetCurrentHealth(), HealthComponent->GetMaxHealth(), ColdLevel, Item, WoundTier))
 	{
 		return false;
 	}
-	const FPersonalItemEffect Effect = PersonalItemRules::GetEffect(Item);
+	const FPersonalItemEffect Effect = PersonalItemRules::GetEffectiveEffect(Item, WoundTier);
 	const float HealthBefore = HealthComponent->GetCurrentHealth();
-	HealthComponent->Heal(Effect.Heal);
+	if (Effect.Heal > 0.f)
+	{
+		HealthComponent->Heal(Effect.Heal);
+	}
 	const int32 Gained = FMath::FloorToInt(HealthComponent->GetCurrentHealth() - HealthBefore);
 	if (UFloatingTextSubsystem* Floating = Gained > 0 && GetWorld() ? GetWorld()->GetSubsystem<UFloatingTextSubsystem>() : nullptr)
 	{

@@ -48,6 +48,15 @@ namespace SectorRoundsSmoke
 		bool bPanicMeasure = false;
 		bool bMeasureInitialized = false;
 		double MeasureStartAt = 0.0;
+		bool bAccuracyMeasure = false;
+		int32 TargetRounds = 20;
+		int32 AccLastRound = 0;
+		double AccRoundStartAt = 0.0;
+		TSet<TWeakObjectPtr<AOperativeCharacter>> HookedShooters;
+		int32 AccPlayerShots[4]{};
+		int32 AccPlayerHits[4]{};
+		int32 AccPmcShots[4]{};
+		int32 AccPmcHits[4]{};
 	};
 
 	bool Finish(bool bPass, const TCHAR* What)
@@ -176,7 +185,7 @@ namespace SectorRoundsSmoke
 		{
 			return false;
 		}
-		if (!State->bPanicMeasure)
+		if (!State->bPanicMeasure && !State->bAccuracyMeasure)
 		{
 			Cease(*World);
 		}
@@ -244,6 +253,88 @@ namespace SectorRoundsSmoke
 				return Finish(true, TEXT("panic measure 90s completed"));
 			}
 			return true;
+		}
+		if (State->bAccuracyMeasure)
+		{
+			const double Now = World->GetTimeSeconds();
+			const FSectorRoundView View = Training->GetRoundView();
+			if (View.Number > State->TargetRounds || (View.Number == State->TargetRounds && View.Phase != ESectorRoundPhase::Fighting && State->AccLastRound == State->TargetRounds))
+			{
+				auto Sum4 = [](const int32 (&A)[4]) { return A[0] + A[1] + A[2] + A[3]; };
+				const int32 PS = Sum4(State->AccPlayerShots), PH = Sum4(State->AccPlayerHits);
+				const int32 MS = Sum4(State->AccPmcShots), MH = Sum4(State->AccPmcHits);
+				const float PPct = PS > 0 ? 100.f * PH / PS : 0.f;
+				const float MPct = MS > 0 ? 100.f * MH / MS : 0.f;
+				UE_LOG(LogCodexTactics, Display,
+					TEXT("[AccuracyMeasure] Rounds=%d PlayerShots=%d+%d+%d+%d PlayerHits=%d+%d+%d+%d (%.1f%%) | PmcShots=%d+%d+%d+%d PmcHits=%d+%d+%d+%d (%.1f%%)"),
+					State->TargetRounds,
+					State->AccPlayerShots[0], State->AccPlayerShots[1], State->AccPlayerShots[2], State->AccPlayerShots[3],
+					State->AccPlayerHits[0], State->AccPlayerHits[1], State->AccPlayerHits[2], State->AccPlayerHits[3], PPct,
+					State->AccPmcShots[0], State->AccPmcShots[1], State->AccPmcShots[2], State->AccPmcShots[3],
+					State->AccPmcHits[0], State->AccPmcHits[1], State->AccPmcHits[2], State->AccPmcHits[3], MPct);
+				return Finish(true, TEXT("accuracy measure completed"));
+			}
+			for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+			{
+				AOperativeCharacter* Op = *It;
+				if (!Op || Op->IsActorBeingDestroyed() || State->HookedShooters.Contains(Op))
+				{
+					continue;
+				}
+				State->HookedShooters.Add(Op);
+				TWeakPtr<FState> WeakState = State;
+				Op->OnWeaponFiredNative.AddLambda([WeakState](AOperativeCharacter* Shooter, AActor* Target, bool bHit)
+				{
+					const TSharedPtr<FState> S = WeakState.Pin();
+					if (!S || !Shooter || !Target) { return; }
+					const float DistM = static_cast<float>(FVector::Dist2D(Shooter->GetActorLocation(), Target->GetActorLocation())) / 100.f;
+					const int32 B = DistM < 10.f ? 0 : (DistM < 25.f ? 1 : (DistM < 50.f ? 2 : 3));
+					if (Shooter->IsPlayerTeam())
+					{
+						++S->AccPlayerShots[B];
+						if (bHit) { ++S->AccPlayerHits[B]; }
+					}
+					else
+					{
+						++S->AccPmcShots[B];
+						if (bHit) { ++S->AccPmcHits[B]; }
+					}
+				});
+			}
+			if (View.Phase == ESectorRoundPhase::Fighting && View.Number != State->AccLastRound)
+			{
+				State->AccLastRound = View.Number;
+				State->AccRoundStartAt = Now;
+				if (USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
+				{
+					Squad->SetSquadPosture(ESquadFirePosture::Aggressive);
+					Squad->SetFollowersHolding(false);
+				}
+				const FVector StartPos = Training->GetStart().GetLocation();
+				UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+				TSet<int32> PmcTeams;
+				for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+				{
+					It->bTacticalCeaseFire = false;
+					if (!It->IsPlayerTeam())
+					{
+						PmcTeams.Add(It->TeamId);
+					}
+				}
+				if (Pmc)
+				{
+					for (int32 PmcTeam : PmcTeams)
+					{
+						Pmc->SetTeamCommanded(PmcTeam, true);
+						Pmc->SetTeamAssault(PmcTeam, &StartPos);
+					}
+				}
+			}
+			else if (View.Phase == ESectorRoundPhase::Fighting && Now - State->AccRoundStartAt >= 90.0)
+			{
+				KillSide(*World, false);
+			}
+			return Now < State->StageAt + 1200.0 || Finish(false, TEXT("accuracy measure timed out"));
 		}
 		const double Now = World->GetTimeSeconds();
 		const FSectorRoundView View = Training->GetRoundView();
@@ -404,6 +495,14 @@ namespace SectorRoundsSmoke
 			else if (FParse::Value(*Arg, TEXT("PanicMeasure="), Val))
 			{
 				State->bPanicMeasure = Val != 0;
+			}
+			else if (FParse::Value(*Arg, TEXT("AccuracyMeasure="), Val))
+			{
+				State->bAccuracyMeasure = Val != 0;
+			}
+			else if (FParse::Value(*Arg, TEXT("Rounds="), Val) && Val > 0)
+			{
+				State->TargetRounds = Val;
 			}
 		}
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float) { return Step(State); }), 0.f);

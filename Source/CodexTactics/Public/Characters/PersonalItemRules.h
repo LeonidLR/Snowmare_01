@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Characters/CriticalWoundRules.h"
 #include "PersonalItemRules.generated.h"
 
 /**
@@ -30,10 +31,16 @@ struct FPersonalItemEffect
  */
 namespace PersonalItemRules
 {
+	CODEXTACTICS_API bool IsFood(EPersonalItem Item);
+
 	CODEXTACTICS_API FPersonalItemEffect GetEffect(EPersonalItem Item);
 
-	/** Godot heal_with_item: nothing to do at full health and zero cold. */
-	CODEXTACTICS_API bool CanUse(float Health, float MaxHealth, float Cold);
+	/** Food never heals HP while Heavy or Critical wounded (keeps warmth only). */
+	CODEXTACTICS_API FPersonalItemEffect GetEffectiveEffect(EPersonalItem Item, CriticalWoundRules::EWoundTier WoundTier);
+
+	/** Godot heal_with_item: nothing to do at full health and zero cold; food on Heavy/Critical only helps if cold > 0. */
+	CODEXTACTICS_API bool CanUse(float Health, float MaxHealth, float Cold,
+		EPersonalItem Item = EPersonalItem::Medkit, CriticalWoundRules::EWoundTier WoundTier = CriticalWoundRules::EWoundTier::None);
 
 	/** "Medkit", "Canned food", "Bread", "Chocolate" (Godot item_names). */
 	CODEXTACTICS_API FText GetName(EPersonalItem Item);

@@ -235,6 +235,16 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 			if (!Event.bStart)
 			{
 				W.WriteValue(TEXT("result"), Results[FMath::Clamp(static_cast<int32>(Event.Result), 0, 3)]);
+				auto WriteBuckets = [&](const TCHAR* Key, const int32 (&Arr)[FDemoRoundEvent::ShotBuckets])
+				{
+					W.WriteArrayStart(Key);
+					for (int32 B = 0; B < FDemoRoundEvent::ShotBuckets; ++B) { W.WriteValue(Arr[B]); }
+					W.WriteArrayEnd();
+				};
+				WriteBuckets(TEXT("shots_player"), Event.ShotsPlayer);
+				WriteBuckets(TEXT("hits_player"), Event.HitsPlayer);
+				WriteBuckets(TEXT("shots_pmc"), Event.ShotsPmc);
+				WriteBuckets(TEXT("hits_pmc"), Event.HitsPmc);
 			}
 		});
 	};
