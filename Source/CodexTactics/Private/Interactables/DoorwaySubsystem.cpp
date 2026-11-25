@@ -2,6 +2,7 @@
 
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
+#include "Interactables/DoorRules.h"
 #include "LevelGen/PropsLayoutView.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -53,6 +54,47 @@ bool UDoorwaySubsystem::LoadFromLayout(const FString& LayoutFilePath)
 
 bool UDoorwaySubsystem::LoadFromLayoutJson(const FString& JsonString)
 {
+	TSharedPtr<FJsonObject> Root;
+	const bool bRoot = FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(JsonString), Root) && Root.IsValid();
+	FString Schema;
+	if (bRoot)
+	{
+		Root->TryGetStringField(TEXT("schema"), Schema);
+	}
+	// The props view accepts only codex.levelgen_layout/1 (the depot). The kept showcase layout is /2; its building doors are the same
+	// openings DoorRules already reads (yaw is the outward normal). Stairs and windows are not breach doorways.
+	if (Schema == TEXT("codex.levelgen_layout/2"))
+	{
+		TArray<DoorRules::FLayoutPlace> Places;
+		TMap<FString, FBox2D> Footprints;
+		DoorRules::ParseLayoutPlaces(*Root, Places, Footprints);
+		const TMap<FString, DoorRules::FLayoutDoor> LayoutDoors = DoorRules::ParseLayoutDoors(*Root);
+		int32 Added = 0;
+		for (const DoorRules::FLayoutPlace& Place : Places)
+		{
+			if (Place.bStair || Place.Id.IsEmpty())
+			{
+				continue;
+			}
+			FRuntimeDoorway Door;
+			Door.Id = Place.Id;
+			Door.BuildingId = Place.BuildingId;
+			Door.WidthCm = Place.WidthCm > 0.f ? Place.WidthCm : 120.f;
+			Door.Center = Place.Center;
+			const FVector2D Normal = Place.Normal.GetSafeNormal();
+			Door.OutwardNormal = FVector(Normal.X, Normal.Y, 0.f);
+			Door.WallTangent = FVector(-Normal.Y, Normal.X, 0.f);
+			if (const DoorRules::FLayoutDoor* Layout = LayoutDoors.Find(Place.Id))
+			{
+				Door.Role = Layout->Role;
+			}
+			Door.WalkLayer = FMath::Abs(Place.Center.Z) < 80.f ? TEXT("ground") : TEXT("upper");
+			RegisterDoorway(Door);
+			++Added;
+		}
+		return Added > 0;
+	}
+
 	TArray<FString> Errors;
 	FPropsLayoutView View;
 	if (!FPropsLayoutView::Build(JsonString, View, Errors))
@@ -61,13 +103,9 @@ bool UDoorwaySubsystem::LoadFromLayoutJson(const FString& JsonString)
 	}
 
 	float GroundZ = 0.f;
-	TSharedPtr<FJsonObject> Root;
-	if (FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(JsonString), Root) && Root.IsValid())
+	if (bRoot && Root->HasField(TEXT("ground_z")))
 	{
-		if (Root->HasField(TEXT("ground_z")))
-		{
-			GroundZ = static_cast<float>(Root->GetNumberField(TEXT("ground_z")));
-		}
+		GroundZ = static_cast<float>(Root->GetNumberField(TEXT("ground_z")));
 	}
 
 	for (const FPropsDoorway& D : View.GetDoorways())

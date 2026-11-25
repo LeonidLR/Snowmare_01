@@ -414,7 +414,7 @@ bool ACodexTacticsPlayerController::TryBreachEntryClick(const FHitResult& Hit)
 		Roles.Add(Member.Slot.Role);
 		Positions.Add(Member.Operative.IsValid() ? Member.Operative->GetActorLocation() : Member.Target);
 	}
-	const TArray<FDoorwayBreachEntryMove> Moves = DoorwayBreachEntryRules::PlanEntry(Breach.Center, Breach.Outward, Breach.WidthCm, Roles, Positions);
+	const TArray<FDoorwayBreachEntryMove> Moves = DoorwayBreachEntryRules::PlanEntry(Breach.Center, Breach.Outward, Breach.WidthCm, Roles, Positions, Breach.Room);
 	if (Moves.IsEmpty())
 	{
 		return false;

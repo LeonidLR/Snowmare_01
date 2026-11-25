@@ -201,6 +201,63 @@ bool FBreachEntryOrderTest::RunTest(const FString&)
 	return true;
 }
 
+BREACH_ENTRY_TEST(FBreachEntryRoomClampTest, "RoomClamp")
+bool FBreachEntryRoomClampTest::RunTest(const FString&)
+{
+	using namespace DoorwayBreachEntryRules;
+	// A 150 cm street door. The right-hand return is 140 cm off the axis (S01 d20's east wall). The unclamped hook
+	// (half width 75 + HookSideCm 100 = 175) sits in that wall, and the move is unreachable.
+	const FVector Center(0.f, 0.f, 0.f);
+	const FVector Outward(0.f, 1.f, 0.f);
+	const FDoorwayBreachRoom Room = MakeRoom(800.f, 140.f, 400.f, 0.f);
+	const TArray<FDoorwayBreachEntryMove> Moves = PlanEntry(Center, Outward, 150.f,
+		{ EDoorwayBreachSlotRole::RightJamb, EDoorwayBreachSlotRole::LeftJamb, EDoorwayBreachSlotRole::CenterPoint },
+		{ FVector(90.f, 45.f, 0.f), FVector(-90.f, 45.f, 0.f), FVector(0.f, 220.f, 0.f) }, Room);
+	TestEqual(TEXT("three men go in"), Moves.Num(), 3);
+	if (Moves.Num() == 3)
+	{
+		const float RightLimit = 140.f - HookWallClearCm;
+		TestTrue(TEXT("right hook stops short of the return wall and past the centre man"),
+			FMath::IsNearlyEqual(Moves[0].Destination.X, RightLimit, 0.1f)
+			&& FMath::IsNearlyEqual(Moves[0].Destination.Y, -(CentreDepthCm + HookPastCentreCm), 0.1f));
+		TestTrue(TEXT("left hook keeps the full offset on a wide side"), Moves[1].Destination.X < -(75.f + HookSideCm - 1.f));
+		TestTrue(TEXT("centre still drives 2.5 m in a deep room"), Moves[2].Destination.Equals(FVector(0.f, -CentreDepthCm, 0.f), 0.1f));
+	}
+	return true;
+}
+
+BREACH_ENTRY_TEST(FBreachEntryClosetFileTest, "ClosetFile")
+bool FBreachEntryClosetFileTest::RunTest(const FString&)
+{
+	using namespace DoorwayBreachEntryRules;
+	// S01 d20's janitor closet: 4 m deep, the returns 100 cm and 150 cm off the axis (a 150 cm door). Both unclamped hooks
+	// (175 cm) are in the wall, and both wall-cleared hooks (30 cm and 80 cm) stand in the centre man's path.
+	const FVector Center(0.f, 0.f, 0.f);
+	const FVector Outward(0.f, 1.f, 0.f);
+	const FDoorwayBreachRoom Room = MakeRoom(400.f, 100.f, 150.f, 0.f);
+	const TArray<FDoorwayBreachEntryMove> Moves = PlanEntry(Center, Outward, 150.f,
+		{ EDoorwayBreachSlotRole::RightJamb, EDoorwayBreachSlotRole::LeftJamb, EDoorwayBreachSlotRole::CenterPoint },
+		{ FVector(90.f, 45.f, 0.f), FVector(-90.f, 45.f, 0.f), FVector(0.f, 220.f, 0.f) }, Room);
+	TestEqual(TEXT("three men go in"), Moves.Num(), 3);
+	if (Moves.Num() == 3)
+	{
+		const float Far = 400.f - HookWallClearCm;
+		const float RightLateral = 100.f - HookWallClearCm;
+		const float LeftLateral = 150.f - HookWallClearCm;
+		TestTrue(TEXT("the first hook takes the far wall, inside the right return"),
+			FMath::IsNearlyEqual(Moves[0].Destination.X, RightLateral, 0.1f) && FMath::IsNearlyEqual(Moves[0].Destination.Y, -Far, 0.1f));
+		TestTrue(TEXT("the second hook steps back a body, inside the left return"),
+			FMath::IsNearlyEqual(Moves[1].Destination.X, -LeftLateral, 0.1f) && FMath::IsNearlyEqual(Moves[1].Destination.Y, -(Far - HookPastCentreCm), 0.1f));
+		const float CentreDepth = Far - HookPastCentreCm - HookPastCentreCm;
+		TestTrue(TEXT("the centre man stops a body short of the nearer hook, still inside"),
+			Moves[2].Destination.Equals(FVector(0.f, -CentreDepth, 0.f), 0.1f) && CentreDepth > InsideMinDepthCm);
+		TestTrue(TEXT("neither hook stands in his path"),
+			FVector::Dist2D(Moves[0].Destination, Moves[2].Destination) > HookLaneCm
+			&& FVector::Dist2D(Moves[1].Destination, Moves[2].Destination) > HookLaneCm);
+	}
+	return true;
+}
+
 BREACH_ENTRY_TEST(FBreachEntryInsideTest, "InsideRoom")
 bool FBreachEntryInsideTest::RunTest(const FString&)
 {

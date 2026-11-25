@@ -698,6 +698,20 @@ bool DoorRules::ShouldCloseBehind(bool bSideBlocks, bool bDoorwayOccupied, bool 
 	return bSideBlocks && !bDoorwayOccupied && !bSomebodyToCome && QuietSeconds >= NeedSeconds;
 }
 
+bool DoorRules::IsQuietInnerFloor(int32 Floor, int32 EntryCount, int32 QuietFloor, int32 QuietEntries)
+{
+	return QuietEntries > 0 && EntryCount >= QuietEntries && Floor <= QuietFloor;
+}
+
+bool DoorRules::MayRandomLockInner(int32 Floor, int32 EntryCount, float Roll, float Share, int32 QuietFloor, int32 QuietEntries)
+{
+	if (IsQuietInnerFloor(Floor, EntryCount, QuietFloor, QuietEntries))
+	{
+		return false;
+	}
+	return Roll < Share;
+}
+
 FDoorKickOutcome DoorRules::ResolveKick(EDoorLeafState State, EDoorStrength Strength, bool bHeavy, float HealthFraction, float RollOpen, float RollInjury,
 	const FDoorTuning& Tuning)
 {
@@ -1076,6 +1090,16 @@ FDoorTuning DoorTuning::FromJson(const FJsonObject& Json, const FDoorTuning& Bas
 	}
 	ReadDoorFlag(Json, TEXT("start_interior_closed"), Tuning.bStartInteriorClosed);
 	ReadDoorNumber(Json, TEXT("start_interior_locked_share"), Tuning.StartInteriorLockedShare, 0.f, 1.f);
+	double QuietFloor = 0.0;
+	if (Json.TryGetNumberField(TEXT("start_interior_locked_quiet_floor"), QuietFloor))
+	{
+		Tuning.StartInteriorLockedQuietFloor = FMath::RoundToInt32(QuietFloor);
+	}
+	double QuietEntries = 0.0;
+	if (Json.TryGetNumberField(TEXT("start_interior_locked_quiet_entries"), QuietEntries))
+	{
+		Tuning.StartInteriorLockedQuietEntries = FMath::Clamp(FMath::RoundToInt32(QuietEntries), 0, 32);
+	}
 	ReadDoorNumber(Json, TEXT("close_behind_s"), Tuning.CloseBehindSeconds, 0.f, 60.f);
 	ReadDoorNumber(Json, TEXT("close_behind_radius_cm"), Tuning.CloseBehindRadiusCm, 0.f, 3000.f);
 	ReadDoorNumber(Json, TEXT("swing_min_deg"), Tuning.SwingMinDeg, 0.f, 180.f);

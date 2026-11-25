@@ -204,6 +204,13 @@ struct CODEXTACTICS_API FDoorTuning
 	 * roll seed and its place). Their strength stays the inner one (wood: kick 0.55, pistol 0.6) - weaker than the steel entrances.
 	 */
 	float StartInteriorLockedShare = 0.25f;
+	/**
+	 * "start_interior_locked_quiet_floor" / "start_interior_locked_quiet_entries" (G018): a building with at least this many role=entry doors
+	 * does not random-lock inner doors on floors at or below the quiet floor. The walk between two street doors stays a shut auto-open door
+	 * (the story quiet way). QuietEntries <= 0 turns the skip off. Upper floors and a single entry still use the share.
+	 */
+	int32 StartInteriorLockedQuietFloor = 0;
+	int32 StartInteriorLockedQuietEntries = 2;
 	float CloseBehindSeconds = 1.5f;
 	float CloseBehindRadiusCm = 300.f;
 	float SwingMinDeg = 30.f;
@@ -507,6 +514,15 @@ namespace DoorRules
 
 	/** Close behind: the open side blocks, nobody stands in the doorway or is still to come through, and it has been so for NeedSeconds. */
 	CODEXTACTICS_API bool ShouldCloseBehind(bool bSideBlocks, bool bDoorwayOccupied, bool bSomebodyToCome, float QuietSeconds, float NeedSeconds);
+
+	/** True when this floor of a building with enough street entries is the quiet way and must not be random-locked. QuietEntries <= 0 is never quiet. */
+	CODEXTACTICS_API bool IsQuietInnerFloor(int32 Floor, int32 EntryCount, int32 QuietFloor, int32 QuietEntries);
+
+	/**
+	 * Random lock of one inner door shut at the start (start_interior_locked_share). False on a quiet floor (IsQuietInnerFloor) or when Roll
+	 * is not under Share.
+	 */
+	CODEXTACTICS_API bool MayRandomLockInner(int32 Floor, int32 EntryCount, float Roll, float Share, int32 QuietFloor, int32 QuietEntries);
 
 	/** Does one of Keys open this door: "*", the opening id, the building id (every locked door of it) or the door's own key tag. */
 	CODEXTACTICS_API bool KeyFits(const TSet<FString>& Keys, const FString& BuildingId, const FString& OpeningId, const FString& DoorKeyId);

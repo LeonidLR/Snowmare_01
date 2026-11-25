@@ -1,4 +1,5 @@
-// Dev-only console command: R17-5, the doorway breach in the game (designer 2026-11-17 with R17-3; docs/design/DOORWAY_BREACH.md) on L_Gen_Depot_1
+// Dev-only console command: R17-5, the doorway breach in the game (designer 2026-11-17 with R17-3; docs/design/DOORWAY_BREACH.md). G018 runs it on
+// L_Gen_StoryShowcase_Kit (L_Gen_Depot_1 is archived).
 // (its doorways: the level generator layout, UDoorwaySubsystem):
 //   Scripts/smoke_parallel.ps1 -Commands DoorBreachSmoke -ExtraArgs -Multiprocess
 // Every click takes the real input path (the camera's ray -> ACodexTacticsPlayerController::HandlePlayerClick). Cases:
@@ -8,7 +9,8 @@
 //                                                         back from the threshold;
 //   c  a click inside the room                         -> the entry: the jamb men and the centre man end up inside, past the threshold;
 //   d  Solo, first + second click on a doorway         -> one silhouette; he goes to the nearest jamb and peeks in.
-// Enemies are parked far away.
+// Enemies are parked far away. The kit showcase is in doors.json enabled_maps and is PMC-only (076): this smoke checks the doorway
+// ghost, so openable doors stay off (a shut leaf would take the click) and the kit PMC squad is removed.
 
 #include "CoreMinimal.h"
 
@@ -142,6 +144,13 @@ namespace DoorBreachSmoke
 			FHitResult Hit;
 			if (MantleSmokeSites::CameraRayHit(World, Point, Hit) && PC.ClassifyClickPreview(Hit) == EClickPreviewKind::Breach)
 			{
+				// A dense layout: the same ray can sit in a neighbour's portal. Only the doorway under test counts.
+				if (PC.GetBreachPreviewDoorwayId() != Door.Id)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[DoorBreachSmoke] the ray at %s arms %s, not %s"), *Point.ToCompactString(),
+						*PC.GetBreachPreviewDoorwayId(), *Door.Id);
+					continue;
+				}
 				OutHit = Hit;
 				return true;
 			}
@@ -156,6 +165,11 @@ namespace DoorBreachSmoke
 		{
 			return false;
 		}
+		if (IConsoleVariable* Openable = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Doors.Openable")))
+		{
+			Openable->Set(0, ECVF_SetByConsole);
+		}
+		SmokeUtils::StopLevelPmc(World);
 		switch (State->PreloadGate.Poll(World))
 		{
 		case SmokeUtils::EPreloadGate::Waiting:
@@ -201,6 +215,21 @@ namespace DoorBreachSmoke
 				{
 					State->Doors.Add(Door);
 				}
+			}
+			// Street entries (schema v2 role). An interior door's ray often arms the neighbouring opening (S07 d9 armed d20).
+			// A schema v1 layout has no role: every ground doorway stays, as on the depot.
+			TArray<FRuntimeDoorway> Entries;
+			for (const FRuntimeDoorway& Door : State->Doors)
+			{
+				if (Door.Role.Equals(TEXT("entry")))
+				{
+					Entries.Add(Door);
+				}
+			}
+			if (Entries.Num() > 0)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[DoorBreachSmoke] street entries %d of %d ground doorways"), Entries.Num(), State->Doors.Num());
+				State->Doors = MoveTemp(Entries);
 			}
 			const FVector Near = Leader->GetActorLocation();
 			State->Doors.Sort([&Near](const FRuntimeDoorway& A, const FRuntimeDoorway& B) { return FVector::DistSquared2D(A.Center, Near) < FVector::DistSquared2D(B.Center, Near); });
@@ -258,7 +287,7 @@ namespace DoorBreachSmoke
 			if (!AimIntoOpening(World, *PC, *State, State->ClickHit))
 			{
 				UE_LOG(LogCodexTactics, Display, TEXT("[DoorBreachSmoke] the camera does not see into doorway %s - the next one"), *State->Door.Id);
-				Next(*State, ++State->Retries > 8 ? 99 : 1);
+				Next(*State, ++State->Retries > 16 ? 99 : 1);
 				return true;
 			}
 			// Review 2026-11-17 (finding 2): a click THROUGH the opening onto the room's floor is a plain move through the doorway, no breach ghost.
@@ -451,7 +480,7 @@ namespace DoorBreachSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.DoorBreachSmoke"),
-		TEXT("Dev check (R17-5 doorway breach, L_Gen_Depot_1): a first click into a doorway shows the squad's breach ghost, the second click stacks the squad on ")
+		TEXT("Dev check (R17-5 doorway breach, L_Gen_StoryShowcase_Kit): a first click into a doorway shows the squad's breach ghost, the second click stacks the squad on ")
 		TEXT("its slots (jamb men peeking in), a click inside the room is the entry (the men end inside); Solo: one man at the nearest jamb; PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }

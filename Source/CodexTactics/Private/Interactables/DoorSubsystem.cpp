@@ -498,11 +498,21 @@ void UDoorSubsystem::TickCloseBehind(float DeltaTime)
 int32 UDoorSubsystem::CloseInteriorDoors()
 {
 	InnerLocked = 0;
-	if (!DoorTuning::Get().bStartInteriorClosed || !GetWorld())
+	const FDoorTuning& Tuning = DoorTuning::Get();
+	if (!Tuning.bStartInteriorClosed || !GetWorld())
 	{
 		return 0;
 	}
+	TMap<FString, int32> EntriesByBuilding;
+	for (const ADoorActor* Door : Doors)
+	{
+		if (Door && Door->GetRole() == TEXT("entry") && !Door->GetBuildingId().IsEmpty())
+		{
+			EntriesByBuilding.FindOrAdd(Door->GetBuildingId()) += 1;
+		}
+	}
 	int32 Shut = 0;
+	int32 QuietSkipped = 0;
 	for (ADoorActor* Door : Doors)
 	{
 		if (!Door || Door->IsBroken() || Door->GetDoorState() != EDoorLeafState::Open || Door->GetRole() == TEXT("entry"))
@@ -522,17 +532,30 @@ int32 UDoorSubsystem::CloseInteriorDoors()
 		{
 			++Shut;
 			// Designer 2026-11-22: some of them, at random, are locked (kick / shoot the lock / a key); a stable roll per door (its place).
+			// G018: the ground floor of a building with two street entries is the quiet way and stays unlocked.
 			const FVector At = Door->GetActorLocation();
 			const uint32 Salt = FCrc::StrCrc32(*FString::Printf(TEXT("inner_lock_%s_%d_%d_%d"), *Door->GetBuildingId(), FMath::RoundToInt(At.X / 10.f),
 				FMath::RoundToInt(At.Y / 10.f), FMath::RoundToInt(At.Z / 10.f)));
 			const float LockedShare = DoorSubsystemLocal::CVarDoorsInnerLockedShare.GetValueOnGameThread() >= 0.f
-				? DoorSubsystemLocal::CVarDoorsInnerLockedShare.GetValueOnGameThread() : DoorTuning::Get().StartInteriorLockedShare;
-			if (DoorRules::DeterministicRoll(DoorTuning::GetRollSeed(), Salt) < LockedShare
+				? DoorSubsystemLocal::CVarDoorsInnerLockedShare.GetValueOnGameThread() : Tuning.StartInteriorLockedShare;
+			const int32 Entries = EntriesByBuilding.FindRef(Door->GetBuildingId());
+			if (DoorRules::IsQuietInnerFloor(Door->GetFloor(), Entries, Tuning.StartInteriorLockedQuietFloor, Tuning.StartInteriorLockedQuietEntries))
+			{
+				++QuietSkipped;
+				continue;
+			}
+			if (DoorRules::MayRandomLockInner(Door->GetFloor(), Entries, DoorRules::DeterministicRoll(DoorTuning::GetRollSeed(), Salt), LockedShare,
+				Tuning.StartInteriorLockedQuietFloor, Tuning.StartInteriorLockedQuietEntries)
 				&& Door->ForceState(EDoorLeafState::Locked, nullptr))
 			{
 				++InnerLocked;
 			}
 		}
+	}
+	if (QuietSkipped > 0)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Doors: quiet route - %d inner door(s) on floor <= %d of a building with >= %d entries stayed unlocked"),
+			QuietSkipped, Tuning.StartInteriorLockedQuietFloor, Tuning.StartInteriorLockedQuietEntries);
 	}
 	return Shut;
 }
