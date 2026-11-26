@@ -191,6 +191,15 @@ class DemoTacticsTest(unittest.TestCase):
         self.assertEqual(len(report.kills), 1)
         self.assertIn("distract_and_flank", {t.tag for t in report.tactics})
 
+    def test_null_move_target_can_use_recorded_nearest_threat(self):
+        records = [dict(type="snap", t=0, threats=[dict(id="E", p=[1000, 0, 0])]),
+                   dict(type="order", t=1, actor="A", kind="Move", target=None, dest=[0, 0, 0],
+                        ops=[dict(id="A", p=[900, 0, 0])], threats=[dict(id="E", p=[1000, 0, 0])],
+                        facts=dict(thr_d=100, thr_d_new=1000)),
+                   dict(type="snap", t=2, threats=[dict(id="E", p=[500, 0, 0], in_cover=False)]),
+                   dict(type="kill", t=3, killer="B", victim="E", dist=3000)]
+        self.assertIn("lure_then_snipe", self.tags(records))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,8 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**121 BLOCKER (2026-11-27): real PIE acceptance evidence still needed.** C++8de50957: worker build PASS410.31s; Smart848/848 PASS including HitAttribution/AllHealthLossPaths; all16 mapped smokes PASS first try; Python20/20 PASS including actual null-target schema and round-end ties. Recording facts/tagger finished and reviewed, but no real new PIE fight showing all3 core tactics was captured in this headless run. Synthetic fixture is not acceptance evidence. See `docs/port/codex/outbox/121-recording-tactics.report.md`. Stop here; Lead owns the next task.
+
+
 **121 checkpoint (2026-11-27, gemini/121-recording-tactics).** Reviewed Gemini telemetry; corrected attribution, optical observer/support facts, ground and look measurements, death/down semantics, and conservative round-scoped tactic tagging. Python18/18 PASS; final worker build/Smart/smokes and new PIE acceptance recording pending. Report: `docs/port/codex/outbox/121-recording-tactics.report.md`. Not merge-ready.
 
 

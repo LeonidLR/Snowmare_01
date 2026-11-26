@@ -177,7 +177,7 @@ def _analyze_segment(records, report, round_id, pitches):
 
     def target_id(r):
         target = r.get("target", {})
-        return str(target.get("id", "")) if isinstance(target, dict) else str(target)
+        return str(target.get("id", "")) if isinstance(target, dict) else str(target) if target else ""
 
     for r in records:
         t, typ = float(r.get("t", 0)), r.get("type")
