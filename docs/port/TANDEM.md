@@ -1489,3 +1489,5 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 
 **139 crouch compatibility checkpoint (2026-11-27).** Complete ground paths with legacy standing-centre goals remain valid while crouched: no-way-up allowance now includes the class default standing capsule. Worker build PASS406.18s; final Smart/nine-smoke recheck pending. Saved-map LadderActor_22 inset125 fix remains with Lead. Report: `docs/port/codex/outbox/139-roof-ladder-no-path.report.md`.
+
+**139 MERGE-READY (map fix pending), 2026-11-27.** Code f4d0c498: worker build PASS406.18s; Smart927/927 PASS; exact nine mapped smokes8 PASS, only saved-map RoofLadderSmoke FAIL expected (strict retry too). Crouched LowCoverMoveLake and FormationStair PASS; repair probe climbs at feet302.2. Lead still applies LadderActor_22 inset125/125 and saves navmesh. Final artifacts/report: `docs/port/codex/outbox/139-roof-ladder-no-path.report.md`, `Saved/Logs/Worker/139-final/`.
