@@ -213,6 +213,9 @@ public:
 	 * preparation unless in solo mode (Godot _cycle_leader_stance). */
 	void CycleLeaderStance();
 
+	/** C / Z / V stance key handler for selected operative(s) (or whole squad when Alt is held). */
+	void ApplyStance(EOperativeStance Stance);
+
 	/** Action bar "MOVE": toggles «click an object to move it» (cancels an active placement). Godot _on_relocate_slot_clicked. */
 	void ToggleRelocateSelectMode();
 
@@ -794,7 +797,6 @@ private:
 	void StanceStand() { ApplyStance(EOperativeStance::Standing); }
 	void StanceCrouch() { ApplyStance(EOperativeStance::Crouching); }
 	void StanceProne() { ApplyStance(EOperativeStance::Prone); }
-	void ApplyStance(EOperativeStance Stance);
 	USquadSubsystem* GetSquad() const;
 	class ATacticalCameraPawn* GetCameraPawn() const;
 
