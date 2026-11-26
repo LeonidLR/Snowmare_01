@@ -667,7 +667,11 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
         [Console]::OutputEncoding = $previousEncoding
         Show-GateSummary $stages $timing.Seconds
     }
-    if ($code -eq 0 -and -not $Preview) { Write-Host 'ready to push' }
+    if ($code -eq 0 -and -not $Preview) {
+        Write-Host 'ready to push'
+        # Designer 2026-11-26 (main PC disk full): every green gate removes the agent lanes already merged into main.
+        try { & (Join-Path $PSScriptRoot 'cleanup_merged_lanes.ps1') } catch { Write-Host "[lanes] cleanup skipped: $($_.Exception.Message)" }
+    }
     return $code
 }
 
