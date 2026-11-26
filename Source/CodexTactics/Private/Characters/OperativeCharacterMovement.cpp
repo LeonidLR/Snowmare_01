@@ -157,7 +157,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 			AOperativeCharacter* ActiveUnderFireShooter = nullptr;
 			FVector ActiveUnderFirePoint = FVector::ZeroVector;
 			const double NowSec = GetWorld() ? GetWorld()->GetTimeSeconds() : -1.0e9;
-			const bool bInContact = (CurrentCombatTarget.IsValid() && OperativeCharacterInternal::IsLiveEnemy(CurrentCombatTarget.Get()))
+			const bool bInContact = (CurrentCombatTarget.IsValid() && OperativeCharacterInternal::IsLiveTargetOf(*this, CurrentCombatTarget.Get()))
 				|| GetUnderFireThreat(ActiveUnderFireShooter, ActiveUnderFirePoint)
 				|| (NowSec - LastShotTime <= 5.0) || (NowSec - LastThreatContactTime <= 5.0);
 			if (!bInContact && bFoughtThisFight)

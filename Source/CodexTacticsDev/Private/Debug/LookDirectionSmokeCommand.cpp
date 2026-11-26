@@ -20,15 +20,12 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Debug/SmokeUtils.h"
 #include "Dom/JsonObject.h"
-#include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
-#include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
-#include "Navigation/PathFollowingComponent.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
 #include "Serialization/JsonReader.h"
@@ -643,7 +640,7 @@ namespace LookDirectionSmoke
 			Leader->StopOperative();
 			Leader->TeleportTo(State.RampSpot.RampFoot + FVector(0.f, 0.f, HalfH + 4.f),
 				(State.RampSpot.RoofArrive - State.RampSpot.RampFoot).GetSafeNormal2D().Rotation(), false, true);
-			// Arm stale facing + look before climbing the ramp, then walk up the ramp onto the roof.
+			// Arm stale facing before climbing the ramp, then walk up the ramp onto the roof.
 			Leader->SetFacingPoint(State.RampSpot.RampFoot - (State.RampSpot.RoofArrive - State.RampSpot.RampFoot).GetSafeNormal2D() * 400.f);
 			Check(State, Leader->OrderMoveTo(State.RampSpot.RoofArrive, false) == EOperativeOrderResult::Accepted,
 				FString::Printf(TEXT("Ramp climb to %s roof accepted"), *State.RampSpot.BuildingId));
@@ -695,7 +692,8 @@ namespace LookDirectionSmoke
 				State.LastMovingTravelYaw = static_cast<float>(Leader->GetVelocity().Rotation().Yaw);
 				State.bHasMovingTravelYaw = true;
 			}
-			const bool bArrived = FVector::Dist2D(Leader->GetActorLocation(), State.RampSpot.RoofSprintGoal) < 130.f
+			const bool bArrived = State.StageTime > 0.5f
+				&& FVector::Dist2D(Leader->GetActorLocation(), State.RampSpot.RoofSprintGoal) < 130.f
 				&& Leader->GetVelocity().Size2D() < 10.f;
 			if (!bArrived && State.StageTime < 10.f)
 			{
