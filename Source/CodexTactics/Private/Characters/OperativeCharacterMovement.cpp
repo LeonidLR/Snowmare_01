@@ -870,7 +870,6 @@ bool AOperativeCharacter::IsWounded() const
 bool AOperativeCharacter::CanSprintIfStanding() const
 {
 	return !bCarrying && CriticalWoundRules::AllowsSprint(IsCriticallyWounded())
-		&& !(ColdSurvival && ColdSurvival->IsFrostbitten())
 		&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded());
 }
 
