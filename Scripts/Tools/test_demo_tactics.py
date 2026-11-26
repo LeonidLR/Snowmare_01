@@ -184,6 +184,13 @@ class DemoTacticsTest(unittest.TestCase):
             records.append(dict(type="snap", t=t, ops=ops))
         self.assertNotIn("unwatched_flank_seconds", self.tags(records))
 
+    def test_round_end_at_kill_timestamp_keeps_final_kill(self):
+        records = self.core_records()
+        records.insert(0, dict(type="round_end", t=22, round=1))
+        report = dt.analyze_records(records)
+        self.assertEqual(len(report.kills), 1)
+        self.assertIn("distract_and_flank", {t.tag for t in report.tactics})
+
 
 if __name__ == "__main__":
     unittest.main()

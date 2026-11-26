@@ -126,7 +126,8 @@ def analyze_records(records: List[Dict[str, Any]]) -> TaggerReport:
     result = TaggerReport(str(header.get("session", "")), str(header.get("map", "")),
                           float(footer.get("duration_s", 0)))
     ordered = sorted((r for r in records if r.get("type") not in ("header", "footer")),
-                     key=lambda r: float(r.get("t", 0)))
+                     key=lambda r: (float(r.get("t", 0)),
+                         -1 if r.get("type") == "round_start" else 1 if r.get("type") == "round_end" else 0))
     segments, current, round_id = [], [], "legacy"
     for r in ordered:
         if r.get("type") == "round_start":
