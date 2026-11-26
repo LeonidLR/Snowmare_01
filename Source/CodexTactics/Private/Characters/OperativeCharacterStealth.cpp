@@ -72,6 +72,7 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 		ClearStealthManualLookTarget();
 		ClearStealthAutoLookTarget();
 		ClearIdleFacing();
+		bExplicitFacing = false;
 		SetFormationLookYaw(TOptional<float>());
 		SmoothedVelocity = FVector::ZeroVector;
 		bStealthMode = true;
@@ -110,8 +111,8 @@ void AOperativeCharacter::SetStealthFast(bool bFast)
 void AOperativeCharacter::SetManualLookPoint(const FVector& WorldPoint)
 {
 	const LookHoldRules::FLookDirection Dir = LookHoldRules::DirectionFromClick(GetActorLocation(), WorldPoint);
-	ManualLookPoint = WorldPoint;
 	SetManualLookDirection(Dir.YawDeg, Dir.PitchDeg);
+	ManualLookPoint = WorldPoint;
 }
 
 void AOperativeCharacter::SetManualLookDirection(float YawDeg, float PitchDeg)
@@ -119,6 +120,7 @@ void AOperativeCharacter::SetManualLookDirection(float YawDeg, float PitchDeg)
 	bHasManualLookPoint = true;
 	ManualLookYawDeg = FRotator::NormalizeAxis(YawDeg);
 	ManualLookPitchDeg = FMath::Clamp(PitchDeg, -89.f, 89.f);
+	ManualLookPoint = LookHoldRules::ProjectLookPoint(GetActorLocation(), ManualLookYawDeg, ManualLookPitchDeg, 1000.f);
 	ClearIdleFacing();
 	bExplicitFacing = false;
 	// A look set while the plain corner peek is already up switches to the CoverIndoor pose. A look before that peek
@@ -153,10 +155,8 @@ void AOperativeCharacter::SetStealthManualLookTarget(const FVector& WorldPoint)
 		return;
 	}
 	const LookHoldRules::FLookDirection Dir = LookHoldRules::DirectionFromClick(GetActorLocation(), WorldPoint);
-	bHasManualLookPoint = true;
+	SetManualLookDirection(Dir.YawDeg, Dir.PitchDeg);
 	ManualLookPoint = WorldPoint;
-	ManualLookYawDeg = Dir.YawDeg;
-	ManualLookPitchDeg = Dir.PitchDeg;
 }
 
 void AOperativeCharacter::ClearStealthManualLookTarget()

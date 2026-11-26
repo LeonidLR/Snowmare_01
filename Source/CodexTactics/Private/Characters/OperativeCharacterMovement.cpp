@@ -148,7 +148,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		bExplicitFacing = false;
 		if (!bAutonomousOrder)
 		{
-			if (!IsInStealthMode() && bSprint && HasManualLookPoint())
+			if (!IsInStealthMode() && bSprint && CanSprint() && HasManualLookPoint())
 			{
 				ClearManualLookPoint();
 				UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
@@ -156,7 +156,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 			AOperativeCharacter* ActiveUnderFireShooter = nullptr;
 			FVector ActiveUnderFirePoint = FVector::ZeroVector;
 			const double NowSec = GetWorld() ? GetWorld()->GetTimeSeconds() : -1.0e9;
-			const bool bInContact = (CurrentCombatTarget.IsValid() && CurrentCombatTarget->IsA<ACharacter>())
+			const bool bInContact = CurrentCombatTarget.IsValid()
 				|| GetUnderFireThreat(ActiveUnderFireShooter, ActiveUnderFirePoint)
 				|| (NowSec - LastShotTime <= 5.0) || (NowSec - LastThreatContactTime <= 5.0);
 			if (!bInContact && bFoughtThisFight)
@@ -820,7 +820,7 @@ void AOperativeCharacter::HandleMoveFinished()
 	bOwnMoveOrder = false;
 	bStealthFast = false;
 	bSprinting = false;
-	ArrivalTravelYaw = static_cast<float>(!SmoothedVelocity.IsNearlyZero(10.f) ? SmoothedVelocity.Rotation().Yaw : GetActorRotation().Yaw);
+	ArrivalTravelYaw = static_cast<float>(SmoothedVelocity.SizeSquared2D() > 10.f * 10.f ? SmoothedVelocity.Rotation().Yaw : GetActorRotation().Yaw);
 	bPendingArrivalFacingLog = true;
 	ApplyMovementParams();
 

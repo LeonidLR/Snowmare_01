@@ -120,7 +120,7 @@ namespace LookHoldRules
 		}
 		const FRotator Rot = Delta.Rotation();
 		return FLookDirection{ static_cast<float>(FRotator::NormalizeAxis(Rot.Yaw)),
-			static_cast<float>(FMath::Clamp(FRotator::NormalizeAxis(Rot.Pitch), -89., 89.)) };
+			FMath::Clamp(static_cast<float>(FRotator::NormalizeAxis(Rot.Pitch)), -89.f, 89.f) };
 	}
 
 	FVector ProjectLookPoint(const FVector& OperativeLocation, float YawDeg, float PitchDeg, float DistanceCm)

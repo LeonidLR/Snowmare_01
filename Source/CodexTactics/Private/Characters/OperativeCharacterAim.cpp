@@ -150,6 +150,13 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	{
 		// User design rule 2026-10-06: the back stays against the wall (actor yaw = wall normal); the threat side only picks the _L/_R clip
 		// (CoverFacingRules); no turn to a target or to the movement (a shimmy away from the threat walks backwards).
+		AOperativeCharacter* CoverFireShooter = nullptr;
+		FVector CoverFlashPoint = FVector::ZeroVector;
+		if (bFoughtThisFight && ((CurrentCombatTarget.IsValid() && OperativeCharacterInternal::IsLiveEnemy(CurrentCombatTarget.Get()))
+			|| GetUnderFireThreat(CoverFireShooter, CoverFlashPoint)))
+		{
+			LastThreatContactTime = GetWorld() ? GetWorld()->GetTimeSeconds() : LastThreatContactTime;
+		}
 		const float CoverYaw = GetCoverFacingYaw();
 		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, CoverYaw, 0.f), DeltaTime, 10.f));
 		BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, 0.f, DeltaTime, 6.f);

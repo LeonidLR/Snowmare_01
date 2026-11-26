@@ -1,8 +1,8 @@
 // Runtime smoke for task 145 on L_Gen_Depot_1_X6:
-//  1. Multi-select Shift+click gives identical world yaw; L-shaped walk keeps locked yaw +-10 deg on both legs.
+//  1. Multi-select Shift+click via HandleWorldHit gives identical world yaw to both operatives; L-shaped walk keeps locked yaw +-10 deg.
 //  2. Standing on an X6 roof looking down via Shift+click on ground below drives AnimInstance AimPitch < -10 deg
 //     and bends the skeletal pose/muzzle pitch downward relative to level baseline.
-//  3. Part B: stale ManualLook / SetFacingPoint before a plain sprint clears cleanly; arrival stays within +-15 deg of travel yaw.
+//  3. Part B: stale SetFacingPoint and stale ManualLookDirection each clear cleanly on sprint; arrival stays within +-15 deg of travel yaw.
 
 #include "CoreMinimal.h"
 
@@ -13,11 +13,14 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "CollisionQueryParams.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Containers/Ticker.h"
+#include "Core/CodexTacticsPlayerController.h"
 #include "Debug/SmokeUtils.h"
 #include "Dom/JsonObject.h"
+#include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -42,8 +45,10 @@ namespace LookDirectionSmoke
 		WalkLeg2,
 		RoofLevel,
 		RoofDown,
-		SprintClear,
-		SettleAfterSprint,
+		SprintClearFacing,
+		SettleFacing,
+		SprintClearLook,
+		SettleLook,
 		Done
 	};
 
@@ -87,13 +92,13 @@ namespace LookDirectionSmoke
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: %s"), bOk ? TEXT("ok  ") : TEXT("FAIL"), *What);
+		UE_LOG(LogCodexTactics, Display, TEXT("LookDirectionSmoke %s: %s"), bOk ? TEXT("ok  ") : TEXT("FAIL"), *What);
 		State.Failures += bOk ? 0 : 1;
 	}
 
 	bool Finish(FState& State, bool bComplete)
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), (State.Failures == 0 && bComplete) ? TEXT("PASS") : TEXT("FAIL"));
+		UE_LOG(LogCodexTactics, Display, TEXT("LookDirectionSmoke RESULT: %s"), (State.Failures == 0 && bComplete) ? TEXT("PASS") : TEXT("FAIL"));
 		State.bDone = true;
 		FPlatformMisc::RequestExit(false, TEXT("LookDirectionSmoke"));
 		return false;
@@ -149,20 +154,25 @@ namespace LookDirectionSmoke
 		FString LevelText;
 		TSharedPtr<FJsonObject> Level;
 		const FString LevelFile = FPaths::ProjectContentDir() / TEXT("Data/LevelJson/L_Gen_Depot_1_X6.json");
+		FString LayoutRelPath;
 		if (!FFileHelper::LoadFileToString(LevelText, *LevelFile)
 			|| !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(LevelText), Level) || !Level.IsValid()
-			|| !Level->HasField(TEXT("levelgen_layout")))
+			|| !Level->TryGetStringField(TEXT("levelgen_layout"), LayoutRelPath))
 		{
 			return Out;
 		}
 		FString LayoutText;
 		TSharedPtr<FJsonObject> Layout;
-		if (!FFileHelper::LoadFileToString(LayoutText, *(FPaths::ProjectDir() / Level->GetStringField(TEXT("levelgen_layout"))))
-			|| !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(LayoutText), Layout) || !Layout.IsValid())
+		const TArray<TSharedPtr<FJsonValue>>* Buildings = nullptr;
+		if (!FFileHelper::LoadFileToString(LayoutText, *(FPaths::ProjectDir() / LayoutRelPath))
+			|| !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(LayoutText), Layout) || !Layout.IsValid()
+			|| !Layout->TryGetArrayField(TEXT("buildings"), Buildings) || !Buildings)
 		{
 			return Out;
 		}
-		const float GroundZ = Layout->HasField(TEXT("ground_z")) ? static_cast<float>(Layout->GetNumberField(TEXT("ground_z"))) : 0.f;
+		double GroundZRaw = 0.0;
+		Layout->TryGetNumberField(TEXT("ground_z"), GroundZRaw);
+		const float GroundZ = static_cast<float>(GroundZRaw);
 		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 		if (!Nav)
 		{
@@ -173,22 +183,34 @@ namespace LookDirectionSmoke
 		{
 			TraceParams.AddIgnoredActor(Ig);
 		}
-		for (const TSharedPtr<FJsonValue>& BV : Layout->GetArrayField(TEXT("buildings")))
+		for (const TSharedPtr<FJsonValue>& BV : *Buildings)
 		{
-			const TSharedPtr<FJsonObject>& B = BV->AsObject();
+			const TSharedPtr<FJsonObject> B = BV.IsValid() ? BV->AsObject() : nullptr;
+			if (!B.IsValid())
+			{
+				continue;
+			}
 			bool bWalkable = false;
 			bool bEnterable = false;
 			B->TryGetBoolField(TEXT("roof_walkable"), bWalkable);
 			B->TryGetBoolField(TEXT("enterable"), bEnterable);
-			if (!bWalkable || !bEnterable)
+			double FloorsRaw = 0.0;
+			const TArray<TSharedPtr<FJsonValue>>* Footprint = nullptr;
+			if (!bWalkable || !bEnterable || !B->TryGetNumberField(TEXT("floors"), FloorsRaw)
+				|| !B->TryGetArrayField(TEXT("footprint"), Footprint) || !Footprint || Footprint->Num() < 2)
 			{
 				continue;
 			}
-			const int32 Floors = static_cast<int32>(B->GetNumberField(TEXT("floors")));
-			const float RoofZ = GroundZ + Floors * 300.f;
-			const TArray<TSharedPtr<FJsonValue>>& Footprint = B->GetArrayField(TEXT("footprint"));
-			const FVector2D Min(Footprint[0]->AsArray()[0]->AsNumber(), Footprint[0]->AsArray()[1]->AsNumber());
-			const FVector2D Max(Footprint[1]->AsArray()[0]->AsNumber(), Footprint[1]->AsArray()[1]->AsNumber());
+			const TArray<TSharedPtr<FJsonValue>>* MinArr = nullptr;
+			const TArray<TSharedPtr<FJsonValue>>* MaxArr = nullptr;
+			if (!(*Footprint)[0]->TryGetArray(MinArr) || !(*Footprint)[1]->TryGetArray(MaxArr)
+				|| !MinArr || !MaxArr || MinArr->Num() < 2 || MaxArr->Num() < 2)
+			{
+				continue;
+			}
+			const float RoofZ = GroundZ + static_cast<float>(FloorsRaw) * 300.f;
+			const FVector2D Min((*MinArr)[0]->AsNumber(), (*MinArr)[1]->AsNumber());
+			const FVector2D Max((*MaxArr)[0]->AsNumber(), (*MaxArr)[1]->AsNumber());
 			const FVector2D Centre = (Min + Max) * 0.5;
 			const TPair<FVector, FVector> Edges[] = {
 				{ FVector(Max.X - 110.f, Centre.Y, RoofZ), FVector(1.f, 0.f, 0.f) },
@@ -208,6 +230,12 @@ namespace LookDirectionSmoke
 				FNavLocation GroundNav;
 				if (!Nav->ProjectPointToNavigation(GroundQuery, GroundNav, FVector(200.f, 200.f, 150.f))
 					|| FMath::Abs(static_cast<float>(GroundNav.Location.Z) - GroundZ) > 100.f)
+				{
+					continue;
+				}
+				FHitResult LosHit;
+				if (World->LineTraceSingleByChannel(LosHit, RoofNav.Location + FVector(0.f, 0.f, 150.f),
+					GroundNav.Location + FVector(0.f, 0.f, 40.f), ECC_Visibility, TraceParams))
 				{
 					continue;
 				}
@@ -248,7 +276,8 @@ namespace LookDirectionSmoke
 		}
 
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
-		if (!Squad)
+		ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+		if (!Squad || !PC)
 		{
 			return true;
 		}
@@ -305,13 +334,17 @@ namespace LookDirectionSmoke
 
 			Squad->SetSelectedGroup({ Leader, Mate }, false);
 			const FVector ClickPoint = Leader->GetActorLocation() + State.ArenaForward * 700.f;
-			const LookHoldRules::FLookDirection SharedDir = LookHoldRules::DirectionFromClick(Leader->GetActorLocation(), ClickPoint);
-			Leader->SetManualLookDirection(SharedDir.YawDeg, SharedDir.PitchDeg);
-			Mate->SetManualLookDirection(SharedDir.YawDeg, SharedDir.PitchDeg);
-			State.LockedYawDeg = SharedDir.YawDeg;
+			FHitResult LookHit(nullptr, nullptr, ClickPoint, FVector::UpVector);
+			LookHit.bBlockingHit = true;
+			PC->SetSimulatedShiftModifier(true);
+			PC->HandleWorldHit(LookHit);
+			PC->SetSimulatedShiftModifier(false);
+			State.LockedYawDeg = Leader->GetManualLookYawDeg();
 
 			const float YawMatch = FMath::Abs(FMath::FindDeltaAngleDegrees(Leader->GetManualLookYawDeg(), Mate->GetManualLookYawDeg()));
-			Check(State, YawMatch < 0.05f, FString::Printf(TEXT("Multi-select shared direction yaw identical (diff %.2f deg, yaw %.1f)"), YawMatch, SharedDir.YawDeg));
+			Check(State, Leader->HasManualLookPoint() && Mate->HasManualLookPoint() && YawMatch < 0.05f,
+				FString::Printf(TEXT("HandleWorldHit Shift+click shares identical yaw across selection (diff %.2f deg, yaw %.1f)"),
+					YawMatch, State.LockedYawDeg));
 
 			State.Leg1Goal = SmokeUtils::FreeSpot(World, State.ArenaOrigin + State.ArenaRight * 450.f, Leader);
 			Check(State, Leader->OrderMoveTo(State.Leg1Goal, false) == EOperativeOrderResult::Accepted, TEXT("L-path leg 1 plain move accepted"));
@@ -320,7 +353,7 @@ namespace LookDirectionSmoke
 		}
 		case EStage::WalkLeg1:
 		{
-			if (!Leader)
+			if (!Leader || !Mate)
 			{
 				return Finish(State, false);
 			}
@@ -338,8 +371,10 @@ namespace LookDirectionSmoke
 			{
 				return true;
 			}
-			Check(State, State.Leg1Samples >= 3 && State.Leg1Bad == 0,
-				FString::Printf(TEXT("L-path leg 1 keeps locked compass yaw +-10 deg (%d bad / %d samples)"), State.Leg1Bad, State.Leg1Samples));
+			const float MateErr = FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Mate->GetActorRotation().Yaw), State.LockedYawDeg));
+			Check(State, State.Leg1Samples >= 3 && State.Leg1Bad == 0 && MateErr <= 10.f,
+				FString::Printf(TEXT("L-path leg 1 keeps locked compass yaw +-10 deg (%d bad / %d samples, mate off %.1f)"),
+					State.Leg1Bad, State.Leg1Samples, MateErr));
 
 			State.Leg2Goal = SmokeUtils::FreeSpot(World, State.Leg1Goal + State.ArenaForward * 380.f, Leader);
 			Check(State, Leader->OrderMoveTo(State.Leg2Goal, false) == EOperativeOrderResult::Accepted, TEXT("L-path leg 2 plain move accepted"));
@@ -375,7 +410,7 @@ namespace LookDirectionSmoke
 				Ignored.Add(M);
 			}
 			State.RoofSpot = FindX6RoofLookSpot(World, Ignored);
-			Check(State, State.RoofSpot.bFound, TEXT("Found X6 walkable roof + ground spot below for pitch-down check"));
+			Check(State, State.RoofSpot.bFound, TEXT("Found X6 walkable roof + clear ground spot below for pitch-down check"));
 			if (!State.RoofSpot.bFound)
 			{
 				return Finish(State, false);
@@ -437,19 +472,18 @@ namespace LookDirectionSmoke
 				FString::Printf(TEXT("Roof downward AO pitches skeleton down (spine->head %.1f -> %.1f, muzzle %.1f -> %.1f)"),
 					State.LevelPosePitch, DownPosePitch, State.LevelMuzzlePitch, DownMuzzlePitch));
 
-			// Part B: arm stale look + ordered facing, then issue a plain sprint move elsewhere and verify arrival facing matches travel.
+			// Part B check 1: SetFacingPoint must clear on plain move/sprint without F-1 returning after 3s.
 			const float HalfH = Leader->GetCapsuleComponent() ? Leader->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 88.f;
+			Leader->ClearManualLookPoint();
 			Leader->TeleportTo(State.ArenaOrigin + FVector(0.f, 0.f, HalfH + 4.f), FRotator(0.f, State.ArenaForward.Rotation().Yaw, 0.f), false, true);
 			Leader->StopOperative();
 			Leader->SetFacingPoint(State.ArenaOrigin - State.ArenaForward * 500.f);
-			Leader->SetManualLookDirection(FRotator::NormalizeAxis(static_cast<float>(State.ArenaForward.Rotation().Yaw) + 120.f), 0.f);
-			State.SprintGoal = SmokeUtils::FreeSpot(World, State.ArenaOrigin + State.ArenaForward * 600.f, Leader);
-			Check(State, Leader->OrderMoveTo(State.SprintGoal, true) == EOperativeOrderResult::Accepted, TEXT("Part B plain sprint after stale look/facing accepted"));
-			Check(State, !Leader->HasManualLookPoint(), TEXT("Part B sprint clears ManualLookPoint immediately"));
-			Next(State, EStage::SprintClear);
+			State.SprintGoal = SmokeUtils::FreeSpot(World, State.ArenaOrigin + State.ArenaForward * 550.f, Leader);
+			Check(State, Leader->OrderMoveTo(State.SprintGoal, true) == EOperativeOrderResult::Accepted, TEXT("Part B sprint clearing SetFacingPoint accepted"));
+			Next(State, EStage::SprintClearFacing);
 			return true;
 		}
-		case EStage::SprintClear:
+		case EStage::SprintClearFacing:
 		{
 			if (!Leader)
 			{
@@ -460,11 +494,11 @@ namespace LookDirectionSmoke
 			{
 				return true;
 			}
-			Check(State, bArrived, FString::Printf(TEXT("Part B sprint arrived at goal (%.1f s)"), State.StageTime));
-			Next(State, EStage::SettleAfterSprint);
+			Check(State, bArrived, FString::Printf(TEXT("Part B sprint (after SetFacingPoint) arrived (%.1f s)"), State.StageTime));
+			Next(State, EStage::SettleFacing);
 			return true;
 		}
-		case EStage::SettleAfterSprint:
+		case EStage::SettleFacing:
 		{
 			if (!Leader)
 			{
@@ -478,7 +512,48 @@ namespace LookDirectionSmoke
 			const float FinalYaw = static_cast<float>(Leader->GetActorRotation().Yaw);
 			const float OffDeg = FMath::Abs(FMath::FindDeltaAngleDegrees(FinalYaw, TravelYaw));
 			Check(State, OffDeg <= 15.f,
-				FString::Printf(TEXT("Part B arrival holds travel yaw +-15 deg after settling (got %.1f, travel %.1f, off %.1f)"), FinalYaw, TravelYaw, OffDeg));
+				FString::Printf(TEXT("Part B SetFacingPoint cleared: arrival holds travel yaw +-15 deg (got %.1f, travel %.1f, off %.1f)"),
+					FinalYaw, TravelYaw, OffDeg));
+
+			// Part B check 2: ManualLookDirection clears on sprint and arrival holds reverse travel yaw.
+			Leader->SetManualLookDirection(FRotator::NormalizeAxis(TravelYaw + 120.f), 0.f);
+			State.SprintGoal = SmokeUtils::FreeSpot(World, State.ArenaOrigin, Leader);
+			Check(State, Leader->OrderMoveTo(State.SprintGoal, true) == EOperativeOrderResult::Accepted, TEXT("Part B sprint clearing ManualLookDirection accepted"));
+			Check(State, !Leader->HasManualLookPoint(), TEXT("Part B sprint clears ManualLookPoint immediately"));
+			Next(State, EStage::SprintClearLook);
+			return true;
+		}
+		case EStage::SprintClearLook:
+		{
+			if (!Leader)
+			{
+				return Finish(State, false);
+			}
+			const bool bArrived = FVector::Dist2D(Leader->GetActorLocation(), State.SprintGoal) < 120.f && Leader->GetVelocity().Size2D() < 10.f;
+			if (!bArrived && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, bArrived, FString::Printf(TEXT("Part B sprint (after ManualLook) arrived (%.1f s)"), State.StageTime));
+			Next(State, EStage::SettleLook);
+			return true;
+		}
+		case EStage::SettleLook:
+		{
+			if (!Leader)
+			{
+				return Finish(State, false);
+			}
+			if (State.StageTime < 1.0f)
+			{
+				return true;
+			}
+			const float ReturnTravelYaw = static_cast<float>(FRotator::NormalizeAxis(State.ArenaForward.Rotation().Yaw + 180.f));
+			const float FinalYaw = static_cast<float>(Leader->GetActorRotation().Yaw);
+			const float OffDeg = FMath::Abs(FMath::FindDeltaAngleDegrees(FinalYaw, ReturnTravelYaw));
+			Check(State, OffDeg <= 15.f,
+				FString::Printf(TEXT("Part B ManualLook cleared: arrival holds travel yaw +-15 deg (got %.1f, travel %.1f, off %.1f)"),
+					FinalYaw, ReturnTravelYaw, OffDeg));
 			return Finish(State, true);
 		}
 		default:
@@ -486,32 +561,23 @@ namespace LookDirectionSmoke
 		}
 	}
 
-	void Run()
-	{
-		UWorld* World = nullptr;
-		if (GEngine)
-		{
-			for (const FWorldContext& Context : GEngine->GetWorldContexts())
-			{
-				if (Context.WorldType == EWorldType::Game || Context.WorldType == EWorldType::PIE)
-				{
-					World = Context.World();
-					break;
-				}
-			}
-		}
-		TSharedRef<FState> State = MakeShared<FState>();
-		State->World = World;
-		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Weak = TWeakObjectPtr<UWorld>(World), State](float)
-		{
-			return Step(Weak, State);
-		}), StepSeconds);
-	}
-
-	FAutoConsoleCommand Command(
+	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.LookDirectionSmoke"),
 		TEXT("Task 145: shared Shift+click world yaw on L-path, roof pitch-down AO bone check, and Part B sprint arrival facing on X6."),
-		FConsoleCommandDelegate::CreateStatic(&Run));
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic([](const TArray<FString>&, UWorld* World)
+		{
+			if (!World)
+			{
+				UE_LOG(LogCodexTactics, Error, TEXT("LookDirectionSmoke: no UWorld context."));
+				return;
+			}
+			TSharedRef<FState> State = MakeShared<FState>();
+			State->World = World;
+			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Weak = TWeakObjectPtr<UWorld>(World), State](float)
+			{
+				return Step(Weak, State);
+			}), StepSeconds);
+		}));
 }
 
 #endif // !UE_BUILD_SHIPPING
