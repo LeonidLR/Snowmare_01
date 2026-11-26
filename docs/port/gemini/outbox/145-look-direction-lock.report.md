@@ -1,47 +1,43 @@
 # 145: Look Direction Lock (`Shift+Click` World Yaw+Pitch) & Part B Arrival Facing
 
 - **Branch / Worktree**: `gemini/145-look-direction-lock` (`C:\Work\Lanes\CodexTactics-145`)
-- **Base Merged**: `origin/main` (including `135`, `142`, and `b65ec5f7` / `d3f6dfae`) at `fa48efaf`.
+- **Code Commit Tested**: `402745c7` (merged `origin/main` up to `d3f6dfae`)
 
 ## Summary of Changes
 
 ### Part A — Fixed World Look Direction (`Shift+Click` variant B) & Multi-select Shared Yaw
-- **`LookHoldRules` (`Source/CodexTactics/Public/Tactics/LookHoldRules.h`, `Source/CodexTactics/Private/Tactics/LookHoldRules.cpp`)**:
-  - Added `FLookDirection { float YawDeg; float PitchDeg; }`, `DirectionFromClick(OperativeLocation, ClickPoint)`, and `ProjectLookPoint(OperativeLocation, YawDeg, PitchDeg, DistanceCm = 1000.f)`.
-- **`AOperativeCharacter` (`Source/CodexTactics/Public/Characters/OperativeCharacter.h`, `Source/CodexTactics/Private/Characters/OperativeCharacterStealth.cpp`)**:
-  - Replaced point-based lock tracking with `(ManualLookYawDeg, ManualLookPitchDeg)` via `SetManualLookDirection(YawDeg, PitchDeg)`, preserving `SetManualLookPoint`, `SetStealthManualLookTarget`, `GetStealthManualLookTarget`, and `ClearManualLookPoint` compatibility.
-  - `GetManualLookPoint()` projects `1000 cm` from `GetActorLocation()` along the stored `(ManualLookYawDeg, ManualLookPitchDeg)` so turns along L-shaped paths or cover corners preserve a constant compass direction.
-  - `SetStealthMode(true)` now clears `bExplicitFacing = false` so a previous facing order cannot block stealth look hold.
-- **`ACodexTacticsPlayerController` (`Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerOrders.cpp`)**:
-  - Both non-stealth and stealth multi-select `Shift+click` compute `SharedDir` once from the first valid operative (`LookHoldRules::IsValidLookPoint`) and apply it uniformly across all valid selected operatives, reporting HUD/callout messages on that valid reference operative.
+- **`LookHoldRules`** ([LookHoldRules.h](Source/CodexTactics/Public/Tactics/LookHoldRules.h), [LookHoldRules.cpp](Source/CodexTactics/Private/Tactics/LookHoldRules.cpp)):
+  - Added `FLookDirection { float YawDeg; float PitchDeg; }`, `DirectionFromClick(OperativeLocation, ClickPoint)`, `ProjectLookPoint(OperativeLocation, YawDeg, PitchDeg, DistanceCm = 1000.f)`, and `AdjustClickForFlatGround(OperativeLocation, HalfHeightCm, ClickPoint, FlatBandCm = 65.f)` so clicks near standing feet elevation remain horizontal (`0 deg` pitch) while steeper elevation clicks preserve true pitch.
+- **`AOperativeCharacter`** ([OperativeCharacter.h](Source/CodexTactics/Public/Characters/OperativeCharacter.h), [OperativeCharacterStealth.cpp](Source/CodexTactics/Private/Characters/OperativeCharacterStealth.cpp)):
+  - Replaced point-based lock tracking with `(ManualLookYawDeg, ManualLookPitchDeg)` via `SetManualLookDirection(YawDeg, PitchDeg)`, projecting `1000 cm` from `GetActorLocation()` consistently across `SetManualLookPoint`, `SetStealthManualLookTarget`, `GetStealthManualLookTarget`, and `GetManualLookPoint`.
+  - `SetStealthMode(true)` clears `bExplicitFacing = false`.
+- **`ACodexTacticsPlayerController`** ([CodexTacticsPlayerControllerOrders.cpp](Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerOrders.cpp)):
+  - Both stealth and non-stealth multi-select `Shift+click` compute one `SharedDir` (using `AdjustClickForFlatGround`) from the first valid operative (`LookHoldRules::IsValidLookPoint`) and apply it uniformly to all valid selected operatives.
 
 ### Roof Downward Aim Offset Pitch (`#1398`)
-- **`UOperativeAnimInstance::UpdateAimOffset` (`Source/CodexTactics/Private/Characters/OperativeAnimInstance.cpp`)**:
-  - Added `bLookHoldPitch` (gated on `!bInCover && !Operative.HasOwnFacing() && !bIsSprinting && Operative.GetActiveLookPoint(LookPoint)`) so Shift+clicking ground below a roof drives `AimPitchTarget` from `ManualLookPitchDeg` with `AimYawTarget = 0` (body yaw stays controlled by `UpdateCombatFacing`).
-  - Both `bCornerLookPoint` and `bLookHoldPitch` read `GetManualLookPitchDeg()` directly when `HasManualLookPoint()` is true, eliminating muzzle-height Z parallax.
+- **`UOperativeAnimInstance::UpdateAimOffset`** ([OperativeAnimInstance.cpp](Source/CodexTactics/Private/Characters/OperativeAnimInstance.cpp)):
+  - Added `bLookHoldPitch` (`!bCornerLookPoint && !bInCover && !Operative.IsInStealthMode() && !Operative.HasOwnFacing() && !bIsSprinting && Operative.GetActiveLookPoint(LookPoint)`) driving `AimPitchTarget` from `ManualLookPitchDeg` with `AimYawTarget = 0`, clamped to `ActiveAimOffset` BlendSpace axis limits.
 
-### Part B — Arrival Facing Log & Stale State Fixes (`#1394`, `#1397`)
-- **Arrival Facing Log (`OperativeCharacterMovement.cpp`, `OperativeCharacterAim.cpp`)**:
-  - Added once-per-move `[ArrivalFacing]` log (`rule=<manual look|watch sector|F-1 return|idle facing|threat turn|cover facing|combat target|door lock|grenade lock|first aid|travel> yaw=... actor=... travel=...`).
-- **Stale Sources Fixed**:
-  - `OrderMoveTo`: clears `ClearIdleFacing()` and `bExplicitFacing = false` before `ShouldDeferMove()` / early climb returns; clears stale `bFoughtThisFight` & `LastThreat` when issuing a non-autonomous move out of active contact (`CurrentCombatTarget` invalid/dead, not under fire, `>5 s` since last shot/contact); gates sprint look-clear on `CanSprint()`.
-  - `HandleMoveFinished`: computes `ArrivalTravelYaw` using 2D horizontal velocity (`SizeSquared2D() > 100.f`).
-  - `UpdateCombatFacing`: keeps `LastThreatContactTime` fresh during cover firefights (`bInCover`), expires stale `bFoughtThisFight` after `20 s` without threat contact (preserving `RetreatFacingSmoke`), and adds `!bFacingWall` to `bHasIdleFacing`.
-  - `OrderMantleTop` / `FinishMantle` (`OperativeCharacterMantle.cpp`) and `ResetTransientStateForLoad` (`OperativeCharacterHealth.cpp`): clear `IdleFacing`, `bExplicitFacing`, `ManualLookPoint`, and `bFoughtThisFight` cleanly.
-  - `StealthModeSmokeCommand.cpp`: updated section 5 orthogonal stealth move yaw check to `GetManualLookYawDeg()`.
+### Part B — Arrival Facing Log, Ramp-to-Roof Fix & Round Reset
+- **Arrival Facing Log & Threat Decay** ([OperativeCharacterAim.cpp](Source/CodexTactics/Private/Characters/OperativeCharacterAim.cpp), [OperativeCharacterMovement.cpp](Source/CodexTactics/Private/Characters/OperativeCharacterMovement.cpp)):
+  - Added once-per-move `[ArrivalFacing]` log and `2D` horizontal velocity check (`SizeSquared2D() > 100.f`) in `HandleMoveFinished`.
+  - Cleared `IdleFacing`, `bExplicitFacing`, sprint-look (including immediate clear on prone -> double-click sprint before `RiseDelay`, with `LOOK CLEARED` gated on `IsLookHoldEligible()`), and stale `bFoughtThisFight` (`> 5 s` out of active contact on non-autonomous moves; `20 s` stationary decay past `LastThreatContactTime`; `!WaveCombat` reset moved above early cover/interaction returns).
+  - Guarded idle facing with `!bFacingWall`.
+- **Mantle & Round/Region/Load Resets** ([OperativeCharacterMantle.cpp](Source/CodexTactics/Private/Characters/OperativeCharacterMantle.cpp), [OperativeCharacterHealth.cpp](Source/CodexTactics/Private/Characters/OperativeCharacterHealth.cpp), [MissionSubsystem.cpp](Source/CodexTactics/Private/Core/MissionSubsystem.cpp), [TrainingSectorSubsystem.cpp](Source/CodexTactics/Private/Training/TrainingSectorSubsystem.cpp)):
+  - Added `AOperativeCharacter::ClearLookAndFacingState()` (clearing manual look, idle/explicit facing, `bFoughtThisFight`, `LastThreat`, `LastThreatContactTime = -1000.0`) and wired it into `ResetTransientStateForLoad`, `UMissionSubsystem::StartCombatMode`, `UMissionSubsystem::HandleGameFlowChanged` (`bCutsceneEnded`), and `UTrainingSectorSubsystem::MovePlayersToSector`; cleared `IdleFacing` and `bExplicitFacing` in `OrderMantleTop` / `FinishMantle`.
+- **Tests & Smoke Updates** ([LookHoldRulesTest.cpp](Source/CodexTacticsTests/Private/Tactics/LookHoldRulesTest.cpp), [LookDirectionSmokeCommand.cpp](Source/CodexTacticsDev/Private/Debug/LookDirectionSmokeCommand.cpp), [LookHoldSmokeCommand.cpp](Source/CodexTacticsDev/Private/Debug/LookHoldSmokeCommand.cpp), [StealthModeSmokeCommand.cpp](Source/CodexTacticsDev/Private/Debug/StealthModeSmokeCommand.cpp), [test_map.json](Scripts/test_map.json)).
 
-## Verification
-- **Build**: `machine_dispatch.py build --lane C:\Work\Lanes\CodexTactics-145`: `Result: Succeeded` (`72.26s`, Exit code 0 after final edits).
-- **CheckMap**: `Scripts/test.ps1 -CheckMap`: `Impact map OK: every smoke command is registered and mapped.`
-- **Unit Tests** (`Scripts/test.ps1 -Filter "CodexTactics.Tactics.LookHold+CodexTactics.Squad.ThreatFacing+CodexTactics.Characters.StealthMode" -SkipSmokes -NoBuild`): **22 tests, 0 failed** (`11/11` StealthMode, `3/3` ThreatFacing, `8/8` LookHold incl. `DirectionLock`).
-- **Dispatched Smokes** (`machine_dispatch.py smoke --lane C:\Work\Lanes\CodexTactics-145`, post-final-edit):
-  - `LookDirectionSmoke`: **PASS** (`69.8s` on `L_Gen_Depot_1_X6`):
-    - Multi-select `HandleWorldHit` Shift+click diff `0.00 deg`;
-    - L-shaped walk Leg 1 + Leg 2 hold world look yaw within `+-10 deg`;
-    - Roof downward Shift+click pitch -> `AnimInstance AimPitch` + skeletal bones pitched down (`spine->head` & `muzzle`);
-    - Real `B_ruin` external ramp climb to roof, then roof sprint -> `[ArrivalFacing] rule=travel` held `+-15 deg` past `3.5s`;
-    - `SetFacingPoint` and `ManualLookDirection` cleared on plain sprint.
-  - `CoverIndoorSmoke`: **PASS** (`80.7s`).
-  - `FormationScanPitchSmoke`: **PASS** (`72.4s`).
-  - `TorsoDriftSmoke`: **PASS** (`73.4s`).
-- **Pro Self-Review**: `research` subagent (`Model: pro`) full review (`750a290c`) + delta review (`162e2b0d`) completed; all findings (stealth multi-select/smoke, non-stealth skipped RefOp, disallowed sprint clear, AO cover/own-facing gating & parallax, 2D arrival yaw / cover contact / mantle / load resets, team-symmetric `OperativeCharacterInternal::IsLiveTargetOf`, `RoofSprintClear` `StageTime > 0.5f` guard, unused headers in `LookDirectionSmokeCommand.cpp`, zero `Content/` files committed) resolved and re-verified.
+## Verification (on `402745c7`)
+- **Build**: `machine_dispatch.py build` on `codex-worker`: `Result: Succeeded` (`397.15 s` compile; exit `0`).
+- **Impact Map**: `Scripts/test.ps1 -CheckMap`: `Impact map OK: every smoke command is registered and mapped.`
+- **Unit Tests** (`Scripts/test.ps1 -Filter "CodexTactics.Tactics.LookHold+CodexTactics.Squad.ThreatFacing+CodexTactics.Characters.StealthMode+CodexTactics.Anim+CodexTactics.Movement+CodexTactics.Cover+CodexTactics.Characters.Mantle+CodexTactics.Mission+CodexTactics.Training.Sector" -SkipSmokes`): **89 tests, 0 failed**.
+- **Smokes** (`machine_dispatch.py smoke` on `codex-worker`, `L_Gen_Depot_1_X6`):
+  - `LookDirectionSmoke`: **PASS** (`43.7 s`, zero re-runs) — multi-select `HandleWorldHit` level `0.0 deg` pitch & shared `90.0 deg` yaw (`diff 0.00 deg`); both `Leader` (`0/43`, `0/30`) and `Mate` (`0/44`, `0/30`) hold locked yaw along both L-path legs; roof downward Shift+click pitches real skeleton (`AimPitch -47.5 deg`, `alpha 1.00`, `spine->head 72.3 -> 52.8`, `muzzle 1.4 -> -43.0`); `B_ruin` ramp climb to roof (`feet Z 602 vs roof 600`) -> roof sprint `[ArrivalFacing] rule=travel yaw=85.2` held past `3.5 s` (`off 4.4 deg`, `meshDrift 0.0`); `ClearLookAndFacingState()` clears look state; `SetFacingPoint` (`off 0.1`) & `ManualLook` (`off 0.2`) clear on sprint.
+  - `TorsoDriftSmoke`: **PASS** (`39.2 s`).
+  - `RoofFightSmoke`: **PASS** (`40.3 s`).
+  - `CoverIndoorSmoke`: **PASS** (`40.7 s`).
+- **Pro Self-Review**: `research` subagent (`Model: pro`) reviewed both the initial diff and `4c4124c5..402745c7`, returning verdict `MERGE-READY` with 0 Blocking/Important findings.
+
+## What Was NOT Checked
+- Full `verify_all.ps1` across every unmapped smoke in the project (the 4 targeted X6 smokes ran and passed).
+- Retired/archived map smokes (`StealthModeSmoke`, `LookHoldSmoke`, `RetreatFacingSmoke`), which `smoke_parallel.ps1` rejects unless given `-Map` with `-ForceMap`.
