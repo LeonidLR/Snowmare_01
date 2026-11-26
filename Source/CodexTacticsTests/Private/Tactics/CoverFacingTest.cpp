@@ -176,10 +176,10 @@ bool FCoverCornerPoseSnapTest::RunTest(const FString& Parameters)
 {
 	using namespace CoverFacingRules;
 	const FCoverFacingConfig Config;
-	// Edge 70 cm away on the facing side (right: pack _L): at the corner, within the snap tolerance of the stand-off.
-	const FCoverSlot Near = CoverFacingTest::MakeCoverFacingSlot(false, 0.f, true, 70.f);
+	// Edge 45 cm away on the facing side (right: pack _L): at the corner, within the snap tolerance of the 34 cm stand-off.
+	const FCoverSlot Near = CoverFacingTest::MakeCoverFacingSlot(false, 0.f, true, 45.f);
 	float Shift = -1.f;
-	TestTrue(TEXT("edge 0.7 m on the facing side: corner pose"), IsAtCorner(Near, ECoverFacing::Right, Config));
+	TestTrue(TEXT("edge 0.45 m on the facing side: corner pose"), IsAtCorner(Near, ECoverFacing::Right, Config));
 	TestFalse(TEXT("... no snap needed (inside the snap tolerance of the stand-off)"), ShouldSnapToCorner(Near, ECoverFacing::Right, Shift, Config));
 	TestFalse(TEXT("facing the other (closed) side: no corner pose"), IsAtCorner(Near, ECoverFacing::Left, Config));
 	// Edge 1.6 m away: walk towards it, stopping the pack _L stand-off short of the measured edge.
@@ -349,12 +349,11 @@ bool FCoverCornerStandOffPerClipSideTest::RunTest(const FString& Parameters)
 		FMath::IsNearlyEqual(CornerStandOff(ECoverFacing::Left, false, Config), CornerStandOff(ECoverFacing::Right, false, Config), 0.01f)
 		&& CornerStandOff(ECoverFacing::Left, false, Config) <= 35.f);
 
-	// The same edge 80 cm away. His right stand-off is 66, so 80 - 66 = 14 sits inside the 15 cm snap
-	// tolerance: already at the corner, no walk away and no step. His left (34 standing, 56 crouched) is still short.
+	// The same edge 80 cm away. Both stand-offs are 34 cm standing / 56 cm crouched, so 80 cm steps closer on both sides.
 	float Shift = -1.f;
 	const FCoverSlot Both = CoverFacingTest::MakeCoverFacingSlot(true, 80.f, true, 80.f);
-	TestFalse(TEXT("right edge 0.8 m: inside the snap tolerance of the right stand-off"), ShouldSnapToCorner(Both, ECoverFacing::Right, Shift, Config, false));
-	TestEqual(TEXT("... no step"), Shift, 0.f, 0.01f);
+	TestTrue(TEXT("right edge 0.8 m: steps closer"), ShouldSnapToCorner(Both, ECoverFacing::Right, Shift, Config, false));
+	TestEqual(TEXT("... by edge - the right stand-off"), Shift, 80.f - Config.StandStandOffPackLCm, 0.01f);
 	TestTrue(TEXT("left edge 0.8 m: steps closer"), ShouldSnapToCorner(Both, ECoverFacing::Left, Shift, Config, false));
 	TestEqual(TEXT("... by edge - the left stand-off"), Shift, 80.f - Config.StandStandOffPackRCm, 0.01f);
 	TestTrue(TEXT("left edge 0.8 m crouched: steps closer"), ShouldSnapToCorner(Both, ECoverFacing::Left, Shift, Config, true));
