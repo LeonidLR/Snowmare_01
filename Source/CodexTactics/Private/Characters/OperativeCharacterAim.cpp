@@ -4,6 +4,7 @@
 // (2026-10-07).
 
 #include "Characters/OperativeCharacter.h"
+#include "CodexTactics.h"
 
 #include "Characters/AimOffsetRules.h"
 #include "Characters/FacingRules.h"

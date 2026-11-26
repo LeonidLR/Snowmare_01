@@ -468,6 +468,8 @@ public:
 	bool HasManualLookPoint() const { return bHasManualLookPoint; }
 	float GetManualLookYawDeg() const { return ManualLookYawDeg; }
 	float GetManualLookPitchDeg() const { return ManualLookPitchDeg; }
+	/** Corner look AO (135b): true when LookPoint lies within the active corner aim-offset reach; false means step out of wall hug to turn. */
+	bool CanReachCornerLookInCover(const FVector& LookPoint, float* OutOffDeg = nullptr) const;
 	/** CoverIndoor aim offset: a Shift-click look while the corner peek is up. A new plain peek or leaving the corner turns it off. */
 	bool WantsCornerLookPose() const;
 	bool GetManualLookPoint(FVector& OutPoint) const;
@@ -3271,6 +3273,8 @@ private:
 	 * a teleport / a new wall normal while the push was on left up to ~1.2 m of it on the mesh for good (the body beside its capsule).
 	 */
 	FVector CoverWallPushAppliedLocal = FVector::ZeroVector;
+	/** 135b: closed-loop corner edge alignment for idle/return corner poses, actor-local so GetCoverEntryMeshOffset stays 0 when not peeking. */
+	FVector CoverCornerAlignAppliedLocal = FVector::ZeroVector;
 	/**
 	 * Low cover: share of the fire stance's sideways root step that is cancelled on the mesh (1 = over the top, where he stands; 0 = the corner
 	 * peek, where the step is the lean out past the wall's end - 2026-10-20). Eased by UpdateCoverEntryBlend over CoverLeanBlendSeconds.

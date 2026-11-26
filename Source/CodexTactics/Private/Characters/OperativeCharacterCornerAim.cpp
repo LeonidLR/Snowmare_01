@@ -865,6 +865,26 @@ bool AOperativeCharacter::IsAtPeekableCorner() const
 	return bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing);
 }
 
+bool AOperativeCharacter::CanReachCornerLookInCover(const FVector& LookPoint, float* OutOffDeg) const
+{
+	if (!bInCover || !CoverSlot.IsValid())
+	{
+		if (OutOffDeg) { *OutOffDeg = 0.f; }
+		return false;
+	}
+	const FVector LookDir = LookPoint - GetActorLocation();
+	const float SignedAbs = FMath::Abs(CoverLookAoRules::SignedYawFromNormal(CoverSlot.WallNormal, LookDir));
+	// Cover corner side aim poses face round the edge (~85..145 deg off the wall normal);
+	// front-facing looks (< 85 deg, e.g. straight out or across the wall face) or rear looks (> 145 deg) step out of cover to turn.
+	constexpr float MinSideYawDeg = 85.f;
+	constexpr float MaxSideYawDeg = 145.f;
+	if (OutOffDeg)
+	{
+		*OutOffDeg = SignedAbs;
+	}
+	return SignedAbs >= MinSideYawDeg && SignedAbs <= MaxSideYawDeg;
+}
+
 bool AOperativeCharacter::WantsCornerLookPose() const
 {
 	return CoverLookAoRules::WantsPose(bCornerLookPose && (IsPeekingRoundCorner() || IsAtPeekableCorner()), bHasManualLookPoint);

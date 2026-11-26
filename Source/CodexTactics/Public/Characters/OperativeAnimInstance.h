@@ -1309,8 +1309,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover Animation Sets")
 	FString GetActiveCoverAnimSet() const { return ActiveCoverAnimSet; }
 
+	/** Dev smokes only: forces a cover animation set by name ("m4" for native clips, "riffle" for indoor set; empty = auto). */
+	void SetCoverAnimSetOverrideForTesting(const FString& SetName);
+
 	/** The context the last cover entry was judged in ("indoor" / "outdoor" / "stealth"; smokes). */
 	const FString& GetCoverAnimContext() const { return CoverAnimContextName; }
+	FString CoverAnimSetOverrideForTesting;
 
 	/** The active set has its own clip for Key base (stand_reload, crouch_over_fire_idle, ...) on Facing's side. */
 	bool HasCoverSetClip(const TCHAR* KeyBase, ECoverFacing Facing) const;

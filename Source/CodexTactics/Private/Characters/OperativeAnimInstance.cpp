@@ -2359,7 +2359,8 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	// idle -> fire transition, then the fire-ready idle; the exit transition when the threat is gone for the hold time,
 	// he shimmies off the edge or leaves the cover. Without the clips the look-around corner pose stands in.
 	UAnimSequenceBase* FireIdle = PickCoverClip(bIsCrouching ? CoverCrouchFireIdle : CoverStandFireIdle);
-	const bool bWantFirePose = (bCoverFireReady || (bCoverOverTopShotPending && !bIsReloading)) && FireIdle;
+	const bool bWantCornerLookFire = bCornerLookPoseApplied && Operative.IsAtPeekableCorner() && !bShimmying;
+	const bool bWantFirePose = (bCoverFireReady || bWantCornerLookFire || (bCoverOverTopShotPending && !bIsReloading)) && FireIdle;
 	bool bPeekStanceBlend = false;
 	if (bCoverInFirePose && !bShimmying)
 	{

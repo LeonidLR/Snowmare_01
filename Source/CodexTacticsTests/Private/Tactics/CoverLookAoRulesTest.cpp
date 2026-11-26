@@ -42,6 +42,21 @@ bool FCoverLookAoRulesTest::RunTest(const FString&)
 	ClampAxes(ClampedYaw, UnusedPitch, 60.f, 90.f);
 	TestTrue(TEXT("the cone keeps the look past the aim-offset clamp"), FMath::Abs(Cone) > 60.f && FMath::IsNearlyEqual(Cone, LookYaw, 0.01f));
 	TestTrue(TEXT("the aim offset would have stopped at its range"), FMath::IsNearlyEqual(ClampedYaw, 60.f, 0.01f));
+
+	// Corner AO reach: within ~45 deg of CornerAimDirection stays in cover; 0 deg wall normal (100 deg off) steps out.
+	FCoverSlot Slot;
+	Slot.WorldLocation = FVector::ZeroVector;
+	Slot.WallPoint = FVector(-45.f, 0.f, 0.f);
+	Slot.WallNormal = FVector(1.f, 0.f, 0.f);
+	Slot.bLeftEdgeExposed = true;
+	Slot.LeftEdgeDistanceCm = 34.f;
+	float OffDeg = 0.f;
+	TestTrue(TEXT("look -67 deg from normal on left pose is within 45 deg AO reach"),
+		IsWithinCornerAoReach(Slot, ECoverFacing::Left, FRotator(0.f, -67.f, 0.f).Vector(), 100.f, 45.f, &OffDeg));
+	TestEqual(TEXT("-67 vs -100 off deg"), OffDeg, 33.f, 0.2f);
+	TestFalse(TEXT("look along wall normal (0 deg) exceeds 45 deg AO reach from left corner aim"),
+		IsWithinCornerAoReach(Slot, ECoverFacing::Left, FVector(1.f, 0.f, 0.f), 100.f, 45.f, &OffDeg));
+	TestEqual(TEXT("0 vs -100 off deg"), OffDeg, 100.f, 0.2f);
 	return true;
 }
 

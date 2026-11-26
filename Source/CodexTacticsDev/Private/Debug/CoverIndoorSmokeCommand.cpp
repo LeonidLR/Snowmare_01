@@ -670,7 +670,8 @@ namespace CoverIndoorSmoke
 					}
 					const FLook& Look = Looks[Sample];
 					const float Up = Look.Up > 0.f ? 280.f : -90.f;
-					const FVector Point = Op->GetActorLocation() + Normal * 180.f + Right * (Look.Side * 420.f) + FVector(0.f, 0.f, Up);
+					// Corner AO cone (~106 deg from normal round the edge): stays in cover while AO drives weapon yaw & pitch.
+					const FVector Point = Op->GetActorLocation() - Normal * 120.f + Right * (Look.Side * 420.f) + FVector(0.f, 0.f, Up);
 					Op->SetManualLookPoint(Point);
 				};
 				if (R.LookSince < 0.0)
@@ -679,7 +680,7 @@ namespace CoverIndoorSmoke
 					ApplyLook(0);
 					return;
 				}
-				if (Now - R.LookSince < 0.8)
+				if (Now - R.LookSince < 1.0)
 				{
 					return;
 				}
@@ -713,6 +714,27 @@ namespace CoverIndoorSmoke
 					else if (Op->CoverFacing != R.LookSideLatched)
 					{
 						R.bLookSidesDiffer = true;
+					}
+					FVector LookPt = FVector::ZeroVector;
+					if (Op->GetManualLookPoint(LookPt))
+					{
+						const float LookYaw = static_cast<float>((LookPt - Op->GetActorLocation()).GetSafeNormal2D().Rotation().Yaw);
+						const USceneComponent* WeaponComp = (Op->WeaponSkeletalMesh && Op->WeaponSkeletalMesh->IsVisible())
+							? static_cast<const USceneComponent*>(Op->WeaponSkeletalMesh.Get())
+							: static_cast<const USceneComponent*>(Op->WeaponMesh.Get());
+						if (WeaponComp)
+						{
+							const FVector Barrel = (Op->GetWeaponMuzzleLocation() - WeaponComp->GetComponentLocation()).GetSafeNormal2D();
+							if (!Barrel.IsNearlyZero())
+							{
+								const float WeaponErr = FMath::Abs(FRotator::NormalizeAxis(static_cast<float>(Barrel.Rotation().Yaw) - LookYaw));
+								UE_LOG(LogCodexTactics, Display, TEXT("CoverIndoorSmoke 135b look %s %s: lookYaw %.1f, weapon %.1f (err %.1f), AimYaw %.1f, facing %s"),
+									bCrouch ? TEXT("crouch") : TEXT("stand"), Looks[R.LookSample].Name, LookYaw, static_cast<float>(Barrel.Rotation().Yaw),
+									WeaponErr, Anim->AimYaw, Op->CoverFacing == ECoverFacing::Left ? TEXT("L") : TEXT("R"));
+								Check(WeaponErr <= 15.f, FString::Printf(TEXT("%s %s: weapon yaw err %.1f deg (<= 15)"),
+									bCrouch ? TEXT("crouch") : TEXT("stand"), Looks[R.LookSample].Name, WeaponErr));
+							}
+						}
 					}
 					Shot(FString::Printf(TEXT("%s_%s"), bCrouch ? TEXT("crouch") : TEXT("stand"), Looks[R.LookSample].Name));
 				}
