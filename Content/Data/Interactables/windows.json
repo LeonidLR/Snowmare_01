@@ -17,5 +17,7 @@
   "approach_match_cm": 200,
   "_approach_match_cm": "G024: a move whose goal is within this of the landing is that climb (the leader's target is the landing itself).",
   "approach_arrive_cm": 150,
-  "_approach_arrive_cm": "G024: the near face counts as reached when the walk stops within this of the approach point."
+  "_approach_arrive_cm": "G024: the near face counts as reached when the walk stops within this of the approach point.",
+  "solo_group_queue_spacing_cm": 150,
+  "_solo_group_queue_spacing_cm": "G024b: a solo box selection files through the ordered window. Rank 0 stands on the landing. Rank N stands this many centimetres times N further along the climb. Not the lateral group spread (that path takes the door)."
 }

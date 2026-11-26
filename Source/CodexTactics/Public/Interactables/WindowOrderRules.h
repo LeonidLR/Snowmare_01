@@ -28,6 +28,8 @@ struct CODEXTACTICS_API FWindowOrderTuning
 	float ApproachMatchCm = 200.f;
 	/** He has reached the near face when the walk stops within this of the approach point. */
 	float ApproachArriveCm = 150.f;
+	/** Solo box selection (G024b): centimetres between men filing through one ordered window. Rank 0 is the landing. */
+	float SoloGroupQueueSpacingCm = 150.f;
 };
 
 /**
@@ -85,4 +87,13 @@ namespace WindowOrderRules
 	 */
 	CODEXTACTICS_API TOptional<FVector> QueueThroughWindow(const FVector& Approach, const FVector& Landing, const FVector& LeaderLocation,
 		int32 Rank, float SpacingCm);
+
+	/**
+	 * Solo box selection on an explicit window order (G024b). Rank 0's destination is the landing. Rank N stands
+	 * SpacingCm * N further along the climb, so the group files through that window instead of spreading onto a door path.
+	 * Feet already on the far side of the mid-plane reflect the approach and the landing: he climbs from his own side.
+	 * OutApproach and OutDestination copy Feet.Z. False when the climb has no direction or Rank is negative.
+	 */
+	CODEXTACTICS_API bool FileSoloGroup(const FVector& Feet, const FVector& Approach, const FVector& Landing, int32 Rank, float SpacingCm,
+		FVector& OutApproach, FVector& OutDestination);
 }
