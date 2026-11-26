@@ -149,10 +149,17 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		bExplicitFacing = false;
 		if (!bAutonomousOrder)
 		{
-			if (!IsInStealthMode() && bSprint && CanSprint() && HasManualLookPoint())
+			const bool bWillSprintOnOrder = !IsInStealthMode() && bSprint
+				&& (CanSprint() || (Stance == EOperativeStance::Prone && !bCarrying && !IsCriticallyWounded()
+					&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded())));
+			if (bWillSprintOnOrder && HasManualLookPoint())
 			{
+				const bool bNotifyLookCleared = IsLookHoldEligible();
 				ClearManualLookPoint();
-				UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+				if (bNotifyLookCleared)
+				{
+					UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+				}
 			}
 			AOperativeCharacter* ActiveUnderFireShooter = nullptr;
 			FVector ActiveUnderFirePoint = FVector::ZeroVector;
@@ -222,8 +229,12 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	{
 		if (HasManualLookPoint())
 		{
+			const bool bNotifyLookCleared = IsLookHoldEligible();
 			ClearManualLookPoint();
-			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+			if (bNotifyLookCleared)
+			{
+				UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+			}
 		}
 		// A sprint order stands a crouching operative up (Godot set_target).
 		if (Stance == EOperativeStance::Crouching)
@@ -730,8 +741,12 @@ void AOperativeCharacter::SetSprinting(bool bNewSprinting)
 	const bool bAllowed = bNewSprinting && CanSprint() && Stance == EOperativeStance::Standing;
 	if (LookHoldRules::ShouldClearOnSprint(bAllowed) && HasManualLookPoint())
 	{
+		const bool bNotifyLookCleared = IsLookHoldEligible();
 		ClearManualLookPoint();
-		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+		if (bNotifyLookCleared)
+		{
+			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+		}
 	}
 	if (bSprinting != bAllowed)
 	{

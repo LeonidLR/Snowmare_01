@@ -476,7 +476,9 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 					}
 					if (StealthRef)
 					{
-						const LookHoldRules::FLookDirection SharedDir = LookHoldRules::DirectionFromClick(StealthRef->GetActorLocation(), Hit.ImpactPoint);
+						const FVector AdjustedStealthClick = LookHoldRules::AdjustClickForFlatGround(
+							StealthRef->GetActorLocation(), StealthRef->GetSimpleCollisionHalfHeight(), Hit.ImpactPoint);
+						const LookHoldRules::FLookDirection SharedDir = LookHoldRules::DirectionFromClick(StealthRef->GetActorLocation(), AdjustedStealthClick);
 						for (AOperativeCharacter* Member : StealthedSelected)
 						{
 							if (Member && LookHoldRules::IsValidLookPoint(Hit.ImpactPoint, Member->GetActorLocation()))
@@ -829,8 +831,11 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 				break;
 			}
 		}
+		const FVector AdjustedClick = RefOp
+			? LookHoldRules::AdjustClickForFlatGround(RefOp->GetActorLocation(), RefOp->GetSimpleCollisionHalfHeight(), Hit.ImpactPoint)
+			: Hit.ImpactPoint;
 		const LookHoldRules::FLookDirection SharedDir = RefOp
-			? LookHoldRules::DirectionFromClick(RefOp->GetActorLocation(), Hit.ImpactPoint)
+			? LookHoldRules::DirectionFromClick(RefOp->GetActorLocation(), AdjustedClick)
 			: LookHoldRules::FLookDirection{};
 		for (AOperativeCharacter* Op : Targets)
 		{

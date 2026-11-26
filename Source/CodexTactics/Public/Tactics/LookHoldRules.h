@@ -75,6 +75,12 @@ namespace LookHoldRules
 		float PitchDeg = 0.f;
 	};
 
+	/**
+	 * When Shift+clicking flat terrain at roughly the operative's standing feet elevation, keep look pitch horizontal (0 deg)
+	 * so standing operatives do not pitch downward toward nearby ground clicks; steeper elevation clicks keep true Z.
+	 */
+	CODEXTACTICS_API FVector AdjustClickForFlatGround(const FVector& OperativeLocation, float HalfHeightCm, const FVector& ClickPoint, float FlatBandCm = 65.f);
+
 	/** Compute fixed world yaw + pitch from OperativeLocation to ClickPoint at the moment of the click. */
 	CODEXTACTICS_API FLookDirection DirectionFromClick(const FVector& OperativeLocation, const FVector& ClickPoint);
 

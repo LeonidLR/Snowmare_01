@@ -112,7 +112,6 @@ void AOperativeCharacter::SetManualLookPoint(const FVector& WorldPoint)
 {
 	const LookHoldRules::FLookDirection Dir = LookHoldRules::DirectionFromClick(GetActorLocation(), WorldPoint);
 	SetManualLookDirection(Dir.YawDeg, Dir.PitchDeg);
-	ManualLookPoint = WorldPoint;
 }
 
 void AOperativeCharacter::SetManualLookDirection(float YawDeg, float PitchDeg)
@@ -156,7 +155,6 @@ void AOperativeCharacter::SetStealthManualLookTarget(const FVector& WorldPoint)
 	}
 	const LookHoldRules::FLookDirection Dir = LookHoldRules::DirectionFromClick(GetActorLocation(), WorldPoint);
 	SetManualLookDirection(Dir.YawDeg, Dir.PitchDeg);
-	ManualLookPoint = WorldPoint;
 }
 
 void AOperativeCharacter::ClearStealthManualLookTarget()

@@ -106,6 +106,15 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	bFacingCombatTarget = false;
 	bFacingFormationSector = false;
 	UpdateStealthLookLock(DeltaTime);
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	const bool bRealTimeFight = !Flow || (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime);
+	// User request 2026-10-22: the fight's memory of whom he fought lasts for the wave fight only — clear before early cover/interaction returns.
+	if (!Flow || Flow->GetPhase() != ECodexGamePhase::WaveCombat)
+	{
+		bFoughtThisFight = false;
+		LastThreat.Reset();
+		LastThreatContactTime = -1000.0;
+	}
 	auto EmitArrivalFacing = [this](const TCHAR* Rule, float TargetYaw)
 	{
 		if (!bPendingArrivalFacingLog)
@@ -163,16 +172,8 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		EmitArrivalFacing(TEXT("cover facing"), CoverYaw);
 		return;
 	}
-	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
-	const bool bRealTimeFight = !Flow || (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime);
 	AActor* Target = CurrentCombatTarget.Get();
 	// A quick fire order (Ctrl + click on a point) turns him to its point itself (RunQuickFire): no pull back to the combat target meanwhile.
-	// User request 2026-10-22: the fight's memory of whom he fought (ThreatFacingRules) lasts for the wave fight (pause / turn-based included).
-	if (!Flow || Flow->GetPhase() != ECodexGamePhase::WaveCombat)
-	{
-		bFoughtThisFight = false;
-		LastThreat.Reset();
-	}
 	bTurningToThreat = false;
 	// Run-and-peek (#55 fix, the game designer's video 2026-11-08): the run's last metres turn him to the peek facing - he arrives looking
 	// where the peek looks and the run blends straight into the peek stance (no turn to the wall, no wall hug, no turn back out). It wins over
