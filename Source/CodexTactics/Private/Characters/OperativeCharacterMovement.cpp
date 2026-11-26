@@ -143,8 +143,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	// User decision 2026-10-01: a sprint order (double click) stands a prone operative up — he rises in place, then runs;
 	// any move ordered while he is getting up starts once he is up. SetStance arms the settle time, so the hold below covers
 	// both this stand-up and a stance clip that is already playing (bug 2026-10-11: a move must never slide a rooted body).
-	if (bSprint && Stance == EOperativeStance::Prone && !bCarrying
-		&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded()))
+	if (bSprint && Stance == EOperativeStance::Prone && CanSprintIfStanding())
 	{
 		SetStance(EOperativeStance::Standing);
 	}
@@ -693,8 +692,7 @@ void AOperativeCharacter::StopOperative()
 
 void AOperativeCharacter::SetSprinting(bool bNewSprinting)
 {
-	if (bNewSprinting && IsInStealthMode() && !bCarrying && !IsCriticallyWounded()
-		&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded()))
+	if (bNewSprinting && IsInStealthMode() && CanSprintIfStanding())
 	{
 		SetStealthMode(false);
 		SetStance(EOperativeStance::Standing);
@@ -869,10 +867,16 @@ bool AOperativeCharacter::IsWounded() const
 		&& HealthComponent->GetCurrentHealth() / HealthComponent->GetMaxHealth() < MovementConfig.WoundedHealthThreshold);
 }
 
+bool AOperativeCharacter::CanSprintIfStanding() const
+{
+	return !bCarrying && CriticalWoundRules::AllowsSprint(IsCriticallyWounded())
+		&& !(ColdSurvival && ColdSurvival->IsFrostbitten())
+		&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded());
+}
+
 bool AOperativeCharacter::CanSprint() const
 {
-	return !bCarrying && OperativeMovementRules::CanSprint(MovementConfig, Stance, ColdLevel, IsWounded())
-		&& CriticalWoundRules::AllowsSprint(IsCriticallyWounded()); // the critical wound: down, crawling only
+	return Stance != EOperativeStance::Prone && CanSprintIfStanding();
 }
 
 float AOperativeCharacter::GetMaxSpeed() const

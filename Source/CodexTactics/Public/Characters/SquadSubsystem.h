@@ -1274,6 +1274,8 @@ private:
 		bool bReformAlongWall = false;
 		/** Item 2 (2026-11-03): steering the final approach into his wall place (TryWallFinalApproach); logged once per approach. */
 		bool bFinalApproach = false;
+		/** Task 150: stood up from crouch/prone to sprint with the leader; syncs to leader stance on walk/crouch until overridden. */
+		bool bStoodUpForLeaderSprint = false;
 	};
 
 	/** Formation look sectors: the state over frames (SquadSubsystemFormation.cpp). */

@@ -353,6 +353,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
 	bool CanSprint() const;
 
+	/** True when nothing except current stance (Prone/Crouching) prevents this operative from sprinting once standing. */
+	bool CanSprintIfStanding() const;
+
 	/** Godot is_wounded: health below MovementConfig.WoundedHealthThreshold (or bWounded forced). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
 	bool IsWounded() const;

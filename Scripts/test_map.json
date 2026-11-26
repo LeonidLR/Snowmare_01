@@ -20,7 +20,7 @@
     "SectorBoundarySmoke", "SectorRoundsSmoke", "RoofFightSmoke", "CorpseSearchSmoke",
     "DropLinkReachSmoke", "ColdIndoorsSmoke", "WindowStairHoverSmoke", "FormationStairSmoke", "FormationWindowSmoke", "CoverIndoorSmoke",
     "DoorsSmoke", "DoorBreachSmoke", "WindowCoverFireSmoke", "WindowDetourSmoke", "CornerSlotSmoke",
-    "TorsoDriftSmoke", "FormationScanPitchSmoke"
+    "TorsoDriftSmoke", "FormationScanPitchSmoke", "FormationRunStanceSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -68,6 +68,7 @@
     "CornerSlotSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 400, "_why": "G025: corner slots on X6 blocks, both hands, stand and crouch. Shoulder <= 25 cm from the edge, penetration <= 2 cm."},
     "TorsoDriftSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 400, "_why": "G025: cover, climb, look left, look right, neutral, walk 10 m. Mesh forward versus velocity <= 10 deg after 0.5 s."},
     "FormationScanPitchSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 400, "_why": "G025: formation scan pitch. Open ground spans >= 20 deg. A walk toward an X6 building records aim pitch > +10 deg."},
+    "FormationRunStanceSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 400, "_why": "Task 150: formation crouched/prone followers stand up and run within 1 s on double-click, walk on single-click, crouch on C; Solo untouched."},
     "FormationStairSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json -DPCVars=Codex.Doors.InnerLockedShare=0", "timeout": 900, "_why": "designer 2026-11-22: the squad stuck on the stairwell - the formation climbs every showcase building storey by storey on the player's click Requires the untracked Kit map, provided in the main checkout and both worker roots. The smoke runner reports map missing elsewhere."},
     "WindowStairHoverSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 400, "_why": "designer test 2026-11-22: the window silhouette + window click (through it, breaks it) and the stair-up silhouette + click (up a storey), real cursor rays and the real click on the dressed showcase Requires the untracked Kit map, provided in the main checkout and both worker roots. The smoke runner reports map missing elsewhere."},
     "LevelGenBuildingsSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelGenBuildingsSmokeMaxFail=10", "timeout": 180, "_why": "048: report complete operative nav paths from every exterior door to every room, landing and walkable roof on the old X6 layout" },
@@ -246,6 +247,13 @@
         "CodexTactics.Combat.Sight"
       ],
       "smokes": []
+    },
+    {
+      "name": "formation-run-stance-150",
+      "_comment": "Task 150: formation run order stands crouched and prone followers up and sprints them; walk/crouch returns stance and gait; Solo untouched.",
+      "globs": ["Source/**/Characters/SquadOrderRules*", "Source/**/Characters/SquadSubsystem.*", "Source/**/Characters/OperativeCharacterMovement*", "Source/**/Debug/FormationRunStanceSmoke*"],
+      "tests": ["CodexTactics.Squad.Orders", "CodexTactics.Movement", "CodexTactics.Formation"],
+      "smokes": ["FormationRunStanceSmoke"]
     },
     {
       "name": "wound-pace-2026-11-11",

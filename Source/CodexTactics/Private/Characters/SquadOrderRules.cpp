@@ -69,6 +69,60 @@ namespace SquadOrderRules
 		return bLeaderSprinting && bFollowerCrouching && bStanceFromSquad && bCanSprint;
 	}
 
+	FFormationFollowStanceGait ResolveFormationFollowStanceGait(const FFormationFollowOrderFacts& Facts)
+	{
+		FFormationFollowStanceGait Out;
+		Out.DesiredStance = Facts.FollowerStance;
+		if (!Facts.bInFormation)
+		{
+			return Out;
+		}
+		if (Facts.bLeaderSprinting)
+		{
+			const bool bEligible = Facts.bCanSprintStanding && !Facts.bHoldsApproachLook && !Facts.bInWallPose
+				&& !Facts.bInCover && !Facts.bInStealth && !Facts.bLockedProne;
+			if (bEligible)
+			{
+				if (Facts.FollowerStance != EOperativeStance::Standing)
+				{
+					Out.DesiredStance = EOperativeStance::Standing;
+					Out.bChangeStance = true;
+					Out.bMarkStanceFromSquad = true;
+					Out.bNextStoodUpForLeaderSprint = true;
+				}
+				else
+				{
+					Out.bNextStoodUpForLeaderSprint = Facts.bStoodUpForLeaderSprint && Facts.bStanceFromSquad;
+				}
+				Out.bSprint = true;
+			}
+			else
+			{
+				Out.bNextStoodUpForLeaderSprint = Facts.bStoodUpForLeaderSprint && Facts.bStanceFromSquad;
+			}
+			return Out;
+		}
+
+		// Leader walked / stopped / crouched (single-click or C key): drop sprint to walk, and copy leader stance if sprint stood this follower up.
+		const bool bCanSyncFromSprint = Facts.bStoodUpForLeaderSprint && Facts.bStanceFromSquad
+			&& !Facts.bInWallPose && !Facts.bInCover && !Facts.bInStealth && !Facts.bLockedProne;
+		if (bCanSyncFromSprint)
+		{
+			if (Facts.FollowerStance != Facts.LeaderStance)
+			{
+				Out.DesiredStance = Facts.LeaderStance;
+				Out.bChangeStance = true;
+				Out.bMarkStanceFromSquad = true;
+				Out.bNextStoodUpForLeaderSprint = (Facts.LeaderStance == EOperativeStance::Standing);
+			}
+			else
+			{
+				Out.bNextStoodUpForLeaderSprint = (Facts.LeaderStance == EOperativeStance::Standing);
+			}
+		}
+		return Out;
+	}
+
 	bool ShouldLeaveCoverToFollow(const FCoverFollowFacts& Facts, float LeaveDistanceCm)
 	{
 		if (!Facts.bInCover || Facts.bOnOwnOrder || Facts.bFollowersHolding || Facts.bGuarding || !Facts.bFormationActive)
