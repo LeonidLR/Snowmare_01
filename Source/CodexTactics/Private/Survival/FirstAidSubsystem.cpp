@@ -209,8 +209,10 @@ const FFirstAidRecord* UFirstAidSubsystem::FindRunning(const AOperativeCharacter
 
 bool UFirstAidSubsystem::IsBusy(const AOperativeCharacter& Operative) const
 {
+	// Designer 2026-11-26: being in cover (hugging a wall / behind a low cover) no longer blocks first aid - the player's order takes him
+	// off the wall (RequestSelf / RequestAid leave the cover once the request is accepted).
 	return Operative.IsKnockedDown() || Operative.IsClimbingLadder() || Operative.IsVaulting() || Operative.IsMantling() || Operative.IsRagdollActive()
-		|| Operative.bInCover || Operative.bCarrying || IsInTreatment(&Operative);
+		|| Operative.bCarrying || IsInTreatment(&Operative);
 }
 
 void UFirstAidSubsystem::Post(const AOperativeCharacter* Speaker, const FString& Text) const
@@ -250,7 +252,7 @@ FirstAidRules::ERefusal UFirstAidSubsystem::Refuse(AOperativeCharacter* Who, Fir
 		Post(Who, FString::Printf(TEXT("%s cannot help - he needs help himself."), *WhoName));
 		break;
 	case FirstAidRules::ERefusal::Busy:
-		Post(Who, FString::Printf(TEXT("%s is busy (cover, ladder, climbing or another treatment)."), *WhoName));
+		Post(Who, FString::Printf(TEXT("%s is busy (ladder, climbing, carrying or another treatment)."), *WhoName));
 		break;
 	default:
 		break;
@@ -272,6 +274,10 @@ FirstAidRules::ERefusal UFirstAidSubsystem::RequestSelf(AOperativeCharacter* Ope
 	if (Reason != FirstAidRules::ERefusal::None)
 	{
 		return Refuse(Operative, Reason, Operative, Item, bPostFeed);
+	}
+	if (Operative->bInCover)
+	{
+		Operative->LeaveCover(TEXT("first aid"));
 	}
 	FTreatment& Treatment = Treatments.AddDefaulted_GetRef();
 	Treatment.Helper = Operative;
@@ -307,6 +313,10 @@ FirstAidRules::ERefusal UFirstAidSubsystem::RequestAid(AOperativeCharacter* Help
 	if (Reason != FirstAidRules::ERefusal::None)
 	{
 		return Refuse(Helper, Reason, Patient, Item, bPostFeed);
+	}
+	if (Helper->bInCover)
+	{
+		Helper->LeaveCover(TEXT("first aid"));
 	}
 	const float Distance = FVector::Dist2D(Helper->GetActorLocation(), Patient->GetActorLocation());
 	FTreatment Treatment;
