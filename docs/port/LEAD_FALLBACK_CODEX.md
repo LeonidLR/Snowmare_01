@@ -35,8 +35,8 @@ executor as usual. The Claude Lead updates the STATE block below after every mer
 - Spend little: react only to FINISH / blockers / the designer.
 
 ## STATE (updated by the Claude Lead - 2026-11-26 ~17:40)
-origin/main 6f2a80a7 (+ docs). 17:35 claude/firstaid-cover (24771d72); 20:30 Gemini 145 look direction lock (b70b0338 + delta 6f2a80a7, gates v8-2/v8-3 green).
-Live queues (re-plan, supersedes the lines below): Codex 139 -> 121 -> 148 -> 149 -> 147; Gemini 150 -> 135b -> 141 -> 144.
+origin/main 6f2a80a7 (+ docs). 17:35 claude/firstaid-cover (24771d72); 20:30 Gemini 145 look direction lock (b70b0338 + delta 6f2a80a7); 23:00 Gemini 150 formation run stands crouched/prone followers up (8d4e5f09, lead removed an unasked frostbite sprint ban dd7df49f).
+Live queues (re-plan, supersedes the lines below): Codex 139 -> 121 -> 148 -> 149 -> 147; Gemini 135b -> 141 -> 144.
 Designer away tonight (Saved/Lead/MAIN_PC_FREE set - delete when he is back). Merged today: G023 + Codex 134 (4851b3aa), Gemini 135 (10963d3a), Codex 142 TG Main/Play switch (549b0868),
 lanes auto-cleanup (8605d41d), claude/ux-1126 = selected-only vision cones (Shift+O), inventory closes on item pick, Take ALL closes loot (82c06f7b).
 Play copy = a12dea10 built (has 135; NOT yet ux-1126 - update when its editor is closed).
