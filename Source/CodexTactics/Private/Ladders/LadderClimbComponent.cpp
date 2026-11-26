@@ -1214,7 +1214,7 @@ void ULadderClimbComponent::FinishClimb()
 	Fire(ELadderClimbEvent::ExitDone);
 	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(Character))
 	{
-		const float ClimbHeightCm = Character ? static_cast<float>(FMath::Abs(Character->GetActorLocation().Z - SavedLocation.Z)) : 0.f;
+		const float ClimbHeightCm = Character ? static_cast<float>(FMath::Abs(Character->GetActorLocation().Z - ClimbStartLocation.Z)) : 0.f;
 		Recorder->RecordClimb(Character, FName(TEXT("ladder")), ClimbHeightCm);
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Ladder] %s is off %s at the %s"), *GetNameSafe(Character), *GetNameSafe(Target), bTop ? TEXT("top") : TEXT("bottom"));
