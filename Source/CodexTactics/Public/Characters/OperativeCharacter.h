@@ -2214,8 +2214,8 @@ public:
 	 * his head sits right over the pelvis - so _R gets +11. A tracked, eased mesh offset (CoverEntryAppliedOffset), gone when the peek is over;
 	 * the stand-off is NOT shortened instead: hugging the wall 17 cm from its end lets his eyes see round it (PeekSightSmoke).
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
-	float CornerLeanExtraPackLCm = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "-60"))
+	float CornerLeanExtraPackLCm = -26.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float CornerLeanExtraPackRCm = 11.f;
 
