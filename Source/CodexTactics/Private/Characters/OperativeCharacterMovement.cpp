@@ -524,7 +524,11 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 			&& !Path->GetPathPoints().IsEmpty();
 		const float FeetZ = GetActorLocation().Z - GetSimpleCollisionHalfHeight();
 		const bool bAtGoal = Result == EPathFollowingRequestResult::AlreadyAtGoal;
-		if (OperativeMovementRules::HasNoWayUp(FeetZ, Destination.Z, GetSimpleCollisionHalfHeight(), bHasPath || bAtGoal,
+		// Legacy callers can supply a standing capsule-centre goal while this man is crouched.
+		// The authored capsule (including BP overrides) keeps that API convention independent of stance.
+		const float GoalHalfHeight = FMath::Max(GetSimpleCollisionHalfHeight(),
+			GetClass()->GetDefaultObject<AOperativeCharacter>()->GetSimpleCollisionHalfHeight() * GetActorScale3D().Z);
+		if (OperativeMovementRules::HasNoWayUp(FeetZ, Destination.Z, GoalHalfHeight, bHasPath || bAtGoal,
 			bHasPath && Path->IsPartial(), bHasPath ? Path->GetEndLocation().Z : FeetZ))
 		{
 			AIController->StopMovement();

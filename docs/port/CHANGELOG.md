@@ -573,3 +573,6 @@ Last update: 2026-09-29 by Claude, after commit `2ca14b0`.
 2026-11-11 Codex stealth 003: expanded male/female integration smokes, rendered game-camera evidence and 44 unit tests PASS; six Gemini gaps covered, late weapon materials fixed. Ready for designer testing in interim only.
 
 2026-11-11 Codex: 003 final report/handback finalized with source hashes 90a6bf64, 4d15a54f, 561a29ed and verified game-camera evidence. Doc routing level1/gpt-6-luna required primary corrections (date/stale queue); current queue 004,005,C5,C6.
+
+
+**139 crouch compatibility checkpoint (2026-11-27).** Complete ground paths with legacy standing-centre goals remain valid while crouched: no-way-up allowance now includes the class default standing capsule. Worker build PASS406.18s; final Smart/nine-smoke recheck pending. Saved-map LadderActor_22 inset125 fix remains with Lead. Report: `docs/port/codex/outbox/139-roof-ladder-no-path.report.md`.

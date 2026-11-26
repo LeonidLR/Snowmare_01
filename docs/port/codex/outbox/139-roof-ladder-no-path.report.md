@@ -1,5 +1,19 @@
 # 139 — диагностика лестницы на крышу / No way up
 
+## Fresh headless run 2026-11-27 - validation in progress
+
+This section supersedes the earlier environment-blocker and LIMIT checkpoints. Existing lane/branch reused at `8b8d7d5c`; code baseline `9ce2d0f5`.
+
+- AGENTS.md absent in lane and checked parent locations; CLAUDE.md/TANDEM/HANDOFF/active state and both task documents/review checkpoint read.
+- `Scripts/test.ps1 -Smart -SkipSmokes -Base origin/main`: PASS 927/927, 117 s. To avoid spending minutes resolving tens of thousands of irrelevant untracked asset-pack files, the invocation used a temporary git core.excludesFile under lane Saved excluding untracked Content/Config only; tracked changes and all Source files remained included.
+- Worker dispatch batch `dispatch-20261127-010644-99548`: RoofLadderSmoke FAIL as expected; RoofLadderRepairProbe PASS; FormationStairSmoke PASS (6/6 stair legs); WindowDetourSmoke PASS; WindowCoverFireSmoke PASS; CutawayClickSmoke PASS; CoverIndoorSmoke PASS; FormationWallHugSmoke PASS. LowCoverMoveLakeSmoke FAIL, reproduced on isolated retry.
+- Remaining regression: crouched low cover had current capsule half-height about58.5cm, feet about2.2cm and an existing standing-centre goal89.5cm. The current capsule produced only80cm slack, so a complete ground path ending at z0 was incorrectly refused. Caller now includes the authored standing capsule height (class defaults, including BP overrides) in the allowance. Strict partial/unreachable upper-storey rejection remains unchanged. Smoke assertions were not weakened.
+- The nine full names above are exactly the mapped smoke union for the five task139 Source files. Worker rebuild of the crouch correction PASS406.18s (`Saved/Logs/Worker/build-20261127-011216-25336/Build.log`). Final Smart/nine-smoke rechecks pending.
+- Dispatcher initially chose the allowed main-PC fallback, which failed Kit-map preflight and ran no smokes. Subsequent dispatch used the existing dispatcher with main selection disabled in its calling process, preserving worker queue and lock behavior; no map copied or edited.
+- The pre-existing worker_sync tool automatically invoked `git lfs push` for unpushed HEAD (objects only; branch refs stayed unpushed). This was discovered from its output. Removed that implicit upload from both authorized lane scripts; future syncs ship code by bundle. The first121 build was already waiting inside the old script and also used its old object-upload command. No manual branch push was performed.
+- No maps, assets, Content JSON, Config or VFX edited; no designer Editor started or closed. No main/play checkout, commit or merge.
+
+
 ## Night resume 2026-11-27 00:55 Asia/Jerusalem — BLOCKED
 
 This checkpoint supersedes the older LIMIT status below. Lane remains `codex/139-roof-ladder-no-path`; gameplay code remains `9ce2d0f525b2da1384919ea411cb2d2fdb64216a`. No gameplay changes in this resume.

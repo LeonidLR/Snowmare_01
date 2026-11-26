@@ -1,5 +1,8 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**139 crouch compatibility checkpoint (2026-11-27).** Complete ground paths with legacy standing-centre goals remain valid while crouched: no-way-up allowance now includes the class default standing capsule. Worker build PASS406.18s; final Smart/nine-smoke recheck pending. Saved-map LadderActor_22 inset125 fix remains with Lead. Report: `docs/port/codex/outbox/139-roof-ladder-no-path.report.md`.
+
+
 **Window order rules (`claude/bgen-test`, 2026-11-23 morning; designer decision via Lead).** `WindowOrderRules` + `Content/Data/Interactables/windows.json`:
 (1) Solo with the WHOLE squad box-selected, in a fight (wave / firefight / squad detected): every move order opens the windows on the way;
 (2) formation: a follower never paths / auto-vaults through a WHOLE window, even on the leader's window order - he follows once the leader

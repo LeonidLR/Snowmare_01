@@ -1486,3 +1486,6 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 2026-11-11 Codex stealth checkpoint: male/female/rendered smokes and 44 tests PASS, 3 game-camera frames copied to main Saved/Orchestrator/stealth (explicit task exception). No main assets/push. Female fixture uses existing optimized female body in memory because movement-map roster overrides all bodies male.
 
 2026-11-11 Codex: stealth 003 final verification report complete, designer notified to test interim L_MovementTest / STEALTH or7. Source remains interim-only. New designer priority via Claude: 004 hitch then005 ragdoll beforeC5/C6.
+
+
+**139 crouch compatibility checkpoint (2026-11-27).** Complete ground paths with legacy standing-centre goals remain valid while crouched: no-way-up allowance now includes the class default standing capsule. Worker build PASS406.18s; final Smart/nine-smoke recheck pending. Saved-map LadderActor_22 inset125 fix remains with Lead. Report: `docs/port/codex/outbox/139-roof-ladder-no-path.report.md`.

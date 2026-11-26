@@ -262,3 +262,8 @@ carrying of the wounded (the designer: too complex).
   `CodexTactics.Ladder.Rules.Refusals` (the ladder refusal); smoke `InjuredLocomotionSmoke` stage 7 (HP 15 % -> down by himself, the stand
   orders refused with the feed line, no sprint, the injured crawl; healed to 40 % -> stands on the order, limps forward).
 
+
+
+## Upper-goal reachability (139, 2026-11-27)
+
+Explicit player moves to a higher floor require a complete route ending at that floor. The allowance for capsule-centre destinations includes the authored standing capsule even while crouched; existing same-floor low-cover moves keep their full ground routes. Partial upper-floor paths still report "No way up to that point." Formation/autonomous orders retain their own handling. RoofLadderSmoke keeps the saved-map climb assertion; RoofLadderRepairProbe changes only runtime link targets to prove the designer's125cm landing inset. Neither saves the map.
