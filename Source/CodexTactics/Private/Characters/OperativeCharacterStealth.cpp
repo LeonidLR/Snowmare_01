@@ -72,6 +72,7 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 		ClearStealthManualLookTarget();
 		ClearStealthAutoLookTarget();
 		ClearIdleFacing();
+		bExplicitFacing = false;
 		SetFormationLookYaw(TOptional<float>());
 		SmoothedVelocity = FVector::ZeroVector;
 		bStealthMode = true;
@@ -109,8 +110,16 @@ void AOperativeCharacter::SetStealthFast(bool bFast)
 
 void AOperativeCharacter::SetManualLookPoint(const FVector& WorldPoint)
 {
+	const LookHoldRules::FLookDirection Dir = LookHoldRules::DirectionFromClick(GetActorLocation(), WorldPoint);
+	SetManualLookDirection(Dir.YawDeg, Dir.PitchDeg);
+}
+
+void AOperativeCharacter::SetManualLookDirection(float YawDeg, float PitchDeg)
+{
 	bHasManualLookPoint = true;
-	ManualLookPoint = WorldPoint;
+	ManualLookYawDeg = FRotator::NormalizeAxis(YawDeg);
+	ManualLookPitchDeg = FMath::Clamp(PitchDeg, -89.f, 89.f);
+	ManualLookPoint = LookHoldRules::ProjectLookPoint(GetActorLocation(), ManualLookYawDeg, ManualLookPitchDeg, 1000.f);
 	ClearIdleFacing();
 	bExplicitFacing = false;
 	// A look set while the plain corner peek is already up switches to the CoverIndoor pose. A look before that peek
@@ -126,6 +135,8 @@ void AOperativeCharacter::ClearManualLookPoint()
 	const bool bHadLook = bHasManualLookPoint;
 	bHasManualLookPoint = false;
 	ManualLookPoint = FVector::ZeroVector;
+	ManualLookYawDeg = 0.f;
+	ManualLookPitchDeg = 0.f;
 	bCornerLookPose = false;
 	// Neutral look (Shift-click on himself) and every other clear. Cover entry calls this after bInCover is set,
 	// so the release no-ops there and the entry yaw blend keeps the mesh.
@@ -142,8 +153,8 @@ void AOperativeCharacter::SetStealthManualLookTarget(const FVector& WorldPoint)
 		ClearManualLookPoint();
 		return;
 	}
-	bHasManualLookPoint = true;
-	ManualLookPoint = WorldPoint;
+	const LookHoldRules::FLookDirection Dir = LookHoldRules::DirectionFromClick(GetActorLocation(), WorldPoint);
+	SetManualLookDirection(Dir.YawDeg, Dir.PitchDeg);
 }
 
 void AOperativeCharacter::ClearStealthManualLookTarget()
@@ -216,9 +227,9 @@ void AOperativeCharacter::UpdateStealthLookLock(float DeltaSeconds)
 
 bool AOperativeCharacter::GetManualLookPoint(FVector& OutPoint) const
 {
-	if (HasManualLookPoint() && LookHoldRules::IsValidLookPoint(ManualLookPoint, GetActorLocation(), LookHoldRules::GetConfig().MinPlacementDistanceCm))
+	if (HasManualLookPoint())
 	{
-		OutPoint = ManualLookPoint;
+		OutPoint = LookHoldRules::ProjectLookPoint(GetActorLocation(), ManualLookYawDeg, ManualLookPitchDeg, 1000.f);
 		return true;
 	}
 	return false;

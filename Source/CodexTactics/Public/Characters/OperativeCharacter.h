@@ -462,10 +462,15 @@ public:
 	bool IsStealthFast() const { return bStealthMode && bStealthFast; }
 	bool CanStealthFast() const;
 	void SetStealthFast(bool bFast);
-	/** Look hold outside stealth (059, solo walk / jog / crouch / prone strafe). */
+	/** Look hold outside stealth (059, solo walk / jog / crouch / prone strafe; 145: fixed world direction). */
 	void SetManualLookPoint(const FVector& WorldPoint);
+	void SetManualLookDirection(float YawDeg, float PitchDeg = 0.f);
 	void ClearManualLookPoint();
+	/** Clears manual look, idle/explicit facing, and stale combat threat memory on round / region / load resets. */
+	void ClearLookAndFacingState();
 	bool HasManualLookPoint() const { return bHasManualLookPoint; }
+	float GetManualLookYawDeg() const { return ManualLookYawDeg; }
+	float GetManualLookPitchDeg() const { return ManualLookPitchDeg; }
 	/** CoverIndoor aim offset: a Shift-click look while the corner peek is up. A new plain peek or leaving the corner turns it off. */
 	bool WantsCornerLookPose() const;
 	bool GetManualLookPoint(FVector& OutPoint) const;
@@ -3011,6 +3016,9 @@ private:
 	TWeakObjectPtr<AActor> LastThreat;
 	FVector LastThreatLocation = FVector::ZeroVector;
 	bool bFoughtThisFight = false;
+	double LastThreatContactTime = -1000.0;
+	bool bPendingArrivalFacingLog = false;
+	float ArrivalTravelYaw = 0.f;
 	bool bExplicitFacing = false;
 	/** The yaw of the player's facing order (SetFacingPoint) he returns to after the fight (ThreatFacingRules::ShouldReturnToOrderedFacing). */
 	float OrderedFacingYaw = 0.f;
@@ -3674,6 +3682,10 @@ private:
 	bool bCornerLookPose = false;
 	UPROPERTY(Transient)
 	FVector ManualLookPoint = FVector::ZeroVector;
+	UPROPERTY(Transient)
+	float ManualLookYawDeg = 0.f;
+	UPROPERTY(Transient)
+	float ManualLookPitchDeg = 0.f;
 	TWeakObjectPtr<AActor> StealthAutoLookActor;
 	uint32 StealthAutoLookTargetId = 0;
 	UPROPERTY(Transient)
