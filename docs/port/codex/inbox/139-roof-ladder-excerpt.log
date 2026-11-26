@@ -1,0 +1,147 @@
+[2026.11.26-07.47.27:814][783]LogCodexTactics: Display: [Formation] saved shape: off - the formula (formation_shapes.json revision 1)
+[2026.11.26-07.47.27:839][784]LogCodexTactics: Display: [Formation] Medic-Sapper yields to the leader's walk: at (13329, -12512), his slot (13596, -12402) - steps aside to (13648, -12351); the leader (13789, -12669) -> (12902, -11752)
+[2026.11.26-07.47.28:021][798]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.26-07.47.28:021][798]LogCodexTactics: Display: Engineer: move to (12896, -11735) sprint -> accepted
+[2026.11.26-07.47.28:270][817]LogCodexTactics: Display: [Formation] Commander yields to the leader's walk: at (13619, -12613), his slot (13772, -12543) - steps aside to (13805, -12511); the leader (13724, -12600) -> (12896, -11735)
+[2026.11.26-07.47.28:685][846]LogCodexTactics: Display: [Formation] places by travel (column): Commander -> Z; Medic-Sapper -> P;
+[2026.11.26-07.47.28:787][853]LogCodexTactics: Display: [Formation] guard: Wedge (level 0, cut here - / ahead -, turn ahead 4 deg, heading 138, 15 walls) at (13529, -12386)
+[2026.11.26-07.47.28:787][853]LogCodexTactics: Display: [Formation] column -> wedge (terrain open, passage -)
+[2026.11.26-07.47.30:052][944]LogCodexTactics: Display: [Formation] rear guard: Z (wedge)
+[2026.11.26-07.47.30:302][962]LogCodexTactics: Display: Engineer: move to (12665, -10189) -> accepted
+[2026.11.26-07.47.30:458][972]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.26-07.47.30:459][972]LogCodexTactics: Display: Engineer: move to (12659, -10112) sprint -> accepted
+[2026.11.26-07.47.32:877][141]LogCodexTactics: Display: [Formation] rear guard: Z (wedge)
+[2026.11.26-07.47.32:915][143]LogCodexTactics: Display: Engineer: move to (12484, -8668) -> accepted
+[2026.11.26-07.47.33:112][157]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.26-07.47.33:112][157]LogCodexTactics: Display: Engineer: move to (12512, -8480) sprint -> accepted
+[2026.11.26-07.47.34:804][275]LogCodexTactics: Display: Engineer: move to (11510, -7621) -> accepted
+[2026.11.26-07.47.34:809][275]LogCodexTactics: Display: [Formation] bypass: none - the destination (11510, -7621, 300) is on another level (feet at 2)
+[2026.11.26-07.47.34:809][275]LogCodexTactics: Display: [Formation] rear guard: Z (wedge)
+[2026.11.26-07.47.34:972][286]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.26-07.47.34:976][286]LogCodexTactics: Display: Engineer: move to (11451, -7571) sprint -> accepted
+[2026.11.26-07.47.34:981][286]LogCodexTactics: Display: [Formation] bypass: none - the destination (11451, -7571, 300) is on another level (feet at 2)
+[2026.11.26-07.47.35:948][357]LogCodexTactics: Display: [Sight] hidden 45, revealed 40, ghosts 0 (heard 0), demasks 326, pack alerts 0, forgotten 0
+[2026.11.26-07.47.36:135][371]LogCodexTactics: Display: [Cover] Operator Petrov: turns along the wall to the left (threat known)
+[2026.11.26-07.47.36:259][380]LogCodexTactics: Display: [Formation] guard: Wedge -> Column (wall) (level 2, cut here - / ahead PZ, turn ahead 19 deg, heading 138, 4 walls) at (11922, -8421)
+[2026.11.26-07.47.36:260][380]LogCodexTactics: Display: [Formation] wedge -> column (terrain open, passage -, asked wedge)
+[2026.11.26-07.47.36:609][405]LogCodexTactics: Display: [Formation] guard: Echelon right -> Column (wall) (level 2, cut here - / ahead PZ, turn ahead 25 deg, heading 138, 4 walls) at (11737, -8249)
+[2026.11.26-07.47.38:841][567]LogCodexTactics: Display: Engineer: move to (11700, -7628) -> accepted
+[2026.11.26-07.47.38:846][567]LogCodexTactics: Display: [Formation] bypass: none - the destination (11700, -7628, 300) is on another level (feet at 2)
+[2026.11.26-07.47.38:846][567]LogCodexTactics: Display: [Formation] rear guard: Z (column)
+[2026.11.26-07.47.39:018][579]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.26-07.47.39:020][579]LogCodexTactics: Display: Engineer: move to (11700, -7628) sprint -> accepted
+[2026.11.26-07.47.39:026][579]LogCodexTactics: Display: [Formation] bypass: none - the destination (11700, -7628, 300) is on another level (feet at 9)
+[2026.11.26-07.47.39:791][633]LogCodexTactics: Display: [Formation] rear guard: Z (column)
+[2026.11.26-07.47.39:792][633]LogCodexTactics: Display: [Formation] confined queue from (11723, -8089): Commander #2 (11856, -8083) depth 133; Medic-Sapper #1 (11856, -8163) depth 152;
+[2026.11.26-07.47.39:792][633]LogCodexTactics: Display: [Formation] confined: 2 of 2 follower slot(s) moved into the pocket at (11856, -8003) (median 48 cm, column)
+[2026.11.26-07.47.40:567][686]LogCodexTactics: Display: [Formation] confined queue from (11723, -8089): Commander #2 (11856, -8083) depth 133; Medic-Sapper #1 in (11856, -8163) depth 152;
+[2026.11.26-07.47.40:846][705]LogCodexTactics: Display: Engineer: move to (11476, -8379) -> accepted
+[2026.11.26-07.47.40:850][705]LogCodexTactics: Display: [Formation] confined: off (the leader walks on)
+[2026.11.26-07.47.40:925][710]LogCodexTactics: Display: [Formation] Commander yields to the leader's walk: at (11737, -8121), his slot (11530, -8053) - steps aside to (11821, -8206); the leader (11856, -8003) -> (11476, -8379)
+[2026.11.26-07.47.40:925][710]LogCodexTactics: Display: [Formation] Medic-Sapper yields to the leader's walk: at (11815, -8142), his slot (11677, -8021) - steps aside to (11850, -8178); the leader (11856, -8003) -> (11476, -8379)
+[2026.11.26-07.47.41:354][739]LogCodexTactics: Display: [Formation] Medic-Sapper yields to the leader's walk: at (11826, -8146), his slot (11729, -8017) - steps aside to (11868, -8157); the leader (11808, -8047) -> (11476, -8379)
+[2026.11.26-07.47.41:419][744]LogCodexTactics: Display: Engineer: move to (11656, -8521) -> accepted
+[2026.11.26-07.47.41:616][757]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.26-07.47.41:616][757]LogCodexTactics: Display: Engineer: move to (11654, -8522) sprint -> accepted
+[2026.11.26-07.47.42:680][832]LogCodexTactics: Display: [Formation] rear guard: Z (column)
+[2026.11.26-07.47.43:482][887]LogCodexTactics: Display: Engineer: move to (11476, -7557) -> accepted
+[2026.11.26-07.47.43:488][887]LogCodexTactics: Display: [Formation] bypass: none - the destination (11476, -7557, 300) is on another level (feet at 2)
+[2026.11.26-07.47.44:395][953]LogCodexTactics: Display: [Formation] guard: Wedge -> Column (wall) (level 2, cut here - / ahead PZ, turn ahead 10 deg, heading 111, 4 walls) at (11621, -8355)
+[2026.11.26-07.47.45:954][ 63]LogCodexTactics: Display: [Sight] hidden 45, revealed 40, ghosts 0 (heard 0), demasks 326, pack alerts 0, forgotten 0
+[2026.11.26-07.47.48:567][243]LogCodexTactics: Display: [RpgChoice] Engineer (team 0): the player picked grenade (the rule leaves it for 45 s)
+[2026.11.26-07.47.48:568][243]LogCodexTactics: Display: [Engineer] 🔫 Weapon: Hand Grenade [1 / 1] (Damage: 85)
+[2026.11.26-07.47.48:569][243]LogCodexTactics: Display: [Engineer] 🧨 Pick a throw point, standing (max 12 m). RMB or Esc to cancel.
+[2026.11.26-07.47.49:119][279]LogCodexTactics: Display: [Grenade] Throw cancelled.
+[2026.11.26-07.47.49:360][295]LogCodexTactics: Display: [RpgChoice] Engineer (team 0): the player picked m16 (the rule leaves it for 45 s)
+[2026.11.26-07.47.49:360][295]LogCodexTactics: Display: [Engineer] 🔫 Weapon: M16A2 Assault Rifle [18 / 75] (Damage: 18)
+[2026.11.26-07.47.50:393][362]LogCodexTactics: Display: Engineer: move to (11513, -7757) -> accepted
+[2026.11.26-07.47.50:882][393]LogCodexTactics: Display: Engineer: move to (11513, -7757) -> accepted
+[2026.11.26-07.47.51:339][424]LogCodexTactics: Display: [Formation] confined queue from (11588, -8199): Commander #2 (11631, -8044) depth 161; Medic-Sapper #1 (11711, -8044) depth 198;
+[2026.11.26-07.47.51:339][424]LogCodexTactics: Display: [Formation] confined: 2 of 2 follower slot(s) moved into the pocket at (11551, -8044) (median 149 cm, column)
+[2026.11.26-07.47.52:050][473]LogCodexTactics: Display: [Formation] confined queue from (11588, -8199): Commander #2 (11631, -8044) depth 161; Medic-Sapper #1 in (11711, -8044) depth 198;
+[2026.11.26-07.47.52:548][504]LogCodexTactics: Display: [Formation] confined queue from (11588, -8199): Commander #1 in (11631, -8044) depth 161; Medic-Sapper #2 in (11711, -8044) depth 198;
+[2026.11.26-07.47.52:713][515]LogCodexTactics: Display: [Formation] guard: Echelon left (level 0, cut here - / ahead (standing), turn ahead 0 deg, heading 57, 4 walls) at (11551, -8044)
+[2026.11.26-07.47.52:713][515]LogCodexTactics: Display: [Formation] column -> echelon_left (terrain wall_right, passage -)
+[2026.11.26-07.47.52:713][515]LogCodexTactics: Display: [Formation] places by travel (echelon_left): Commander -> P; Medic-Sapper -> Z;
+[2026.11.26-07.47.52:713][515]LogCodexTactics: Display: [Formation] saved shape: echelon_left/3 in effect (formation_shapes.json revision 1)
+[2026.11.26-07.47.52:821][522]LogCodexTactics: Display: Engineer: move to (11513, -7757) -> accepted
+[2026.11.26-07.47.52:827][522]LogCodexTactics: Display: [Formation] guard: Echelon left -> Column (wall) (level 2, cut here - / ahead PZ, turn ahead 46 deg, heading 52, 4 walls) at (11551, -8044)
+[2026.11.26-07.47.52:827][522]LogCodexTactics: Display: [Formation] echelon_left -> column (terrain wall_right, passage -, asked echelon_left)
+[2026.11.26-07.47.52:827][522]LogCodexTactics: Display: [Formation] rear guard: Z (column)
+[2026.11.26-07.47.52:827][522]LogCodexTactics: Display: [Formation] confined: off (the leader walks on)
+[2026.11.26-07.47.52:827][522]LogCodexTactics: Display: [Formation] saved shape: off - the formula (formation_shapes.json revision 1)
+[2026.11.26-07.47.52:846][523]LogCodexTactics: Display: [Formation] confined: 2 of 2 follower slot(s) moved into the pocket at (11550, -8044) (median 149 cm, column)
+[2026.11.26-07.47.54:716][652]LogCodexTactics: Display: Engineer: move to (11827, -8471) -> accepted
+[2026.11.26-07.47.54:722][652]LogCodexTactics: Display: [Formation] confined: off (the leader walks on)
+[2026.11.26-07.47.54:755][654]LogCodexTactics: Display: [Formation] Commander yields to the leader's walk: at (11609, -8106), his slot (11528, -8234) - steps aside to (11696, -8050); the leader (11549, -8045) -> (11827, -8471)
+[2026.11.26-07.47.54:896][663]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.26-07.47.54:897][663]LogCodexTactics: Display: Engineer: move to (11868, -8489) sprint -> accepted
+[2026.11.26-07.47.55:075][674]LogCodexTactics: Display: [Formation] Medic-Sapper yields to the leader's walk: at (11687, -8143), his slot (11624, -8363) - steps aside to (11726, -8112); the leader (11539, -8068) -> (11868, -8489)
+[2026.11.26-07.47.55:287][688]LogCodexTactics: Display: [Formation] Medic-Sapper yields to the leader's walk: at (11687, -8146), his slot (11607, -8299) - steps aside to (11570, -8332); the leader (11553, -8131) -> (11868, -8489)
+[2026.11.26-07.47.55:634][710]LogCodexTactics: Display: [Formation] places by travel (column): Commander -> Z; Medic-Sapper -> P;
+[2026.11.26-07.47.55:938][729]LogCodexTactics: Display: [Formation] guard: Wedge (level 0, cut here - / ahead -, turn ahead 5 deg, heading -50, 4 walls) at (11838, -8458)
+[2026.11.26-07.47.55:938][729]LogCodexTactics: Display: [Formation] column -> wedge (terrain open, passage -)
+[2026.11.26-07.47.55:969][731]LogCodexTactics: Display: [Sight] hidden 45, revealed 40, ghosts 0 (heard 0), demasks 326, pack alerts 0, forgotten 0
+[2026.11.26-07.47.56:003][733]LogCodexTactics: Display: [Formation] rear guard: Z (wedge)
+[2026.11.26-07.47.56:250][750]LogCodexTactics: Display: Engineer: move to (11453, -7667) -> accepted
+[2026.11.26-07.47.56:255][750]LogCodexTactics: Display: [Formation] bypass: none - the destination (11453, -7667, 300) is on another level (feet at 2)
+[2026.11.26-07.47.56:288][752]LogCodexTactics: Display: [Formation] Medic-Sapper yields to the leader's walk: at (11740, -8157), his slot (11811, -8092) - steps aside to (11812, -8122); the leader (11851, -8472) -> (11453, -7667)
+[2026.11.26-07.47.56:420][761]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.26-07.47.56:422][761]LogCodexTactics: Display: Engineer: move to (11446, -7658) sprint -> accepted
+[2026.11.26-07.47.56:426][761]LogCodexTactics: Display: [Formation] bypass: none - the destination (11446, -7658, 300) is on another level (feet at 2)
+[2026.11.26-07.47.56:506][767]LogCodexTactics: Display: [Formation] guard: Wedge -> Column (wall) (level 2, cut here - / ahead PZ, turn ahead 63 deg, heading 53, 4 walls) at (11825, -8440)
+[2026.11.26-07.47.56:506][767]LogCodexTactics: Display: [Formation] wedge -> column (terrain open, passage -, asked wedge)
+[2026.11.26-07.47.56:597][774]LogCodexTactics: Display: [Formation] Commander yields to the leader's walk: at (11556, -8192), his slot (11663, -8276) - steps aside to (11616, -8298); the leader (11804, -8415) -> (11446, -7658)
+[2026.11.26-07.47.57:032][803]LogCodexTactics: Display: [Formation] places by travel (column): Commander -> P; Medic-Sapper -> Z;
+[2026.11.26-07.47.58:140][883]LogCodexTactics: Display: [Formation] guard: Echelon right -> Column (wall) (level 2, cut here - / ahead PZ, turn ahead 36 deg, heading 134, 4 walls) at (11501, -8058)
+[2026.11.26-07.48.02:513][168]LogCodexTactics: Display: [GiveWay] Engineer: his walk to (11446, -7658) was ended as blocked 402 cm from it - asked again (1 / 4) -> 0
+[2026.11.26-07.48.02:575][172]LogCodexTactics: Display: [Formation] rear guard: Z (column)
+[2026.11.26-07.48.02:577][172]LogCodexTactics: Display: [Formation] confined queue from (11607, -8164): Commander #1 (11385, -8170) depth 222; Medic-Sapper #2 (11659, -8057) depth 119;
+[2026.11.26-07.48.02:577][172]LogCodexTactics: Display: [Formation] confined: 2 of 2 follower slot(s) moved into the pocket at (11499, -8057) (median 143 cm, column)
+[2026.11.26-07.48.02:990][195]LogCodexTactics: Display: [Formation] confined queue from (11607, -8164): Commander #1 in (11385, -8170) depth 222; Medic-Sapper #2 (11442, -8113) depth 173;
+[2026.11.26-07.48.03:731][241]LogCodexTactics: Display: [Formation] confined queue from (11607, -8164): Commander #1 in (11385, -8170) depth 222; Medic-Sapper #2 in (11442, -8113) depth 173;
+[2026.11.26-07.48.05:978][399]LogCodexTactics: Display: [Sight] hidden 45, revealed 40, ghosts 0 (heard 0), demasks 326, pack alerts 0, forgotten 0
+[2026.11.26-07.48.08:520][586]LogCodexTactics: Display: [Cover] Operator Petrov: left the cover (sector no-contact relocate)
+[2026.11.26-07.48.08:520][586]LogCodexTactics: Display: [TrainingSector] Round 4 pmc_relocated #3/3: 42.0 m from squad (LOS no, cover yes, fallback no) to V(X=11460.62, Y=-12322.79, Z=10.00)
+[2026.11.26-07.48.08:524][587]LogCodexTactics: Display: [SniperAnim] AS_Stand_Aim_Start (rate 1.00)
+[2026.11.26-07.48.08:543][587]LogCodexTactics: Display: Operator Petrov: move to (11297, -11968) sprint -> accepted
+[2026.11.26-07.48.08:543][587]LogCodexTactics: Display: [Cover] Operator Petrov: to the high cover at (11297, -11968) at a sprint
+[2026.11.26-07.48.08:543][587]LogCodexTactics: Display: [PmcAI] team 4: Operator Petrov -> TakeCover (score 0.20; threat remembered at 6036 cm, hp 100%, cover 0.00)
+[2026.11.26-07.48.09:195][633]LogCodexTactics: Display: [Cover] Operator Petrov: entered the high cover at (11297, -11968), facing right, corners L 0 R 0
+[2026.11.26-07.48.09:196][633]LogCodexTactics: Display: [Operator Petrov] 🧱 Hugging the wall, holding the corner!
+[2026.11.26-07.48.09:196][633]LogCodexTactics: Display: [Cover] Operator Petrov: runs into the cover (191 cm out, speed 725, clip lead 76, glide 121)
+[2026.11.26-07.48.09:199][633]LogCodexTactics: Display: [PmcAI] team 4: Operator Petrov completed TakeCover in cover -> Hold
+[2026.11.26-07.48.09:207][634]LogCodexTactics: Display: [CoverSet] Operator Petrov: cover at V(X=11290.79, Y=-11912.79, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.26-07.48.09:599][663]LogCodexTactics: Display: [Cover] Operator Petrov: settled in the cover after 0.42 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.26-07.48.13:798][969]LogCodexTactics: Display: Engineer: move to (11509, -7640) -> accepted
+[2026.11.26-07.48.13:805][969]LogCodexTactics: Display: [Formation] bypass: none - the destination (11509, -7640, 300) is on another level (feet at 2)
+[2026.11.26-07.48.13:805][969]LogCodexTactics: Display: [Formation] confined: off (the leader walks on)
+[2026.11.26-07.48.13:967][979]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.26-07.48.13:968][979]LogCodexTactics: Display: Engineer: move to (11509, -7640) sprint -> accepted
+[2026.11.26-07.48.13:973][979]LogCodexTactics: Display: [Formation] bypass: none - the destination (11509, -7640, 300) is on another level (feet at 2)
+[2026.11.26-07.48.14:271][999]LogCodexTactics: Display: [Formation] rear guard: Z (column)
+[2026.11.26-07.48.15:630][ 90]LogCodexTactics: Display: Engineer: move to (12509, -7696) -> accepted
+[2026.11.26-07.48.15:806][101]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.26-07.48.15:806][101]LogCodexTactics: Display: Engineer: move to (12648, -7582) sprint -> accepted
+[2026.11.26-07.48.15:981][113]LogCodexTactics: Display: [Sight] hidden 45, revealed 40, ghosts 0 (heard 0), demasks 326, pack alerts 0, forgotten 0
+[2026.11.26-07.48.16:280][135]LogCodexTactics: Display: [Formation] places by travel (column): Commander -> Z; Medic-Sapper -> P;
+[2026.11.26-07.48.16:618][159]LogCodexTactics: Display: [Formation] guard: Echelon left (level 0, cut here - / ahead -, turn ahead 11 deg, heading 20, 4 walls) at (12046, -7938)
+[2026.11.26-07.48.16:619][159]LogCodexTactics: Display: [Formation] column -> echelon_left (terrain wall_right, passage -)
+[2026.11.26-07.48.16:619][159]LogCodexTactics: Display: [Formation] saved shape: echelon_left/3 in effect (formation_shapes.json revision 1)
+[2026.11.26-07.48.17:317][205]LogCodexTactics: Display: [Formation] guard: Wedge (level 0, cut here - / ahead -, turn ahead 1 deg, heading 30, 11 walls) at (12482, -7680)
+[2026.11.26-07.48.17:317][205]LogCodexTactics: Display: [Formation] echelon_left -> wedge (terrain open, passage -)
+[2026.11.26-07.48.17:317][205]LogCodexTactics: Display: [Formation] places by travel (wedge): Commander -> P; Medic-Sapper -> Z;
+[2026.11.26-07.48.17:317][205]LogCodexTactics: Display: [Formation] saved shape: off - the formula (formation_shapes.json revision 1)
+[2026.11.26-07.48.17:603][225]LogCodexTactics: Display: [Formation] rear guard: Z (wedge)
+[2026.11.26-07.48.25:984][790]LogCodexTactics: Display: [Sight] hidden 45, revealed 40, ghosts 0 (heard 0), demasks 326, pack alerts 0, forgotten 0
+[2026.11.26-07.48.30:071][ 86]LogCodexTactics: Display: Engineer: move to (12475, -6702) -> accepted
+[2026.11.26-07.48.30:220][ 96]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.26-07.48.30:220][ 96]LogCodexTactics: Display: Engineer: move to (12427, -6699) sprint -> accepted
+[2026.11.26-07.48.31:620][184]LogCodexTactics: Display: [Formation] rear guard: Z (wedge)
+[2026.11.26-07.48.31:775][196]LogCodexTactics: Display: Engineer: move to (12399, -5407) -> accepted
+[2026.11.26-07.48.31:965][208]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.26-07.48.31:965][208]LogCodexTactics: Display: Engineer: move to (12416, -5276) sprint -> accepted
+[2026.11.26-07.48.32:556][248]LogCodexTactics: Display: Engineer: move to (13367, -6469) -> accepted
+[2026.11.26-07.48.32:563][248]LogCodexTactics: Display: [Formation] rear guard: Z (wedge)
+[2026.11.26-07.48.32:755][259]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.26-07.48.32:755][259]LogCodexTactics: Display: Engineer: move to (13432, -6492) sprint -> accepted
