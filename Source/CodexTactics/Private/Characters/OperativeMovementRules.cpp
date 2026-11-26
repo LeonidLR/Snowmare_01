@@ -2,6 +2,12 @@
 
 namespace OperativeMovementRules
 {
+	bool HasNoWayUp(float FeetZ, float GoalZ, bool bHasPath, bool bPartial, float EndZ)
+	{
+		constexpr float LevelSlackCm = 80.f; // stairs / navmesh height noise are not a different roof
+		return GoalZ > FeetZ + LevelSlackCm && (!bHasPath || bPartial || EndZ < GoalZ - LevelSlackCm);
+	}
+
 	float GetStanceSpeedMultiplier(const FOperativeMovementConfig& Config, EOperativeStance Stance)
 	{
 		switch (Stance)

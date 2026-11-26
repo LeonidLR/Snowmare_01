@@ -14,6 +14,22 @@
 
 // --- Movement rules ---
 
+MOVEMENT_TEST(FMovementNoWayUpTest, "Movement.NoWayUp")
+bool FMovementNoWayUpTest::RunTest(const FString&)
+{
+	using namespace OperativeMovementRules;
+	TestTrue(TEXT("Partial path below the roof is no way up"), HasNoWayUp(2.f, 300.f, true, true, 2.f));
+	TestTrue(TEXT("Complete path projected to lower ground misses the roof"), HasNoWayUp(2.f, 300.f, true, false, 2.f));
+	TestTrue(TEXT("No path to upper goal is refused"), HasNoWayUp(2.f, 300.f, false, false, 0.f));
+	TestTrue(TEXT("Partial path on disconnected upper island is refused"), HasNoWayUp(2.f, 300.f, true, true, 300.f));
+	TestFalse(TEXT("Complete ladder or stair path reaches roof"), HasNoWayUp(2.f, 300.f, true, false, 302.f));
+	TestFalse(TEXT("Same-level partial approach remains allowed"), HasNoWayUp(2.f, 2.f, true, true, 2.f));
+	TestFalse(TEXT("Height noise within slack is not a roof"), HasNoWayUp(2.f, 82.f, false, false, 2.f));
+	TestFalse(TEXT("Descending routes keep their existing recovery"), HasNoWayUp(300.f, 2.f, false, false, 300.f));
+	return true;
+}
+
+
 MOVEMENT_TEST(FMovementStanceSpeedsTest, "Movement.StanceSpeeds")
 bool FMovementStanceSpeedsTest::RunTest(const FString&)
 {

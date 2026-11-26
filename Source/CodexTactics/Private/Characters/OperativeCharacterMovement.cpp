@@ -514,6 +514,31 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 	{
 		Result = AIController->MoveToLocation(Destination, MovementConfig.AcceptanceRadius, false, true, true, false, ChooseMoveFilter());
 	}
+	// Task139: partial paths and lower-ground projection must not silently accept an upper roof click.
+	// Door approaches are redirected by the click handler; same-level partial paths stay valid.
+	if (IsPlayerTeam() && !bAutonomousOrder && !bFormationMove)
+	{
+		const UPathFollowingComponent* Following = AIController->GetPathFollowingComponent();
+		const FNavPathSharedPtr Path = Following ? Following->GetPath() : nullptr;
+		const bool bHasPath = Result == EPathFollowingRequestResult::RequestSuccessful && Path.IsValid() && Path->IsValid()
+			&& !Path->GetPathPoints().IsEmpty();
+		const float FeetZ = GetActorLocation().Z - GetSimpleCollisionHalfHeight();
+		const bool bAtGoal = Result == EPathFollowingRequestResult::AlreadyAtGoal;
+		if (OperativeMovementRules::HasNoWayUp(FeetZ, Destination.Z, bHasPath || bAtGoal,
+			bHasPath && Path->IsPartial(), bHasPath ? Path->GetEndLocation().Z : FeetZ))
+		{
+			AIController->StopMovement();
+			bHasMoveOrder = false;
+			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+			{
+				Messages->PostMessage(DisplayName, NSLOCTEXT("OperativeMovement", "NoWayUp", "No way up to that point."));
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[Move] %s: no way up to %s (path=%d partial=%d end-z=%.1f)"),
+				*DisplayName.ToString(), *Destination.ToCompactString(), bHasPath, bHasPath && Path->IsPartial(),
+				bHasPath ? Path->GetEndLocation().Z : FeetZ);
+			return EOperativeOrderResult::Unreachable;
+		}
+	}
 	if (Result == EPathFollowingRequestResult::Failed)
 	{
 		bHasMoveOrder = false;

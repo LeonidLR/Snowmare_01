@@ -21,9 +21,11 @@
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
 #include "NavLinkCustomComponent.h"
+#include "UI/GameMessageSubsystem.h"
 
 namespace RoofLadderSmoke
 {
+    bool bRepairProbe = false; // explicit transient diagnostic only; the ordinary regression never repairs the map
     const FVector RoofGoal(11510.f, -7621.f, 300.f);
     struct FState
     {
@@ -36,11 +38,11 @@ namespace RoofLadderSmoke
     bool Finish(bool bPass, const FString& Why)
     {
         UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: %s"), bPass ? TEXT("ok") : TEXT("FAIL"), *Why);
-        UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s RoofLadderSmoke"), bPass ? TEXT("PASS") : TEXT("FAIL"));
+        UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s %s"), bPass ? TEXT("PASS") : TEXT("FAIL"), bRepairProbe ? TEXT("RoofLadderRepairProbe") : TEXT("RoofLadderSmoke"));
         FPlatformMisc::RequestExit(false, TEXT("RoofLadderSmoke"));
         return false;
     }
-    void Projection(UNavigationSystemV1& Nav, const TCHAR* Name, const FVector& Point)
+    void LogNavProjection(UNavigationSystemV1& Nav, const TCHAR* Name, const FVector& Point)
     {
         FNavLocation Out;
         const bool bOk = Nav.ProjectPointToNavigation(Point, Out, FVector(50.f, 50.f, 60.f));
@@ -85,14 +87,26 @@ namespace RoofLadderSmoke
             }
             if (!Nearest) { return Finish(false, TEXT("gallery ladder exists")); }
             State->Ladder = Nearest;
+            if (bRepairProbe)
+            {
+                // Proposed data fix: authored top (11597.45,-7868.48) is ~125 cm inside this saved actor's rung plane.
+                // Change only this process's link/climb targets. No map, layout or asset is saved.
+                Nearest->TopStandoff = 125.f;
+                Nearest->TopExitStandoff = 125.f;
+                const LadderRules::FClipContract Contract = Nearest->GetContract();
+                Nearest->GetNavLink()->SetLinkData(LadderRules::BottomLinkLocal(Contract),
+                    LadderRules::TopLinkLocal(Contract, Nearest->GetRungCount()), ENavLinkDirection::BothWays);
+                UE_LOG(LogCodexTactics, Display, TEXT("[RoofLadder] REPAIR PROBE ONLY: transient inset125, no asset save"));
+            }
+
             UE_LOG(LogCodexTactics, Display, TEXT("[RoofLadder] nearest %s tags=%s at %s yaw=%.1f top-standoff=%.1f exit-standoff=%.1f enabled=%d"),
                 *Nearest->GetName(), *FString::JoinBy(Nearest->Tags, TEXT(","), [](FName N) { return N.ToString(); }),
                 *Nearest->GetActorLocation().ToCompactString(), Nearest->GetActorRotation().Yaw,
                 Nearest->TopStandoff, Nearest->TopExitStandoff, Nearest->GetNavLink() && Nearest->GetNavLink()->IsEnabled());
-            Projection(*Nav, TEXT("bottom"), Nearest->GetBottomLinkWorld());
-            Projection(*Nav, TEXT("top"), Nearest->GetTopLinkWorld());
-            Projection(*Nav, TEXT("exit"), Nearest->GetTopExitWorld());
-            Projection(*Nav, TEXT("roof goal"), RoofGoal);
+            LogNavProjection(*Nav, TEXT("bottom"), Nearest->GetBottomLinkWorld());
+            LogNavProjection(*Nav, TEXT("top"), Nearest->GetTopLinkWorld());
+            LogNavProjection(*Nav, TEXT("exit"), Nearest->GetTopExitWorld());
+            LogNavProjection(*Nav, TEXT("roof goal"), RoofGoal);
             Path(*World, *Leader, Nearest->GetBottomLinkWorld(), Nearest->GetTopLinkWorld(), false);
             Path(*World, *Leader, Nearest->GetBottomLinkWorld(), RoofGoal, false);
             Path(*World, *Leader, Nearest->GetBottomLinkWorld(), RoofGoal, true);
@@ -113,6 +127,17 @@ namespace RoofLadderSmoke
         if (State->Stage == 1)
         {
             if (State->Time < 1.f || Nav->IsNavigationBuildInProgress()) { return true; }
+            // An actual impossible upper order must refuse, post feedback and leave no own walk to the wall.
+            UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>();
+            const int32 BeforeMessages = Messages ? Messages->GetHistory().Num() : 0;
+            const EOperativeOrderResult BadOrder = Leader->OrderMoveTo(RoofGoal + FVector(0.f, 0.f, 1000.f), false);
+            if (BadOrder != EOperativeOrderResult::Unreachable || Leader->HasOwnMoveOrder() || !Messages
+                || Messages->GetHistory().Num() <= BeforeMessages
+                || !Messages->GetHistory().Last().Text.ToString().Contains(TEXT("No way up")))
+            {
+                return Finish(false, TEXT("impossible upper goal is refused with No way up and no wall walk"));
+            }
+            UE_LOG(LogCodexTactics, Display, TEXT("[RoofLadder] No way up feedback PASS; valid roof order follows"));
             State->ClimbsBefore = Leader->LadderClimb ? Leader->LadderClimb->GetClimbsUp() : 0;
             FHitResult Hit(nullptr, nullptr, RoofGoal, FVector::UpVector);
             Hit.bBlockingHit = true; Hit.Location = RoofGoal; Hit.TraceStart = RoofGoal + FVector(0.f, 0.f, 1000.f);
@@ -133,14 +158,22 @@ namespace RoofLadderSmoke
             Feet, bClimbed, *Leader->GetActorLocation().ToCompactString())); }
         return true;
     }
-    void Run(const TArray<FString>&, UWorld* World)
+    void Run(const TArray<FString>& Args, UWorld* World)
     {
+        bRepairProbe = Args.Contains(TEXT("RepairProbe"));
         SmokeUtils::StopLevelPmc(World);
         if (IConsoleVariable* Pressure = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.Enabled"))) { Pressure->Set(0, ECVF_SetByConsole); }
         const TSharedRef<FState> State = MakeShared<FState>();
         FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float) { return Tick(State); }));
         UE_LOG(LogCodexTactics, Display, TEXT("RoofLadderSmoke: start (X6 gallery roof 11510,-7621,300)"));
     }
+    void RunRepairProbe(const TArray<FString>&, UWorld* World)
+    {
+        Run({ TEXT("RepairProbe") }, World);
+    }
+    static FAutoConsoleCommandWithWorldAndArgs RepairProbeCommand(TEXT("CodexTactics.RoofLadderRepairProbe"),
+        TEXT("139 diagnostic only: transient authored landing inset125; never saves or replaces the ordinary roof regression."),
+        FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunRepairProbe));
     static FAutoConsoleCommandWithWorldAndArgs Command(TEXT("CodexTactics.RoofLadderSmoke"), TEXT("X6 gallery roof-via-ladder regression and link projection diagnostics."),
         FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
