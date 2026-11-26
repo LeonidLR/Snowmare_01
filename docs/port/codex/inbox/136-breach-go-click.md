@@ -25,3 +25,7 @@ Smoke step: open a door, peek -> that building's roof hidden, storey = his; walk
 MUST (designer): the reveal shows the LAYOUT only. Enemies in inner rooms / behind walls stay hidden (no mesh, no marker, no minimap dot);
 only an enemy in his direct line of sight through the doorway is shown. Smoke asserts: enemy in an inner room -> hidden while the roof is
 off; enemy in the doorway's line -> visible.
+Designer note: this ALREADY partly works in some buildings, especially LARGE ones (roof hides when an operative is at / in the door), but
+much less in SMALL buildings. Start by finding why: likely a size / footprint / inside-test threshold in URoofCutawaySubsystem (min area,
+distance-to-centre, "inside" probe depth vs a small room's depth, or small buildings built from different pieces). Log the decision for one
+small and one large X6 building with the operative in the doorway; fix the rule so size does not matter.
