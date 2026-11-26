@@ -17,7 +17,7 @@
     "TutorialAmbushLakeMineSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "TurnArenaLakeSmoke", "TurnArenaYardSmoke",
     "EnvironmentLakeSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "WeatherLakeSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke", "SnowIndoorSmoke",
     "StartLightingSmoke", "StartSnowSmoke", "FormationWallHugSmoke", "FormationFenceCrossSmoke", "StartFlickerSmoke", "LevelGenBuildingsSmoke", "RoofCutawayStoreySmoke", "CutawayClickSmoke",
-    "SectorBoundarySmoke", "SectorRoundsSmoke", "CorpseSearchSmoke",
+    "SectorBoundarySmoke", "SectorRoundsSmoke", "RoofFightSmoke", "CorpseSearchSmoke",
     "DropLinkReachSmoke", "ColdIndoorsSmoke", "WindowStairHoverSmoke", "FormationStairSmoke", "FormationWindowSmoke", "CoverIndoorSmoke",
     "DoorsSmoke", "DoorBreachSmoke", "WindowCoverFireSmoke", "WindowDetourSmoke", "CornerSlotSmoke",
     "TorsoDriftSmoke", "FormationScanPitchSmoke"
@@ -85,6 +85,7 @@
     "TutorialAmbushLakeEarlyKillSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-22: the first PMC wire -> the tripwire card; both A4 zombies killed early -> every bound step closes (no stale target); A7 -> PREPARE THE GROUND" },
     "SectorBoundarySmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-Sector=1 -SectorSeed=91", "timeout": 300, "_why": "Task 106: one active training sector constrains a squad move and its PMC squad"},
     "SectorRoundsSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-Sector=5 -SectorSeed=91", "timeout": 300, "_why": "G019: a wiped side starts the next round on a different start and post; an empty reserve refills only after the quiet delay"},
+    "RoofFightSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 300, "_why": "G023: X6 walkable roof LowCover shooting at ground PMC 20-40 m below + full-wall block + grenade throw yaw <= 20 deg (op & PMC) + first-aid chest yaw <= 30 deg behind/beside"},
     "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" }
   },
   "archivedMapSmokes": {
@@ -173,6 +174,12 @@
   },
   "nonSmokeDebugCommands": ["PmcArena", "LevelGenIslandsProbe", "GiveWeapon", "MortarList", "MortarMan", "MortarFire", "MortarCease", "MortarCrewPmc", "ShotgunD1Shots", "ShotgunLoopShots", "RpgShots", "RecoilProbe", "CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots", "StoryShowcaseFixShots"],
   "rules": [
+    {
+      "name": "roof-fight-g023",
+      "globs": ["Source/**/Tactics/CoverFacingRules*", "Source/**/Combat/Grenade*", "Source/**/Survival/FirstAid*", "Source/**/Characters/OperativeCharacterAim.cpp", "Source/**/Characters/OperativeCharacterCover.cpp", "Source/**/Characters/OperativeCharacterCornerAim.cpp", "Source/**/Characters/OperativeCharacterCombat.cpp", "Source/**/Characters/OperativeCharacterWeapons.cpp", "Source/**/Characters/SquadAutonomySubsystem*", "Source/**/Debug/RoofFightSmokeCommand.cpp"],
+      "tests": ["CodexTactics.Tactics.Cover", "CodexTactics.Combat.Grenade", "CodexTactics.Survival.FirstAid"],
+      "smokes": ["RoofFightSmoke"]
+    },
     {
       "name": "training-sector",
       "globs": ["Source/**/Training/TrainingSector*", "Source/**/Debug/SectorBoundarySmokeCommand.cpp", "Source/**/Debug/SectorRoundsSmokeCommand.cpp", "Source/**/Telemetry/SessionRecordingRules.*", "Source/**/Telemetry/SessionRecordingSubsystem.*", "Source/**/Characters/OperativeCharacterHealth.cpp", "Source/**/UI/CodexTacticsHUD.*", "Content/Data/LevelJson/L_Gen_Depot_1_X6.sectors.json"],

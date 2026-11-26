@@ -2596,6 +2596,9 @@ public:
 	 */
 	void SetDoorFacingLock(const TOptional<float>& Yaw) { DoorFacingYaw = Yaw; }
 	bool HasDoorFacingLock() const { return DoorFacingYaw.IsSet(); }
+	/** G023: locks combat facing to the grenade target yaw through pre-turn and throw release. */
+	void SetGrenadeFacingLock(const TOptional<float>& Yaw) { GrenadeFacingYaw = Yaw; }
+	bool HasGrenadeFacingLock() const { return GrenadeFacingYaw.IsSet(); }
 	TOptional<float> GetFormationLookYaw() const { return FormationLookYaw; }
 
 	/** True while the formation sector drives his facing (last UpdateCombatFacing). */
@@ -2993,6 +2996,7 @@ private:
 	TOptional<float> FormationLookPitch;
 	/** SetDoorFacingLock: the yaw the door work holds (unset = none). */
 	TOptional<float> DoorFacingYaw;
+	TOptional<float> GrenadeFacingYaw;
 	bool bFacingFormationSector = false;
 	float FormationPaceMultiplier = 1.f;
 	bool bFormationWallPose = false;

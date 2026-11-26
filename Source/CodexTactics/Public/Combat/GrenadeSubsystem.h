@@ -87,13 +87,15 @@ struct CODEXTACTICS_API FGrenadeAimInfo
  * _throw_grenade_at, _handle_grenade_throw_click, _enter_gorky17 grenade refund.
  */
 UCLASS()
-class CODEXTACTICS_API UGrenadeSubsystem : public UWorldSubsystem
+class CODEXTACTICS_API UGrenadeSubsystem : public UTickableWorldSubsystem
 {
 	GENERATED_BODY()
 
 public:
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
+	virtual void Tick(float DeltaTime) override;
+	virtual TStatId GetStatId() const override;
 
 	/** Godot _start_grenade_throw_mode: needs grenades; posts the stance range line. */
 	bool StartAim(AOperativeCharacter* Thrower);
@@ -174,4 +176,15 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<AGrenadeAimActor> AimActor;
+
+	struct FPendingThrow
+	{
+		TWeakObjectPtr<AOperativeCharacter> Thrower;
+		TWeakObjectPtr<AGrenadeActor> Grenade;
+		float TargetYaw = 0.f;
+		float Elapsed = 0.f;
+		bool bClipStarted = false;
+	};
+	TArray<FPendingThrow> PendingThrows;
+	void ClearThrowFacing(const AOperativeCharacter* ForThrower);
 };

@@ -17,7 +17,9 @@
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacterInternal.h"
+#include "Combat/GrenadeRules.h"
 #include "Combat/HealthComponent.h"
+#include "Survival/FirstAidSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
@@ -110,6 +112,24 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		SetActorRotation(FRotator(0.f, *DoorFacingYaw, 0.f));
 		BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, 0.f, DeltaTime, 6.f);
 		return;
+	}
+	if (GrenadeFacingYaw.IsSet())
+	{
+		// G023: smoothly turn toward the throw target before/during the grenade throw montage.
+		const float CurrentYaw = static_cast<float>(GetActorRotation().Yaw);
+		const float NextYaw = GrenadeRules::StepThrowYaw(CurrentYaw, *GrenadeFacingYaw, GrenadeRules::TurnRateDegPerSec, DeltaTime);
+		SetActorRotation(FRotator(0.f, NextYaw, 0.f));
+		BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, 0.f, DeltaTime, 6.f);
+		return;
+	}
+	if (const UFirstAidSubsystem* FirstAid = GetWorld() ? GetWorld()->GetSubsystem<UFirstAidSubsystem>() : nullptr)
+	{
+		if (FirstAid->IsActivelyTreating(this))
+		{
+			// G023: FirstAidSubsystem keeps the medic facing the patient's chest throughout the treatment montage.
+			BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, 0.f, DeltaTime, 6.f);
+			return;
+		}
 	}
 	if (bInCover)
 	{
@@ -374,7 +394,7 @@ void AOperativeCharacter::StopAndFace(const FVector& Location)
 
 FVector AOperativeCharacter::GetStanceAimOrigin() const
 {
-	return bInCover && bCornerAimActive && (CurrentCoverHeight == ECoverHeight::HighCover || IsManualCornerPeekSpot()) ? GetCoverFireOrigin()
+	return bInCover && (CurrentCoverHeight == ECoverHeight::LowCover || (bCornerAimActive && (CurrentCoverHeight == ECoverHeight::HighCover || IsManualCornerPeekSpot()))) ? GetCoverFireOrigin()
 		: GetMuzzleLocation();
 }
 

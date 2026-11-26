@@ -155,7 +155,7 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	EShotLineHit Kind = EShotLineHit::Clear;
 	AActor* HitEnemy = Enemy;
 	FHitResult Hit;
-	const FVector LineFrom = bCornerShot ? GetCoverFireOrigin() : GetMuzzleLocation();
+	const FVector LineFrom = (bCornerShot || (bInCover && CurrentCoverHeight == ECoverHeight::LowCover)) ? GetCoverFireOrigin() : GetMuzzleLocation();
 	const FVector LineTo = EnemyFeet + FVector(0.f, 0.f, 80.f);
 	const bool bLineHit = World->LineTraceSingleByChannel(Hit, LineFrom, LineTo, ECC_Visibility, Params);
 	if (OutDetail)
@@ -329,7 +329,7 @@ bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShoo
 	}
 	EShotLineHit Kind = EShotLineHit::Clear;
 	FHitResult Hit;
-	if (World->LineTraceSingleByChannel(Hit, bCornerShot ? GetCoverFireOrigin() : GetMuzzleLocation(), Ghost.GetAimPoint(), ECC_Visibility, Params) && Hit.GetActor())
+	if (World->LineTraceSingleByChannel(Hit, (bCornerShot || (bInCover && CurrentCoverHeight == ECoverHeight::LowCover)) ? GetCoverFireOrigin() : GetMuzzleLocation(), Ghost.GetAimPoint(), ECC_Visibility, Params) && Hit.GetActor())
 	{
 		Kind = Hit.GetActor()->IsA<ABarricadeActor>() ? EShotLineHit::Barricade : EShotLineHit::Blocked;
 	}
@@ -366,7 +366,7 @@ bool AOperativeCharacter::EvaluateReturnFire(FShootCandidate& Out) const
 	const FVector MyFeet = OperativeCharacterInternal::ShotFeet(this);
 	const float Range = CurrentWeapon ? CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
 	const float Distance = FVector::Dist(MyFeet + FVector(0.f, 0.f, 100.f), Flash);
-	const FVector From = GetMuzzleLocation();
+	const FVector From = bInCover ? GetCoverFireOrigin() : GetMuzzleLocation();
 	// The line to the flash, a hand short of it (the muzzle may poke into the corner it fires round): the operatives never stop it
 	// (the squad's own column included - mates are not in the way of a squad shot line).
 	const FVector End = Flash + (From - Flash).GetSafeNormal() * 15.f;
