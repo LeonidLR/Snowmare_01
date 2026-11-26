@@ -15,3 +15,17 @@ Designer finding 2026-11-26 (later): the entry already works when he can click t
 When the roof does not disappear there is nothing inside to click, so the entry is impossible. So 136 = make the door itself the "go in" target
 (no dependency on the roof cutaway), reusing the existing floor-click entry path. Also check why the roof sometimes does not hide while the squad
 is stacked at that building's door (stacked at a door = treat the squad as "at the building" for the cutaway); report it, fix if small.
+
+## 136 part B - door peek reveals the building (designer 2026-11-26, for enemies inside buildings later)
+An operative who runs up to a door, opens it and looks inside (like a corner peek, through the open doorway) "lights up" that building:
+its roof (and storeys above his) hide via the roof cutaway, showing the floor he stands on. Enemies inside are still revealed only by
+line of sight / vision cone (fog of war), the cutaway just lets the player see the room layout. Reveal ends when nobody of the squad
+watches through that doorway (or after a short hold, ~5 s). Reuse URoofCutawaySubsystem (same hook as the stacked-at-door finding).
+Smoke step: open a door, peek -> that building's roof hidden, storey = his; walk away -> roof back.
+MUST (designer): the reveal shows the LAYOUT only. Enemies in inner rooms / behind walls stay hidden (no mesh, no marker, no minimap dot);
+only an enemy in his direct line of sight through the doorway is shown. Smoke asserts: enemy in an inner room -> hidden while the roof is
+off; enemy in the doorway's line -> visible.
+Designer note: this ALREADY partly works in some buildings, especially LARGE ones (roof hides when an operative is at / in the door), but
+much less in SMALL buildings. Start by finding why: likely a size / footprint / inside-test threshold in URoofCutawaySubsystem (min area,
+distance-to-centre, "inside" probe depth vs a small room's depth, or small buildings built from different pieces). Log the decision for one
+small and one large X6 building with the operative in the doorway; fix the rule so size does not matter.

@@ -534,7 +534,9 @@ void UInteractionSubsystem::LootAll()
 	if (Crate->RequestSearch(Leader, ELootItem::Medkit, true))
 	{
 		PlayerCommands::ReportBy(this, PlayerCommands::LootTake, Leader, Crate);
-		OnLootDialogChanged.Broadcast(true, Crate); // "Searching..." until the grab closes it
+		// Designer 2026-11-26: "Take ALL" closes the window at once; the search still runs and finishes (CloseLootDialog keeps it),
+		// HandleSearchFinished posts what was taken.
+		CloseLootDialog();
 	}
 	else if (!Crate->IsSearching())
 	{

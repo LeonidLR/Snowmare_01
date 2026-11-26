@@ -453,6 +453,7 @@ FReply UInventoryDrawerWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry
 		if (FindSlotAt(InMouseEvent.GetScreenSpacePosition()) == Index && SlotButtons[Index]->GetIsEnabled())
 		{
 			Activate(static_cast<EInventoryDrawerSlot>(Index));
+			Close(); // designer 2026-11-26: an item picked = the drawer goes, the player then works with the item in the world
 		}
 		return FReply::Handled();
 	}
@@ -465,6 +466,12 @@ void UInventoryDrawerWidget::NativeOnDragDetected(const FGeometry& InGeometry, c
 	{
 		OutOperation = CreateDragOperation(static_cast<EInventoryDrawerSlot>(PressedSlot));
 		PressedSlot = INDEX_NONE;
+		// Designer 2026-11-26: picking an item up closes the drawer, so the squad behind it is visible while dragging onto someone.
+		// Only the panel collapses - this widget stays alive and still gets NativeOnDragCancelled for the world drop.
+		if (OutOperation)
+		{
+			Close();
+		}
 		return;
 	}
 	Super::NativeOnDragDetected(InGeometry, InMouseEvent, OutOperation);
@@ -483,7 +490,7 @@ void UInventoryDrawerWidget::HandleWorldDrop(UInventoryDragDropOperation* Operat
 {
 	APlayerController* PC = GetOwningPlayer();
 	ACodexTacticsHUD* Hud = PC ? Cast<ACodexTacticsHUD>(PC->GetHUD()) : nullptr;
-	if (!Operation || !Hud || (Panel && Panel->GetCachedGeometry().IsUnderLocation(ScreenPosition)))
+	if (!Operation || !Hud || (IsOpen() && Panel->GetCachedGeometry().IsUnderLocation(ScreenPosition)))
 	{
 		return; // dropped back on the drawer: nothing to do
 	}
