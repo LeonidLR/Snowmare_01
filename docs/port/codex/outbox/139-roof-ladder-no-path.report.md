@@ -1,5 +1,19 @@
 # 139 — диагностика лестницы на крышу / No way up
 
+## Night resume 2026-11-27 00:55 Asia/Jerusalem — BLOCKED
+
+This checkpoint supersedes the older LIMIT status below. Lane remains `codex/139-roof-ladder-no-path`; gameplay code remains `9ce2d0f525b2da1384919ea411cb2d2fdb64216a`. No gameplay changes in this resume.
+
+- Existing final worker build confirmed PASS: `Saved/Logs/RemoteBuilds.jsonl` entry at `2026-11-26T17:31:49`, head `9ce2d0f5`, exit 0, total 939 s. `Saved/Logs/Build.log` ends `Result: Succeeded`, engine execution 453.07 s. No rebuild needed.
+- Requested `Scripts/test.ps1 -Smart -SkipSmokes -Base origin/main` launched, but produced no output or fresh automation log before the environment blocker. Stopped our invocation; no new unit PASS claimed. Existing automation log is still dated November 26, 17:29.
+- Requested dispatcher with FULL names: `python Scripts/Tools/machine_dispatch.py smoke --lane . --smokes RoofLadderSmoke,RoofLadderRepairProbe,LowCoverMoveLakeSmoke,FormationStairSmoke --jobs 2`.
+- Worker unavailable: SSH reports `Permission denied` reading `/c/Users/Zephyrus15Duo/.ssh/known_hosts`, then `Host key verification failed`. Dispatcher selected the allowed/free main PC fallback.
+- Fallback exited 1 during smoke preflight: `FormationStairSmoke` requires `/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit`, but `Content/Maps/KitPilot/L_Gen_StoryShowcase_Kit.umap` is missing in this lane. No smoke runtime results from this resume; regression closure remains unverified.
+- No maps, JSON, assets, Config or VFX edited. No merge, push, or main changes. AGENTS.md was absent in the lane and checked parent locations; CLAUDE.md, TANDEM.md, active session state, HANDOFF and task/checkpoint read.
+- `git diff --check` passed. Report commit attempted but filesystem permissions deny creation of `.git/worktrees/CodexTactics-139/index.lock`; report remains saved and uncommitted, HEAD `0de781e6`. No approval requested.
+
+Stopped under the explicit no-approvals/blocker instruction. Lead needs to restore worker SSH access or provide the required lane smoke maps before retrying step 2. The strict RoofLadderSmoke remains unchanged; the separately documented LadderActor_22 map fix (125/125 cm) still belongs to Lead. Task 121 was not started.
+
 Статус: LIMIT — НЕ ЗАВЕРШЕНО. Primary used90%, осталось10%; остановка по правилу дизайнера до26.11.2026 18:23:42 Asia/Jerusalem. Предыдущее продолжение после RESUME Lead#1388. Worktree C:/Work/Lanes/CodexTactics-139, ветка codex/139-roof-ladder-no-path. В собственную ветку влит origin/main b65ec5f7 (merge abb03556), main не менялся.
 
 ## Подтверждённая причина
