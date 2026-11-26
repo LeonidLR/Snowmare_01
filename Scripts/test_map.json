@@ -426,7 +426,7 @@
       "globs": ["Source/**/Tactics/ClickPreviewRules*", "Source/**/Core/CodexTacticsPlayerControllerClickPreview*", "Source/**/Core/CodexTacticsPlayerController.*",
         "Source/**/Core/CodexTacticsPlayerControllerSelection*", "Source/**/Debug/ClickPreviewSmoke*", "Source/**/Tests/**/ClickPreviewRulesTest*", "Source/**/Characters/SquadSubsystemMantleQueue*"],
       "tests": ["CodexTactics.Tactics.ClickPreview", "CodexTactics.Tactics.Cover", "CodexTactics.Formation.WallLeadership"],
-      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke"]
+      "smokes": ["TutorialAmbushLakeSmoke", "TurnArenaLakeSmoke", "WindowStairHoverSmoke"]
     },
     {
       "name": "openable-doors-r1-2026-11-22",

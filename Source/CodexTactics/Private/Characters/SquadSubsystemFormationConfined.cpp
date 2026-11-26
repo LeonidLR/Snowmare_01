@@ -11,6 +11,7 @@
 #include "Formation/FormationConfinedRules.h"
 #include "AIController.h"
 #include "HAL/IConsoleManager.h"
+#include "Ladders/LadderClimbComponent.h"
 #include "Navigation/CrowdFollowingComponent.h"
 #include "NavMesh/RecastNavMesh.h"
 #include "NavigationData.h"
@@ -478,8 +479,10 @@ void USquadSubsystem::ApplyFormationConfined(const AOperativeCharacter& LeaderRe
 	const bool bRoomRequest = Confined.bLeaderRoomRequest;
 	Confined.bLeaderRoomRequest = false;
 	AOperativeCharacter* const LeaderMutable = GetLeader();
+	// A ladder pauses the path and owns the resume goal, including its queue and exit. It is not an idle leader to move aside.
+	const ULadderClimbComponent* LeaderLadder = LeaderRef.FindComponentByClass<ULadderClimbComponent>();
 	if (bRoomRequest && Result.bQueued && LeaderMutable == &LeaderRef && !bLeaderMoving && LeaderRef.GetVelocity().Size2D() < ConfinedStandingSpeed
-		&& !LeaderRef.HasOwnMoveOrder() && Confined.LeaderRoomSerial.Get(LeaderRef.GetMoveOrderSerial() + 1u) != LeaderRef.GetMoveOrderSerial())
+		&& !LeaderRef.HasOwnMoveOrder() && !(LeaderLadder && LeaderLadder->IsBusy()) && Confined.LeaderRoomSerial.Get(LeaderRef.GetMoveOrderSerial() + 1u) != LeaderRef.GetMoveOrderSerial())
 	{
 		const FVector2D EntryIn = Queue.EntryInside;
 		const FVector2D Away = (LeaderAt - EntryIn).GetSafeNormal();
