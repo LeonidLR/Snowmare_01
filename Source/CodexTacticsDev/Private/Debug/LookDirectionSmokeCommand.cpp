@@ -45,6 +45,9 @@ namespace LookDirectionSmoke
 		WalkLeg2,
 		RoofLevel,
 		RoofDown,
+		RampFootToRoof,
+		RoofSprintClear,
+		RoofSprintSettle,
 		SprintClearFacing,
 		SettleFacing,
 		SprintClearLook,
@@ -58,6 +61,16 @@ namespace LookDirectionSmoke
 		FVector RoofStandFeet = FVector::ZeroVector;
 		FVector Outward = FVector::ForwardVector;
 		FVector GroundBelow = FVector::ZeroVector;
+	};
+
+	struct FRampRoofSpot
+	{
+		bool bFound = false;
+		FString BuildingId;
+		FVector RampFoot = FVector::ZeroVector;
+		FVector RoofArrive = FVector::ZeroVector;
+		FVector RoofSprintGoal = FVector::ZeroVector;
+		float RoofZ = 0.f;
 	};
 
 	struct FState
@@ -85,6 +98,8 @@ namespace LookDirectionSmoke
 		int32 Leg2Bad = 0;
 
 		FRoofTestSpot RoofSpot;
+		FRampRoofSpot RampSpot;
+		FVector RoofSprintStart = FVector::ZeroVector;
 		float LevelAimPitch = 0.f;
 		float LevelPosePitch = 0.f;
 		float LevelMuzzlePitch = 0.f;
@@ -243,6 +258,120 @@ namespace LookDirectionSmoke
 				Out.RoofStandFeet = RoofNav.Location;
 				Out.Outward = Edge.Value;
 				Out.GroundBelow = GroundNav.Location;
+				return Out;
+			}
+		}
+		return Out;
+	}
+
+	FRampRoofSpot FindX6RampToRoof(UWorld* World)
+	{
+		FRampRoofSpot Out;
+		FString LevelText;
+		TSharedPtr<FJsonObject> Level;
+		const FString LevelFile = FPaths::ProjectContentDir() / TEXT("Data/LevelJson/L_Gen_Depot_1_X6.json");
+		FString LayoutRelPath;
+		if (!FFileHelper::LoadFileToString(LevelText, *LevelFile)
+			|| !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(LevelText), Level) || !Level.IsValid()
+			|| !Level->TryGetStringField(TEXT("levelgen_layout"), LayoutRelPath))
+		{
+			return Out;
+		}
+		FString LayoutText;
+		TSharedPtr<FJsonObject> Layout;
+		const TArray<TSharedPtr<FJsonValue>>* Buildings = nullptr;
+		if (!FFileHelper::LoadFileToString(LayoutText, *(FPaths::ProjectDir() / LayoutRelPath))
+			|| !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(LayoutText), Layout) || !Layout.IsValid()
+			|| !Layout->TryGetArrayField(TEXT("buildings"), Buildings) || !Buildings)
+		{
+			return Out;
+		}
+		double GroundZRaw = 0.0;
+		Layout->TryGetNumberField(TEXT("ground_z"), GroundZRaw);
+		const float GroundZ = static_cast<float>(GroundZRaw);
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		if (!Nav)
+		{
+			return Out;
+		}
+		for (const TSharedPtr<FJsonValue>& BV : *Buildings)
+		{
+			const TSharedPtr<FJsonObject> B = BV.IsValid() ? BV->AsObject() : nullptr;
+			if (!B.IsValid())
+			{
+				continue;
+			}
+			bool bWalkable = false;
+			B->TryGetBoolField(TEXT("roof_walkable"), bWalkable);
+			double FloorsRaw = 0.0;
+			const TArray<TSharedPtr<FJsonValue>>* Footprint = nullptr;
+			const TArray<TSharedPtr<FJsonValue>>* Stairs = nullptr;
+			if (!bWalkable || !B->TryGetNumberField(TEXT("floors"), FloorsRaw)
+				|| !B->TryGetArrayField(TEXT("footprint"), Footprint) || !Footprint || Footprint->Num() < 2
+				|| !B->TryGetArrayField(TEXT("stairs"), Stairs) || !Stairs)
+			{
+				continue;
+			}
+			const TArray<TSharedPtr<FJsonValue>>* MinArr = nullptr;
+			const TArray<TSharedPtr<FJsonValue>>* MaxArr = nullptr;
+			if (!(*Footprint)[0]->TryGetArray(MinArr) || !(*Footprint)[1]->TryGetArray(MaxArr)
+				|| !MinArr || !MaxArr || MinArr->Num() < 2 || MaxArr->Num() < 2)
+			{
+				continue;
+			}
+			const int32 Floors = static_cast<int32>(FloorsRaw);
+			const float RoofZ = GroundZ + static_cast<float>(Floors) * 300.f;
+			const FVector2D Min((*MinArr)[0]->AsNumber(), (*MinArr)[1]->AsNumber());
+			const FVector2D Max((*MaxArr)[0]->AsNumber(), (*MaxArr)[1]->AsNumber());
+			for (const TSharedPtr<FJsonValue>& SV : *Stairs)
+			{
+				const TSharedPtr<FJsonObject> S = SV.IsValid() ? SV->AsObject() : nullptr;
+				if (!S.IsValid())
+				{
+					continue;
+				}
+				FString Kind;
+				double FromRaw = 0.0, ToRaw = 0.0;
+				const TArray<TSharedPtr<FJsonValue>>* PosArr = nullptr;
+				const TArray<TSharedPtr<FJsonValue>>* TopArr = nullptr;
+				if (!S->TryGetStringField(TEXT("kind"), Kind) || Kind != TEXT("external")
+					|| !S->TryGetNumberField(TEXT("from"), FromRaw) || !S->TryGetNumberField(TEXT("to"), ToRaw)
+					|| static_cast<int32>(FromRaw) != 0 || static_cast<int32>(ToRaw) != Floors
+					|| !S->TryGetArrayField(TEXT("pos"), PosArr) || !PosArr || PosArr->Num() < 2
+					|| !S->TryGetArrayField(TEXT("top"), TopArr) || !TopArr || TopArr->Num() < 2)
+				{
+					continue;
+				}
+				const FVector2D Foot2D((*PosArr)[0]->AsNumber(), (*PosArr)[1]->AsNumber());
+				const FVector2D Top2D((*TopArr)[0]->AsNumber(), (*TopArr)[1]->AsNumber());
+				const FVector2D Mid2D = (Min + Max) * 0.5;
+				const FVector2D Inward = (Mid2D - Top2D).GetSafeNormal();
+				FNavLocation FootNav, ArriveNav, SprintNav;
+				if (!Nav->ProjectPointToNavigation(FVector(Foot2D.X, Foot2D.Y, GroundZ + 30.f), FootNav, FVector(120.f, 120.f, 150.f))
+					|| FMath::Abs(static_cast<float>(FootNav.Location.Z) - GroundZ) > 80.f)
+				{
+					continue;
+				}
+				const FVector ArriveQuery(Top2D.X + Inward.X * 150.f, Top2D.Y + Inward.Y * 150.f, RoofZ + 30.f);
+				if (!Nav->ProjectPointToNavigation(ArriveQuery, ArriveNav, FVector(150.f, 150.f, 150.f))
+					|| FMath::Abs(static_cast<float>(ArriveNav.Location.Z) - RoofZ) > 80.f)
+				{
+					continue;
+				}
+				const FVector2D Side(-Inward.Y, Inward.X);
+				const FVector SprintQuery(ArriveNav.Location.X + Side.X * 450.f, ArriveNav.Location.Y + Side.Y * 450.f, RoofZ + 30.f);
+				if (!Nav->ProjectPointToNavigation(SprintQuery, SprintNav, FVector(180.f, 180.f, 150.f))
+					|| FMath::Abs(static_cast<float>(SprintNav.Location.Z) - RoofZ) > 80.f
+					|| FVector::Dist2D(ArriveNav.Location, SprintNav.Location) < 250.f)
+				{
+					continue;
+				}
+				Out.bFound = true;
+				B->TryGetStringField(TEXT("id"), Out.BuildingId);
+				Out.RampFoot = FootNav.Location;
+				Out.RoofArrive = ArriveNav.Location;
+				Out.RoofSprintGoal = SprintNav.Location;
+				Out.RoofZ = RoofZ;
 				return Out;
 			}
 		}
@@ -472,7 +601,91 @@ namespace LookDirectionSmoke
 				FString::Printf(TEXT("Roof downward AO pitches skeleton down (spine->head %.1f -> %.1f, muzzle %.1f -> %.1f)"),
 					State.LevelPosePitch, DownPosePitch, State.LevelMuzzlePitch, DownMuzzlePitch));
 
-			// Part B check 1: SetFacingPoint must clear on plain move/sprint without F-1 returning after 3s.
+			// Part B repro: walk up a real X6 external ramp onto the roof, then clear stale lock/facing on sprint across the roof.
+			State.RampSpot = FindX6RampToRoof(World);
+			Check(State, State.RampSpot.bFound, TEXT("Found X6 external ramp to walkable roof for Part B ramp climb check"));
+			if (!State.RampSpot.bFound)
+			{
+				return Finish(State, false);
+			}
+			const float HalfH = Leader->GetCapsuleComponent() ? Leader->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 88.f;
+			Leader->ClearManualLookPoint();
+			Leader->StopOperative();
+			Leader->TeleportTo(State.RampSpot.RampFoot + FVector(0.f, 0.f, HalfH + 4.f),
+				(State.RampSpot.RoofArrive - State.RampSpot.RampFoot).GetSafeNormal2D().Rotation(), false, true);
+			// Arm stale facing + look before climbing the ramp, then walk up the ramp onto the roof.
+			Leader->SetFacingPoint(State.RampSpot.RampFoot - (State.RampSpot.RoofArrive - State.RampSpot.RampFoot).GetSafeNormal2D() * 400.f);
+			Check(State, Leader->OrderMoveTo(State.RampSpot.RoofArrive, false) == EOperativeOrderResult::Accepted,
+				FString::Printf(TEXT("Ramp climb to %s roof accepted"), *State.RampSpot.BuildingId));
+			Next(State, EStage::RampFootToRoof);
+			return true;
+		}
+		case EStage::RampFootToRoof:
+		{
+			if (!Leader)
+			{
+				return Finish(State, false);
+			}
+			const float HalfH = Leader->GetCapsuleComponent() ? Leader->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 88.f;
+			const float FeetZ = static_cast<float>(Leader->GetActorLocation().Z) - HalfH;
+			const bool bOnRoof = FMath::Abs(FeetZ - State.RampSpot.RoofZ) < 80.f
+				&& FVector::Dist2D(Leader->GetActorLocation(), State.RampSpot.RoofArrive) < 140.f
+				&& Leader->GetVelocity().Size2D() < 15.f;
+			if (!bOnRoof && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(State, bOnRoof, FString::Printf(TEXT("Climbed %s ramp onto roof (feet Z %.0f vs roof %.0f, %.1f s)"),
+				*State.RampSpot.BuildingId, FeetZ, State.RampSpot.RoofZ, State.StageTime));
+			if (!bOnRoof)
+			{
+				return Finish(State, false);
+			}
+			// Simulate Shift+click look + SetFacingPoint on the roof after ramp climb, then plain sprint across the roof.
+			State.RoofSprintStart = Leader->GetActorLocation();
+			const float RoofSprintYaw = static_cast<float>((State.RampSpot.RoofSprintGoal - State.RoofSprintStart).Rotation().Yaw);
+			Leader->SetFacingPoint(State.RoofSprintStart - (State.RampSpot.RoofSprintGoal - State.RoofSprintStart).GetSafeNormal2D() * 400.f);
+			Leader->SetManualLookDirection(FRotator::NormalizeAxis(RoofSprintYaw - 110.f), 0.f);
+			Check(State, Leader->OrderMoveTo(State.RampSpot.RoofSprintGoal, true) == EOperativeOrderResult::Accepted,
+				TEXT("Roof plain sprint after ramp climb accepted"));
+			Check(State, !Leader->HasManualLookPoint(), TEXT("Roof sprint after ramp climb clears ManualLookPoint"));
+			Next(State, EStage::RoofSprintClear);
+			return true;
+		}
+		case EStage::RoofSprintClear:
+		{
+			if (!Leader)
+			{
+				return Finish(State, false);
+			}
+			const bool bArrived = FVector::Dist2D(Leader->GetActorLocation(), State.RampSpot.RoofSprintGoal) < 130.f
+				&& Leader->GetVelocity().Size2D() < 10.f;
+			if (!bArrived && State.StageTime < 10.f)
+			{
+				return true;
+			}
+			Check(State, bArrived, FString::Printf(TEXT("Roof sprint after ramp climb arrived (%.1f s)"), State.StageTime));
+			Next(State, EStage::RoofSprintSettle);
+			return true;
+		}
+		case EStage::RoofSprintSettle:
+		{
+			if (!Leader)
+			{
+				return Finish(State, false);
+			}
+			if (State.StageTime < 3.5f)
+			{
+				return true; // wait past F-1's 3.0 s quiet delay to confirm SetFacingPoint did not survive
+			}
+			const float TravelYaw = static_cast<float>((State.RampSpot.RoofSprintGoal - State.RoofSprintStart).Rotation().Yaw);
+			const float FinalYaw = static_cast<float>(Leader->GetActorRotation().Yaw);
+			const float OffDeg = FMath::Abs(FMath::FindDeltaAngleDegrees(FinalYaw, TravelYaw));
+			Check(State, OffDeg <= 15.f,
+				FString::Printf(TEXT("After ramp climb, roof sprint arrival holds travel yaw +-15 deg past 3.5s (got %.1f, travel %.1f, off %.1f)"),
+					FinalYaw, TravelYaw, OffDeg));
+
+			// Part B arena check 1: SetFacingPoint must clear on plain move/sprint without F-1 returning after 3s.
 			const float HalfH = Leader->GetCapsuleComponent() ? Leader->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 88.f;
 			Leader->ClearManualLookPoint();
 			Leader->TeleportTo(State.ArenaOrigin + FVector(0.f, 0.f, HalfH + 4.f), FRotator(0.f, State.ArenaForward.Rotation().Yaw, 0.f), false, true);
