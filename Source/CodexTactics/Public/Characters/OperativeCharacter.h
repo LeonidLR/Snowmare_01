@@ -459,10 +459,13 @@ public:
 	bool IsStealthFast() const { return bStealthMode && bStealthFast; }
 	bool CanStealthFast() const;
 	void SetStealthFast(bool bFast);
-	/** Look hold outside stealth (059, solo walk / jog / crouch / prone strafe). */
+	/** Look hold outside stealth (059, solo walk / jog / crouch / prone strafe; 145: fixed world direction). */
 	void SetManualLookPoint(const FVector& WorldPoint);
+	void SetManualLookDirection(float YawDeg, float PitchDeg = 0.f);
 	void ClearManualLookPoint();
 	bool HasManualLookPoint() const { return bHasManualLookPoint; }
+	float GetManualLookYawDeg() const { return ManualLookYawDeg; }
+	float GetManualLookPitchDeg() const { return ManualLookPitchDeg; }
 	/** CoverIndoor aim offset: a Shift-click look while the corner peek is up. A new plain peek or leaving the corner turns it off. */
 	bool WantsCornerLookPose() const;
 	bool GetManualLookPoint(FVector& OutPoint) const;
@@ -3669,6 +3672,10 @@ private:
 	bool bCornerLookPose = false;
 	UPROPERTY(Transient)
 	FVector ManualLookPoint = FVector::ZeroVector;
+	UPROPERTY(Transient)
+	float ManualLookYawDeg = 0.f;
+	UPROPERTY(Transient)
+	float ManualLookPitchDeg = 0.f;
 	TWeakObjectPtr<AActor> StealthAutoLookActor;
 	uint32 StealthAutoLookTargetId = 0;
 	UPROPERTY(Transient)

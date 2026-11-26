@@ -803,11 +803,15 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			Targets.Add(Leader);
 		}
 		bool bSetAny = false;
+		const AOperativeCharacter* RefOp = (!Targets.IsEmpty() && Targets[0]) ? Targets[0] : nullptr;
+		const LookHoldRules::FLookDirection SharedDir = RefOp
+			? LookHoldRules::DirectionFromClick(RefOp->GetActorLocation(), Hit.ImpactPoint)
+			: LookHoldRules::FLookDirection{};
 		for (AOperativeCharacter* Op : Targets)
 		{
 			if (Op && LookHoldRules::IsValidLookPoint(Hit.ImpactPoint, Op->GetActorLocation()))
 			{
-				Op->SetManualLookPoint(Hit.ImpactPoint);
+				Op->SetManualLookDirection(SharedDir.YawDeg, SharedDir.PitchDeg);
 				bSetAny = true;
 			}
 		}

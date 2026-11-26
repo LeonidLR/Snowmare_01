@@ -67,4 +67,17 @@ namespace LookHoldRules
 
 	/** Clamps residual twist angle to +/- LimitDeg. If LimitDeg < 0, uses config StandingMaxTwistDeg. */
 	CODEXTACTICS_API float ClampResidualTwist(float TwistDeg, float LimitDeg = -1.f);
+
+	/** Locked world look direction (variant B, task 145). */
+	struct CODEXTACTICS_API FLookDirection
+	{
+		float YawDeg = 0.f;
+		float PitchDeg = 0.f;
+	};
+
+	/** Compute fixed world yaw + pitch from OperativeLocation to ClickPoint at the moment of the click. */
+	CODEXTACTICS_API FLookDirection DirectionFromClick(const FVector& OperativeLocation, const FVector& ClickPoint);
+
+	/** Project a synthetic look target along the locked compass direction from the operative's current position. */
+	CODEXTACTICS_API FVector ProjectLookPoint(const FVector& OperativeLocation, float YawDeg, float PitchDeg = 0.f, float DistanceCm = 1000.f);
 }

@@ -202,4 +202,28 @@ bool FLookHoldTwistLimitsTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLookHoldDirectionLockTest, "CodexTactics.Tactics.LookHold.DirectionLock",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FLookHoldDirectionLockTest::RunTest(const FString&)
+{
+	using namespace LookHoldRules;
+
+	const FVector Start(0.f, 0.f, 0.f);
+	const FVector ClickEast(600.f, 0.f, 100.f);
+	const FLookDirection Dir = DirectionFromClick(Start, ClickEast);
+	TestTrue(TEXT("Click east gives yaw ~0"), FMath::Abs(Dir.YawDeg) < 0.01f);
+	TestTrue(TEXT("Click above gives positive pitch"), Dir.PitchDeg > 5.f && Dir.PitchDeg < 20.f);
+
+	// L-shaped walk: leg 1 moves north (+Y), leg 2 moves east (+X); projected look stays east (~0 deg) on both legs
+	const FVector Leg1Pos(0.f, 500.f, 0.f);
+	const FVector Leg2Pos(400.f, 500.f, 0.f);
+	const float Yaw1 = static_cast<float>((ProjectLookPoint(Leg1Pos, Dir.YawDeg, Dir.PitchDeg) - Leg1Pos).Rotation().Yaw);
+	const float Yaw2 = static_cast<float>((ProjectLookPoint(Leg2Pos, Dir.YawDeg, Dir.PitchDeg) - Leg2Pos).Rotation().Yaw);
+	TestTrue(TEXT("Leg 1 keeps locked east yaw"), FMath::Abs(FMath::FindDeltaAngleDegrees(Yaw1, Dir.YawDeg)) < 0.01f);
+	TestTrue(TEXT("Leg 2 keeps locked east yaw"), FMath::Abs(FMath::FindDeltaAngleDegrees(Yaw2, Dir.YawDeg)) < 0.01f);
+
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
