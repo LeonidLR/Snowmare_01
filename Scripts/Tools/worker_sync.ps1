@@ -254,8 +254,9 @@ try {
             & git -C $BinariesFrom fetch --quiet origin 2>$null
             $onRemote = @(& git -C $BinariesFrom branch -r --contains $Ref 2>$null).Count -gt 0
             if (-not $onRemote) {
-                # Lane validation ships code by bundle; never upload LFS objects implicitly.
-                Say "ship: code bundle only (no LFS push)"
+                Say "lfs: pushing LFS objects for $($Ref.Substring(0,8)) to origin (refs stay unpushed)"
+                & git -C $BinariesFrom lfs push origin $Ref 2>&1 | Out-Host
+                if ($LASTEXITCODE -ne 0) { throw "LFS-FAILED: git lfs push origin $Ref failed (exit $LASTEXITCODE)" }
                 $bundle = Join-Path ([IO.Path]::GetTempPath()) "worker_sync-$Token.bundle"
                 try {
                     $bundleRef = New-WorkerCommitBundle $BinariesFrom $Ref $bundle $Token
