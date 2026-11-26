@@ -379,4 +379,12 @@ namespace CoverFacingRules
 	 */
 	CODEXTACTICS_API ECoverEntryTurn DecideCoverEntryTurn(bool bQuiet, bool bHasEnterClip, bool bCornerPeekArrival, float ArrivalYawDeg, float WallNormalYawDeg,
 		const FCoverFacingConfig& Config = FCoverFacingConfig(), bool bPeekStanceArrival = false);
+
+	/**
+	 * G023 roof / low-cover fire origin: aiming over low cover (40-130 cm, including 95-100 cm X6 roof parapets)
+	 * rises to at least StandingMuzzleCm / WallTopCm + ClearanceCm (clamped to MaxHeightCm) and leans forward
+	 * LeanCm into -WallNormal so crouched idle and downward shots from roofs clear the parapet top.
+	 */
+	CODEXTACTICS_API FVector OverTopFirePoint(const FVector& Feet, const FVector& WallNormal, float WallTopCm,
+		float StandingMuzzleCm = 140.f, float ClearanceCm = 22.f, float MaxHeightCm = 165.f, float LeanCm = 35.f);
 }

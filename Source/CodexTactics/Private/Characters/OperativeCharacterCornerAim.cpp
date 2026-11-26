@@ -837,7 +837,10 @@ EPeekSightPose AOperativeCharacter::GetPeekSightPose() const
 	{
 		return EPeekSightPose::None;
 	}
-	return PeekSightRules::DecidePose(CurrentCoverHeight, Stance, bCornerAimActive, IsManualCornerPeekSpot() || IsCornerHoldSpot());
+	const bool bOverTopParapet = !IsInStealthMode() && !IsCoverShotBlind() && CurrentCoverHeight == ECoverHeight::LowCover
+		&& CoverSlot.WallTopCm > 0.f && CoverSlot.WallTopCm <= 105.f && Stance != EOperativeStance::Prone
+		&& !IsManualCornerPeekSpot() && !IsCornerHoldSpot();
+	return PeekSightRules::DecidePose(CurrentCoverHeight, Stance, bCornerAimActive || bOverTopParapet, IsManualCornerPeekSpot() || IsCornerHoldSpot());
 }
 
 bool AOperativeCharacter::GetPeekSight(FVector& OutEye, FVector& OutDirection) const
@@ -859,7 +862,8 @@ bool AOperativeCharacter::GetPeekSight(FVector& OutEye, FVector& OutDirection) c
 		return true;
 	}
 	// Over the top of a low wall: the head above its top, looking across it.
-	OutEye = PeekSightRules::OverTopEyePoint(PeekSightConfig, Feet, CoverSlot.WallNormal, EyeCm, CoverSlot.WallTopCm);
+	const float EffectiveEyeCm = (CoverSlot.WallTopCm > 0.f && CoverSlot.WallTopCm <= 105.f) ? FMath::Max(EyeCm, 140.f) : EyeCm;
+	OutEye = PeekSightRules::OverTopEyePoint(PeekSightConfig, Feet, CoverSlot.WallNormal, EffectiveEyeCm, CoverSlot.WallTopCm);
 	OutDirection = (-CoverSlot.WallNormal).GetSafeNormal2D();
 	return true;
 }

@@ -45,3 +45,25 @@ FVector GrenadeRules::ArcPoint(const FVector& Start, const FVector& End, float P
 	Point.Z += FMath::Sin(T * PI) * ArcHeight;
 	return Point;
 }
+
+float GrenadeRules::ThrowYaw(const FVector& From, const FVector& Target, float FallbackYaw)
+{
+	const FVector Direction = (Target - From).GetSafeNormal2D();
+	return Direction.IsNearlyZero() ? FRotator::NormalizeAxis(FallbackYaw)
+		: static_cast<float>(FRotator::NormalizeAxis(Direction.Rotation().Yaw));
+}
+
+float GrenadeRules::ThrowErrorDeg(float CurrentYaw, float TargetYaw)
+{
+	return FMath::Abs(FRotator::NormalizeAxis(TargetYaw - CurrentYaw));
+}
+
+bool GrenadeRules::NeedsPreTurn(float ErrorDeg, float TriggerDeg)
+{
+	return ErrorDeg > FMath::Max(TriggerDeg, 0.f);
+}
+
+float GrenadeRules::StepThrowYaw(float CurrentYaw, float TargetYaw, float InTurnRateDegPerSec, float DeltaSeconds)
+{
+	return FMath::FixedTurn(CurrentYaw, TargetYaw, FMath::Max(InTurnRateDegPerSec, 0.f) * FMath::Max(DeltaSeconds, 0.f));
+}

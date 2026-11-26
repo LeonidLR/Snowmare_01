@@ -413,4 +413,13 @@ namespace CoverFacingRules
 		}
 		return ECoverEntryTurn::EnterClip;
 	}
+
+	FVector OverTopFirePoint(const FVector& Feet, const FVector& WallNormal, float WallTopCm,
+		float StandingMuzzleCm, float ClearanceCm, float MaxHeightCm, float LeanCm)
+	{
+		const float MinClearHeight = WallTopCm > 0.f ? WallTopCm + FMath::Max(ClearanceCm, 0.f) : StandingMuzzleCm;
+		const float Height = FMath::Clamp(FMath::Max(StandingMuzzleCm, MinClearHeight), 0.f, FMath::Max(StandingMuzzleCm, MaxHeightCm));
+		const FVector Forward = (-WallNormal).GetSafeNormal2D();
+		return Feet + Forward * FMath::Max(LeanCm, 0.f) + FVector(0.f, 0.f, Height);
+	}
 }

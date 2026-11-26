@@ -678,6 +678,28 @@ bool FCoverAutoFirePoseReachTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+COVER_FACING_TEST(FCoverOverTopFirePointTest, "FireAt.OverTopFirePoint")
+bool FCoverOverTopFirePointTest::RunTest(const FString& Parameters)
+{
+	using namespace CoverFacingRules;
+	const FVector Feet(0.f, 0.f, 900.f);
+	const FVector WallNormal(-1.f, 0.f, 0.f); // wall faces -X (back to wall), shooter fires toward +X (-WallNormal)
+	// 95 cm X6 kit parapet: raises from crouched muzzle (85 cm) to standing 140 cm and leans 35 cm forward into -WallNormal.
+	const FVector P95 = OverTopFirePoint(Feet, WallNormal, 95.f);
+	TestTrue(TEXT("95 cm parapet: X leans +35 cm, Z rises to Feet.Z + 140 cm"), P95.Equals(FVector(35.f, 0.f, 1040.f), 0.01f));
+	// Steep downward line to a ground PMC 20 m away, 9 m below clear of a parapet outer edge 70 cm in front of Feet (35 cm past leaned muzzle):
+	const FVector GroundPmc(2000.f, 0.f, 90.f);
+	const FVector AtOuterParapet = FMath::Lerp(P95, GroundPmc, (70.f - P95.X) / (GroundPmc.X - P95.X));
+	TestTrue(TEXT("20 m downward line from 9 m roof clears a 100 cm parapet top"), AtOuterParapet.Z > 1000.f + 15.f);
+	// Taller 128 cm low wall: adds ClearanceCm (22 cm -> 150 cm).
+	const FVector P128 = OverTopFirePoint(Feet, WallNormal, 128.f);
+	TestTrue(TEXT("128 cm low cover: clears top + 22 cm"), P128.Equals(FVector(35.f, 0.f, 1050.f), 0.01f));
+	// Unmeasured wall top (0 cm) still uses standing height + lean.
+	const FVector P0 = OverTopFirePoint(Feet, WallNormal, 0.f);
+	TestTrue(TEXT("0 cm fallback still clears to standing height"), P0.Equals(FVector(35.f, 0.f, 1040.f), 0.01f));
+	return true;
+}
+
 #undef COVER_FACING_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS
