@@ -43,6 +43,7 @@
 #include "Interactables/LootCrateActor.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Subsystems/CodexEventBus.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Tactics/CoverDecisionRules.h"
 #include "Tactics/CoverRules.h"
@@ -55,11 +56,19 @@ void AOperativeCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDama
 {
 	LastDamageType = Spec.DamageType;
 	LastDamageAmount = FinalDamage;
+	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+	{
+		Recorder->RecordDamage(Spec.AttackerSource, this, FinalDamage, Spec.DamageOrigin);
+	}
 	// G026: a heavy hit during a mantle or a vault does not pull him back. The climb finishes (MantleRules::TraversalCompletes).
 }
 
 void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 {
+	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+	{
+		Recorder->RecordKillOrDown(this, AttackerSource, IsPlayerTeam());
+	}
 	if (bInCover)
 	{
 		LeaveCover(TEXT("died"));

@@ -2569,6 +2569,8 @@ public:
 	bool IsReturningToOrderedFacing() const { return bReturningToOrderedFacing; }
 	/** World time of his last shot (any target / point), s. */
 	double GetLastShotTime() const { return LastShotTime; }
+	/** World time of last incoming shot / under-fire event, s (-1e9 if never). */
+	double GetUnderFireTime() const { return UnderFireTime; }
 	void ClearIdleFacing() { bHasIdleFacing = false; }
 
 	// --- Formation look sectors (Codex.Formation.Sectors, docs/design/FORMATION_SECTORS.md; driven by USquadSubsystem) -------------

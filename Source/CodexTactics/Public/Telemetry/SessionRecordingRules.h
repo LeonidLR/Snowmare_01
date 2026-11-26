@@ -93,12 +93,33 @@ struct FDemoOp
 	int32 Clip = 0;
 	int32 Reserve = 0;
 	int32 ThreatCount = 0;
+	int32 SeenByEnemy = 0;
+	double UnderFireSeconds = -1.;
+	float HeightAboveGroundCm = 0.f;
+	float ScanPitchDeg = 0.f;
 	uint8 Stance = 0;
 	bool bAlive = false;
 	bool bMoving = false;
 	bool bCover = false;
+	bool bStealth = false;
 	bool bSelected = false;
 	bool bLeader = false;
+};
+
+struct FDemoEvent
+{
+	enum class EType : uint8 { ShotHit, Damage, Kill, Down, Stealth, Cover, Climb };
+	EType Type = EType::ShotHit;
+	double Time = 0.;
+	double RealTime = 0.;
+	FName Who;
+	FName Whom;
+	FName Weapon;
+	FName Kind;
+	float Amount = 0.f;
+	float DistanceCm = -1.f;
+	bool bFlag = false;
+	bool bCoveredByAlly = false;
 };
 
 struct FDemoUnit
@@ -149,6 +170,7 @@ struct FDemoSession
 	TArray<FDemoUnit> Units;
 	TArray<FDemoFrame> Frames;
 	TArray<FDemoRoundEvent> Rounds;
+	TArray<FDemoEvent> Events;
 	TArray<FDemoOp> Ops;
 	TArray<FDemoThreat> Threats;
 	FString Mark;

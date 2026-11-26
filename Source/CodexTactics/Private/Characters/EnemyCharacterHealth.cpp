@@ -19,6 +19,7 @@
 #include "Combat/WaveVictorySubsystem.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Core/PlayerCommands.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -78,6 +79,10 @@ void AEnemyCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDamage)
 	}
 	LastDamageType = Spec.DamageType;
 	LastDamageAmount = FinalDamage;
+	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+	{
+		Recorder->RecordDamage(Spec.AttackerSource, this, FinalDamage, Spec.DamageOrigin);
+	}
 	if (!Spec.DamageOrigin.IsZero())
 	{
 		LastHitDirection = (GetActorLocation() - Spec.DamageOrigin).GetSafeNormal();
@@ -137,6 +142,10 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 	}
 
 	bIsDying = true;
+	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+	{
+		Recorder->RecordKillOrDown(this, AttackerSource, false);
+	}
 	const bool bDownAtDeath = IsKnockedDown(); // the knockdown plays its own Death_* from the ground (a death pose too)
 	Tags.Remove(FName(TEXT("Enemy")));
 	if (UEnemyTacticsSubsystem* Tactics = GetWorld()->GetSubsystem<UEnemyTacticsSubsystem>())

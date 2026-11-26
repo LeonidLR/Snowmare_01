@@ -113,6 +113,9 @@ void USessionRecordingSubsystem::Start(const FString& Directory)
 	Session.Threats.Reserve(SessionRecordingRules::MaxThreats * ReserveFrames);
 	Session.Units.Reserve(8);
 	LastOrders.Reset(8);
+	LastHitsByVictim.Reset();
+	GroundReferenceZ = 0.;
+	bHasGroundReference = false;
 	Suppressed = NAME_None;
 	bRecording = true;
 }
@@ -226,6 +229,186 @@ void USessionRecordingSubsystem::RecordSectorRound(const FDemoRoundEvent& Event)
 	Stored.RealTime = FMath::Max(0., FPlatformTime::Seconds() - RealStart);
 }
 
+void USessionRecordingSubsystem::RecordShotHit(const AActor* Shooter, const AActor* Victim, FName WeaponId, float Damage, float DistanceCm)
+{
+	if (!bRecording || !Suppressed.IsNone() || !GetWorld() || !Shooter || !Victim)
+	{
+		return;
+	}
+	const FName Who = Shooter->GetFName();
+	const FName Whom = Victim->GetFName();
+	LastHitsByVictim.Add(Whom, FLastHitContext{ Who, WeaponId, DistanceCm, Shooter });
+	FDemoEvent& Event = Session.Events.AddDefaulted_GetRef();
+	Event.Type = FDemoEvent::EType::ShotHit;
+	Event.Time = FMath::Max(0., GetWorld()->GetTimeSeconds() - GameStart);
+	Event.RealTime = FMath::Max(0., FPlatformTime::Seconds() - RealStart);
+	Event.Who = Who;
+	Event.Whom = Whom;
+	Event.Weapon = WeaponId;
+	Event.Amount = Damage;
+	Event.DistanceCm = DistanceCm;
+}
+
+void USessionRecordingSubsystem::RecordDamage(const FString& AttackerSource, const AActor* Victim, float Damage, const FVector& DamageOrigin)
+{
+	if (!bRecording || !Suppressed.IsNone() || !GetWorld() || !Victim || Damage <= 0.f)
+	{
+		return;
+	}
+	const FName Whom = Victim->GetFName();
+	FName Who = AttackerSource.IsEmpty() ? FName(TEXT("Unknown")) : FName(*AttackerSource);
+	float DistCm = DamageOrigin.IsZero() ? -1.f : static_cast<float>(FVector::Dist2D(Victim->GetActorLocation(), DamageOrigin));
+	if (const FLastHitContext* Hit = LastHitsByVictim.Find(Whom))
+	{
+		if (Hit->Shooter.IsValid() && DistCm < 0.f)
+		{
+			DistCm = Hit->DistanceCm;
+		}
+		if (!Hit->Who.IsNone())
+		{
+			Who = Hit->Who;
+		}
+	}
+	FDemoEvent& Event = Session.Events.AddDefaulted_GetRef();
+	Event.Type = FDemoEvent::EType::Damage;
+	Event.Time = FMath::Max(0., GetWorld()->GetTimeSeconds() - GameStart);
+	Event.RealTime = FMath::Max(0., FPlatformTime::Seconds() - RealStart);
+	Event.Who = Who;
+	Event.Whom = Whom;
+	Event.Amount = Damage;
+	Event.DistanceCm = DistCm;
+}
+
+void USessionRecordingSubsystem::RecordKillOrDown(const AActor* Victim, const FString& AttackerSource, bool bIsDown)
+{
+	if (!bRecording || !Suppressed.IsNone() || !GetWorld() || !Victim)
+	{
+		return;
+	}
+	const UWorld& World = *GetWorld();
+	const FName Whom = Victim->GetFName();
+	FName Who = AttackerSource.IsEmpty() ? FName(TEXT("Unknown")) : FName(*AttackerSource);
+	FName Weapon = NAME_None;
+	float DistCm = -1.f;
+	const AActor* KillerActor = nullptr;
+	if (const FLastHitContext* Hit = LastHitsByVictim.Find(Whom))
+	{
+		if (!Hit->Who.IsNone()) { Who = Hit->Who; }
+		Weapon = Hit->Weapon;
+		DistCm = Hit->DistanceCm;
+		KillerActor = Hit->Shooter.Get();
+	}
+	bool bAware = false;
+	bool bCoveredByAlly = false;
+	const UTacticalSightSubsystem* Sight = World.GetSubsystem<UTacticalSightSubsystem>();
+	const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(&World);
+	if (const AOperativeCharacter* VictimOp = Cast<AOperativeCharacter>(Victim))
+	{
+		if (VictimOp->IsPlayerTeam())
+		{
+			bAware = (KillerActor && Sight && Sight->IsVisibleToSquad(KillerActor))
+				|| (World.GetTimeSeconds() - VictimOp->GetUnderFireTime() <= 5.0);
+			if (const USquadSubsystem* Squad = World.GetSubsystem<USquadSubsystem>())
+			{
+				for (const TWeakObjectPtr<AOperativeCharacter>& Ref : Squad->GetMemberRefs())
+				{
+					const AOperativeCharacter* Ally = Ref.Get();
+					if (Ally && Ally != VictimOp && SessionRecordingRuntime::Alive(*Ally)
+						&& FVector::Dist2D(Ally->GetActorLocation(), VictimOp->GetActorLocation()) <= 2500.f)
+					{
+						bCoveredByAlly = true;
+						break;
+					}
+				}
+			}
+		}
+		else
+		{
+			bAware = (KillerActor && Pmc && Pmc->IsVisibleToTeam(VictimOp->TeamId, KillerActor))
+				|| (World.GetTimeSeconds() - VictimOp->GetUnderFireTime() <= 5.0);
+			if (Pmc)
+			{
+				Pmc->ForEachHostileOperative([&](const AOperativeCharacter& Ally)
+				{
+					if (&Ally != VictimOp && SessionRecordingRuntime::Alive(Ally)
+						&& Ally.TeamId == VictimOp->TeamId
+						&& FVector::Dist2D(Ally.GetActorLocation(), VictimOp->GetActorLocation()) <= 2500.f)
+					{
+						bCoveredByAlly = true;
+					}
+				});
+			}
+		}
+	}
+	else if (const AEnemyCharacter* VictimEnemy = Cast<AEnemyCharacter>(Victim))
+	{
+		bAware = VictimEnemy->GetCurrentTarget() != nullptr;
+		UEnemyRegistrySubsystem::ForEachEnemyCharacter(&World, [&](const AEnemyCharacter& Ally)
+		{
+			if (&Ally != VictimEnemy && Ally.GetHealthComponent() && Ally.GetHealthComponent()->IsAlive()
+				&& FVector::Dist2D(Ally.GetActorLocation(), VictimEnemy->GetActorLocation()) <= 2500.f)
+			{
+				bCoveredByAlly = true;
+			}
+		});
+	}
+	FDemoEvent& Event = Session.Events.AddDefaulted_GetRef();
+	Event.Type = bIsDown ? FDemoEvent::EType::Down : FDemoEvent::EType::Kill;
+	Event.Time = FMath::Max(0., World.GetTimeSeconds() - GameStart);
+	Event.RealTime = FMath::Max(0., FPlatformTime::Seconds() - RealStart);
+	Event.Who = Who;
+	Event.Whom = Whom;
+	Event.Weapon = Weapon;
+	Event.DistanceCm = DistCm;
+	Event.bFlag = bAware;
+	Event.bCoveredByAlly = bCoveredByAlly;
+	LastHitsByVictim.Remove(Whom);
+}
+
+void USessionRecordingSubsystem::RecordStealth(const AOperativeCharacter* Op, bool bEnabled)
+{
+	if (!bRecording || !Suppressed.IsNone() || !GetWorld() || !Op)
+	{
+		return;
+	}
+	FDemoEvent& Event = Session.Events.AddDefaulted_GetRef();
+	Event.Type = FDemoEvent::EType::Stealth;
+	Event.Time = FMath::Max(0., GetWorld()->GetTimeSeconds() - GameStart);
+	Event.RealTime = FMath::Max(0., FPlatformTime::Seconds() - RealStart);
+	Event.Who = Op->GetFName();
+	Event.bFlag = bEnabled;
+}
+
+void USessionRecordingSubsystem::RecordCover(const AOperativeCharacter* Op, bool bEntered, FName HeightName)
+{
+	if (!bRecording || !Suppressed.IsNone() || !GetWorld() || !Op)
+	{
+		return;
+	}
+	FDemoEvent& Event = Session.Events.AddDefaulted_GetRef();
+	Event.Type = FDemoEvent::EType::Cover;
+	Event.Time = FMath::Max(0., GetWorld()->GetTimeSeconds() - GameStart);
+	Event.RealTime = FMath::Max(0., FPlatformTime::Seconds() - RealStart);
+	Event.Who = Op->GetFName();
+	Event.Kind = HeightName;
+	Event.bFlag = bEntered;
+}
+
+void USessionRecordingSubsystem::RecordClimb(const AActor* Op, FName Kind, float HeightCm)
+{
+	if (!bRecording || !Suppressed.IsNone() || !GetWorld() || !Op)
+	{
+		return;
+	}
+	FDemoEvent& Event = Session.Events.AddDefaulted_GetRef();
+	Event.Type = FDemoEvent::EType::Climb;
+	Event.Time = FMath::Max(0., GetWorld()->GetTimeSeconds() - GameStart);
+	Event.RealTime = FMath::Max(0., FPlatformTime::Seconds() - RealStart);
+	Event.Who = Op->GetFName();
+	Event.Kind = Kind;
+	Event.Amount = HeightCm;
+}
+
 void USessionRecordingSubsystem::RecordMode(EDemoMode Mode, bool bOn)
 {
 	if (SuppressDepth > 0) { return; }
@@ -299,17 +482,29 @@ void USessionRecordingSubsystem::Capture(FDemoFrame& Frame, const AOperativeChar
 
 	FVector Centre = FVector::ZeroVector;
 	Session.Alive = 0;
+	TArray<const AOperativeCharacter*, TInlineAllocator<8>> CapturedOps;
 	for (const TWeakObjectPtr<AOperativeCharacter>& Ref : Squad->GetMemberRefs())
 	{
 		const AOperativeCharacter* Op = Ref.Get();
 		if (!Op) { continue; }
+		const double FeetZ = Op->GetActorLocation().Z - Op->GetSimpleCollisionHalfHeight();
+		if (!bHasGroundReference || FeetZ < GroundReferenceZ)
+		{
+			GroundReferenceZ = FeetZ;
+			bHasGroundReference = true;
+		}
 		FDemoOp& View = Session.Ops.AddDefaulted_GetRef();
+		CapturedOps.Add(Op);
 		View.Id = Op->GetFName();
 		View.Position = Op->GetActorLocation();
 		View.Yaw = Op->GetActorRotation().Yaw;
 		View.bAlive = Alive(*Op);
 		View.bMoving = Op->IsMoving();
 		View.bCover = Op->bInCover;
+		View.bStealth = Op->IsInStealthMode();
+		View.HeightAboveGroundCm = FMath::Max(0.f, static_cast<float>(FeetZ - GroundReferenceZ));
+		View.UnderFireSeconds = Op->GetUnderFireTime() > -1.0e8 ? FMath::Max(0., World.GetTimeSeconds() - Op->GetUnderFireTime()) : -1.;
+		View.ScanPitchDeg = Op->GetFormationLookPitch().IsSet() ? Op->GetFormationLookPitch().GetValue() : 0.f;
 		View.bSelected = bHasSelection ? View.bAlive && Squad->IsGroupSelected(Op) : Op == Selected;
 		View.bLeader = Op == Squad->GetFormationLeader();
 		View.Stance = static_cast<uint8>(Op->GetStance());
@@ -365,11 +560,34 @@ void USessionRecordingSubsystem::Capture(FDemoFrame& Frame, const AOperativeChar
 	};
 	UEnemyRegistrySubsystem::ForEachEnemyCharacter(&World, [&](const AEnemyCharacter& Enemy)
 	{
-		if (const UHealthComponent* Health = Enemy.GetHealthComponent(); Health && Health->IsAlive()) { Visit(Enemy); }
+		if (const UHealthComponent* Health = Enemy.GetHealthComponent(); Health && Health->IsAlive())
+		{
+			Visit(Enemy);
+			for (int32 Index = 0; Index < CapturedOps.Num(); ++Index)
+			{
+				if (Enemy.GetCurrentTarget() == CapturedOps[Index])
+				{
+					++Session.Ops[Frame.FirstOp + Index].SeenByEnemy;
+				}
+			}
+		}
 	});
 	if (const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(&World))
 	{
-		Pmc->ForEachHostileOperative([&](const AOperativeCharacter& Op) { if (Alive(Op)) { Visit(Op); } });
+		Pmc->ForEachHostileOperative([&](const AOperativeCharacter& Op)
+		{
+			if (Alive(Op))
+			{
+				Visit(Op);
+				for (int32 Index = 0; Index < CapturedOps.Num(); ++Index)
+				{
+					if (Pmc->IsVisibleToTeam(Op.TeamId, CapturedOps[Index]))
+					{
+						++Session.Ops[Frame.FirstOp + Index].SeenByEnemy;
+					}
+				}
+			}
+		});
 	}
 	for (const FNearest& Entry : Nearest) { Session.Threats.Add(Describe(*Entry.Actor)); }
 	Frame.NumThreats = Nearest.Num();
@@ -532,6 +750,11 @@ void USessionRecordingSubsystem::RecordOrderAt(double Time, const FDemoFacts& Fa
 	Frame.RealTime = Time;
 	Frame.Facts = Facts;
 	EndOrder(AppendOrder(Frame, nullptr));
+}
+
+void USessionRecordingSubsystem::RecordEventAt(const FDemoEvent& Event)
+{
+	Session.Events.Add(Event);
 }
 
 void USessionRecordingSubsystem::SnapshotAt(double Time)
