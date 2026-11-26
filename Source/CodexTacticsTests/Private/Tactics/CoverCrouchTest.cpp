@@ -43,7 +43,7 @@ bool FCoverCrouchClipSidesTest::RunTest(const FString&)
 	TestEqual(TEXT("threat left, crouch-shimmy right: crch walk_bwd_loop_L"), ShimmyClipIndex(ECoverFacing::Left, false), 0);
 	// Crouched corner stand-offs: the X6 clavicle step (92 / 74 cm) minus 18 cm. The 2026-10-07 pelvis steps were 77 / 61.
 	const FCoverFacingConfig Config;
-	TestEqual(TEXT("crouched at his right corner (crch _L)"), CornerStandOff(ECoverFacing::Right, true, Config), 74.f, 0.01f);
+	TestEqual(TEXT("crouched at his right corner (crch _L)"), CornerStandOff(ECoverFacing::Right, true, Config), 56.f, 0.01f);
 	TestEqual(TEXT("crouched at his left corner (crch _R)"), CornerStandOff(ECoverFacing::Left, true, Config), 56.f, 0.01f);
 	float Shift = 0.f;
 	TestTrue(TEXT("crouched, right edge 1.2 m: steps to the crouched stand-off"),

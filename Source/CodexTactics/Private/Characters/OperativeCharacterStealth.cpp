@@ -123,7 +123,7 @@ void AOperativeCharacter::SetManualLookDirection(float YawDeg, float PitchDeg)
 	bExplicitFacing = false;
 	// A look set while the plain corner peek is already up switches to the CoverIndoor pose. A look before that peek
 	// stays a look hold only (the peek order and the cover entry clear it).
-	if (IsPeekingRoundCorner())
+	if (IsPeekingRoundCorner() || IsAtPeekableCorner())
 	{
 		bCornerLookPose = true;
 	}

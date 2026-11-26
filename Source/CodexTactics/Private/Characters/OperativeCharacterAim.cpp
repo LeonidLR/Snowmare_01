@@ -401,7 +401,7 @@ FVector AOperativeCharacter::GetStanceAimOrigin() const
 FVector AOperativeCharacter::GetStanceAimBaseDirection() const
 {
 	if (bInCover && ((CurrentCoverHeight == ECoverHeight::HighCover && (bCornerAimActive || IsCornerHoldSpot()))
-		|| (bCornerAimActive && IsManualCornerPeekSpot())))
+		|| (bCornerAimActive && IsManualCornerPeekSpot()) || WantsCornerLookPose()))
 	{
 		return CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, GetCornerAimOutwardDeg()); // crouched at a high wall: its own clip's angle
 	}
