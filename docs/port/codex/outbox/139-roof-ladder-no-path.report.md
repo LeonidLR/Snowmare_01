@@ -1,6 +1,6 @@
 # 139 — диагностика лестницы на крышу / No way up
 
-Статус: В РАБОТЕ после RESUME Lead#1388. Worktree C:/Work/Lanes/CodexTactics-139, ветка codex/139-roof-ladder-no-path. В собственную ветку влит origin/main b65ec5f7 (merge abb03556), main не менялся.
+Статус: LIMIT — НЕ ЗАВЕРШЕНО. Primary used90%, осталось10%; остановка по правилу дизайнера до26.11.2026 18:23:42 Asia/Jerusalem. Предыдущее продолжение после RESUME Lead#1388. Worktree C:/Work/Lanes/CodexTactics-139, ветка codex/139-roof-ladder-no-path. В собственную ветку влит origin/main b65ec5f7 (merge abb03556), main не менялся.
 
 ## Подтверждённая причина
 
@@ -52,3 +52,21 @@ CheckMap PASS. Вторая worker-сборка (No way up + repair probe) PASS4
 - Dispatcher request: RoofLadderSmoke, RoofLadderRepairProbe, LowCoverMoveLakeSmoke, FormationStairSmoke; jobs=2. Initial sandbox denied queue lock; authorized escalated retry accepted. No approval rejection.
 - Saved map remains blocked by LadderActor_22 upper landing inset, documented above. Repair probe passes only transient geometry; ordinary roof smoke must remain strict.
 - Current designer queue supersedes older paragraphs: 139 -> 121 -> 148 -> 149 -> 147. Reuse existing 121 lane; review Gemini fbad5357 before creating codex branch. No extra lanes, no main push.
+
+## LIMIT checkpoint 2026-11-26 17:30 Asia/Jerusalem
+
+- Последний код **9ce2d0f525b2da1384919ea411cb2d2fdb64216a**, ранее44863738. Код закоммичен, незавершённый отчёт сохраняется отдельным checkpoint-коммитом.
+- Финальное правило учитывает capsule-centre контракт на ОБОИХ концах: GoalZ > FeetZ + max(80, CapsuleHalfHeight+20), а полный путь принимается при EndZ >= GoalZ - этого же допуска; partial upper path всё равно отвергается.11 unit-case внутри Movement.NoWayUp, включая достижимый верхний этаж с centre-goal400/nav310. Последние эти11case **ещё не запускались**.
+- Третья worker-сборка PASS416.42s соответствовала промежуточному исправлению. После саморевью изменены ещё тело pure rule и один unit-case; затем код сохранён в9ce2d0f5. Именно9ce2d0f5 сейчас собирается в четвёртом remote run.
+- Запрос dispatcher139 PID103324 с17:03 отменён только после затяжного ожидания night-loop. Использована прямо разрешённая альтернатива `Scripts/build.ps1 -Remote worker` в той же lane. Штатный SYNC/PAUSE установлен; чужие locks и процессы не удалялись. Сессия exec **59090**, token **DESKTOP-6RLUUV8-101324-20261126-171612**. Реальная сборка на worker началась17:23:53; последний известный этап — компиляция dev-модуля. На LIMIT она ещё выполняется; **финальный build PASS не заявлен**.
+- Lead#1421: дизайнер ушёл, MAIN_PC_FREE выставлен; будущий dispatcher может использовать оба ПК. Самостоятельно этот флаг не менялся.
+- Smart320/320 и шесть compatibility PASS выше относятся к предыдущей ревизии; LowCoverMoveLake/FormationStair поймали исправляемую регрессию. Повторные runtime-проверки финальной ревизии **не выполнены**. Исходный RoofLadderSmoke на сохранённой карте останется FAIL до map fix от Lead.
+
+Следующий шаг после reset:
+
+1. Проверить уже начатую сборку: session59090, Saved/Logs/RemoteBuilds.jsonl и Saved/Logs/Build.log. При её успехе не пересобирать без причины.
+2. `Scripts/test.ps1 -Smart -SkipSmokes -Base origin/main` в lane139. Затем dispatcher smoke полными именами RoofLadderSmoke, RoofLadderRepairProbe, LowCoverMoveLakeSmoke, FormationStairSmoke (и нужные остальные mapped checks по фактической ревизии). Сохранить исходную строгую проверку крыши и не ставить knownFail.
+3. Финально локальный audit/отчёт/коммит и FINISH со всеми фактическими PASS/FAIL. Передать Lead map fix125/125 для LadderActor_22; карты/JSON/assets Codex не меняет.
+4. Далее срочно121, затем148->149->147->143->146->136->137->138->140 (Lead#1414). Existing lane121 clean at fbad5357, reuse её без второй lane. Read-only review заметки: `C:/Users/Zephyrus15Duo/Documents/Codex/121-readonly-review-checkpoint.md`; исходники121 не редактировались. В121 перед повторным использованием WIP исправить подтверждённые ложные tactics/атрибуцию; основной приоритет — полная запись в Play через Lead до боёв27.11.
+
+До полного сброса только ожидание/AgentChat. FINISH для139 не отправлялся.
