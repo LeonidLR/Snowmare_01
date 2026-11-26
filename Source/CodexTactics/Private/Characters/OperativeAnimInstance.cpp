@@ -1426,14 +1426,18 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 	}
 	float YawLimit = AimYawClampDegrees;
 	float PitchLimit = AimPitchClampDegrees;
-	if (bCornerLookPoint && ActiveAimOffset)
+	const TOptional<float> ScanPitch = Operative.GetFormationLookPitch();
+	const bool bScanPitch = bAimOffset && !bAimOffsetTurnBasedOff && !bHasAimTarget
+		&& Operative.IsFacingFormationSector() && ScanPitch.IsSet();
+	const bool bLookHoldPitch = bAimOffset && !bAimOffsetTurnBasedOff && !bHasAimTarget && !bScanPitch && !bCornerLookPoint
+		&& !bInCover && !Operative.IsInStealthMode() && !Operative.HasOwnFacing() && !bIsSprinting && Operative.GetActiveLookPoint(LookPoint);
+	if ((bCornerLookPoint || bLookHoldPitch) && ActiveAimOffset)
 	{
 		const FBlendParameter& YawAxis = ActiveAimOffset->GetBlendParameter(0);
 		const FBlendParameter& PitchAxis = ActiveAimOffset->GetBlendParameter(1);
 		YawLimit = CoverLookAoRules::AxisAbs(YawAxis.Min, YawAxis.Max, AimYawClampDegrees);
 		PitchLimit = CoverLookAoRules::AxisAbs(PitchAxis.Min, PitchAxis.Max, AimPitchClampDegrees);
 	}
-	bool bLookHoldPitch = false;
 	if (bCornerLookPoint)
 	{
 		// Not YawTargetWithinReach: a look past the rifle's 60 deg twist is still inside the CoverIndoor yaw axis, and
@@ -1451,11 +1455,6 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 	{
 		// Formation scan pitch (G025): the sector already turns the actor for yaw. The aim offset only nods.
 		// A combat aim and the corner look both win. OrderMoveTo does not clear this pitch while the look is set.
-		const TOptional<float> ScanPitch = Operative.GetFormationLookPitch();
-		const bool bScanPitch = bAimOffset && !bAimOffsetTurnBasedOff && !bHasAimTarget
-			&& Operative.IsFacingFormationSector() && ScanPitch.IsSet();
-		bLookHoldPitch = bAimOffset && !bAimOffsetTurnBasedOff && !bHasAimTarget && !bScanPitch
-			&& !bInCover && !Operative.HasOwnFacing() && !bIsSprinting && Operative.GetActiveLookPoint(LookPoint);
 		if (bScanPitch)
 		{
 			AimPitchTarget = FMath::Clamp(ScanPitch.GetValue(), -AimPitchClampDegrees, AimPitchClampDegrees);

@@ -111,6 +111,16 @@ namespace LookHoldRules
 		return FMath::Clamp(FRotator::NormalizeAxis(TwistDeg), -Limit, Limit);
 	}
 
+	FVector AdjustClickForFlatGround(const FVector& OperativeLocation, float HalfHeightCm, const FVector& ClickPoint, float FlatBandCm)
+	{
+		const double FeetZ = OperativeLocation.Z - static_cast<double>(FMath::Max(0.f, HalfHeightCm));
+		if (FMath::Abs(ClickPoint.Z - FeetZ) <= static_cast<double>(FMath::Max(0.f, FlatBandCm)))
+		{
+			return FVector(ClickPoint.X, ClickPoint.Y, OperativeLocation.Z);
+		}
+		return ClickPoint;
+	}
+
 	FLookDirection DirectionFromClick(const FVector& OperativeLocation, const FVector& ClickPoint)
 	{
 		const FVector Delta = ClickPoint - OperativeLocation;

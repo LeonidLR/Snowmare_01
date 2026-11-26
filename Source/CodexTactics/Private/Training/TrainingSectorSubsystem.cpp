@@ -382,6 +382,7 @@ void UTrainingSectorSubsystem::MovePlayersToSector(bool bOnlyOutside) const
 			continue;
 		}
 		const FVector Offset(0.0, Slot++ * 120.0, 0.0);
+		Op.ClearLookAndFacingState();
 		Op.StopOperative(); // Existing navigation paths were built for the previous region.
 		if (!bOnlyOutside || !Allows(GetWorld(), Op.GetActorLocation(), WallHalfWidth + Op.GetSimpleCollisionRadius()))
 		{

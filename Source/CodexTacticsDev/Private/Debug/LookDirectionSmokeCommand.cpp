@@ -89,12 +89,18 @@ namespace LookDirectionSmoke
 		FVector ArenaRight = FVector::RightVector;
 		FVector Leg1Goal = FVector::ZeroVector;
 		FVector Leg2Goal = FVector::ZeroVector;
+		FVector MateLeg1Goal = FVector::ZeroVector;
+		FVector MateLeg2Goal = FVector::ZeroVector;
 		FVector SprintGoal = FVector::ZeroVector;
 		float LockedYawDeg = 0.f;
 		int32 Leg1Samples = 0;
 		int32 Leg1Bad = 0;
+		int32 MateLeg1Samples = 0;
+		int32 MateLeg1Bad = 0;
 		int32 Leg2Samples = 0;
 		int32 Leg2Bad = 0;
+		int32 MateLeg2Samples = 0;
+		int32 MateLeg2Bad = 0;
 
 		FRoofTestSpot RoofSpot;
 		FRampRoofSpot RampSpot;
@@ -480,7 +486,8 @@ namespace LookDirectionSmoke
 			Mate->StopOperative();
 
 			Squad->SetSelectedGroup({ Leader, Mate }, false);
-			const FVector ClickPoint = Leader->GetActorLocation() + State.ArenaForward * 700.f;
+			// Click on the flat floor 2.5 m ahead: must lock shared yaw AND stay level (0 deg pitch, not pitched down into the floor).
+			const FVector ClickPoint = State.ArenaOrigin + State.ArenaForward * 250.f;
 			FHitResult LookHit(nullptr, nullptr, ClickPoint, FVector::UpVector);
 			LookHit.bBlockingHit = true;
 			PC->SetSimulatedShiftModifier(true);
@@ -489,14 +496,18 @@ namespace LookDirectionSmoke
 			State.LockedYawDeg = Leader->GetManualLookYawDeg();
 
 			const float YawMatch = FMath::Abs(FMath::FindDeltaAngleDegrees(Leader->GetManualLookYawDeg(), Mate->GetManualLookYawDeg()));
-			Check(State, Leader->HasManualLookPoint() && Mate->HasManualLookPoint() && YawMatch < 0.05f,
-				FString::Printf(TEXT("HandleWorldHit Shift+click shares identical yaw across selection (diff %.2f deg, yaw %.1f)"),
-					YawMatch, State.LockedYawDeg));
+			Check(State, Leader->HasManualLookPoint() && Mate->HasManualLookPoint()
+				&& YawMatch < 0.05f && FMath::Abs(Leader->GetManualLookPitchDeg()) < 0.5f,
+				FString::Printf(TEXT("HandleWorldHit Shift+click shares identical level yaw across selection (diff %.2f deg, yaw %.1f, pitch %.1f)"),
+					YawMatch, State.LockedYawDeg, Leader->GetManualLookPitchDeg()));
 
 			State.Leg1Goal = SmokeUtils::FreeSpot(World, State.ArenaOrigin + State.ArenaRight * 450.f, Leader);
+			State.MateLeg1Goal = SmokeUtils::FreeSpot(World, State.ArenaOrigin + State.ArenaRight * 290.f - State.ArenaForward * 140.f, Mate);
 			UE_LOG(LogCodexTactics, Display, TEXT("LookDirectionSmoke: Setup ArenaOrigin=%s Leader=%s Leg1Goal=%s"),
 				*State.ArenaOrigin.ToCompactString(), *Leader->GetActorLocation().ToCompactString(), *State.Leg1Goal.ToCompactString());
-			Check(State, Leader->OrderMoveTo(State.Leg1Goal, false) == EOperativeOrderResult::Accepted, TEXT("L-path leg 1 plain move accepted"));
+			Check(State, Leader->OrderMoveTo(State.Leg1Goal, false) == EOperativeOrderResult::Accepted
+				&& Mate->OrderMoveTo(State.MateLeg1Goal, false) == EOperativeOrderResult::Accepted,
+				TEXT("L-path leg 1 plain move accepted for both selected operatives"));
 			Next(State, EStage::WalkLeg1);
 			return true;
 		}
@@ -507,7 +518,9 @@ namespace LookDirectionSmoke
 				return Finish(State, false);
 			}
 			const float Speed2D = static_cast<float>(Leader->GetVelocity().Size2D());
+			const float MateSpeed2D = static_cast<float>(Mate->GetVelocity().Size2D());
 			const float DistToGoal = static_cast<float>(FVector::Dist2D(Leader->GetActorLocation(), State.Leg1Goal));
+			const float MateDistToGoal = static_cast<float>(FVector::Dist2D(Mate->GetActorLocation(), State.MateLeg1Goal));
 			if (State.Leg1Samples == 0 && (FMath::Abs(State.StageTime - 0.5f) < 0.03f || FMath::Abs(State.StageTime - 1.5f) < 0.03f))
 			{
 				UE_LOG(LogCodexTactics, Display, TEXT("LookDirectionSmoke: WalkLeg1 t=%.2f speed=%.1f dist=%.1f moving=%d"),
@@ -522,24 +535,42 @@ namespace LookDirectionSmoke
 					++State.Leg1Bad;
 				}
 			}
-			const bool bArrived = State.StageTime > 0.5f && DistToGoal < 100.f && Speed2D < 15.f;
+			if (MateSpeed2D > 25.f && State.StageTime > 0.20f)
+			{
+				++State.MateLeg1Samples;
+				const float MateWalkErr = FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Mate->GetActorRotation().Yaw), State.LockedYawDeg));
+				if (MateWalkErr > 10.f)
+				{
+					++State.MateLeg1Bad;
+				}
+			}
+			const bool bArrived = State.StageTime > 0.5f && DistToGoal < 100.f && Speed2D < 15.f
+				&& MateDistToGoal < 120.f && MateSpeed2D < 15.f;
 			if (!bArrived && State.StageTime < 8.f)
 			{
 				return true;
 			}
+			if (!bArrived)
+			{
+				Check(State, false, FString::Printf(TEXT("L-path leg 1 arrived in 8s (leader dist %.0f, mate dist %.0f)"), DistToGoal, MateDistToGoal));
+				return Finish(State, false);
+			}
 			const float MateErr = FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Mate->GetActorRotation().Yaw), State.LockedYawDeg));
-			Check(State, State.Leg1Samples >= 3 && State.Leg1Bad == 0 && MateErr <= 10.f,
-				FString::Printf(TEXT("L-path leg 1 keeps locked compass yaw +-10 deg (%d bad / %d samples, mate off %.1f, dist %.0f)"),
-					State.Leg1Bad, State.Leg1Samples, MateErr, FVector::Dist2D(Leader->GetActorLocation(), State.Leg1Goal)));
+			Check(State, State.Leg1Samples >= 3 && State.Leg1Bad == 0 && State.MateLeg1Samples >= 2 && State.MateLeg1Bad == 0 && MateErr <= 10.f,
+				FString::Printf(TEXT("L-path leg 1 keeps locked compass yaw +-10 deg (leader %d/%d, mate %d/%d, mate off %.1f)"),
+					State.Leg1Bad, State.Leg1Samples, State.MateLeg1Bad, State.MateLeg1Samples, MateErr));
 
 			State.Leg2Goal = SmokeUtils::FreeSpot(World, State.Leg1Goal + State.ArenaForward * 380.f, Leader);
-			Check(State, Leader->OrderMoveTo(State.Leg2Goal, false) == EOperativeOrderResult::Accepted, TEXT("L-path leg 2 plain move accepted"));
+			State.MateLeg2Goal = SmokeUtils::FreeSpot(World, State.MateLeg1Goal + State.ArenaForward * 380.f, Mate);
+			Check(State, Leader->OrderMoveTo(State.Leg2Goal, false) == EOperativeOrderResult::Accepted
+				&& Mate->OrderMoveTo(State.MateLeg2Goal, false) == EOperativeOrderResult::Accepted,
+				TEXT("L-path leg 2 plain move accepted for both selected operatives"));
 			Next(State, EStage::WalkLeg2);
 			return true;
 		}
 		case EStage::WalkLeg2:
 		{
-			if (!Leader)
+			if (!Leader || !Mate)
 			{
 				return Finish(State, false);
 			}
@@ -552,13 +583,30 @@ namespace LookDirectionSmoke
 					++State.Leg2Bad;
 				}
 			}
-			const bool bArrived = FVector::Dist2D(Leader->GetActorLocation(), State.Leg2Goal) < 100.f && Leader->GetVelocity().Size2D() < 15.f;
+			if (Mate->GetVelocity().Size2D() > 25.f && State.StageTime > 0.35f)
+			{
+				++State.MateLeg2Samples;
+				const float MateWalkErr = FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Mate->GetActorRotation().Yaw), State.LockedYawDeg));
+				if (MateWalkErr > 10.f)
+				{
+					++State.MateLeg2Bad;
+				}
+			}
+			const bool bArrived = State.StageTime > 0.5f
+				&& FVector::Dist2D(Leader->GetActorLocation(), State.Leg2Goal) < 100.f && Leader->GetVelocity().Size2D() < 15.f
+				&& FVector::Dist2D(Mate->GetActorLocation(), State.MateLeg2Goal) < 120.f && Mate->GetVelocity().Size2D() < 15.f;
 			if (!bArrived && State.StageTime < 8.f)
 			{
 				return true;
 			}
-			Check(State, State.Leg2Samples >= 3 && State.Leg2Bad == 0,
-				FString::Printf(TEXT("L-path leg 2 keeps locked compass yaw +-10 deg (%d bad / %d samples)"), State.Leg2Bad, State.Leg2Samples));
+			if (!bArrived)
+			{
+				Check(State, false, TEXT("L-path leg 2 arrived in 8s"));
+				return Finish(State, false);
+			}
+			Check(State, State.Leg2Samples >= 3 && State.Leg2Bad == 0 && State.MateLeg2Samples >= 2 && State.MateLeg2Bad == 0,
+				FString::Printf(TEXT("L-path leg 2 keeps locked compass yaw +-10 deg (leader %d/%d, mate %d/%d)"),
+					State.Leg2Bad, State.Leg2Samples, State.MateLeg2Bad, State.MateLeg2Samples));
 
 			TArray<const AActor*> Ignored;
 			for (AOperativeCharacter* M : Squad->GetMembers())
@@ -741,12 +789,16 @@ namespace LookDirectionSmoke
 			{
 				return Finish(State, false);
 			}
-			const bool bArrived = FVector::Dist2D(Leader->GetActorLocation(), State.SprintGoal) < 120.f && Leader->GetVelocity().Size2D() < 10.f;
+			const bool bArrived = State.StageTime > 0.5f && FVector::Dist2D(Leader->GetActorLocation(), State.SprintGoal) < 120.f && Leader->GetVelocity().Size2D() < 10.f;
 			if (!bArrived && State.StageTime < 8.f)
 			{
 				return true;
 			}
 			Check(State, bArrived, FString::Printf(TEXT("Part B sprint (after SetFacingPoint) arrived (%.1f s)"), State.StageTime));
+			if (!bArrived)
+			{
+				return Finish(State, false);
+			}
 			Next(State, EStage::SettleFacing);
 			return true;
 		}
@@ -756,20 +808,25 @@ namespace LookDirectionSmoke
 			{
 				return Finish(State, false);
 			}
-			if (State.StageTime < 1.0f)
+			if (State.StageTime < 3.5f)
 			{
-				return true;
+				return true; // Wait past F-1's 3.0s return delay.
 			}
 			const float TravelYaw = static_cast<float>((State.SprintGoal - State.ArenaOrigin).Rotation().Yaw);
 			const float FinalYaw = static_cast<float>(Leader->GetActorRotation().Yaw);
 			const float OffDeg = FMath::Abs(FMath::FindDeltaAngleDegrees(FinalYaw, TravelYaw));
 			Check(State, OffDeg <= 15.f,
-				FString::Printf(TEXT("Part B SetFacingPoint cleared: arrival holds travel yaw +-15 deg (got %.1f, travel %.1f, off %.1f)"),
+				FString::Printf(TEXT("Part B SetFacingPoint cleared: arrival holds travel yaw +-15 deg past 3.5s (got %.1f, travel %.1f, off %.1f)"),
 					FinalYaw, TravelYaw, OffDeg));
 
-			// Part B check 2: ManualLookDirection clears on sprint and arrival holds reverse travel yaw.
+			// Part B check 2: ManualLookDirection clears on sprint and arrival holds reverse travel yaw; also verify round reset clears look.
+			Leader->SetManualLookDirection(FRotator::NormalizeAxis(TravelYaw + 120.f), 0.f);
+			Leader->ClearLookAndFacingState();
+			Check(State, !Leader->HasManualLookPoint(), TEXT("Part B round reset helper ClearLookAndFacingState clears look state"));
 			Leader->SetManualLookDirection(FRotator::NormalizeAxis(TravelYaw + 120.f), 0.f);
 			State.SprintGoal = SmokeUtils::FreeSpot(World, State.ArenaOrigin, Leader);
+			State.bHasMovingTravelYaw = false;
+			State.LastMovingTravelYaw = static_cast<float>(FRotator::NormalizeAxis(TravelYaw + 180.f));
 			Check(State, Leader->OrderMoveTo(State.SprintGoal, true) == EOperativeOrderResult::Accepted, TEXT("Part B sprint clearing ManualLookDirection accepted"));
 			Check(State, !Leader->HasManualLookPoint(), TEXT("Part B sprint clears ManualLookPoint immediately"));
 			Next(State, EStage::SprintClearLook);
@@ -781,12 +838,21 @@ namespace LookDirectionSmoke
 			{
 				return Finish(State, false);
 			}
-			const bool bArrived = FVector::Dist2D(Leader->GetActorLocation(), State.SprintGoal) < 120.f && Leader->GetVelocity().Size2D() < 10.f;
+			if (Leader->GetVelocity().Size2D() > 50.f)
+			{
+				State.LastMovingTravelYaw = static_cast<float>(Leader->GetVelocity().Rotation().Yaw);
+				State.bHasMovingTravelYaw = true;
+			}
+			const bool bArrived = State.StageTime > 0.5f && FVector::Dist2D(Leader->GetActorLocation(), State.SprintGoal) < 120.f && Leader->GetVelocity().Size2D() < 10.f;
 			if (!bArrived && State.StageTime < 8.f)
 			{
 				return true;
 			}
 			Check(State, bArrived, FString::Printf(TEXT("Part B sprint (after ManualLook) arrived (%.1f s)"), State.StageTime));
+			if (!bArrived)
+			{
+				return Finish(State, false);
+			}
 			Next(State, EStage::SettleLook);
 			return true;
 		}
@@ -800,10 +866,10 @@ namespace LookDirectionSmoke
 			{
 				return true;
 			}
-			const float ReturnTravelYaw = static_cast<float>(FRotator::NormalizeAxis(State.ArenaForward.Rotation().Yaw + 180.f));
+			const float ReturnTravelYaw = State.LastMovingTravelYaw;
 			const float FinalYaw = static_cast<float>(Leader->GetActorRotation().Yaw);
 			const float OffDeg = FMath::Abs(FMath::FindDeltaAngleDegrees(FinalYaw, ReturnTravelYaw));
-			Check(State, OffDeg <= 15.f,
+			Check(State, State.bHasMovingTravelYaw && OffDeg <= 15.f,
 				FString::Printf(TEXT("Part B ManualLook cleared: arrival holds travel yaw +-15 deg (got %.1f, travel %.1f, off %.1f)"),
 					FinalYaw, ReturnTravelYaw, OffDeg));
 			return Finish(State, true);

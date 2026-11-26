@@ -463,6 +463,8 @@ public:
 	void SetManualLookPoint(const FVector& WorldPoint);
 	void SetManualLookDirection(float YawDeg, float PitchDeg = 0.f);
 	void ClearManualLookPoint();
+	/** Clears manual look, idle/explicit facing, and stale combat threat memory on round / region / load resets. */
+	void ClearLookAndFacingState();
 	bool HasManualLookPoint() const { return bHasManualLookPoint; }
 	float GetManualLookYawDeg() const { return ManualLookYawDeg; }
 	float GetManualLookPitchDeg() const { return ManualLookPitchDeg; }

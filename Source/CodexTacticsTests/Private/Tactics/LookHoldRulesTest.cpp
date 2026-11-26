@@ -223,6 +223,17 @@ bool FLookHoldDirectionLockTest::RunTest(const FString&)
 	TestTrue(TEXT("Leg 1 keeps locked east yaw"), FMath::Abs(FMath::FindDeltaAngleDegrees(Yaw1, Dir.YawDeg)) < 0.01f);
 	TestTrue(TEXT("Leg 2 keeps locked east yaw"), FMath::Abs(FMath::FindDeltaAngleDegrees(Yaw2, Dir.YawDeg)) < 0.01f);
 
+	// Flat same-floor click flattens pitch to 0 deg; roof-to-ground click preserves steep downward pitch.
+	const FVector StandingLoc(0.f, 0.f, 90.f);
+	const FVector FlatFloorClick(250.f, 0.f, 2.f);
+	const FLookDirection FlatDir = DirectionFromClick(StandingLoc, AdjustClickForFlatGround(StandingLoc, 88.f, FlatFloorClick));
+	TestTrue(TEXT("Flat ground click keeps horizontal 0 deg pitch"), FMath::Abs(FlatDir.PitchDeg) < 0.01f);
+
+	const FVector RoofLoc(0.f, 0.f, 690.f);
+	const FVector GroundBelowClick(600.f, 0.f, 10.f);
+	const FLookDirection DownDir = DirectionFromClick(RoofLoc, AdjustClickForFlatGround(RoofLoc, 88.f, GroundBelowClick));
+	TestTrue(TEXT("Roof to ground click keeps steep downward pitch"), DownDir.PitchDeg < -35.f);
+
 	return true;
 }
 
