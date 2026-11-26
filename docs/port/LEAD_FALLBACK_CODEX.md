@@ -57,3 +57,5 @@ the designer on 11-28; plan: Codex runs Scripts/Tools/weekly_audit.ps1 first, Fa
 Codex: 139 (finishing) -> 121 full recording (Gemini WIP fbad5357; needed before the designer's fights 11-27) -> 147 PMC fled = win ->
 148 fight replay + building numbers + drawn routes -> 143 -> 146 -> 136 -> 137 -> 138 -> 140 -> G022 -> smoke grenade.
 Gemini (smaller, always reviewed): 145 (+B) -> 135b -> 141 -> 144.
+Designer 17:45: priority = full recording (121) + drawing in TG (148) + productive bot training this weekend (149).
+Codex: 139 -> 121 -> 148 -> 149 -> 147 -> 143 -> 146 -> 136 -> 137 -> 138 -> 140 -> G022. Both machines may be used tonight.
