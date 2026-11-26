@@ -1,6 +1,6 @@
 # 139 — WIP checkpoint: roof ladder no path
 
-Статус: **НЕ ЗАВЕРШЕНО**, диагностика подготовлена; игровой фикс ещё не внесён.
+Статус: **LIMIT — НЕ ЗАВЕРШЕНО**. Codex primary used90%, осталось10%; работа остановлена по правилу дизайнера до сброса 2026-11-26 13:16 Asia/Jerusalem. Диагностика подготовлена; игровой фикс ещё не внесён.
 Ветка `codex/139-roof-ladder-no-path`, worktree `C:/Work/Lanes/CodexTactics-139`, база `5e510025` (origin/main при старте).
 
 ## Найдено до правки
@@ -22,7 +22,7 @@
 
 ## Следующий шаг после сброса
 
-1. Проверить существующий dispatcher build (запущен из lane139, исходно PID93976; на10:00:56 стоял в общей очереди за worker). При отсутствии результата: `python Scripts/Tools/machine_dispatch.py build --lane C:/Work/Lanes/CodexTactics-139`.
+1. Проверить существующий dispatcher build (lane139, исходно PID93976). Последнее наблюдение ДО LIMIT: сборка стартовала на worker10:03:13; sync token DESKTOP-6RLUUV8-94560-20261126-100234, исходный HEAD5e510025 + новый smoke через ExtraZip. Её результат после LIMIT не проверялся; новых smoke после LIMIT не запускалось. При отсутствии результата: `python Scripts/Tools/machine_dispatch.py build --lane C:/Work/Lanes/CodexTactics-139`.
 2. `python Scripts/Tools/machine_dispatch.py smoke --lane C:/Work/Lanes/CodexTactics-139 --smokes CodexTactics.RoofLadderSmoke --jobs 1`.
 3. По `[RoofLadder]` установить реальные actor/link ends/navmesh projections и partial path. При data issue — точный ladder/roof и предлагаемый inset/data fix в отчёте, без записи карты/X6 JSON. При runtime issue — минимальный фикс.
 4. Добавить понятное сообщение No way up для недоступной верхней цели; сейчас OrderGroupMove игнорирует EOperativeOrderResult, а RequestMove принимает successful partial path. Сохранить подход к locked door и разрешённые partial moves на том же уровне; unit test для чистой логики, если она выделяется.
