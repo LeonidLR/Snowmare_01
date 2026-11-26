@@ -2,7 +2,7 @@
 
 **Branch**: `gemini/135-corner-look-body` (from `origin/main` + `gemini/G023-fight2-facing-roof`)  
 **Model**: Hydrogen  
-**Review**: NEON REVIEW NEEDED (model switch unavailable in this turn)
+**Review**: Neon review completed (3 findings fixed in `0fbc4383` and `6340bed9`: `OperativeCharacter.h` `CoverStandOffStandPackLCm=34.f` / `CoverStandOffCrouchPackLCm=56.f` + `CornerLeanExtraPackLCm=-26.f` + `BP_Operative.uasset` verified no override; `bAtCoverCorner` preserved on `CornerHold` cross-normal look; `UpdateCoverSetAimOffset` uses `bCoverInFirePose ? CoverFirePoseFacing : CoverFacing`).
 
 ## 1. Changes Implemented
 
@@ -21,6 +21,7 @@
 - `Source/CodexTacticsDev/Private/Debug/CoverIndoorSmokeCommand.cpp`: split `bSawYawOff` into `bSawYawRight` and `bSawYawLeft` and asserted both.
 
 ### Part C — Left corner slot too far from the edge
+- `Source/CodexTactics/Public/Characters/OperativeCharacter.h`: aligned `CoverStandOffStandPackLCm = 34.f` and `CoverStandOffCrouchPackLCm = 56.f` (verified `BP_Operative.uasset` has no `CoverStandOff` override) and set `CornerLeanExtraPackLCm = -26.f` so the `_L` clip's root step stays within the `25 cm` shoulder gate while the capsule stands at `34 cm`.
 - `Source/CodexTactics/Public/Tactics/CoverFacingRules.h`: aligned `StandStandOffPackLCm = 34.f` (matching `StandStandOffPackRCm = 34.f <= 35 cm`) and `CrouchStandOffPackLCm = 56.f` (matching `CrouchStandOffPackRCm = 56.f`).
 - `Source/CodexTacticsTests/Private/Tactics/CoverFacingTest.cpp`, `Source/CodexTacticsTests/Private/Tactics/CoverCrouchTest.cpp`: updated `CornerPoseAndSnap`, `CornerStandOffPerClipSide`, and `CrouchClipSides` for symmetric `34 cm / 56 cm` stand-offs and asserted left/right equality `<= 35 cm`.
 
