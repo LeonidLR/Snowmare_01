@@ -524,7 +524,7 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 			&& !Path->GetPathPoints().IsEmpty();
 		const float FeetZ = GetActorLocation().Z - GetSimpleCollisionHalfHeight();
 		const bool bAtGoal = Result == EPathFollowingRequestResult::AlreadyAtGoal;
-		if (OperativeMovementRules::HasNoWayUp(FeetZ, Destination.Z, bHasPath || bAtGoal,
+		if (OperativeMovementRules::HasNoWayUp(FeetZ, Destination.Z, GetSimpleCollisionHalfHeight(), bHasPath || bAtGoal,
 			bHasPath && Path->IsPartial(), bHasPath ? Path->GetEndLocation().Z : FeetZ))
 		{
 			AIController->StopMovement();

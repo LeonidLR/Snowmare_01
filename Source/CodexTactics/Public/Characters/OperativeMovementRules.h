@@ -135,8 +135,8 @@ struct CODEXTACTICS_API FOperativeMovementConfig
 /** Pure movement formulas for operatives. Godot reference: player.gd _process_leader_movement(), can_sprint(). */
 namespace OperativeMovementRules
 {
-	/** An upper-level order must reach that level; same-level partial approaches stay valid. Task139. */
-	CODEXTACTICS_API bool HasNoWayUp(float FeetZ, float GoalZ, bool bHasPath, bool bPartial, float EndZ);
+	/** An upper-level order must reach that level; accepts legacy capsule-centre goals and same-level partial approaches. Task139. */
+	CODEXTACTICS_API bool HasNoWayUp(float FeetZ, float GoalZ, float CapsuleHalfHeightCm, bool bHasPath, bool bPartial, float EndZ);
 
 	/** Speed multiplier of a stance relative to WalkSpeed. */
 	CODEXTACTICS_API float GetStanceSpeedMultiplier(const FOperativeMovementConfig& Config, EOperativeStance Stance);
