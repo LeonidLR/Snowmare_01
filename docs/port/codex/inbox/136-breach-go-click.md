@@ -10,3 +10,8 @@ Later (NOT now): a grenade thrown in before the entry.
   that stacks, clicks again and checks the three end positions.
 - Branch codex/136-breach-go-click from origin/main; build via machine_dispatch.py / build.ps1 -Remote worker; report docs/port/codex/outbox/136-breach-go-click.report.md;
   FINISH `136 FINISH | PASS/FAIL | <hash> | ...`. Queue: after 134, before G022. TypeSafe audit: local boundary audit only (designer 11-26).
+
+Designer finding 2026-11-26 (later): the entry already works when he can click the FLOOR inside - i.e. only when the roof cutaway hid the roof.
+When the roof does not disappear there is nothing inside to click, so the entry is impossible. So 136 = make the door itself the "go in" target
+(no dependency on the roof cutaway), reusing the existing floor-click entry path. Also check why the roof sometimes does not hide while the squad
+is stacked at that building's door (stacked at a door = treat the squad as "at the building" for the cutaway); report it, fix if small.
