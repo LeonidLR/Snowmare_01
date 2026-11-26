@@ -270,7 +270,7 @@ bool FSquadOrderFormationFollowStanceGaitTest::RunTest(const FString&)
 	FFormationFollowOrderFacts LeaderProne = SingleClickWalk;
 	LeaderProne.LeaderStance = EOperativeStance::Prone;
 	Res = ResolveFormationFollowStanceGait(LeaderProne);
-	TestTrue(TEXT("Stood-up follower copies leader Prone when Z pressed"), Res.bChangeStance && Res.DesiredStance == EOperativeStance::Prone);
+	TestTrue(TEXT("Stood-up follower copies leader Prone when V pressed"), Res.bChangeStance && Res.DesiredStance == EOperativeStance::Prone);
 	TestFalse(TEXT("Clears stood-up flag once returned to Prone"), Res.bNextStoodUpForLeaderSprint);
 
 	return true;

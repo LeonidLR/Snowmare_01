@@ -250,7 +250,7 @@ namespace FormationRunStanceSmoke
 					FString::Printf(TEXT("single click -> follower %s walks (stance %d, sprinting %d, speed %.0f, distLeader %.0f)"),
 						*F->DisplayName.ToString(), static_cast<int32>(F->GetStance()), F->IsSprinting() ? 1 : 0, Speed2D, DistToLeader));
 			}
-			PC->StanceCrouch(); // C key -> Leader crouches -> stood-up followers follow leader back to crouch
+			PC->CycleLeaderStance(); // C key (Standing -> Crouching on leader) -> stood-up followers follow leader back to crouch
 			R.Step = EStep::LeaderCrouchReturn;
 			R.StepSince = Now;
 			return;
