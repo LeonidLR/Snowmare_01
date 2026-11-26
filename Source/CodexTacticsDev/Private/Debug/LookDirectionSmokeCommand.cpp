@@ -28,6 +28,8 @@
 #include "HAL/PlatformMisc.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Navigation/PathFollowingComponent.h"
+#include "NavigationPath.h"
 #include "NavigationSystem.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -100,6 +102,9 @@ namespace LookDirectionSmoke
 		FRoofTestSpot RoofSpot;
 		FRampRoofSpot RampSpot;
 		FVector RoofSprintStart = FVector::ZeroVector;
+		float LastMovingTravelYaw = 0.f;
+		bool bHasMovingTravelYaw = false;
+		float RestMeshYaw = 0.f;
 		float LevelAimPitch = 0.f;
 		float LevelPosePitch = 0.f;
 		float LevelMuzzlePitch = 0.f;
@@ -206,12 +211,10 @@ namespace LookDirectionSmoke
 				continue;
 			}
 			bool bWalkable = false;
-			bool bEnterable = false;
 			B->TryGetBoolField(TEXT("roof_walkable"), bWalkable);
-			B->TryGetBoolField(TEXT("enterable"), bEnterable);
 			double FloorsRaw = 0.0;
 			const TArray<TSharedPtr<FJsonValue>>* Footprint = nullptr;
-			if (!bWalkable || !bEnterable || !B->TryGetNumberField(TEXT("floors"), FloorsRaw)
+			if (!bWalkable || !B->TryGetNumberField(TEXT("floors"), FloorsRaw)
 				|| !B->TryGetArrayField(TEXT("footprint"), Footprint) || !Footprint || Footprint->Num() < 2)
 			{
 				continue;
@@ -236,31 +239,43 @@ namespace LookDirectionSmoke
 			for (const TPair<FVector, FVector>& Edge : Edges)
 			{
 				FNavLocation RoofNav;
-				if (!Nav->ProjectPointToNavigation(Edge.Key, RoofNav, FVector(80.f, 80.f, 120.f))
+				if (!Nav->ProjectPointToNavigation(Edge.Key, RoofNav, FVector(200.f, 200.f, 150.f))
 					|| FMath::Abs(static_cast<float>(RoofNav.Location.Z) - RoofZ) > 90.f)
 				{
+					UE_LOG(LogCodexTactics, Verbose, TEXT("LookDirectionSmoke roof edge skip (no RoofNav at %s, got Z=%.1f vs %.1f)"),
+						*Edge.Key.ToCompactString(), RoofNav.Location.Z, RoofZ);
 					continue;
 				}
-				const FVector GroundQuery = RoofNav.Location + Edge.Value * 600.f + FVector(0.f, 0.f, -RoofZ + GroundZ);
-				FNavLocation GroundNav;
-				if (!Nav->ProjectPointToNavigation(GroundQuery, GroundNav, FVector(200.f, 200.f, 150.f))
-					|| FMath::Abs(static_cast<float>(GroundNav.Location.Z) - GroundZ) > 100.f)
+				for (const float DistCm : { 500.f, 700.f, 900.f, 1100.f, 1400.f, 1800.f })
 				{
-					continue;
+					const FVector GroundQuery = RoofNav.Location + Edge.Value * DistCm + FVector(0.f, 0.f, -RoofZ + GroundZ);
+					FNavLocation GroundNav;
+					if (!Nav->ProjectPointToNavigation(GroundQuery, GroundNav, FVector(250.f, 250.f, 150.f))
+						|| FMath::Abs(static_cast<float>(GroundNav.Location.Z) - GroundZ) > 100.f)
+					{
+						continue;
+					}
+					const FVector OverEye = RoofNav.Location + Edge.Value * 60.f + FVector(0.f, 0.f, 155.f);
+					FHitResult LosHit;
+					if (World->LineTraceSingleByChannel(LosHit, OverEye,
+						GroundNav.Location + FVector(0.f, 0.f, 90.f), ECC_Visibility, TraceParams))
+					{
+						continue;
+					}
+					if (LookHoldRules::DirectionFromClick(RoofNav.Location + FVector(0.f, 0.f, 88.f), GroundNav.Location).PitchDeg >= -12.f)
+					{
+						continue;
+					}
+					Out.bFound = true;
+					Out.RoofStandFeet = RoofNav.Location;
+					Out.Outward = Edge.Value;
+					Out.GroundBelow = GroundNav.Location;
+					return Out;
 				}
-				FHitResult LosHit;
-				if (World->LineTraceSingleByChannel(LosHit, RoofNav.Location + FVector(0.f, 0.f, 150.f),
-					GroundNav.Location + FVector(0.f, 0.f, 40.f), ECC_Visibility, TraceParams))
-				{
-					continue;
-				}
-				Out.bFound = true;
-				Out.RoofStandFeet = RoofNav.Location;
-				Out.Outward = Edge.Value;
-				Out.GroundBelow = GroundNav.Location;
-				return Out;
 			}
 		}
+		UE_LOG(LogCodexTactics, Warning, TEXT("LookDirectionSmoke: FindX6RoofLookSpot found no roof/ground pair across %d buildings (GroundZ=%.1f)"),
+			Buildings->Num(), GroundZ);
 		return Out;
 	}
 
@@ -366,6 +381,13 @@ namespace LookDirectionSmoke
 				{
 					continue;
 				}
+				const UNavigationPath* ClimbPath = Nav->FindPathToLocationSynchronously(World, FootNav.Location, ArriveNav.Location);
+				const UNavigationPath* RoofPath = Nav->FindPathToLocationSynchronously(World, ArriveNav.Location, SprintNav.Location);
+				if (!ClimbPath || !ClimbPath->IsValid() || ClimbPath->IsPartial()
+					|| !RoofPath || !RoofPath->IsValid() || RoofPath->IsPartial())
+				{
+					continue;
+				}
 				Out.bFound = true;
 				B->TryGetStringField(TEXT("id"), Out.BuildingId);
 				Out.RampFoot = FootNav.Location;
@@ -423,8 +445,6 @@ namespace LookDirectionSmoke
 				return true;
 			}
 			SmokeUtils::StopLevelPmc(World);
-			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-			SmokeUtils::StartWaveFight(Flow);
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
 				SmokeUtils::ParkEnemyFarAway(*It);
@@ -438,6 +458,7 @@ namespace LookDirectionSmoke
 			Mate->bTacticalCeaseFire = true;
 			Arm(*Leader);
 			Arm(*Mate);
+			State.RestMeshYaw = Leader->GetMesh() ? static_cast<float>(Leader->GetMesh()->GetRelativeRotation().Yaw) : -90.f;
 
 			TArray<const AActor*> Ignored;
 			for (AOperativeCharacter* M : Members)
@@ -476,6 +497,8 @@ namespace LookDirectionSmoke
 					YawMatch, State.LockedYawDeg));
 
 			State.Leg1Goal = SmokeUtils::FreeSpot(World, State.ArenaOrigin + State.ArenaRight * 450.f, Leader);
+			UE_LOG(LogCodexTactics, Display, TEXT("LookDirectionSmoke: Setup ArenaOrigin=%s Leader=%s Leg1Goal=%s"),
+				*State.ArenaOrigin.ToCompactString(), *Leader->GetActorLocation().ToCompactString(), *State.Leg1Goal.ToCompactString());
 			Check(State, Leader->OrderMoveTo(State.Leg1Goal, false) == EOperativeOrderResult::Accepted, TEXT("L-path leg 1 plain move accepted"));
 			Next(State, EStage::WalkLeg1);
 			return true;
@@ -486,7 +509,14 @@ namespace LookDirectionSmoke
 			{
 				return Finish(State, false);
 			}
-			if (Leader->GetVelocity().Size2D() > 25.f && State.StageTime > 0.35f)
+			const float Speed2D = static_cast<float>(Leader->GetVelocity().Size2D());
+			const float DistToGoal = static_cast<float>(FVector::Dist2D(Leader->GetActorLocation(), State.Leg1Goal));
+			if (State.Leg1Samples == 0 && (FMath::Abs(State.StageTime - 0.5f) < 0.03f || FMath::Abs(State.StageTime - 1.5f) < 0.03f))
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("LookDirectionSmoke: WalkLeg1 t=%.2f speed=%.1f dist=%.1f moving=%d"),
+					State.StageTime, Speed2D, DistToGoal, Leader->HasOwnMoveOrder() ? 1 : 0);
+			}
+			if (Speed2D > 25.f && State.StageTime > 0.20f)
 			{
 				++State.Leg1Samples;
 				const float Err = FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Leader->GetActorRotation().Yaw), State.LockedYawDeg));
@@ -495,15 +525,15 @@ namespace LookDirectionSmoke
 					++State.Leg1Bad;
 				}
 			}
-			const bool bArrived = FVector::Dist2D(Leader->GetActorLocation(), State.Leg1Goal) < 100.f && Leader->GetVelocity().Size2D() < 15.f;
+			const bool bArrived = State.StageTime > 0.5f && DistToGoal < 100.f && Speed2D < 15.f;
 			if (!bArrived && State.StageTime < 8.f)
 			{
 				return true;
 			}
 			const float MateErr = FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Mate->GetActorRotation().Yaw), State.LockedYawDeg));
 			Check(State, State.Leg1Samples >= 3 && State.Leg1Bad == 0 && MateErr <= 10.f,
-				FString::Printf(TEXT("L-path leg 1 keeps locked compass yaw +-10 deg (%d bad / %d samples, mate off %.1f)"),
-					State.Leg1Bad, State.Leg1Samples, MateErr));
+				FString::Printf(TEXT("L-path leg 1 keeps locked compass yaw +-10 deg (%d bad / %d samples, mate off %.1f, dist %.0f)"),
+					State.Leg1Bad, State.Leg1Samples, MateErr, FVector::Dist2D(Leader->GetActorLocation(), State.Leg1Goal)));
 
 			State.Leg2Goal = SmokeUtils::FreeSpot(World, State.Leg1Goal + State.ArenaForward * 380.f, Leader);
 			Check(State, Leader->OrderMoveTo(State.Leg2Goal, false) == EOperativeOrderResult::Accepted, TEXT("L-path leg 2 plain move accepted"));
@@ -649,6 +679,8 @@ namespace LookDirectionSmoke
 			Check(State, Leader->OrderMoveTo(State.RampSpot.RoofSprintGoal, true) == EOperativeOrderResult::Accepted,
 				TEXT("Roof plain sprint after ramp climb accepted"));
 			Check(State, !Leader->HasManualLookPoint(), TEXT("Roof sprint after ramp climb clears ManualLookPoint"));
+			State.bHasMovingTravelYaw = false;
+			State.LastMovingTravelYaw = RoofSprintYaw;
 			Next(State, EStage::RoofSprintClear);
 			return true;
 		}
@@ -657,6 +689,11 @@ namespace LookDirectionSmoke
 			if (!Leader)
 			{
 				return Finish(State, false);
+			}
+			if (Leader->GetVelocity().Size2D() > 50.f)
+			{
+				State.LastMovingTravelYaw = static_cast<float>(Leader->GetVelocity().Rotation().Yaw);
+				State.bHasMovingTravelYaw = true;
 			}
 			const bool bArrived = FVector::Dist2D(Leader->GetActorLocation(), State.RampSpot.RoofSprintGoal) < 130.f
 				&& Leader->GetVelocity().Size2D() < 10.f;
@@ -678,12 +715,16 @@ namespace LookDirectionSmoke
 			{
 				return true; // wait past F-1's 3.0 s quiet delay to confirm SetFacingPoint did not survive
 			}
-			const float TravelYaw = static_cast<float>((State.RampSpot.RoofSprintGoal - State.RoofSprintStart).Rotation().Yaw);
+			const float TravelYaw = State.bHasMovingTravelYaw
+				? State.LastMovingTravelYaw
+				: static_cast<float>((State.RampSpot.RoofSprintGoal - State.RoofSprintStart).Rotation().Yaw);
 			const float FinalYaw = static_cast<float>(Leader->GetActorRotation().Yaw);
 			const float OffDeg = FMath::Abs(FMath::FindDeltaAngleDegrees(FinalYaw, TravelYaw));
-			Check(State, OffDeg <= 15.f,
-				FString::Printf(TEXT("After ramp climb, roof sprint arrival holds travel yaw +-15 deg past 3.5s (got %.1f, travel %.1f, off %.1f)"),
-					FinalYaw, TravelYaw, OffDeg));
+			const float MeshRelYaw = Leader->GetMesh() ? static_cast<float>(Leader->GetMesh()->GetRelativeRotation().Yaw) : State.RestMeshYaw;
+			const float MeshDriftDeg = FMath::Abs(FMath::FindDeltaAngleDegrees(MeshRelYaw, State.RestMeshYaw));
+			Check(State, State.bHasMovingTravelYaw && OffDeg <= 15.f && MeshDriftDeg <= 2.f,
+				FString::Printf(TEXT("After ramp climb, roof sprint arrival holds travel yaw +-15 deg past 3.5s (actor %.1f, travel %.1f, off %.1f, meshDrift %.1f)"),
+					FinalYaw, TravelYaw, OffDeg, MeshDriftDeg));
 
 			// Part B arena check 1: SetFacingPoint must clear on plain move/sprint without F-1 returning after 3s.
 			const float HalfH = Leader->GetCapsuleComponent() ? Leader->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 88.f;
