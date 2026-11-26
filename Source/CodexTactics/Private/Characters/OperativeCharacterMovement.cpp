@@ -15,6 +15,7 @@
 #include "Characters/CriticalWoundRules.h"
 #include "Characters/OperativeAIController.h"
 #include "Characters/OperativeAnimInstance.h"
+#include "Characters/OperativeCharacterInternal.h"
 #include "Characters/SquadGiveWayRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "Characters/StealthModeRules.h"
@@ -139,6 +140,32 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	if (!bAutonomousOrder && !bPendingMoveReplay)
 	{
 		TacticalAnchor = SquadAutonomyRules::MakeAnchor(SquadROE::Get(), GetActorLocation(), Destination, GetActorRotation());
+	}
+	bPendingArrivalFacingLog = false;
+	if (!bPendingMoveReplay)
+	{
+		// Clear stale facing / look state on the move order itself (so deferred / climbing orders never keep old idle/ordered/look yaws).
+		ClearIdleFacing();
+		bExplicitFacing = false;
+		if (!bAutonomousOrder)
+		{
+			if (!IsInStealthMode() && bSprint && CanSprint() && HasManualLookPoint())
+			{
+				ClearManualLookPoint();
+				UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+			}
+			AOperativeCharacter* ActiveUnderFireShooter = nullptr;
+			FVector ActiveUnderFirePoint = FVector::ZeroVector;
+			const double NowSec = GetWorld() ? GetWorld()->GetTimeSeconds() : -1.0e9;
+			const bool bInContact = (CurrentCombatTarget.IsValid() && OperativeCharacterInternal::IsLiveTargetOf(*this, CurrentCombatTarget.Get()))
+				|| GetUnderFireThreat(ActiveUnderFireShooter, ActiveUnderFirePoint)
+				|| (NowSec - LastShotTime <= 5.0) || (NowSec - LastThreatContactTime <= 5.0);
+			if (!bInContact && bFoughtThisFight)
+			{
+				bFoughtThisFight = false;
+				LastThreat.Reset();
+			}
+		}
 	}
 	// User decision 2026-10-01: a sprint order (double click) stands a prone operative up — he rises in place, then runs;
 	// any move ordered while he is getting up starts once he is up. SetStance arms the settle time, so the hold below covers
@@ -684,6 +711,7 @@ void AOperativeCharacter::StopOperative()
 	bSteeringOwnMove = false;
 	bStealthFast = false;
 	bSprinting = false;
+	bPendingArrivalFacingLog = false;
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(PendingMoveTimer);
@@ -793,6 +821,8 @@ void AOperativeCharacter::HandleMoveFinished()
 	bOwnMoveOrder = false;
 	bStealthFast = false;
 	bSprinting = false;
+	ArrivalTravelYaw = static_cast<float>(SmoothedVelocity.SizeSquared2D() > 10.f * 10.f ? SmoothedVelocity.Rotation().Yaw : GetActorRotation().Yaw);
+	bPendingArrivalFacingLog = true;
 	ApplyMovementParams();
 
 	// Sprint 12: arrived at the cover slot ordered -> press against the wall.

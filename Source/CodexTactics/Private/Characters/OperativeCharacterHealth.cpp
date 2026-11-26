@@ -703,6 +703,11 @@ void AOperativeCharacter::ResetTransientStateForLoad()
 	}
 	TacticalAnchor = FTacticalAnchor();
 	SetAutonomyTarget(nullptr);
+	ClearManualLookPoint();
+	ClearIdleFacing();
+	bExplicitFacing = false;
+	bFoughtThisFight = false;
+	LastThreat.Reset();
 	StopOperative();
 	if (UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
 	{

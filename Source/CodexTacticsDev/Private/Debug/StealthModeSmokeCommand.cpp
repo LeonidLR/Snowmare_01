@@ -553,7 +553,7 @@ namespace StealthModeSmoke
 					++State.AnchorLostSightFrames;
 				}
 			}
-			const float ExpectedYaw = static_cast<float>((State.AnchorPoint - Op->GetActorLocation()).Rotation().Yaw);
+			const float ExpectedYaw = Op->GetManualLookYawDeg();
 			if (FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), ExpectedYaw)) > 10.f)
 			{
 				++State.AnchorWrongYawFrames;
