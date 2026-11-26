@@ -13,6 +13,7 @@
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/TrapSpotRules.h"
 #include "Ladders/LadderClimbComponent.h"
+#include "Falls/LedgeFallComponent.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Subsystems/CodexEventBus.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -129,6 +130,7 @@ void USquadSubsystem::UnregisterOperative(AOperativeCharacter* Operative)
 {
 	Members.Remove(Operative);
 	SelectedGroup.Remove(Operative); // a fallen member drops out of the selection too
+	StoodUpForSprint.Remove(Operative);
 	if (Operative && PendingLeader.Get() == Operative)
 	{
 		// Bug 2026-11-08: the member selected to lead from the next order fell - the selection returns to the formation's leader.
@@ -255,6 +257,7 @@ void USquadSubsystem::SwitchFormationLeader(AOperativeCharacter& NewLeaderRef)
 		LeaderFacingMemory.Add(OldLeader, { static_cast<float>(OldLeader->GetActorRotation().Yaw), Now }); // his own facing as the leader
 	}
 	Leader = NewLeader;
+	StoodUpForSprint.Remove(NewLeader); // a promoted leader is no longer a stood-up follower
 	// SquadControlSmoke "leader switched away and back" (2026-11-17): a parked follower faces where his leader faces (the idle facing of
 	// UpdateFollower); made the leader he kept that stale idle facing, and it won over his new-leader halt look (OperativeCharacterAim's
 	// idle-facing branch, and the formation sector look needs no idle facing). Neither man keeps a follower's parked facing across the switch:
@@ -625,7 +628,11 @@ void USquadSubsystem::SetFollowersHolding(bool bHold)
 		Follower.bParked = bHold;
 		Follower.RepathTimeRemaining = 0.f;
 	}
-	if (!bHold)
+	if (bHold)
+	{
+		StoodUpForSprint.Reset();
+	}
+	else
 	{
 		EnforceFormationStealthRule();
 	}
@@ -1086,6 +1093,7 @@ void USquadSubsystem::RestoreSoloForLoad(bool bSolo, bool bInTrapSolo)
 	bIsSoloMode = bSolo;
 	bTrapSolo = bSolo && bInTrapSolo;
 	FastRegroups.Reset(); // a load puts everyone where the save had him (2026-11-10)
+	StoodUpForSprint.Reset();
 	SetFollowersHolding(bSolo);
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	if (LeaderRef && HasMultiSelection())
@@ -1585,6 +1593,7 @@ void USquadSubsystem::ToggleGuard(AOperativeCharacter* Operative)
 	if (Operative->bGuarding)
 	{
 		Operative->StopOperative();
+		StoodUpForSprint.Remove(Operative);
 	}
 	RebuildFollowers(); // Godot assign_formation_slots skips guards
 	UFloatingTextSubsystem::SpawnAboveOperative(Operative, Operative->bGuarding ? TEXT("🛡️ GUARD: HELD") : TEXT("🏃 REGROUP"),
@@ -1881,33 +1890,83 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		return;
 	}
 
-	// Followers copy the moving leader's sprint. Deviation (user decision 2026-10-01): every operative keeps the stance
-	// he was given — no copy of the leader's stance (Godot can_sync_stance); only Alt + Z / C / V sets the whole squad.
-	// Bug 2026-10-20: a crouch the SQUAD gave him (Regroup's copy, Solo's guard crouch, a confinement) does not keep him from running with
-	// the sprinting leader - he stands up (the clip defers the move below), then sprints.
-	// G026: a man who has taken his wall slot stays down. Crouching on his own arrival used to wait for the slot yaw, which
-	// was also after the leader stopped sprinting. Standing him back up left the wall pose set and the stance standing.
-	if (!Operative->IsInFormationWallPose()
-		&& CVarSquadFollowerSprintStandUp.GetValueOnGameThread() != 0
-		&& SquadOrderRules::ShouldStandToSprintWithLeader(LeaderRef.IsSprinting(), Operative->GetStance() == EOperativeStance::Crouching,
-			Operative->IsStanceFromSquad(), Operative->CanSprint()))
-	{
-		UE_LOG(LogCodexTactics, Display, TEXT("Squad: %s stands up to sprint with the leader (squad-given crouch)"), *Operative->DisplayName.ToString());
-		Operative->SetStance(EOperativeStance::Standing);
-		Operative->MarkStanceFromSquad();
-	}
-	// Rules v2.5 (the covered approach to the wall): the rear cover and the flank men do not sprint after the leader running in - a sprinting
-	// operative faces his run; they hold their looks at the approach pace (the rear cover walks backwards at the backward cap).
+	// Task 150 + Rules v2.5: in formation, a run (double-click / sprint) order on the leader stands crouched or prone followers up
+	// and sprints them too (while keeping cover/wall/stealth/approach/incapacity guards); on return to walk or crouch (single-click / C),
+	// followers drop sprint and match the leader's stance if the sprint stood them up. Solo stays untouched.
 	const TOptional<EFormationRole> ApproachRole = Sectors.bActiveThisFrame ? SectorRoleOf(Follower) : TOptional<EFormationRole>();
 	const TOptional<EFormationApproachDuty> ApproachDuty = ApproachRole.IsSet() ? FormationApproachDuty(ApproachRole.GetValue()) : TOptional<EFormationApproachDuty>();
 	// Fixes d / e (2026-11-01): a man walking the leader's route round the obstacle runs with him (no approach duty yet).
 	const bool bHoldsApproachLook = ApproachDuty.IsSet() && (ApproachDuty.GetValue() == EFormationApproachDuty::Rear || ApproachDuty.GetValue() == EFormationApproachDuty::Flank)
 		&& !(ApproachRole.IsSet() && Sectors.WallRouteRoles.Contains(ApproachRole.GetValue()));
-	Operative->SetSprinting(LeaderRef.IsSprinting() && !bHoldsApproachLook);
+	const bool bAllowStandUp = CVarSquadFollowerSprintStandUp.GetValueOnGameThread() != 0;
+	const bool bTraversalOrSniperHold = Operative->IsHoldingForSniperShot()
+		|| IsInSquadMantle(Operative)
+		|| Operative->IsMantling()
+		|| Operative->IsVaulting()
+		|| Operative->IsMantleDescending()
+		|| (Operative->LadderClimb && Operative->LadderClimb->IsBusy())
+		|| (Operative->LedgeFall && Operative->LedgeFall->IsBusy())
+		|| Operative->IsCommittedToNavLinkDrop();
+	const auto SetStoodUp = [this, &Follower](bool bOn)
+	{
+		if (bOn)
+		{
+			StoodUpForSprint.Add(Follower.Operative);
+		}
+		else
+		{
+			StoodUpForSprint.Remove(Follower.Operative);
+		}
+	};
+	SquadOrderRules::FFormationFollowOrderFacts FollowFacts;
+	FollowFacts.bInFormation = IsFormationActive() && !bIsSoloMode && !bFollowersHolding;
+	FollowFacts.bLeaderSprinting = LeaderRef.IsSprinting();
+	FollowFacts.LeaderStance = LeaderRef.GetStance();
+	FollowFacts.FollowerStance = Operative->GetStance();
+	FollowFacts.bStanceFromSquad = Operative->IsStanceFromSquad();
+	FollowFacts.bStoodUpForLeaderSprint = StoodUpForSprint.Contains(Follower.Operative);
+	FollowFacts.bCanSprintStanding = Operative->CanSprintIfStanding() && (Operative->GetStance() == EOperativeStance::Standing || bAllowStandUp);
+	FollowFacts.bHoldsApproachLook = bHoldsApproachLook;
+	FollowFacts.bInWallPose = Operative->IsInFormationWallPose();
+	FollowFacts.bInCover = Operative->bInCover || Operative->HasPendingCover() || HasGroupCoverProne(Operative);
+	FollowFacts.bInStealth = Operative->IsInStealthMode();
+	FollowFacts.bLockedProne = Operative->IsCriticallyWounded();
+	FollowFacts.bTraversalOrSniperHold = bTraversalOrSniperHold;
+	const SquadOrderRules::FFormationFollowStanceGait FollowAction = SquadOrderRules::ResolveFormationFollowStanceGait(FollowFacts);
+	if (bAllowStandUp && FollowAction.bChangeStance)
+	{
+		const EOperativeStance PrevStance = Operative->GetStance();
+		Operative->SetStance(FollowAction.DesiredStance);
+		if (Operative->GetStance() == FollowAction.DesiredStance)
+		{
+			if (FollowAction.bMarkStanceFromSquad)
+			{
+				Operative->MarkStanceFromSquad();
+			}
+			SetStoodUp(FollowAction.bNextStoodUpForLeaderSprint);
+			if (FollowAction.DesiredStance == EOperativeStance::Standing && PrevStance != EOperativeStance::Standing)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Squad: %s stands up to sprint with the leader"), *Operative->DisplayName.ToString());
+			}
+		}
+		else
+		{
+			SetStoodUp(false);
+		}
+	}
+	else
+	{
+		SetStoodUp(FollowAction.bChangeStance ? false : FollowAction.bNextStoodUpForLeaderSprint);
+	}
+	if (!bTraversalOrSniperHold)
+	{
+		Operative->SetSprinting(FollowAction.bSprint);
+	}
 
 	// Bug 2026-10-11 (solo off: prone followers slid towards the leader while still rising): a stance change in progress roots
 	// the follower - he stays put until the clip ends, then the next repath sends him to his slot.
-	if (const float MoveHold = Operative->GetMoveHoldSeconds(); OperativeMovementRules::ShouldDeferMove(MoveHold))
+	if (const float MoveHold = Operative->GetMoveHoldSeconds();
+		!bTraversalOrSniperHold && OperativeMovementRules::ShouldDeferMove(MoveHold))
 	{
 		if (Operative->GetVelocity().SizeSquared2D() > 25.f && !Operative->IsProneDiving()) // rev 5f: a dive slides on (root motion)
 		{

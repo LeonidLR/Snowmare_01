@@ -19,3 +19,10 @@ Check whether path costs already avoid revealed traps today and report.
   (default climbs, not around), tall wall (local detour), strict mode stop, revealed tripwire on the line (stop + warn), pause waypoints (3 legs).
 - Branch gemini/141-straight-line-moves from origin/main; build via machine_dispatch.py; report docs/port/gemini/outbox/141-straight-line-moves.report.md;
   FINISH `141 FINISH | PASS/FAIL | <hash> | ...`. Queue: after 135, before 121.
+
+## Designer repro 2026-11-26 (play copy 6178d3ec, X6, Solo, Medic-Sapper crouched behind a fence) - DO THIS FIRST in 141
+A click on the GROUND on the far side -> he vaults the fence (correct). A click on a COVER (low cover) on the far side -> "Take cover!" and he
+runs all the way around the fence. So the cover order builds its path differently from the ground move (likely a nav query filter without the
+fence / mantle links, or the cover approach / slot path ignoring them). Every order that moves an operative (cover, corner peek, breach stack,
+corpse search, first aid, group cover) must use the same path rule as the ground move, incl. fence links and rule 1 (straight preferred).
+Smoke: operative behind a fence, cover order to a low cover on the far side -> he vaults, no loop (path length <= 1.3x straight line).

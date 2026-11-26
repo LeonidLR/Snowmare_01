@@ -53,6 +53,22 @@ export interface SectorFightStats {
   recommendedSector: number | null;
 }
 
+export type TrainingBuildId = 'main' | 'play';
+export interface TrainingBuildStatus {
+  id: TrainingBuildId;
+  available: boolean;
+  built: boolean;
+  fresh: boolean;
+  head: string | null;
+  builtHead: string | null;
+  label: string;
+}
+export interface TrainingBuilds {
+  main: TrainingBuildStatus;
+  play: TrainingBuildStatus;
+  defaultBuild: TrainingBuildId;
+}
+
 export interface TrainingData {
   maps: typeof TRAINING_MAPS;
   active: TrainingSelection;
@@ -62,4 +78,5 @@ export interface TrainingData {
   sectorStats?: SectorFightStats;
   howto?: string;
   editorCmdPath?: string;
+  builds?: TrainingBuilds;
 }

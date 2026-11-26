@@ -83,6 +83,8 @@ namespace CoverIndoorSmoke
 		int32 LookSample = 0;
 		double LookSince = -1.0;
 		bool bSawYawOff = false;
+		bool bSawYawRight = false;
+		bool bSawYawLeft = false;
 		bool bSawPitchUp = false;
 		bool bSawPitchDown = false;
 		bool bLookSidesDiffer = false;
@@ -358,6 +360,8 @@ namespace CoverIndoorSmoke
 			R.LookSample = 0;
 			R.LookSince = -1.0;
 			R.bSawYawOff = false;
+			R.bSawYawRight = false;
+			R.bSawYawLeft = false;
 			R.bSawPitchUp = false;
 			R.bSawPitchDown = false;
 			R.bLookSidesDiffer = false;
@@ -684,6 +688,14 @@ namespace CoverIndoorSmoke
 					if (FMath::Abs(Anim->AimYaw) > 8.f)
 					{
 						R.bSawYawOff = true;
+						if (R.LookSample < 2)
+						{
+							R.bSawYawRight = true;
+						}
+						else
+						{
+							R.bSawYawLeft = true;
+						}
 					}
 					if (Anim->AimPitch > 8.f)
 					{
@@ -720,6 +732,7 @@ namespace CoverIndoorSmoke
 			Check(R.bSawPitchUp && R.bSawPitchDown, FString::Printf(TEXT("%s look drives aim pitch up and down"), bCrouch ? TEXT("crouched") : TEXT("standing")));
 			Check(R.bLookSidesDiffer, TEXT("the look crosses the corner normal onto the other hand"));
 			Check(R.bSawYawOff, TEXT("the look drives aim yaw off centre"));
+			Check(R.bSawYawRight && R.bSawYawLeft, TEXT("the look drives aim yaw both right and left"));
 			Check(!Op->WantsCornerLookPose(), TEXT("clearing the look returns to the plain peek"));
 			InSetCheck(bCrouch ? TEXT("crouched peek-aim") : TEXT("standing peek-aim"), TEXT("Aim"));
 			Check(!Anim->IsCoverOverTopFireSet(), TEXT("the corner uses the side peek set"));

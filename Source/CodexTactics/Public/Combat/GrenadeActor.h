@@ -41,6 +41,14 @@ public:
 	bool CancelAndRefund();
 
 	bool IsFlying() const { return bFlying; }
+	/** G023: true while holding in hand waiting for the thrower to finish pre-turning toward the target. */
+	bool IsPreTurnPending() const { return bPreTurnPending; }
+	/** G023: true once the throw release delay countdown has reached 0 (grenade left hand / flying or landed). */
+	bool HasReleased() const { return !bPreTurnPending && ReleaseDelay <= 0.f; }
+	/** G023: pauses the release delay in hand while the thrower pre-turns. */
+	void SetPreTurnPending(bool bPending) { bPreTurnPending = bPending; }
+	/** G023: unpauses from pre-turn and arms the release countdown from the started clip. */
+	void StartRelease(float NewReleaseDelay);
 	/** The operative who threw it (null once he is gone). */
 	AOperativeCharacter* GetThrower() const { return Thrower.Get(); }
 	bool HasLanded() const { return bLanded; }
@@ -79,6 +87,7 @@ private:
 	float ReleaseDelay = 0.f;
 	float FlightElapsed = 0.f;
 	float FlightDuration = 0.f;
+	bool bPreTurnPending = false;
 	bool bFlying = false;
 	bool bLanded = false;
 	bool bDetonated = false;

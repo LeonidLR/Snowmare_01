@@ -10,6 +10,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "Combat/GrenadeActor.h"
 #include "Combat/GrenadeRules.h"
+#include "Combat/HealthComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/StaticMesh.h"
@@ -378,6 +379,75 @@ AGrenadeActor* UGrenadeSubsystem::ThrowAtCursor(const FVector& CursorPoint)
 	return Grenade;
 }
 
+TStatId UGrenadeSubsystem::GetStatId() const
+{
+	RETURN_QUICK_DECLARE_CYCLE_STAT(UGrenadeSubsystem, STATGROUP_Tickables);
+}
+
+void UGrenadeSubsystem::ClearThrowFacing(const AOperativeCharacter* ForThrower)
+{
+	for (int32 i = PendingThrows.Num() - 1; i >= 0; --i)
+	{
+		if (PendingThrows[i].Thrower.Get() == ForThrower)
+		{
+			if (!PendingThrows[i].bClipStarted && PendingThrows[i].Grenade.IsValid())
+			{
+				PendingThrows[i].Grenade->CancelAndRefund();
+			}
+			PendingThrows.RemoveAtSwap(i);
+		}
+	}
+	if (AOperativeCharacter* Mutable = const_cast<AOperativeCharacter*>(ForThrower))
+	{
+		Mutable->SetGrenadeFacingLock(TOptional<float>());
+	}
+}
+
+void UGrenadeSubsystem::Tick(float DeltaTime)
+{
+	for (int32 i = PendingThrows.Num() - 1; i >= 0; --i)
+	{
+		FPendingThrow& Entry = PendingThrows[i];
+		AOperativeCharacter* ThrowerActor = Entry.Thrower.Get();
+		AGrenadeActor* Grenade = Entry.Grenade.Get();
+		const bool bAlive = IsValid(ThrowerActor) && ThrowerActor->HealthComponent && ThrowerActor->HealthComponent->IsAlive();
+		if (!bAlive || !IsValid(Grenade) || ThrowerActor->HasDoorFacingLock())
+		{
+			if (!Entry.bClipStarted && IsValid(Grenade))
+			{
+				Grenade->CancelAndRefund();
+			}
+			if (IsValid(ThrowerActor))
+			{
+				ThrowerActor->SetGrenadeFacingLock(TOptional<float>());
+			}
+			PendingThrows.RemoveAtSwap(i);
+			continue;
+		}
+		Entry.Elapsed += DeltaTime;
+		if (!Entry.bClipStarted)
+		{
+			const float ErrDeg = GrenadeRules::ThrowErrorDeg(static_cast<float>(ThrowerActor->GetActorRotation().Yaw), Entry.TargetYaw);
+			if (ErrDeg <= GrenadeRules::PreTurnDoneDeg || Entry.Elapsed >= GrenadeRules::MaxPreTurnSeconds)
+			{
+				ThrowerActor->SetActorRotation(FRotator(0.f, Entry.TargetYaw, 0.f));
+				Entry.bClipStarted = true;
+				Entry.Elapsed = 0.f;
+				ThrowerActor->GrenadeReleaseSeconds = -1.f;
+				ThrowerActor->OnGrenadeThrowNative.Broadcast();
+				ThrowerActor->ReceiveGrenadeThrow();
+				Grenade->StartRelease(GrenadeRules::ReleaseDelay(ThrowerActor->GrenadeThrowDuration, ThrowerActor->GrenadeReleaseSeconds));
+			}
+			continue;
+		}
+		if (Grenade->HasReleased() || Entry.Elapsed >= GrenadeRules::MaxFacingHoldSeconds)
+		{
+			ThrowerActor->SetGrenadeFacingLock(TOptional<float>());
+			PendingThrows.RemoveAtSwap(i);
+		}
+	}
+}
+
 AGrenadeActor* UGrenadeSubsystem::ThrowAt(AOperativeCharacter* InThrower, const FVector& Target)
 {
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
@@ -385,6 +455,7 @@ AGrenadeActor* UGrenadeSubsystem::ThrowAt(AOperativeCharacter* InThrower, const 
 	{
 		return nullptr;
 	}
+	ClearThrowFacing(InThrower);
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	AGrenadeActor* Grenade = GetWorld()->SpawnActor<AGrenadeActor>(GrenadeClass ? *GrenadeClass : AGrenadeActor::StaticClass(),
@@ -393,11 +464,27 @@ AGrenadeActor* UGrenadeSubsystem::ThrowAt(AOperativeCharacter* InThrower, const 
 	{
 		return nullptr;
 	}
-	InThrower->GrenadeReleaseSeconds = -1.f; // the anim instance (or the Blueprint event) sets the clip's own release time
-	InThrower->OnGrenadeThrowNative.Broadcast();
-	InThrower->ReceiveGrenadeThrow();
-	Grenade->ConfigureFrom(InThrower, GrenadeRules::ReleaseDelay(InThrower->GrenadeThrowDuration, InThrower->GrenadeReleaseSeconds));
-	Grenade->ThrowTo(Target + FVector(0.f, 0.f, 12.f));
+	const float CurrentYaw = static_cast<float>(InThrower->GetActorRotation().Yaw);
+	const float DesiredYaw = GrenadeRules::ThrowYaw(InThrower->GetActorLocation(), Target, CurrentYaw);
+	const float ErrDeg = GrenadeRules::ThrowErrorDeg(CurrentYaw, DesiredYaw);
+	InThrower->SetGrenadeFacingLock(DesiredYaw);
+	if (!InThrower->HasDoorFacingLock() && GrenadeRules::NeedsPreTurn(ErrDeg))
+	{
+		// G023: smoothly turn toward the throw target BEFORE the upper-body throw montage begins.
+		Grenade->ConfigureFrom(InThrower, 0.f);
+		Grenade->SetPreTurnPending(true);
+		Grenade->ThrowTo(Target + FVector(0.f, 0.f, 12.f));
+		PendingThrows.Add({ InThrower, Grenade, DesiredYaw, 0.f, false });
+	}
+	else
+	{
+		InThrower->GrenadeReleaseSeconds = -1.f; // the anim instance (or the Blueprint event) sets the clip's own release time
+		InThrower->OnGrenadeThrowNative.Broadcast();
+		InThrower->ReceiveGrenadeThrow();
+		Grenade->ConfigureFrom(InThrower, GrenadeRules::ReleaseDelay(InThrower->GrenadeThrowDuration, InThrower->GrenadeReleaseSeconds));
+		Grenade->ThrowTo(Target + FVector(0.f, 0.f, 12.f));
+		PendingThrows.Add({ InThrower, Grenade, DesiredYaw, 0.f, true });
+	}
 	--InThrower->GrenadesCount;
 	if (InThrower->GrenadesCount <= 0)
 	{
@@ -544,6 +631,14 @@ void UGrenadeSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexComba
 		CancelAim(true);
 	}
 	int32 Refunded = 0;
+	for (const FPendingThrow& Entry : PendingThrows)
+	{
+		if (AOperativeCharacter* EntryThrower = Entry.Thrower.Get())
+		{
+			EntryThrower->SetGrenadeFacingLock(TOptional<float>());
+		}
+	}
+	PendingThrows.Reset();
 	for (TActorIterator<AGrenadeActor> It(GetWorld()); It; ++It)
 	{
 		Refunded += It->CancelAndRefund() ? 1 : 0;

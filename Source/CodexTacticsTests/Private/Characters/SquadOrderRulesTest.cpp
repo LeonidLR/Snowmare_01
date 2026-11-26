@@ -165,6 +165,117 @@ bool FSquadOrderStandToSprintTest::RunTest(const FString&)
 	return true;
 }
 
+SQUAD_ORDER_TEST(FSquadOrderFormationFollowStanceGaitTest, "FormationFollowStanceGait")
+bool FSquadOrderFormationFollowStanceGaitTest::RunTest(const FString&)
+{
+	using namespace SquadOrderRules;
+
+	// 1. Player crouched squad (Alt+C -> bStanceFromSquad = false), leader double-clicks (sprints): crouched follower stands up & sprints.
+	FFormationFollowOrderFacts CrouchedSprint;
+	CrouchedSprint.bLeaderSprinting = true;
+	CrouchedSprint.FollowerStance = EOperativeStance::Crouching;
+	CrouchedSprint.bStanceFromSquad = false;
+	FFormationFollowStanceGait Res = ResolveFormationFollowStanceGait(CrouchedSprint);
+	TestTrue(TEXT("Crouched follower stands on leader sprint"), Res.bChangeStance);
+	TestEqual(TEXT("Desired stance is Standing"), Res.DesiredStance, EOperativeStance::Standing);
+	TestTrue(TEXT("Stance marked from squad"), Res.bMarkStanceFromSquad);
+	TestTrue(TEXT("Tracks stood-up-for-sprint"), Res.bNextStoodUpForLeaderSprint);
+	TestTrue(TEXT("Follower sprints"), Res.bSprint);
+
+	// 2. Prone follower in formation: leader sprints -> prone follower stands up & sprints too.
+	FFormationFollowOrderFacts ProneSprint = CrouchedSprint;
+	ProneSprint.FollowerStance = EOperativeStance::Prone;
+	Res = ResolveFormationFollowStanceGait(ProneSprint);
+	TestTrue(TEXT("Prone follower stands on leader sprint"), Res.bChangeStance);
+	TestEqual(TEXT("Prone desired stance is Standing"), Res.DesiredStance, EOperativeStance::Standing);
+	TestTrue(TEXT("Prone follower sprints"), Res.bSprint);
+
+	// 3. Next single-click order (leader walks Standing): follower drops sprint (walks) and keeps Standing while armed.
+	FFormationFollowOrderFacts SingleClickWalk;
+	SingleClickWalk.bLeaderSprinting = false;
+	SingleClickWalk.LeaderStance = EOperativeStance::Standing;
+	SingleClickWalk.FollowerStance = EOperativeStance::Standing;
+	SingleClickWalk.bStanceFromSquad = true;
+	SingleClickWalk.bStoodUpForLeaderSprint = true;
+	Res = ResolveFormationFollowStanceGait(SingleClickWalk);
+	TestFalse(TEXT("Single-click walk keeps leader Standing stance"), Res.bChangeStance);
+	TestFalse(TEXT("Single-click walk stops sprint"), Res.bSprint);
+	TestTrue(TEXT("Still tracks stood-up-for-sprint until crouch or manual override"), Res.bNextStoodUpForLeaderSprint);
+
+	// 4. Player presses C key (leader crouches): stood-up follower follows leader back to Crouching.
+	FFormationFollowOrderFacts LeaderCrouch = SingleClickWalk;
+	LeaderCrouch.LeaderStance = EOperativeStance::Crouching;
+	Res = ResolveFormationFollowStanceGait(LeaderCrouch);
+	TestTrue(TEXT("C key after sprint syncs stood-up follower back to Crouching"), Res.bChangeStance);
+	TestEqual(TEXT("Copies leader crouch stance"), Res.DesiredStance, EOperativeStance::Crouching);
+	TestFalse(TEXT("Clears stood-up flag once returned from Standing"), Res.bNextStoodUpForLeaderSprint);
+	TestFalse(TEXT("Not sprinting when crouched"), Res.bSprint);
+
+	// 5. Manual follower override (bStanceFromSquad = false while standing) means C key on leader leaves follower alone.
+	FFormationFollowOrderFacts ManualStanding = LeaderCrouch;
+	ManualStanding.bStanceFromSquad = false;
+	Res = ResolveFormationFollowStanceGait(ManualStanding);
+	TestFalse(TEXT("Manual follower stance is not overridden by C key"), Res.bChangeStance);
+	TestFalse(TEXT("Stood-up flag clears on manual stance"), Res.bNextStoodUpForLeaderSprint);
+
+	// 6. Leader C without prior sprint stand-up does not crouch standing followers.
+	FFormationFollowOrderFacts NormalFormationCrouch = LeaderCrouch;
+	NormalFormationCrouch.bStoodUpForLeaderSprint = false;
+	Res = ResolveFormationFollowStanceGait(NormalFormationCrouch);
+	TestFalse(TEXT("Standing follower without sprint stand-up does not copy C key"), Res.bChangeStance);
+
+	// 7. Solo mode: never changes follower stance or sprint.
+	FFormationFollowOrderFacts Solo = CrouchedSprint;
+	Solo.bInFormation = false;
+	Res = ResolveFormationFollowStanceGait(Solo);
+	TestFalse(TEXT("Solo never changes follower stance"), Res.bChangeStance);
+	TestFalse(TEXT("Solo never forces sprint"), Res.bSprint);
+
+	// 8. Guards: wounded/carrying/cover/stealth/wall-pose/locked-prone/approach-look stay protected.
+	FFormationFollowOrderFacts Guard = CrouchedSprint;
+	Guard.bCanSprintStanding = false;
+	Res = ResolveFormationFollowStanceGait(Guard);
+	TestFalse(TEXT("Cannot sprint when wounded/carrying/cold"), Res.bChangeStance || Res.bSprint);
+
+	Guard = CrouchedSprint;
+	Guard.bInCover = true;
+	Res = ResolveFormationFollowStanceGait(Guard);
+	TestFalse(TEXT("Follower in cover stays down until leaving cover"), Res.bChangeStance || Res.bSprint);
+
+	Guard = CrouchedSprint;
+	Guard.bInStealth = true;
+	Res = ResolveFormationFollowStanceGait(Guard);
+	TestFalse(TEXT("Stealthed follower stays in stealth"), Res.bChangeStance || Res.bSprint);
+
+	Guard = CrouchedSprint;
+	Guard.bLockedProne = true;
+	Res = ResolveFormationFollowStanceGait(Guard);
+	TestFalse(TEXT("Critically wounded / locked prone stays down"), Res.bChangeStance || Res.bSprint);
+
+	Guard = CrouchedSprint;
+	Guard.bHoldsApproachLook = true;
+	Res = ResolveFormationFollowStanceGait(Guard);
+	TestFalse(TEXT("Rear/flank approach look holds crouch/walk"), Res.bChangeStance || Res.bSprint);
+
+	Guard = CrouchedSprint;
+	Guard.bInWallPose = true;
+	Res = ResolveFormationFollowStanceGait(Guard);
+	TestFalse(TEXT("Follower in formation wall pose stays crouched"), Res.bChangeStance || Res.bSprint);
+
+	Guard = CrouchedSprint;
+	Guard.bTraversalOrSniperHold = true;
+	Res = ResolveFormationFollowStanceGait(Guard);
+	TestFalse(TEXT("Traversal/sniper hold keeps stance and skips sprint"), Res.bChangeStance || Res.bSprint);
+
+	FFormationFollowOrderFacts LeaderProne = SingleClickWalk;
+	LeaderProne.LeaderStance = EOperativeStance::Prone;
+	Res = ResolveFormationFollowStanceGait(LeaderProne);
+	TestTrue(TEXT("Stood-up follower copies leader Prone when V pressed"), Res.bChangeStance && Res.DesiredStance == EOperativeStance::Prone);
+	TestFalse(TEXT("Clears stood-up flag once returned to Prone"), Res.bNextStoodUpForLeaderSprint);
+
+	return true;
+}
+
 SQUAD_ORDER_TEST(FSquadOrderDropsPendingCoverTest, "DropsPendingCover")
 bool FSquadOrderDropsPendingCoverTest::RunTest(const FString&)
 {

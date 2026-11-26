@@ -8,6 +8,9 @@ import type {
   SectorFightRow,
   SectorFightStats,
   TrainingData,
+  TrainingBuildId,
+  TrainingBuildStatus,
+  TrainingBuilds,
   TrainingRun,
   TrainingSector,
   TrainingSelection,
@@ -295,6 +298,68 @@ function recentRuns(root: string): TrainingRun[] {
   return result.sort((a, b) => Date.parse(b.time) - Date.parse(a.time)).slice(0, 12);
 }
 
+/** Mirrors editor_status.py: newest editor DLL compared with newest source file. */
+function newestFileTime(dir: string, accept: (name: string) => boolean = () => true): number {
+  let newest = 0;
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) newest = Math.max(newest, newestFileTime(file, accept));
+      else if (entry.isFile() && accept(entry.name)) newest = Math.max(newest, fs.statSync(file).mtimeMs);
+    }
+  } catch { /* Missing or changing build: reported as unavailable/not built. */ }
+  return newest;
+}
+
+export function trainingBuildRoot(root: string, build: TrainingBuildId): string {
+  return build === 'play' ? path.join(path.dirname(root), 'CodexTactics-play') : root;
+}
+
+function readBuildStatus(root: string, id: TrainingBuildId): TrainingBuildStatus {
+  const buildRoot = trainingBuildRoot(root, id);
+  const available = fs.existsSync(path.join(buildRoot, 'CodexTactics.uproject'));
+  const dllTime = newestFileTime(path.join(buildRoot, 'Binaries/Win64'), (name) => /^UnrealEditor-CodexTactics.*\.dll$/i.test(name));
+  const built = available && dllTime > 0;
+  const fresh = built && dllTime >= newestFileTime(path.join(buildRoot, 'Source'));
+  let head: string | null = null;
+  try {
+    head = execFileSync('git', ['rev-parse', '--short=8', 'HEAD'], {
+      cwd: buildRoot, encoding: 'utf8', timeout: 5000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim() || null;
+  } catch { /* A fixture or absent checkout has no HEAD. */ }
+  let builtHead: string | null = null;
+  try {
+    const lines = fs.readFileSync(path.join(buildRoot, 'Saved/Logs/RemoteBuilds.jsonl'), 'utf8').trim().split(/\r?\n/);
+    for (const line of lines.reverse()) {
+      try {
+        const entry = parse(line);
+        if (entry?.exit === 0 && typeof entry.head === 'string') { builtHead = entry.head; break; }
+      } catch { /* A build may still be appending its record. */ }
+    }
+  } catch { /* Local builds may not have a remote-build record. */ }
+  const title = id === 'play' ? 'Play' : 'Main';
+  const label = !available ? `${title}: отсутствует` : !built ? `${title}: не собрана`
+    : !fresh ? `${title}: устарело` : `${title}: собрано${builtHead || head ? `, ${builtHead || head}` : ''}`;
+  return { id, available, built, fresh, head, builtHead, label };
+}
+
+export function readTrainingBuilds(root: string): TrainingBuilds {
+  const main = readBuildStatus(root, 'main');
+  const play = readBuildStatus(root, 'play');
+  return { main, play, defaultBuild: play.fresh ? 'play' : 'main' };
+}
+
+function requestedBuild(root: string, payload: unknown): { build: TrainingBuildId; root: string } | { status: number; error: string } {
+  const raw = record(payload);
+  const build = raw?.build === undefined ? 'main' : raw.build;
+  if (build !== 'main' && build !== 'play') return { status: 400, error: 'Сборка должна быть Main или Play.' };
+  const buildRoot = trainingBuildRoot(root, build);
+  if (build === 'play' && !fs.existsSync(path.join(buildRoot, 'CodexTactics.uproject'))) {
+    return { status: 404, error: 'Игровая копия Play отсутствует. Обратитесь к Lead, чтобы подготовить её.' };
+  }
+  return { build, root: buildRoot };
+}
+
 export function readTrainingData(root: string): TrainingData {
   const sectors = readTrainingSectors(root);
   const layout = read(path.join(root, 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1_x6.json'));
@@ -314,6 +379,7 @@ export function readTrainingData(root: string): TrainingData {
     sectorStats: readSectorFightStats(root),
     howto,
     editorCmdPath,
+    builds: readTrainingBuilds(root),
   };
 }
 
@@ -419,24 +485,27 @@ function checkLaunchGuards(root: string, deps: TrainingLaunchDeps): { status: nu
   const uprojectPath = path.join(root, 'CodexTactics.uproject');
   const isRunning = deps.isMainEditorRunning ?? defaultIsMainEditorRunning;
   if (isRunning(uprojectPath)) {
-    return { status: 409, error: 'Редактор или игра CodexTactics уже запущены в main — закройте их перед запуском.' };
+    return { status: 409, error: 'Редактор или игра CodexTactics уже запущены в выбранной сборке — закройте их перед запуском.' };
   }
   return null;
 }
 
-export async function handleOpenEditor(root: string, deps: TrainingLaunchDeps = {}): Promise<{ status: number; body: ObjectData }> {
-  const guard = checkLaunchGuards(root, deps);
+export async function handleOpenEditor(root: string, deps: TrainingLaunchDeps = {}, payload: unknown = {}): Promise<{ status: number; body: ObjectData }> {
+  const selected = requestedBuild(root, payload);
+  if ('error' in selected) return { status: selected.status, body: { error: selected.error } };
+  const buildRoot = selected.root;
+  const guard = checkLaunchGuards(buildRoot, deps);
   if (guard) return { status: guard.status, body: { error: guard.error } };
-  const cmdPath = path.join(root, 'Scripts', 'Tools', 'open_editor_nozen.cmd');
+  const cmdPath = path.join(buildRoot, 'Scripts', 'Tools', 'open_editor_nozen.cmd');
   // Lead 2026-11-25: no cmd.exe here - with Windows Terminal as the default console a detached cmd always opens a visible window.
   // Same steps as the .cmd (Zen first, then the editor with -NoZenAutoLaunch), done directly; UnrealEditor.exe is a GUI app.
   const ensureZen = deps.ensureZenReady ?? defaultEnsureZenReady;
   await ensureZen();
-  const uprojectPath = path.join(root, 'CodexTactics.uproject');
+  const uprojectPath = path.join(buildRoot, 'CodexTactics.uproject');
   const args = [uprojectPath, X6_MAP_PATH, '-NoZenAutoLaunch'];
   const runDetached = deps.spawnDetached ?? defaultSpawnDetached;
-  const pid = runDetached(UE_EDITOR_EXE, args, root);
-  return { status: 200, body: { pid: pid ?? null, cmdPath, command: UE_EDITOR_EXE, args } };
+  const pid = runDetached(UE_EDITOR_EXE, args, buildRoot);
+  return { status: 200, body: { build: selected.build, pid: pid ?? null, cmdPath, command: UE_EDITOR_EXE, args } };
 }
 
 export async function handlePlaySector(
@@ -444,7 +513,10 @@ export async function handlePlaySector(
   payload: unknown,
   deps: TrainingLaunchDeps = {},
 ): Promise<{ status: number; body: ObjectData }> {
-  const guard = checkLaunchGuards(root, deps);
+  const selected = requestedBuild(root, payload);
+  if ('error' in selected) return { status: selected.status, body: { error: selected.error } };
+  const buildRoot = selected.root;
+  const guard = checkLaunchGuards(buildRoot, deps);
   if (guard) return { status: guard.status, body: { error: guard.error } };
   const raw = record(payload);
   const sector = raw?.sector;
@@ -457,7 +529,7 @@ export async function handlePlaySector(
   }
   const ensureZen = deps.ensureZenReady ?? defaultEnsureZenReady;
   await ensureZen();
-  const uprojectPath = path.join(root, 'CodexTactics.uproject');
+  const uprojectPath = path.join(buildRoot, 'CodexTactics.uproject');
   const args = [
     uprojectPath,
     X6_MAP_PATH,
@@ -469,8 +541,8 @@ export async function handlePlaySector(
     '-NoZenAutoLaunch',
   ];
   const runDetached = deps.spawnDetached ?? defaultSpawnDetached;
-  const pid = runDetached(UE_EDITOR_EXE, args, root);
-  return { status: 200, body: { pid: pid ?? null, active, command: UE_EDITOR_EXE, args } };
+  const pid = runDetached(UE_EDITOR_EXE, args, buildRoot);
+  return { status: 200, body: { build: selected.build, pid: pid ?? null, active, command: UE_EDITOR_EXE, args } };
 }
 
 type Use = (route: string, handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>) => void;
@@ -516,7 +588,10 @@ export function setupTrainingApi(use: Use, root: string, deps: TrainingLaunchDep
   use('/api/training/open-editor', async (req, res) => {
     try {
       if (req.method !== 'POST') return send(res, 405, { error: 'POST required' });
-      const result = await handleOpenEditor(root, deps);
+      const emptyBody = !req.headers['transfer-encoding'] && Number(req.headers['content-length'] ?? 0) === 0;
+      const parsed = emptyBody ? { ok: true as const, value: {} } : await readJsonBody(req);
+      if (!parsed.ok) return send(res, parsed.status, { error: parsed.error });
+      const result = await handleOpenEditor(root, deps, parsed.value);
       return send(res, result.status, result.body);
     } catch (error) {
       return send(res, 500, { error: error instanceof Error ? error.message : String(error) });

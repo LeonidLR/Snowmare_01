@@ -652,6 +652,8 @@ void AOperativeCharacter::FinishMantle()
 	{
 		bMantleResume = false;
 		bHasMoveOrder = false;
+		ClearIdleFacing();
+		bExplicitFacing = false;
 		if (bMantleOnTop)
 		{
 			SetStance(EOperativeStance::Crouching); // designer Q3: on top he crouches
@@ -878,6 +880,8 @@ bool AOperativeCharacter::OrderMantleTop(const FHitResult& TopHit, bool bSprint,
 	if (FVector::Dist2D(GetActorLocation() - FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight()), Plan.Base)
 		<= OperativeMantleInternal::MantleOrderArriveCm + 40.f && TryStartMantle(Plan.Dir, nullptr, true))
 	{
+		ClearIdleFacing();
+		bExplicitFacing = false;
 		return true; // already at the face
 	}
 	// B17-4: over a fence the clip starts at its own start distance (its hand plant on the fence's lip), not at the top's click base.

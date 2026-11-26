@@ -209,8 +209,10 @@ const FFirstAidRecord* UFirstAidSubsystem::FindRunning(const AOperativeCharacter
 
 bool UFirstAidSubsystem::IsBusy(const AOperativeCharacter& Operative) const
 {
+	// Designer 2026-11-26: being in cover (hugging a wall / behind a low cover) no longer blocks first aid - the player's order takes him
+	// off the wall (RequestSelf / RequestAid leave the cover once the request is accepted).
 	return Operative.IsKnockedDown() || Operative.IsClimbingLadder() || Operative.IsVaulting() || Operative.IsMantling() || Operative.IsRagdollActive()
-		|| Operative.bInCover || Operative.bCarrying || IsInTreatment(&Operative);
+		|| Operative.bCarrying || IsInTreatment(&Operative);
 }
 
 void UFirstAidSubsystem::Post(const AOperativeCharacter* Speaker, const FString& Text) const
@@ -250,7 +252,7 @@ FirstAidRules::ERefusal UFirstAidSubsystem::Refuse(AOperativeCharacter* Who, Fir
 		Post(Who, FString::Printf(TEXT("%s cannot help - he needs help himself."), *WhoName));
 		break;
 	case FirstAidRules::ERefusal::Busy:
-		Post(Who, FString::Printf(TEXT("%s is busy (cover, ladder, climbing or another treatment)."), *WhoName));
+		Post(Who, FString::Printf(TEXT("%s is busy (ladder, climbing, carrying or another treatment)."), *WhoName));
 		break;
 	default:
 		break;
@@ -272,6 +274,10 @@ FirstAidRules::ERefusal UFirstAidSubsystem::RequestSelf(AOperativeCharacter* Ope
 	if (Reason != FirstAidRules::ERefusal::None)
 	{
 		return Refuse(Operative, Reason, Operative, Item, bPostFeed);
+	}
+	if (Operative->bInCover)
+	{
+		Operative->LeaveCover(TEXT("first aid"));
 	}
 	FTreatment& Treatment = Treatments.AddDefaulted_GetRef();
 	Treatment.Helper = Operative;
@@ -307,6 +313,10 @@ FirstAidRules::ERefusal UFirstAidSubsystem::RequestAid(AOperativeCharacter* Help
 	if (Reason != FirstAidRules::ERefusal::None)
 	{
 		return Refuse(Helper, Reason, Patient, Item, bPostFeed);
+	}
+	if (Helper->bInCover)
+	{
+		Helper->LeaveCover(TEXT("first aid"));
 	}
 	const float Distance = FVector::Dist2D(Helper->GetActorLocation(), Patient->GetActorLocation());
 	FTreatment Treatment;
@@ -392,6 +402,22 @@ bool UFirstAidSubsystem::Cancel(const AOperativeCharacter* Operative, FirstAidRu
 	return false;
 }
 
+bool UFirstAidSubsystem::IsActivelyTreating(const AOperativeCharacter* Operative) const
+{
+	if (!Operative)
+	{
+		return false;
+	}
+	for (const FTreatment& Treatment : Treatments)
+	{
+		if (!Treatment.bApproaching && (Treatment.Helper.Get() == Operative || Treatment.Patient.Get() == Operative))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void UFirstAidSubsystem::BeginTreating(FTreatment& Treatment)
 {
 	AOperativeCharacter* Helper = Treatment.Helper.Get();
@@ -416,17 +442,20 @@ void UFirstAidSubsystem::BeginTreating(FTreatment& Treatment)
 		// He faces the lying patient's chest (else the patient): turned at helper_turn_deg_s in Tick (0 = at once, the old snap).
 		const FVector Face = FirstAidRules::HelperFacePoint(Config, FirstAidRules::IsLyingPose(Treatment.PatientPose), Patient->GetActorLocation(),
 			Patient->GetActorForwardVector());
+		Treatment.HelperFaceYaw = FirstAidRules::HelperFaceYaw(Config, FirstAidRules::IsLyingPose(Treatment.PatientPose), Patient->GetActorLocation(),
+			Treatment.PatientBaseYaw, Helper->GetActorLocation(), static_cast<float>(Helper->GetActorRotation().Yaw));
 		if (Config.Patient.HelperTurnDegPerSecond > 0.f)
 		{
 			Helper->SetSprinting(false);
 			Helper->StopOperative();
-			const FVector Direction = (Face - Helper->GetActorLocation()).GetSafeNormal2D();
-			Treatment.bHelperFacing = !Direction.IsNearlyZero();
-			Treatment.HelperFaceYaw = Treatment.bHelperFacing ? static_cast<float>(Direction.Rotation().Yaw) : 0.f;
+			Treatment.bHelperFacing = true;
+			Treatment.bWaitingToFace = !FirstAidRules::IsHelperFacingReady(static_cast<float>(Helper->GetActorRotation().Yaw), Treatment.HelperFaceYaw);
 		}
 		else
 		{
 			Helper->StopAndFace(Face);
+			Treatment.bHelperFacing = true;
+			Treatment.bWaitingToFace = false;
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("[FirstAid] %s: the patient lies '%s' (yaw %.0f), the helper turns to %.0f"), *Patient->DisplayName.ToString(),
 			FirstAidRules::PatientPoseKey(Treatment.PatientPose), Treatment.PatientBaseYaw, Treatment.HelperFaceYaw);
@@ -439,7 +468,10 @@ void UFirstAidSubsystem::BeginTreating(FTreatment& Treatment)
 	Treatment.PatientStance = static_cast<uint8>(Patient->GetStance());
 	Treatment.HelperHealth = FirstAidSubsystemLocal::HealthOf(Helper);
 	Treatment.PatientHealth = FirstAidSubsystemLocal::HealthOf(Patient);
-	PlayClips(Treatment, false);
+	if (!Treatment.bWaitingToFace)
+	{
+		PlayClips(Treatment, false);
+	}
 }
 
 void UFirstAidSubsystem::PlayClips(FTreatment& Treatment, bool bRestart, bool bHelperSide, bool bPatientSide)
@@ -722,14 +754,35 @@ void UFirstAidSubsystem::Tick(float DeltaTime)
 			}
 			continue;
 		}
-		++Treatment.Record.Frames;
 		if (Treatment.bHelperFacing && Helper != Patient)
 		{
+			Treatment.HelperFaceYaw = FirstAidRules::HelperFaceYaw(Config, FirstAidRules::IsLyingPose(Treatment.PatientPose),
+				Patient->GetActorLocation(), Treatment.PatientBaseYaw, Helper->GetActorLocation(), Treatment.HelperFaceYaw);
+			const float TurnRate = Treatment.bWaitingToFace
+				? FMath::Max(Config.Patient.HelperTurnDegPerSecond, FirstAidRules::MinHelperPreTurnDegPerSec)
+				: FMath::Max(Config.Patient.HelperTurnDegPerSecond, 360.f);
 			const float Yaw = FirstAidRules::TurnToward(static_cast<float>(Helper->GetActorRotation().Yaw), Treatment.HelperFaceYaw,
-				Config.Patient.HelperTurnDegPerSecond, DeltaTime);
+				TurnRate, DeltaTime);
 			Helper->SetActorRotation(FRotator(0.f, Yaw, 0.f));
-			Treatment.bHelperFacing = !FMath::IsNearlyZero(FRotator3f::NormalizeAxis(Yaw - Treatment.HelperFaceYaw), 0.5f);
+			if (Treatment.bWaitingToFace)
+			{
+				if (FirstAidRules::IsHelperFacingReady(Yaw, Treatment.HelperFaceYaw))
+				{
+					Treatment.bWaitingToFace = false;
+					Treatment.Clock.Elapsed = 0.f;
+					Treatment.Clock.bApplied = false;
+					Treatment.Record.Frames = 0;
+					Treatment.HelperSpot = Helper->GetActorLocation();
+					Treatment.PatientSpot = Patient->GetActorLocation();
+					PlayClips(Treatment, false);
+				}
+				else
+				{
+					continue;
+				}
+			}
 		}
+		++Treatment.Record.Frames;
 		if (Treatment.PatientClip.IsValid() && Patient != Helper)
 		{
 			HoldBodyHeading(*Patient, Treatment.PatientBaseYaw, Treatment.PatientPlay, DeltaTime);

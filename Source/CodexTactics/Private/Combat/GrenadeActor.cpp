@@ -67,11 +67,30 @@ FVector AGrenadeActor::ThrowTo(const FVector& WorldTarget)
 	return TargetLocation;
 }
 
+void AGrenadeActor::StartRelease(float NewReleaseDelay)
+{
+	bPreTurnPending = false;
+	ReleaseDelay = FMath::Max(0.f, NewReleaseDelay);
+	if (ReleaseDelay <= 0.f)
+	{
+		SetActorHiddenInGame(false);
+	}
+}
+
 void AGrenadeActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	if (!bFlying)
 	{
+		return;
+	}
+	if (bPreTurnPending)
+	{
+		if (const AOperativeCharacter* ThrowerActor = Thrower.Get())
+		{
+			StartLocation = ThrowerActor->GetActorLocation() + FVector(0.f, 0.f, GrenadeRules::HandHeight);
+			SetActorLocation(StartLocation);
+		}
 		return;
 	}
 	if (ReleaseDelay > 0.f)

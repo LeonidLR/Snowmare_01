@@ -465,11 +465,29 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 				}
 				else if (!ClickedMember && StealthedSelected.Num() == SelectedGroup.Num() && Hit.bBlockingHit)
 				{
+					AOperativeCharacter* StealthRef = nullptr;
 					for (AOperativeCharacter* Member : StealthedSelected)
 					{
-						Member->SetStealthManualLookTarget(Hit.ImpactPoint);
+						if (Member && LookHoldRules::IsValidLookPoint(Hit.ImpactPoint, Member->GetActorLocation()))
+						{
+							StealthRef = Member;
+							break;
+						}
 					}
-					UFloatingTextSubsystem::SpawnAboveOperative(StealthedSelected[0], TEXT("LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
+					if (StealthRef)
+					{
+						const FVector AdjustedStealthClick = LookHoldRules::AdjustClickForFlatGround(
+							StealthRef->GetActorLocation(), StealthRef->GetSimpleCollisionHalfHeight(), Hit.ImpactPoint);
+						const LookHoldRules::FLookDirection SharedDir = LookHoldRules::DirectionFromClick(StealthRef->GetActorLocation(), AdjustedStealthClick);
+						for (AOperativeCharacter* Member : StealthedSelected)
+						{
+							if (Member && LookHoldRules::IsValidLookPoint(Hit.ImpactPoint, Member->GetActorLocation()))
+							{
+								Member->SetManualLookDirection(SharedDir.YawDeg, SharedDir.PitchDeg);
+							}
+						}
+						UFloatingTextSubsystem::SpawnAboveOperative(StealthRef, TEXT("LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
+					}
 					HideCoverPreview();
 					return;
 				}
@@ -803,21 +821,41 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			Targets.Add(Leader);
 		}
 		bool bSetAny = false;
+		bool bNewlyLocked = false;
+		AOperativeCharacter* RefOp = nullptr;
 		for (AOperativeCharacter* Op : Targets)
 		{
 			if (Op && LookHoldRules::IsValidLookPoint(Hit.ImpactPoint, Op->GetActorLocation()))
 			{
-				Op->SetManualLookPoint(Hit.ImpactPoint);
+				RefOp = Op;
+				break;
+			}
+		}
+		const FVector AdjustedClick = RefOp
+			? LookHoldRules::AdjustClickForFlatGround(RefOp->GetActorLocation(), RefOp->GetSimpleCollisionHalfHeight(), Hit.ImpactPoint)
+			: Hit.ImpactPoint;
+		const LookHoldRules::FLookDirection SharedDir = RefOp
+			? LookHoldRules::DirectionFromClick(RefOp->GetActorLocation(), AdjustedClick)
+			: LookHoldRules::FLookDirection{};
+		for (AOperativeCharacter* Op : Targets)
+		{
+			if (Op && LookHoldRules::IsValidLookPoint(Hit.ImpactPoint, Op->GetActorLocation()))
+			{
+				bNewlyLocked |= !Op->HasManualLookPoint();
+				Op->SetManualLookDirection(SharedDir.YawDeg, SharedDir.PitchDeg);
 				bSetAny = true;
 			}
 		}
-		if (bSetAny && !Targets.IsEmpty())
+		if (bSetAny && RefOp)
 		{
-			ControllerCommands::Report(this, PlayerCommands::WatchSector, nullptr, false, false, Targets[0], Hit.ImpactPoint);
-			UFloatingTextSubsystem::SpawnAboveOperative(Targets[0], TEXT("LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
-			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+			ControllerCommands::Report(this, PlayerCommands::WatchSector, nullptr, false, false, RefOp, Hit.ImpactPoint);
+			UFloatingTextSubsystem::SpawnAboveOperative(RefOp, TEXT("LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
+			if (bNewlyLocked)
 			{
-				Messages->PostMessage(Targets[0]->DisplayName, FText::Format(LOCTEXT("Sector", "👁️ [{0}]: Watch sector locked!"), Targets[0]->DisplayName));
+				if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+				{
+					Messages->PostMessage(RefOp->DisplayName, FText::Format(LOCTEXT("Sector", "👁️ [{0}]: Watch sector locked!"), RefOp->DisplayName));
+				}
 			}
 		}
 		HideCoverPreview();

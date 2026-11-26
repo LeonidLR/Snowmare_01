@@ -454,6 +454,18 @@ namespace FirstAidRules
 	CODEXTACTICS_API const TCHAR* RefusalName(ERefusal Reason);
 	CODEXTACTICS_API const TCHAR* ModeName(EMode Mode);
 
+	/** G023: helper faces within this of the patient's chest before the aid montage starts, deg. */
+	constexpr float HelperPreTurnDoneDeg = 15.f;
+	/** G023: minimum helper turn speed while pre-turning onto the patient's chest, deg/s. */
+	constexpr float MinHelperPreTurnDegPerSec = 540.f;
+
+	/** G023: target yaw for the helper to face the patient's chest computed from PatientBaseYaw (not counter-turned capsule yaw). */
+	CODEXTACTICS_API float HelperFaceYaw(const FFirstAidConfig& Config, bool bLying, const FVector& PatientLocation, float PatientBaseYaw,
+		const FVector& HelperLocation, float FallbackYaw = 0.f);
+
+	/** G023: true when the helper already faces within ToleranceDeg of TargetYaw. */
+	CODEXTACTICS_API bool IsHelperFacingReady(float HelperYaw, float TargetYaw, float ToleranceDeg = HelperPreTurnDoneDeg);
+
 	/** Parses first_aid.json onto Out (missing keys keep Out's values); false when the text is not a JSON object. */
 	CODEXTACTICS_API bool ParseConfig(const FString& JsonText, FFirstAidConfig& Out);
 

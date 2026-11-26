@@ -765,6 +765,21 @@ namespace FirstAidRules
 		}
 	}
 
+	float HelperFaceYaw(const FFirstAidConfig& Config, bool bLying, const FVector& PatientLocation, float PatientBaseYaw,
+		const FVector& HelperLocation, float FallbackYaw)
+	{
+		const FVector ChestForward = FRotator(0.0, static_cast<double>(PatientBaseYaw), 0.0).Vector();
+		const FVector Face = HelperFacePoint(Config, bLying, PatientLocation, ChestForward);
+		const FVector Direction = (Face - HelperLocation).GetSafeNormal2D();
+		return Direction.IsNearlyZero() ? FRotator::NormalizeAxis(FallbackYaw)
+			: static_cast<float>(FRotator::NormalizeAxis(Direction.Rotation().Yaw));
+	}
+
+	bool IsHelperFacingReady(float HelperYaw, float TargetYaw, float ToleranceDeg)
+	{
+		return FMath::Abs(FRotator3f::NormalizeAxis(TargetYaw - HelperYaw)) <= FMath::Max(ToleranceDeg, 0.f);
+	}
+
 	bool ParseConfig(const FString& JsonText, FFirstAidConfig& Out)
 	{
 		TSharedPtr<FJsonObject> Root;

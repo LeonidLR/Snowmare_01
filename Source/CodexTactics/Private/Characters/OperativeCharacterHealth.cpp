@@ -712,12 +712,23 @@ void AOperativeCharacter::ResetTransientStateForLoad()
 	}
 	TacticalAnchor = FTacticalAnchor();
 	SetAutonomyTarget(nullptr);
+	ClearLookAndFacingState();
 	StopOperative();
 	if (UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
 	{
 		Anim->StopAllMontages(0.f); // get-up, interaction, dive, cover, weather pose, fire / reload clips
 	}
 	ResetBodyOffsets();
+}
+
+void AOperativeCharacter::ClearLookAndFacingState()
+{
+	ClearManualLookPoint();
+	ClearIdleFacing();
+	bExplicitFacing = false;
+	bFoughtThisFight = false;
+	LastThreat.Reset();
+	LastThreatContactTime = -1000.0;
 }
 
 void AOperativeCharacter::ReturnToCoverAfterKnockdown()
