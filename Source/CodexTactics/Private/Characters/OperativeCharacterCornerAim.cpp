@@ -330,8 +330,16 @@ bool AOperativeCharacter::IsCornerHoldSpot() const
 	// Not while the walk to the corner stand-off is still due (bCoverSnapPending: set on entry, decided once the move order
 	// ended) - CornerEntrySmoke 2026-10-07: entering 90 cm from the edge he leaned out and broke the aim for the snap shimmy
 	// in the same instant; with a later snap that is step out -> tuck back -> step out.
-	return bCornerHoldAtEdge && bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight == ECoverHeight::HighCover
-		&& bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing);
+	const bool bAtEdge = bCornerHoldAtEdge && bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight == ECoverHeight::HighCover;
+	if (!bAtEdge)
+	{
+		return false;
+	}
+	if (bCornerLookPose && bHasManualLookPoint && bAtCoverCorner)
+	{
+		return true; // 135: a Shift-click look across the normal keeps the corner hold alive
+	}
+	return bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing);
 }
 
 bool AOperativeCharacter::IsManualCornerPeekSpot() const
@@ -844,9 +852,22 @@ bool AOperativeCharacter::IsPeekingRoundCorner() const
 	return bInCover && bCornerAimActive && (IsManualCornerPeekSpot() || IsCornerHoldSpot());
 }
 
+bool AOperativeCharacter::IsAtPeekableCorner() const
+{
+	if (!bInCover || bShimmying || bCoverSnapPending || CurrentCoverHeight == ECoverHeight::None)
+	{
+		return false;
+	}
+	if (IsManualCornerPeekSpot() || IsCornerHoldSpot() || (bCornerLookPose && bHasManualLookPoint && bAtCoverCorner))
+	{
+		return true;
+	}
+	return bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing);
+}
+
 bool AOperativeCharacter::WantsCornerLookPose() const
 {
-	return CoverLookAoRules::WantsPose(bCornerLookPose && IsPeekingRoundCorner(), bHasManualLookPoint);
+	return CoverLookAoRules::WantsPose(bCornerLookPose && (IsPeekingRoundCorner() || IsAtPeekableCorner()), bHasManualLookPoint);
 }
 
 namespace OperativePeekSight
@@ -871,7 +892,10 @@ EPeekSightPose AOperativeCharacter::GetPeekSightPose() const
 	{
 		return EPeekSightPose::None;
 	}
-	return PeekSightRules::DecidePose(CurrentCoverHeight, Stance, bCornerAimActive, IsManualCornerPeekSpot() || IsCornerHoldSpot());
+	const bool bOverTopParapet = !IsInStealthMode() && !IsCoverShotBlind() && CurrentCoverHeight == ECoverHeight::LowCover
+		&& CoverSlot.WallTopCm > 0.f && CoverSlot.WallTopCm <= 105.f && Stance != EOperativeStance::Prone
+		&& !IsManualCornerPeekSpot() && !IsCornerHoldSpot();
+	return PeekSightRules::DecidePose(CurrentCoverHeight, Stance, bCornerAimActive || bOverTopParapet, IsManualCornerPeekSpot() || IsCornerHoldSpot());
 }
 
 bool AOperativeCharacter::GetPeekSight(FVector& OutEye, FVector& OutDirection) const
@@ -894,7 +918,8 @@ bool AOperativeCharacter::GetPeekSight(FVector& OutEye, FVector& OutDirection) c
 		return true;
 	}
 	// Over the top of a low wall: the head above its top, looking across it. A Shift-click look turns this cone too; with no look the aim stays across the wall.
-	OutEye = PeekSightRules::OverTopEyePoint(PeekSightConfig, Feet, CoverSlot.WallNormal, EyeCm, CoverSlot.WallTopCm);
+	const float EffectiveEyeCm = (CoverSlot.WallTopCm > 0.f && CoverSlot.WallTopCm <= 105.f) ? FMath::Max(EyeCm, 140.f) : EyeCm;
+	OutEye = PeekSightRules::OverTopEyePoint(PeekSightConfig, Feet, CoverSlot.WallNormal, EffectiveEyeCm, CoverSlot.WallTopCm);
 	OutDirection = OperativePeekSight::ConeDirection(*this, OutEye, (-CoverSlot.WallNormal).GetSafeNormal2D(), 0.f);
 	return true;
 }

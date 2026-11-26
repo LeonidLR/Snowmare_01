@@ -2,8 +2,8 @@
 // walks the stairs with the leader only). On a generated map (dressed /Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit or the grey showcase) for
 // every building of the storey index with 2+ storeys: the squad in formation (not Solo) is put on storey 0 by a stair flight, then the
 // player's own click (HandlePlayerClick) on the navmesh floor of the storey above, as far from the stairs as the building allows; within
-// 40 s every member must stand on that storey within 8 m of the leader. A member who is not is logged with where he stands and whether he
-// is still trying to move (STUCK) or stopped. Then storey 1 -> 2 where the building has it. PASS / FAIL, then exits.
+// 40 s (83 s for S04 0 -> 1, two outer ladders and an inner descent) every member must stand on that storey within 8 m of the leader.
+// A member who is not is logged with where he stands and whether he is still trying to move (STUCK) or stopped. Then storey 1 -> 2 where the building has it. PASS / FAIL, then exits.
 //   UnrealEditor.exe <uproject> /Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit -game -nullrhi -nosound -LevelJson=L_Gen_StoryShowcase_Kit.json
 //     -ExecCmds="CodexTactics.FormationStairSmoke"
 // Godot reference: none (UE-only).
@@ -39,6 +39,9 @@ namespace FormationStairSmoke
 	constexpr int32 WarmupFrames = 150;
 	constexpr int32 SettleFrames = 60;
 	constexpr float LegSeconds = 40.f;
+	// Kit map BB9787F9C8A68B11374705134321D3A59858C778AA3F65D7D45BE9946A9C23E8: S04 0 -> 1 takes two outer ladders + an inner descent.
+	// Measured 55.0 / 55.0 / 55.0 s (2026-11-26): ceil(1.5 * slowest) = 83 s. Other stair legs retain 40 s.
+	constexpr float RubbleEscapeSeconds = 83.f;
 	constexpr float TogetherCm = 800.f;
 
 	struct FCase
@@ -403,7 +406,8 @@ namespace FormationStairSmoke
 					*Leader->GetLastMoveDestination().ToCompactString(), Path.IsValid() && Path->GetPathPoints().Num() ? *Path->GetEndLocation().ToCompactString() : TEXT("-"),
 					Path.IsValid() ? Path->GetPathPoints().Num() : 0, Path.IsValid() && Path->IsPartial() ? 1 : 0, bGoalNav ? *GoalOnNav.Location.ToCompactString() : TEXT("none"));
 			}
-			if (!bAll && Seconds < LegSeconds)
+			const float BudgetSeconds = C.Building == TEXT("S04_rubble_escape") && C.From == 0 ? RubbleEscapeSeconds : LegSeconds;
+			if (!bAll && Seconds < BudgetSeconds)
 			{
 				return true;
 			}
@@ -464,7 +468,7 @@ namespace FormationStairSmoke
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.FormationStairSmoke"),
 		TEXT("Dev check (designer 2026-11-22: the squad stuck on the stairwell): the formation climbs every building's stairs storey by storey on the player's click; ")
-		TEXT("every member must be up within 40 s within 8 m of the leader. PASS/FAIL, then exits."),
+		TEXT("every member must be up within 40 s (83 s for S04 rubble escape 0 -> 1) within 8 m of the leader. PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

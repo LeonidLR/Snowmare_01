@@ -1766,6 +1766,8 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
 	bool IsPeekingRoundCorner() const;
+	/** True when standing/crouching at an exposed cover corner (idle or peeking). */
+	bool IsAtPeekableCorner() const;
 
 	/** Rev 5h: the corner peek reveals hidden traps in its sight cone (range, cone, line of sight; TrapSpotRules). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Peek")
@@ -2128,11 +2130,11 @@ public:
 	 * _R at his left. X6 2026-11-25: the outer shoulder, not the 2026-10-06 pelvis step, stays within 25 cm of the edge.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
-	float CoverStandOffStandPackLCm = 66.f;
+	float CoverStandOffStandPackLCm = 34.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float CoverStandOffStandPackRCm = 34.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
-	float CoverStandOffCrouchPackLCm = 74.f;
+	float CoverStandOffCrouchPackLCm = 56.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float CoverStandOffCrouchPackRCm = 56.f;
 
@@ -2212,8 +2214,8 @@ public:
 	 * his head sits right over the pelvis - so _R gets +11. A tracked, eased mesh offset (CoverEntryAppliedOffset), gone when the peek is over;
 	 * the stand-off is NOT shortened instead: hugging the wall 17 cm from its end lets his eyes see round it (PeekSightSmoke).
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
-	float CornerLeanExtraPackLCm = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "-60"))
+	float CornerLeanExtraPackLCm = -26.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float CornerLeanExtraPackRCm = 11.f;
 
@@ -2596,6 +2598,9 @@ public:
 	 */
 	void SetDoorFacingLock(const TOptional<float>& Yaw) { DoorFacingYaw = Yaw; }
 	bool HasDoorFacingLock() const { return DoorFacingYaw.IsSet(); }
+	/** G023: locks combat facing to the grenade target yaw through pre-turn and throw release. */
+	void SetGrenadeFacingLock(const TOptional<float>& Yaw) { GrenadeFacingYaw = Yaw; }
+	bool HasGrenadeFacingLock() const { return GrenadeFacingYaw.IsSet(); }
 	TOptional<float> GetFormationLookYaw() const { return FormationLookYaw; }
 
 	/** True while the formation sector drives his facing (last UpdateCombatFacing). */
@@ -2993,6 +2998,7 @@ private:
 	TOptional<float> FormationLookPitch;
 	/** SetDoorFacingLock: the yaw the door work holds (unset = none). */
 	TOptional<float> DoorFacingYaw;
+	TOptional<float> GrenadeFacingYaw;
 	bool bFacingFormationSector = false;
 	float FormationPaceMultiplier = 1.f;
 	bool bFormationWallPose = false;

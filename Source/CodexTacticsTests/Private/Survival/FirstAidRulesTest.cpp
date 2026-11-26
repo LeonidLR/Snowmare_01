@@ -605,6 +605,16 @@ bool FFirstAidHelperSpotTest::RunTest(const FString&)
 		HelperGoal(Config, true, Patient, Forward, FVector(-600.f, 100.f, 10.f)).Equals(Patient + FVector(-600.f, 100.f, 0.f).GetSafeNormal2D() * 85.f, 0.01f));
 	TestTrue(TEXT("the face point: his chest"), HelperFacePoint(Config, true, Patient, Forward).Equals(FVector(20.f, 0.f, 10.f), 0.01f));
 	TestTrue(TEXT("the face point of a sitting patient: himself"), HelperFacePoint(Config, false, Patient, Forward).Equals(Patient, 0.01f));
+
+	// G023: HelperFaceYaw derives chest position from PatientBaseYaw and validates pre-turn readiness.
+	const FVector ChestBehindHelper(20.f, 0.f, 10.f);
+	const FVector HelperInFrontOfPatient(120.f, 0.f, 10.f);
+	const float ExpectedYawBehind = static_cast<float>(FRotator::NormalizeAxis((ChestBehindHelper - HelperInFrontOfPatient).Rotation().Yaw));
+	TestEqual(TEXT("HelperFaceYaw points from helper to patient's chest using PatientBaseYaw"),
+		HelperFaceYaw(Config, true, Patient, 0.f, HelperInFrontOfPatient), ExpectedYawBehind, 0.05f);
+	TestFalse(TEXT("Helper facing away (180 deg) is not ready"), IsHelperFacingReady(0.f, ExpectedYawBehind));
+	TestFalse(TEXT("Helper facing side (90 deg) is not ready"), IsHelperFacingReady(-90.f, ExpectedYawBehind));
+	TestTrue(TEXT("Helper within 15 deg is ready for montage"), IsHelperFacingReady(ExpectedYawBehind + 10.f, ExpectedYawBehind));
 	return true;
 }
 

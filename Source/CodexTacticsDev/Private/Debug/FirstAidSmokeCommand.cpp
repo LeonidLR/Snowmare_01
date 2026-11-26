@@ -128,6 +128,7 @@ namespace FirstAidSmoke
 		FString MedkitPredicted;
 		FString BagPredicted;
 		FRunSamples Samples;
+		float MaxChestYawErrDeg = -1.f;
 		TArray<FString> Report;
 	};
 
@@ -139,6 +140,11 @@ namespace FirstAidSmoke
 
 	bool Finish(FState& State, bool bComplete)
 	{
+		if (State.MaxChestYawErrDeg >= 0.f)
+		{
+			Check(State, State.MaxChestYawErrDeg <= 30.f,
+				FString::Printf(TEXT("[facing] max helper yaw vs patient chest during montage = %.1f deg (<= 30)"), State.MaxChestYawErrDeg));
+		}
 		FirstAidRules::ResetConfig();
 		for (const FString& Line : State.Report)
 		{
@@ -191,6 +197,15 @@ namespace FirstAidSmoke
 			++State.Samples.HelperClipFrames;
 			State.Samples.HelperClip = HelperAnim->GetFirstAidClipName();
 			State.Samples.MaxHelperSlot = FMath::Max(State.Samples.MaxHelperSlot, HelperAnim->GetSlotMontageGlobalWeight(HelperAnim->FullBodySlot));
+			const UFirstAidSubsystem* FA = State.A.IsValid() && State.A->GetWorld() ? UFirstAidSubsystem::Get(State.A->GetWorld()) : nullptr;
+			const FFirstAidRecord* Running = FA ? FA->FindRunning(State.A.Get()) : nullptr;
+			if (Running && State.B.IsValid() && State.B != State.A && Running->Mode == EMode::Aid)
+			{
+				const float WantYaw = HelperFaceYaw(GetConfig(), IsLyingPose(Running->PatientPose), State.B->GetActorLocation(),
+					State.PatientYaw0, State.A->GetActorLocation(), static_cast<float>(State.A->GetActorRotation().Yaw));
+				const float ErrDeg = FMath::Abs(FRotator3f::NormalizeAxis(static_cast<float>(State.A->GetActorRotation().Yaw) - WantYaw));
+				State.MaxChestYawErrDeg = FMath::Max(State.MaxChestYawErrDeg, ErrDeg);
+			}
 		}
 		if (PatientAnim && PatientAnim->IsFirstAidClipActive())
 		{

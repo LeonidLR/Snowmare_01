@@ -4,6 +4,7 @@
 #include "Vehicles/VehicleSubsystem.h"
 
 #include "Algo/AnyOf.h"
+#include "AI/PmcSquadSubsystem.h"
 #include "Bot/PlaytestBotRules.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
@@ -41,6 +42,19 @@ namespace SquadAutonomy
 	bool IsAliveOperative(const AOperativeCharacter* Operative)
 	{
 		return Operative && Operative->HealthComponent && Operative->HealthComponent->IsAlive();
+	}
+
+	const AActor* EnemyTarget(const AActor* Actor)
+	{
+		if (const AEnemyCharacter* Monster = Cast<AEnemyCharacter>(Actor))
+		{
+			return Monster->GetCurrentTarget();
+		}
+		if (const AOperativeCharacter* Pmc = Cast<AOperativeCharacter>(Actor))
+		{
+			return Pmc->GetCurrentCombatTarget();
+		}
+		return nullptr;
 	}
 
 	float HealthFraction(const AOperativeCharacter& Operative)
@@ -161,6 +175,26 @@ void USquadAutonomySubsystem::RunDecisions()
 		}
 		Enemies.Add(View);
 	}
+	// G023: include live hostile PMCs visible to the player's squad so cover fire-mode decisions (DecideInCover) never force Hold against PMC threats.
+	if (const UPmcSquadSubsystem* PmcSquad = UPmcSquadSubsystem::Get(World))
+	{
+		for (AOperativeCharacter* Pmc : PmcSquad->GetHostileOperatives())
+		{
+			if (!IsValid(Pmc) || !SquadAutonomy::IsAliveOperative(Pmc) || Pmc->IsKilledInAction()
+				|| !PmcSquad->IsVisibleToTeam(PmcTeam::Player, Pmc))
+			{
+				continue;
+			}
+			FEnemyView View;
+			View.Enemy = Pmc;
+			View.Location = Pmc->GetActorLocation();
+			if (Pmc->IsSniperWeaponEquipped())
+			{
+				View.AimTarget = Cast<AOperativeCharacter>(Pmc->GetCurrentCombatTarget());
+			}
+			Enemies.Add(View);
+		}
+	}
 	TArray<AOperativeCharacter*> Members;
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
@@ -204,7 +238,7 @@ void USquadAutonomySubsystem::Decide(AOperativeCharacter& Operative, FOperativeS
 		for (const FEnemyView& View : Enemies)
 		{
 			bIntruderPresent |= FVector::Dist2D(View.Location, Defense.DefendedLocation) <= Defense.InterceptRadiusCm
-				|| (Defense.DefendedActor.IsValid() && View.Enemy->GetCurrentTarget() == Defense.DefendedActor.Get());
+				|| (Defense.DefendedActor.IsValid() && SquadAutonomy::EnemyTarget(View.Enemy) == Defense.DefendedActor.Get());
 		}
 	}
 
@@ -496,7 +530,7 @@ void USquadAutonomySubsystem::ChooseTarget(AOperativeCharacter& Operative, const
 	const AActor* LeaderTarget = Leader && Leader != &Operative ? Leader->GetCurrentCombatTarget() : nullptr;
 	const AActor* Current = Operative.GetAutonomyTarget();
 	TArray<FAutonomyTargetCandidate> Candidates;
-	TArray<AEnemyCharacter*> Actors;
+	TArray<AActor*> Actors;
 	for (const FEnemyView& View : Enemies)
 	{
 		const float Distance = FVector::Dist2D(View.Location, Operative.GetActorLocation());
@@ -504,10 +538,13 @@ void USquadAutonomySubsystem::ChooseTarget(AOperativeCharacter& Operative, const
 		{
 			continue; // out of any range: no line trace
 		}
+		const AEnemyCharacter* Monster = Cast<AEnemyCharacter>(View.Enemy);
+		const AOperativeCharacter* PmcOp = Cast<AOperativeCharacter>(View.Enemy);
 		FAutonomyTargetCandidate Candidate;
-		Candidate.Archetype = View.Enemy->GetArchetype();
+		Candidate.Archetype = Monster ? Monster->GetArchetype()
+			: ((PmcOp && PmcOp->IsSniperWeaponEquipped()) ? EEnemyArchetype::Marksman : EEnemyArchetype::Base);
 		Candidate.DistanceCm = Distance;
-		const UHealthComponent* Health = View.Enemy->GetHealthComponent();
+		const UHealthComponent* Health = Monster ? Monster->GetHealthComponent() : (PmcOp ? PmcOp->HealthComponent.Get() : nullptr);
 		Candidate.HealthFraction = Health && Health->GetMaxHealth() > 0.f ? Health->GetCurrentHealth() / Health->GetMaxHealth() : 1.f;
 		Candidate.bLeaderTarget = View.Enemy == LeaderTarget;
 		Candidate.bCurrent = View.Enemy == Current;
@@ -517,7 +554,7 @@ void USquadAutonomySubsystem::ChooseTarget(AOperativeCharacter& Operative, const
 		if (Defense.IsActive())
 		{
 			Candidate.DistanceToDefendedCm = FVector::Dist2D(View.Location, Defense.DefendedLocation);
-			Candidate.bAttackingDefended = Defense.DefendedActor.IsValid() && View.Enemy->GetCurrentTarget() == Defense.DefendedActor.Get();
+			Candidate.bAttackingDefended = Defense.DefendedActor.IsValid() && SquadAutonomy::EnemyTarget(View.Enemy) == Defense.DefendedActor.Get();
 		}
 		Candidates.Add(Candidate);
 		Actors.Add(View.Enemy);
@@ -760,7 +797,7 @@ void USquadAutonomySubsystem::DecideInCover(AOperativeCharacter& Operative, cons
 	bool bElevatedEnemy = false;
 	for (const FEnemyView& View : Enemies)
 	{
-		if (View.Enemy && View.Enemy->GetCurrentTarget() == &Operative && FVector::Dist2D(View.Location, Position) <= 3000.f)
+		if (View.Enemy && SquadAutonomy::EnemyTarget(View.Enemy) == &Operative && FVector::Dist2D(View.Location, Position) <= 3000.f)
 		{
 			++Shooters;
 		}

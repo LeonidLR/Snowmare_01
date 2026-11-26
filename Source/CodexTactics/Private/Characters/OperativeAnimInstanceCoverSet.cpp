@@ -609,13 +609,14 @@ void UOperativeAnimInstance::UpdateCoverSetAimOffset()
 {
 	// The wired pin drives a cover set's own aim offset in any fire stance. The corner look pose does the same for
 	// CoverIndoor once that pose is on, whether or not the designer has ticked the pin for every cover fire.
-	if ((!bCoverSetAimOffsetWired && !bCornerLookPoseApplied) || ActiveCoverAnimSet.IsEmpty() || !bInCover || !bCoverInFirePose)
+	if ((!bCoverSetAimOffsetWired && !bCornerLookPoseApplied) || ActiveCoverAnimSet.IsEmpty() || !bInCover
+		|| (!bCoverInFirePose && !bCornerLookPoseApplied))
 	{
 		return;
 	}
 	const TCHAR* Key = !bIsCrouching ? TEXT("stand_ao") : bCoverOverTopFireSet ? TEXT("crouch_over_ao") : TEXT("crouch_ao");
 	const FCoverSetAssets* Pair = FindCoverSetExtra(Key);
-	const int32 Index = CoverFacingRules::ClipIndex(CoverFirePoseFacing);
+	const int32 Index = CoverFacingRules::ClipIndex(bCoverInFirePose ? CoverFirePoseFacing : CoverFacing);
 	if (UBlendSpace* Offset = Pair && Pair->Assets.IsValidIndex(Index) ? Cast<UBlendSpace>(Pair->Assets[Index].Get()) : nullptr)
 	{
 		ActiveAimOffset = Offset;

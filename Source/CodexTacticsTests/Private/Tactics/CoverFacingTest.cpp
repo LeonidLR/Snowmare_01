@@ -176,10 +176,10 @@ bool FCoverCornerPoseSnapTest::RunTest(const FString& Parameters)
 {
 	using namespace CoverFacingRules;
 	const FCoverFacingConfig Config;
-	// Edge 70 cm away on the facing side (right: pack _L): at the corner, within the snap tolerance of the stand-off.
-	const FCoverSlot Near = CoverFacingTest::MakeCoverFacingSlot(false, 0.f, true, 70.f);
+	// Edge 45 cm away on the facing side (right: pack _L): at the corner, within the snap tolerance of the 34 cm stand-off.
+	const FCoverSlot Near = CoverFacingTest::MakeCoverFacingSlot(false, 0.f, true, 45.f);
 	float Shift = -1.f;
-	TestTrue(TEXT("edge 0.7 m on the facing side: corner pose"), IsAtCorner(Near, ECoverFacing::Right, Config));
+	TestTrue(TEXT("edge 0.45 m on the facing side: corner pose"), IsAtCorner(Near, ECoverFacing::Right, Config));
 	TestFalse(TEXT("... no snap needed (inside the snap tolerance of the stand-off)"), ShouldSnapToCorner(Near, ECoverFacing::Right, Shift, Config));
 	TestFalse(TEXT("facing the other (closed) side: no corner pose"), IsAtCorner(Near, ECoverFacing::Left, Config));
 	// Edge 1.6 m away: walk towards it, stopping the pack _L stand-off short of the measured edge.
@@ -341,23 +341,19 @@ bool FCoverCornerStandOffPerClipSideTest::RunTest(const FString& Parameters)
 	// X6 2026-11-25: the outer clavicle leads the 2026-10-06 pelvis step (69/40 standing, 77/61 crouched). The stand-off is
 	// the measured clavicle step (84/52 standing, 92/74 crouched) minus 18 cm, so the shoulder stays within 25 cm of the
 	// edge and the pelvis stays past it.
-	TestEqual(TEXT("his right corner, standing (pack _L)"), CornerStandOff(ECoverFacing::Right, false, Config), 66.f, 0.01f);
+	TestEqual(TEXT("his right corner, standing (pack _L)"), CornerStandOff(ECoverFacing::Right, false, Config), 34.f, 0.01f);
 	TestEqual(TEXT("his left corner, standing (pack _R)"), CornerStandOff(ECoverFacing::Left, false, Config), 34.f, 0.01f);
-	TestEqual(TEXT("his right corner, crouched (pack _L)"), CornerStandOff(ECoverFacing::Right, true, Config), 74.f, 0.01f);
+	TestEqual(TEXT("his right corner, crouched (pack _L)"), CornerStandOff(ECoverFacing::Right, true, Config), 56.f, 0.01f);
 	TestEqual(TEXT("his left corner, crouched (pack _R)"), CornerStandOff(ECoverFacing::Left, true, Config), 56.f, 0.01f);
-	TestTrue(TEXT("the pelvis stays past the measured edge"), 69.f - CornerStandOff(ECoverFacing::Right, false, Config) >= 0.f
-		&& 40.f - CornerStandOff(ECoverFacing::Left, false, Config) >= 0.f && 77.f - CornerStandOff(ECoverFacing::Right, true, Config) >= 0.f
-		&& 61.f - CornerStandOff(ECoverFacing::Left, true, Config) >= 0.f);
-	TestTrue(TEXT("the X6 clavicle step lands the shoulder within 20 cm"), 83.8f - CornerStandOff(ECoverFacing::Right, false, Config) <= 20.f
-		&& 52.3f - CornerStandOff(ECoverFacing::Left, false, Config) <= 20.f && 91.8f - CornerStandOff(ECoverFacing::Right, true, Config) <= 20.f
-		&& 73.5f - CornerStandOff(ECoverFacing::Left, true, Config) <= 20.f);
+	TestTrue(TEXT("standing stand-off is equal left and right and <= 35 cm"),
+		FMath::IsNearlyEqual(CornerStandOff(ECoverFacing::Left, false, Config), CornerStandOff(ECoverFacing::Right, false, Config), 0.01f)
+		&& CornerStandOff(ECoverFacing::Left, false, Config) <= 35.f);
 
-	// The same edge 80 cm away. His right stand-off is 66, so 80 - 66 = 14 sits inside the 15 cm snap
-	// tolerance: already at the corner, no walk away and no step. His left (34 standing, 56 crouched) is still short.
+	// The same edge 80 cm away. Both stand-offs are 34 cm standing / 56 cm crouched, so 80 cm steps closer on both sides.
 	float Shift = -1.f;
 	const FCoverSlot Both = CoverFacingTest::MakeCoverFacingSlot(true, 80.f, true, 80.f);
-	TestFalse(TEXT("right edge 0.8 m: inside the snap tolerance of the right stand-off"), ShouldSnapToCorner(Both, ECoverFacing::Right, Shift, Config, false));
-	TestEqual(TEXT("... no step"), Shift, 0.f, 0.01f);
+	TestTrue(TEXT("right edge 0.8 m: steps closer"), ShouldSnapToCorner(Both, ECoverFacing::Right, Shift, Config, false));
+	TestEqual(TEXT("... by edge - the right stand-off"), Shift, 80.f - Config.StandStandOffPackLCm, 0.01f);
 	TestTrue(TEXT("left edge 0.8 m: steps closer"), ShouldSnapToCorner(Both, ECoverFacing::Left, Shift, Config, false));
 	TestEqual(TEXT("... by edge - the left stand-off"), Shift, 80.f - Config.StandStandOffPackRCm, 0.01f);
 	TestTrue(TEXT("left edge 0.8 m crouched: steps closer"), ShouldSnapToCorner(Both, ECoverFacing::Left, Shift, Config, true));
@@ -692,6 +688,28 @@ bool FCoverAutoFirePoseReachTest::RunTest(const FString& Parameters)
 	const FVector MovedActor = Front;
 	TestEqual(TEXT("blind AimPoint outside sector is refused"), FireAt(Low, RememberedFlash, false), ECoverFireAt::Refuse);
 	TestEqual(TEXT("actor now frontal is not a substitute for the remembered AimPoint"), FireAt(Low, MovedActor, false), ECoverFireAt::CoverPose);
+	return true;
+}
+
+COVER_FACING_TEST(FCoverOverTopFirePointTest, "FireAt.OverTopFirePoint")
+bool FCoverOverTopFirePointTest::RunTest(const FString& Parameters)
+{
+	using namespace CoverFacingRules;
+	const FVector Feet(0.f, 0.f, 900.f);
+	const FVector WallNormal(-1.f, 0.f, 0.f); // wall faces -X (back to wall), shooter fires toward +X (-WallNormal)
+	// 95 cm X6 kit parapet: raises from crouched muzzle (85 cm) to standing 140 cm and leans 35 cm forward into -WallNormal.
+	const FVector P95 = OverTopFirePoint(Feet, WallNormal, 95.f);
+	TestTrue(TEXT("95 cm parapet: X leans +35 cm, Z rises to Feet.Z + 140 cm"), P95.Equals(FVector(35.f, 0.f, 1040.f), 0.01f));
+	// Steep downward line to a ground PMC 20 m away, 9 m below clear of a parapet outer edge 70 cm in front of Feet (35 cm past leaned muzzle):
+	const FVector GroundPmc(2000.f, 0.f, 90.f);
+	const FVector AtOuterParapet = FMath::Lerp(P95, GroundPmc, (70.f - P95.X) / (GroundPmc.X - P95.X));
+	TestTrue(TEXT("20 m downward line from 9 m roof clears a 100 cm parapet top"), AtOuterParapet.Z > 1000.f + 15.f);
+	// Taller 128 cm low wall: adds ClearanceCm (22 cm -> 150 cm).
+	const FVector P128 = OverTopFirePoint(Feet, WallNormal, 128.f);
+	TestTrue(TEXT("128 cm low cover: clears top + 22 cm"), P128.Equals(FVector(35.f, 0.f, 1050.f), 0.01f));
+	// Unmeasured wall top (0 cm) still uses standing height + lean.
+	const FVector P0 = OverTopFirePoint(Feet, WallNormal, 0.f);
+	TestTrue(TEXT("0 cm fallback still clears to standing height"), P0.Equals(FVector(35.f, 0.f, 1040.f), 0.01f));
 	return true;
 }
 

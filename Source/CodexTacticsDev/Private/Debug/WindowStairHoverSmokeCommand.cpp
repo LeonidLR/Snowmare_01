@@ -392,6 +392,7 @@ namespace WindowStairHoverSmoke
 			if (R.PendingClick.bBlockingHit)
 			{
 				PC->HandlePlayerClick(R.PendingClick);
+				Check(!PC->IsClickPreviewArmed(), TEXT("S: the stair click issues a move without arming a building cover preview"));
 			}
 			Go(EStep::StairWalk);
 			return true;
@@ -447,7 +448,8 @@ namespace WindowStairHoverSmoke
 					{
 						continue;
 					}
-					const FVector Eye = Aim + Normal * (140.f * Side) + FVector(0.f, 0.f, 30.f);
+					// Keep the real cursor ray clear of the operative standing directly in front of the leaf.
+					const FVector Eye = Aim + Normal * (140.f * Side) + FVector(0.f, 0.f, 160.f);
 					FHitResult Leaf;
 					FCollisionQueryParams LeafQuery(SCENE_QUERY_STAT(OpeningHoverSmokeDoorLeaf), false, Leader);
 					if (!World->LineTraceSingleByChannel(Leaf, Eye, Aim - Normal * (60.f * Side), ECC_Visibility, LeafQuery)

@@ -11,6 +11,7 @@
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "Interactables/WindowBreakage.h"
 #include "Camera/InteriorExitArrowActor.h"
+#include "Camera/RoofCutawaySubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -145,6 +146,12 @@ bool ACodexTacticsPlayerController::IsClickPreviewBypass(const FHitResult& Hit) 
 	}
 	// Designer 2026-11-22: a click on a ground-floor window (its face; the silhouette shows past it) is the window order, not a cover ghost.
 	if (!GetActiveTurnBased() && WindowBreakage::FindWindowSillAt(*GetWorld(), Hit))
+	{
+		return true;
+	}
+	// A flight with a stair-up hover is the same single-click move as its landing, before building cover previews.
+	FVector StairFeet;
+	if (const URoofCutawaySubsystem* Roofs = GetWorld()->GetSubsystem<URoofCutawaySubsystem>(); Roofs && Roofs->FindStairUpTarget(Hit, *Leader, StairFeet))
 	{
 		return true;
 	}

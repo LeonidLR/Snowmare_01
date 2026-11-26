@@ -549,6 +549,10 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 	bInCover = false;
 	bCornerLookPose = false; // leaving the corner drops the CoverIndoor look pose
 	ReleaseTorsoToMovement(FormationLookYaw.IsSet()); // the lean's mesh yaw does not stay on the walk out
+	if (UOperativeAnimInstance* LeaveAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+	{
+		LeaveAnim->ReleasePeekStanceYawLock(); // 135 Part A: a move/cover order off the corner releases any active peek yaw lock
+	}
 	CoverLookSide.Reset(); // the wall group's side belongs to that slot
 	CurrentCoverHeight = ECoverHeight::None;
 	bShimmying = false;
@@ -706,9 +710,15 @@ FVector AOperativeCharacter::GetCoverFireOrigin() const
 	{
 		return Muzzle; // through the opening, not round a corner
 	}
+	if (bInCover && CurrentCoverHeight == ECoverHeight::LowCover && !IsManualCornerPeekSpot() && Stance != EOperativeStance::Prone)
+	{
+		// G023: low cover (incl. 95-100 cm roof parapets) fires over the top from standing-height + slight forward lean so downward rays clear the lip.
+		const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+		return CoverFacingRules::OverTopFirePoint(Feet, CoverSlot.WallNormal, CoverSlot.WallTopCm);
+	}
 	if (!bInCover || (CurrentCoverHeight != ECoverHeight::HighCover && !(bCornerAimActive && IsManualCornerPeekSpot())))
 	{
-		return Muzzle; // low cover: over the top (a manual low-cover corner peek fires round its end, rev 5e)
+		return Muzzle;
 	}
 	return CornerFireOriginFor(CoverSlot, CoverFacing, Muzzle);
 }
@@ -1034,9 +1044,12 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 	const bool bWasAtCorner = bAtCoverCorner;
 	bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, CoverFacing, Config);
 	// The look may name the other hand. The body stays at the ordered edge, so the corner flag stays too.
-	if (!bAtCoverCorner && bManualCornerPeek && WantsCornerLookPose())
+	if (!bAtCoverCorner && WantsCornerLookPose())
 	{
-		bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, ManualCornerPeekSide, Config);
+		bAtCoverCorner = bManualCornerPeek
+			? CoverFacingRules::IsAtCorner(CoverSlot, ManualCornerPeekSide, Config)
+			: (CoverFacingRules::IsAtCorner(CoverSlot, ECoverFacing::Left, Config)
+				|| CoverFacingRules::IsAtCorner(CoverSlot, ECoverFacing::Right, Config));
 	}
 	if (bAtCoverCorner && !bWasAtCorner && bInCover && !bShimmying)
 	{

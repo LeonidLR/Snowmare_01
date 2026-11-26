@@ -38,9 +38,9 @@ struct CODEXTACTICS_API FCoverFacingConfig
 	 * and landed 25-32 cm past the edge. The stand-off is that clavicle step minus 18 cm: the shoulder stays inside the
 	 * 25 cm gate and the pelvis stays past the edge. cm.
 	 */
-	float StandStandOffPackLCm = 66.f;
+	float StandStandOffPackLCm = 34.f;
 	float StandStandOffPackRCm = 34.f;
-	float CrouchStandOffPackLCm = 74.f;
+	float CrouchStandOffPackLCm = 56.f;
 	float CrouchStandOffPackRCm = 56.f;
 	/** At the corner but further from the edge than the stand-off by more than this: step closer (on entry / turn), cm. */
 	float CornerSnapToleranceCm = 15.f;
@@ -393,4 +393,12 @@ namespace CoverFacingRules
 	 */
 	CODEXTACTICS_API ECoverEntryTurn DecideCoverEntryTurn(bool bQuiet, bool bHasEnterClip, bool bCornerPeekArrival, float ArrivalYawDeg, float WallNormalYawDeg,
 		const FCoverFacingConfig& Config = FCoverFacingConfig(), bool bPeekStanceArrival = false);
+
+	/**
+	 * G023 roof / low-cover fire origin: aiming over low cover (40-130 cm, including 95-100 cm X6 roof parapets)
+	 * rises to at least StandingMuzzleCm / WallTopCm + ClearanceCm (clamped to MaxHeightCm) and leans forward
+	 * LeanCm into -WallNormal so crouched idle and downward shots from roofs clear the parapet top.
+	 */
+	CODEXTACTICS_API FVector OverTopFirePoint(const FVector& Feet, const FVector& WallNormal, float WallTopCm,
+		float StandingMuzzleCm = 140.f, float ClearanceCm = 22.f, float MaxHeightCm = 165.f, float LeanCm = 35.f);
 }

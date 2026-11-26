@@ -22,6 +22,16 @@ namespace GrenadeRules
 	constexpr float HandHeight = 135.f;
 	/** Operatives take 65 % of the blast (Godot take_damage(applied_damage * 0.65)). */
 	constexpr float SquadDamageScale = 0.65f;
+	/** G023: pre-throw turn speed before the throw montage starts, deg/s. */
+	constexpr float TurnRateDegPerSec = 900.f;
+	/** G023: skip the pre-turn wait if the thrower already faces within this, deg. */
+	constexpr float PreTurnTriggerDeg = 15.f;
+	/** G023: start the throw montage once the thrower faces the target within this, deg. */
+	constexpr float PreTurnDoneDeg = 5.f;
+	/** G023: safety cap on the pre-turn phase so a blocked rotation never stalls the throw, s. */
+	constexpr float MaxPreTurnSeconds = 0.5f;
+	/** G023: safety cap on holding the throw facing lock after ThrowAt, s. */
+	constexpr float MaxFacingHoldSeconds = 2.5f;
 
 	/**
 	 * Seconds after the throw starts until the grenade leaves the hand: the measured release time of the clip
@@ -43,4 +53,16 @@ namespace GrenadeRules
 
 	/** Position on the arc at Progress 0..1 (Godot lerp + sin(progress * PI) * arc_height). */
 	CODEXTACTICS_API FVector ArcPoint(const FVector& Start, const FVector& End, float Progress);
+
+	/** G023: 2D yaw from From to Target (CurrentYaw preserved if Target coincides with From). */
+	CODEXTACTICS_API float ThrowYaw(const FVector& From, const FVector& Target, float FallbackYaw = 0.f);
+
+	/** G023: unsigned horizontal angle error (0..180 deg) between CurrentYaw and TargetYaw. */
+	CODEXTACTICS_API float ThrowErrorDeg(float CurrentYaw, float TargetYaw);
+
+	/** G023: whether the thrower must smoothly pre-turn before the throw montage begins. */
+	CODEXTACTICS_API bool NeedsPreTurn(float ErrorDeg, float TriggerDeg = PreTurnTriggerDeg);
+
+	/** G023: step yaw toward TargetYaw at InTurnRateDegPerSec over DeltaSeconds. */
+	CODEXTACTICS_API float StepThrowYaw(float CurrentYaw, float TargetYaw, float InTurnRateDegPerSec, float DeltaSeconds);
 }
