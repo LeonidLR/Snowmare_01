@@ -1044,9 +1044,12 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 	const bool bWasAtCorner = bAtCoverCorner;
 	bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, CoverFacing, Config);
 	// The look may name the other hand. The body stays at the ordered edge, so the corner flag stays too.
-	if (!bAtCoverCorner && bManualCornerPeek && WantsCornerLookPose())
+	if (!bAtCoverCorner && WantsCornerLookPose())
 	{
-		bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, ManualCornerPeekSide, Config);
+		bAtCoverCorner = bManualCornerPeek
+			? CoverFacingRules::IsAtCorner(CoverSlot, ManualCornerPeekSide, Config)
+			: (CoverFacingRules::IsAtCorner(CoverSlot, ECoverFacing::Left, Config)
+				|| CoverFacingRules::IsAtCorner(CoverSlot, ECoverFacing::Right, Config));
 	}
 	if (bAtCoverCorner && !bWasAtCorner && bInCover && !bShimmying)
 	{

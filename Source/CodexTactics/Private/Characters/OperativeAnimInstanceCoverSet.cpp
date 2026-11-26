@@ -616,7 +616,7 @@ void UOperativeAnimInstance::UpdateCoverSetAimOffset()
 	}
 	const TCHAR* Key = !bIsCrouching ? TEXT("stand_ao") : bCoverOverTopFireSet ? TEXT("crouch_over_ao") : TEXT("crouch_ao");
 	const FCoverSetAssets* Pair = FindCoverSetExtra(Key);
-	const int32 Index = CoverFacingRules::ClipIndex(CoverFirePoseFacing);
+	const int32 Index = CoverFacingRules::ClipIndex(bCoverInFirePose ? CoverFirePoseFacing : CoverFacing);
 	if (UBlendSpace* Offset = Pair && Pair->Assets.IsValidIndex(Index) ? Cast<UBlendSpace>(Pair->Assets[Index].Get()) : nullptr)
 	{
 		ActiveAimOffset = Offset;

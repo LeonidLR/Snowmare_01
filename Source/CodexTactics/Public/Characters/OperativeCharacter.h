@@ -2130,11 +2130,11 @@ public:
 	 * _R at his left. X6 2026-11-25: the outer shoulder, not the 2026-10-06 pelvis step, stays within 25 cm of the edge.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
-	float CoverStandOffStandPackLCm = 66.f;
+	float CoverStandOffStandPackLCm = 34.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float CoverStandOffStandPackRCm = 34.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
-	float CoverStandOffCrouchPackLCm = 74.f;
+	float CoverStandOffCrouchPackLCm = 56.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float CoverStandOffCrouchPackRCm = 56.f;
 

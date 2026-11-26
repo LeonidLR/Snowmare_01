@@ -854,8 +854,15 @@ bool AOperativeCharacter::IsPeekingRoundCorner() const
 
 bool AOperativeCharacter::IsAtPeekableCorner() const
 {
-	return bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight != ECoverHeight::None
-		&& (IsManualCornerPeekSpot() || IsCornerHoldSpot() || (bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing)));
+	if (!bInCover || bShimmying || bCoverSnapPending || CurrentCoverHeight == ECoverHeight::None)
+	{
+		return false;
+	}
+	if (IsManualCornerPeekSpot() || IsCornerHoldSpot() || (bCornerLookPose && bHasManualLookPoint && bAtCoverCorner))
+	{
+		return true;
+	}
+	return bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing);
 }
 
 bool AOperativeCharacter::WantsCornerLookPose() const

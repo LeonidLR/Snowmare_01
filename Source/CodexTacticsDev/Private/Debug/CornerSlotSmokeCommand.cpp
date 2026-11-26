@@ -423,6 +423,8 @@ namespace CornerSlotSmoke
 			Label, *Shoulder, ShoulderIn, FMath::Abs(ShoulderIn), bPelvis ? TEXT("yes") : TEXT("no"), PelvisIn, CapsuleIn, CapsulePen, WorstPen, *WorstBone, Operative.GetCoverEntryMeshOffset().Size(),
 			static_cast<int32>(Operative.GetStance()), Operative.IsPeekingRoundCorner() ? 1 : 0, Operative.IsCornerAimActive() ? 1 : 0,
 			Set.IsEmpty() ? TEXT("m4") : *Set, *Clip);
+		const float MaxCapsuleIn = Operative.GetStance() == EOperativeStance::Crouching ? 57.f : 36.f;
+		Check(CapsuleIn <= MaxCapsuleIn, FString::Printf(TEXT("%s: capsule %.1f cm from the edge (limit %.0f)"), Label, CapsuleIn, MaxCapsuleIn));
 		const bool bShoulder = Shoulder != TEXT("none") && FMath::Abs(ShoulderIn) <= MaxShoulderFromEdgeCm;
 		Check(bShoulder, FString::Printf(TEXT("%s: outer shoulder %.1f cm from the edge (limit %.0f)"), Label, FMath::Abs(ShoulderIn), MaxShoulderFromEdgeCm));
 		Check(WorstPen <= MaxPenetrationCm, FString::Printf(TEXT("%s: penetration %.1f cm (%s, limit %.0f)"), Label, WorstPen, *WorstBone, MaxPenetrationCm));
