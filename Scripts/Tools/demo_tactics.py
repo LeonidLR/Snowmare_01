@@ -14,8 +14,7 @@ from dataclasses import dataclass, field
 import json
 import math
 from pathlib import Path
-import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 # --- Threshold constants -----------------------------------------------------
@@ -27,8 +26,11 @@ OVERWATCH_FIRE_WINDOW_S = 3.0
 UNDER_FIRE_RECENT_S = 6.0
 UNWATCHED_SECTOR_HALF_ANGLE_DEG = 60.0
 UNWATCHED_FLANK_MIN_SECONDS = 5.0
-UNWATCHED_MOVE_LOOK_WINDOW_S = 1.5
 PRONE_STANCE_INDEX = 2
+CRAWL_MIN_DISTANCE_CM = 50.0
+FLANK_MIN_MOVEMENT_CM = 300.0
+COVER_ORDER_WINDOW_S = 8.0
+MAX_SAMPLE_GAP_S = 5.0
 LURE_RETREAT_MIN_CM = 300.0
 LURE_SNIPE_MIN_DIST_CM = 2000.0
 LURE_SNIPE_WINDOW_S = 15.0
@@ -41,6 +43,8 @@ class DetectedTactic:
     t_end: float
     actor: str
     detail: str
+    evidence: str = "recorded"
+    round_id: str = ""
 
 
 @dataclass
@@ -111,327 +115,212 @@ def _op_under_fire_recent(op: Dict[str, Any]) -> bool:
     return 0.0 <= v <= UNDER_FIRE_RECENT_S
 
 
-def _find_first_contact_time(records: List[Dict[str, Any]]) -> Optional[float]:
-    for r in records:
-        rtype = r.get("type")
-        if rtype in ("shot_hit", "damage", "kill", "down"):
-            return float(r.get("t", 0.0))
-        if rtype == "order" and r.get("kind") in ("Shot", "QuickFire", "Suppress", "Grenade"):
-            return float(r.get("t", 0.0))
-        if rtype in ("snap", "order"):
-            for op in r.get("ops", []):
-                if int(op.get("thr_n", 0)) > 0 or _op_under_fire_recent(op):
-                    return float(r.get("t", 0.0))
-    return None
-
-
 def analyze_records(records: List[Dict[str, Any]]) -> TaggerReport:
+    """Use only evidence in the same round; missing fields remain unknown.
+
+    Stable sorting also accepts inputs that group events and frames separately,
+    and preserves event order when timestamps are equal.
+    """
     header = next((r for r in records if r.get("type") == "header"), {})
     footer = next((r for r in reversed(records) if r.get("type") == "footer"), {})
-    report = TaggerReport(
-        session=str(header.get("session", "")),
-        map_name=str(header.get("map", "")),
-        duration_s=float(footer.get("duration_s", 0.0)),
-    )
-
-    # Base ground Z reference for legacy recordings without op.height
-    all_op_z: List[float] = []
-    for r in records:
-        if r.get("type") in ("snap", "order"):
-            for op in r.get("ops", []):
-                p = op.get("p")
-                if isinstance(p, list) and len(p) >= 3:
-                    all_op_z.append(float(p[2]))
-    base_z = min(all_op_z) if all_op_z else 0.0
-
-    # Collect kills / downs
-    for r in records:
-        if r.get("type") in ("kill", "down"):
-            report.kills.append(
-                KillRecord(
-                    t=float(r.get("t", 0.0)),
-                    event_type=str(r["type"]),
-                    killer=str(r.get("killer", "")),
-                    victim=str(r.get("victim", "")),
-                    weapon=str(r.get("weapon", "")),
-                    dist_cm=float(r.get("dist", -1.0)),
-                    was_victim_aware=r.get("was_victim_aware"),
-                    victim_covered_by_ally=r.get("victim_covered_by_ally"),
-                )
-            )
-
-    first_contact_t = _find_first_contact_time(records)
-
-    # 1. fallback_to_cover_after_contact
-    if first_contact_t is not None:
-        for r in records:
-            t = float(r.get("t", 0.0))
-            if t < first_contact_t or t > first_contact_t + FALLBACK_COVER_WINDOW_S:
-                continue
-            rtype = r.get("type")
-            if rtype == "cover_enter":
-                report.tactics.append(
-                    DetectedTactic(
-                        "fallback_to_cover_after_contact",
-                        first_contact_t,
-                        t,
-                        str(r.get("op", "")),
-                        f"cover_enter {r.get('height', '')} within {t - first_contact_t:.1f}s of contact",
-                    )
-                )
-                break
-            if rtype == "order" and r.get("kind") in ("Cover", "CornerPeek") and r.get("ok", True):
-                report.tactics.append(
-                    DetectedTactic(
-                        "fallback_to_cover_after_contact",
-                        first_contact_t,
-                        t,
-                        str(r.get("actor", "")),
-                        f"cover order ({r.get('pmc_order')}) within {t - first_contact_t:.1f}s of contact",
-                    )
-                )
-                break
-            if rtype == "snap":
-                entered = next((op for op in r.get("ops", []) if _op_is_cover(op)), None)
-                if entered is not None:
-                    report.tactics.append(
-                        DetectedTactic(
-                            "fallback_to_cover_after_contact",
-                            first_contact_t,
-                            t,
-                            str(entered.get("id", "")),
-                            f"in cover within {t - first_contact_t:.1f}s of contact",
-                        )
-                    )
-                    break
-
-    # Track per-op history for multi-frame tactics
-    op_first_pos: Dict[str, Tuple[float, List[float]]] = {}
-    op_stealth_start_pos: Dict[str, Tuple[float, List[float]]] = {}
-    op_prone_moving_since: Dict[str, float] = {}
-    op_moving_to_cover_until: Dict[str, float] = {}
-    cover_ops_firing: List[Tuple[float, str]] = []
-    high_ground_spans: Dict[str, List[float]] = {}
-    pitch_values: List[float] = []
-    unwatched_sectors_s: Dict[str, float] = {"front": 0.0, "right": 0.0, "rear": 0.0, "left": 0.0}
-    last_snap_t: Optional[float] = None
-    last_shot_time_by_op: Dict[str, float] = {}
-    last_under_fire_by_op: Dict[str, float] = {}
-    retreat_events: List[Tuple[float, str, List[float]]] = []
-
-    for r in records:
-        rtype = r.get("type")
-        t = float(r.get("t", 0.0))
-
-        if rtype in ("shot_hit", "damage"):
-            who = str(r.get("who", ""))
-            whom = str(r.get("whom", ""))
-            if who:
-                last_shot_time_by_op[who] = t
-            if whom:
-                last_under_fire_by_op[whom] = t
-
-        if rtype == "order":
-            actor = str(r.get("actor", ""))
-            kind = str(r.get("kind", ""))
-            if kind in ("Shot", "QuickFire", "Suppress") and actor:
-                last_shot_time_by_op[actor] = t
-            if kind == "Cover" and actor:
-                op_moving_to_cover_until[actor] = max(op_moving_to_cover_until.get(actor, 0.0), t + 8.0)
-            if kind in ("Move", "Cover") and actor:
-                facts = r.get("facts", {})
-                td = float(facts.get("thr_d", -1.0))
-                td_new = float(facts.get("thr_d_new", -1.0))
-                if td >= 0.0 and td_new - td >= LURE_RETREAT_MIN_CM:
-                    dest = r.get("dest")
-                    if isinstance(dest, list) and len(dest) >= 2:
-                        retreat_events.append((t, actor, dest))
-
-        if rtype == "cover_enter":
-            op_id = str(r.get("op", ""))
-            if op_id in op_prone_moving_since:
-                report.tactics.append(
-                    DetectedTactic(
-                        "prone_then_crawl_to_cover",
-                        op_prone_moving_since[op_id],
-                        t,
-                        op_id,
-                        "crawled prone into cover",
-                    )
-                )
-                del op_prone_moving_since[op_id]
-
-        if rtype not in ("snap", "order"):
+    result = TaggerReport(str(header.get("session", "")), str(header.get("map", "")),
+                          float(footer.get("duration_s", 0)))
+    ordered = sorted((r for r in records if r.get("type") not in ("header", "footer")),
+                     key=lambda r: float(r.get("t", 0)))
+    segments, current, round_id = [], [], "legacy"
+    for r in ordered:
+        if r.get("type") == "round_start":
+            if current:
+                segments.append((round_id, current))
+            current, round_id = [], str(r.get("round", ""))
+        elif r.get("type") == "round_end":
+            segments.append((round_id, current))
+            current, round_id = [], "between_rounds"
+        else:
+            current.append(r)
+    if current:
+        segments.append((round_id, current))
+    pitches = []
+    for rid, segment in segments:
+        if rid == "between_rounds":
             continue
+        _analyze_segment(segment, result, rid, pitches)
+    if pitches:
+        result.scan_pitch_min, result.scan_pitch_max = min(pitches), max(pitches)
+        result.scan_pitch_range = result.scan_pitch_max - result.scan_pitch_min
+        result.tactics.append(DetectedTactic("scan_pitch_range", 0, result.duration_s, "squad",
+                              f"pitch {min(pitches):.1f}..{max(pitches):.1f} deg"))
+    result.tactics.sort(key=lambda x: (x.t_start, x.tag))
+    return result
 
-        ops = r.get("ops", [])
-        threats = r.get("threats", [])
-        moving_ops = [op for op in ops if op.get("alive", 1) and op.get("mv", False)]
 
-        # Scan pitch & unwatched flanks on snaps
-        if rtype == "snap":
-            dt = (t - last_snap_t) if last_snap_t is not None else 0.0
-            last_snap_t = t
-            for op in ops:
-                if not op.get("alive", 1):
-                    continue
-                if "scan_pitch" in op:
-                    pitch_values.append(float(op["scan_pitch"]))
+def _analyze_segment(records, report, round_id, pitches):
+    previous, stealth_starts, prone, shots, incoming = {}, {}, {}, {}, {}
+    flank_candidates, retreats, threats_previous = {}, {}, {}
+    flank_starts = {}
+    cover_orders, unwatched, high_spans, overwatch = {}, {}, {}, {}
+    engagements = {}
+    contact = None
+    fallback_done = set()
+    last_t = None
+    emitted = set()
 
-            if moving_ops and dt > 0.0 and dt <= 5.0:
-                mean_yaw = float(moving_ops[0].get("yaw", 0.0))
-                sector_offsets = {"front": 0.0, "right": 90.0, "rear": 180.0, "left": -90.0}
-                for sec_name, offset in sector_offsets.items():
-                    sec_yaw = mean_yaw + offset
-                    watched = any(
-                        _angle_diff_deg(float(op.get("yaw", 0.0)), sec_yaw) <= UNWATCHED_SECTOR_HALF_ANGLE_DEG
-                        for op in ops
-                        if op.get("alive", 1)
-                    )
-                    if not watched:
-                        unwatched_sectors_s[sec_name] += dt
+    def emit(tag, start, end, actor, detail, evidence="recorded"):
+        key = tag, actor
+        if key not in emitted:
+            emitted.add(key)
+            report.tactics.append(DetectedTactic(tag, start, end, actor, detail, evidence, round_id))
 
-        # Per-op tracking
-        for op in ops:
-            if not op.get("alive", 1):
-                continue
-            op_id = str(op.get("id", ""))
+    def recent(table, actor, t, window=UNDER_FIRE_RECENT_S):
+        return 0 <= t - table.get(actor, -1e9) <= window
+
+    def target_id(r):
+        target = r.get("target", {})
+        return str(target.get("id", "")) if isinstance(target, dict) else str(target)
+
+    for r in records:
+        t, typ = float(r.get("t", 0)), r.get("type")
+        if typ in ("shot_hit", "damage"):
+            shots[str(r.get("who", ""))] = t
+            incoming[str(r.get("whom", ""))] = t
+            engagements[(str(r.get("who", "")), str(r.get("whom", "")))] = t
+            if contact is None:
+                contact = t
+        if typ == "order" and r.get("ok", True):
+            actor, kind = str(r.get("actor", "")), r.get("kind")
+            if kind in ("Shot", "QuickFire", "Suppress"):
+                shots[actor] = t
+                if contact is None:
+                    contact = t
+            if kind in ("Cover", "CornerPeek"):
+                cover_orders[actor] = t
+            # An engaged retreat with a named target is only the start of a lure.
+            facts = r.get("facts", {})
+            tid = target_id(r)
+            if not tid:
+                actor_view = next((o for o in r.get("ops", []) if o.get("id") == actor), {})
+                candidates = [th for th in r.get("threats", []) if isinstance(th.get("p"), list)]
+                if actor_view.get("p") and candidates:
+                    tid = str(min(candidates, key=lambda th: _dist2d(actor_view["p"], th["p"])).get("id", ""))
+            if kind in ("Move", "Cover") and tid and facts.get("thr_d", -1) >= 0:
+                if facts.get("thr_d_new", -1) - facts["thr_d"] >= LURE_RETREAT_MIN_CM:
+                    if tid in threats_previous and isinstance(r.get("dest"), list):
+                        retreats[tid] = (t, actor, threats_previous[tid]["p"], r["dest"])
+        if typ in ("kill", "down"):
+            killer, victim = str(r.get("killer", "")), str(r.get("victim", ""))
+            report.kills.append(KillRecord(t, typ, killer, victim, str(r.get("weapon", "")),
+                               float(r.get("dist", -1)), r.get("was_victim_aware"),
+                               r.get("victim_covered_by_ally")))
+            candidate = flank_candidates.get((killer, victim))
+            if typ == "kill" and candidate and 0 <= t - candidate[1] <= UNDER_FIRE_RECENT_S:
+                emit("distract_and_flank", candidate[0], t, killer,
+                     f"stealth flank around {victim}; ally engaged; matching kill")
+            lure = retreats.get(victim)
+            target = threats_previous.get(victim, {})
+            # Open ground must be explicitly recorded, never inferred from absence.
+            if (typ == "kill" and lure and killer != lure[1]
+                    and 0 <= t - lure[0] <= LURE_SNIPE_WINDOW_S
+                    and r.get("dist", -1) >= LURE_SNIPE_MIN_DIST_CM
+                    and target.get("in_cover") is False
+                    and 0 <= t - target.get("_observed_t", -1e9) <= MAX_SAMPLE_GAP_S
+                    and _dist2d(target["p"], lure[2]) >= LURE_RETREAT_MIN_CM
+                    and _dist2d(lure[2], lure[3]) - _dist2d(target["p"], lure[3]) >= LURE_RETREAT_MIN_CM):
+                emit("lure_then_snipe", lure[0], t, killer,
+                     f"{victim} advanced into open ground after {lure[1]} retreated")
+        if typ not in ("snap", "order"):
+            continue
+        ops = {str(o.get("id", "")): o for o in r.get("ops", []) if o.get("alive", True)}
+        threats = {str(th.get("id", "")): th for th in r.get("threats", [])
+                   if isinstance(th.get("p"), list) and len(th["p"]) >= 3}
+        if contact is None and any(o.get("thr_n", 0) > 0 or _op_under_fire_recent(o) for o in ops.values()):
+            contact = t
+        # Clip drops recover firing from legacy snapshots; a reload never does.
+        for oid, op in ops.items():
+            prev = previous.get(oid, {})
+            if "clip" in op and "clip" in prev and op["clip"] < prev["clip"]:
+                shots[oid] = t
+            if "scan_pitch" in op:
+                pitches.append(float(op["scan_pitch"]))
             pos = op.get("p")
             if not isinstance(pos, list) or len(pos) < 3:
                 continue
-            if op_id not in op_first_pos:
-                op_first_pos[op_id] = (t, pos)
+            entered_cover = _op_is_cover(op) and prev and not _op_is_cover(prev)
+            if (contact is not None and 0 <= t - contact <= FALLBACK_COVER_WINDOW_S
+                    and entered_cover and oid not in fallback_done):
+                emit("fallback_to_cover_after_contact", contact, t, oid,
+                     "cover transition after contact", "snapshot transition")
+                fallback_done.add(oid)
+            if int(op.get("st", -1)) != PRONE_STANCE_INDEX:
+                prone.pop(oid, None)
+            elif op.get("mv"):
+                prone.setdefault(oid, (t, pos))
+            if entered_cover and oid in prone:
+                start, start_pos = prone.pop(oid)
+                if _dist2d(start_pos, pos) >= CRAWL_MIN_DISTANCE_CM:
+                    emit("prone_then_crawl_to_cover", start, t, oid, "prone movement into cover")
             if _op_is_stealth(op):
-                if op_id not in op_stealth_start_pos:
-                    op_stealth_start_pos[op_id] = (t, pos)
+                for tid, th in threats.items():
+                    stealth_starts.setdefault((oid, tid), (t, pos))
             else:
-                op_stealth_start_pos.pop(op_id, None)
-
-            if int(op.get("st", 0)) == PRONE_STANCE_INDEX and op.get("mv", False):
-                op_prone_moving_since.setdefault(op_id, t)
-            if _op_is_cover(op) and op_id in op_prone_moving_since:
-                report.tactics.append(
-                    DetectedTactic(
-                        "prone_then_crawl_to_cover",
-                        op_prone_moving_since[op_id],
-                        t,
-                        op_id,
-                        "crawled prone into cover",
-                    )
-                )
-                del op_prone_moving_since[op_id]
-
-            # High ground while engaging (firing or visible threat)
-            op_h = float(op.get("height", pos[2] - base_z))
-            engaging = (t - last_shot_time_by_op.get(op_id, -1e9) <= OVERWATCH_FIRE_WINDOW_S) or int(op.get("thr_n", 0)) > 0
-            if engaging and threats:
-                nearest_thr = min(threats, key=lambda th: _dist2d(pos, th["p"]) if isinstance(th.get("p"), list) else 1e9)
-                thr_p = nearest_thr.get("p")
-                if isinstance(thr_p, list) and len(thr_p) >= 3:
-                    dz = pos[2] - float(thr_p[2])
-                    if dz >= HIGH_GROUND_MIN_DZ_CM or op_h >= HIGH_GROUND_MIN_DZ_CM:
-                        high_ground_spans.setdefault(op_id, []).append(t)
-
-            # First in cover overwatch: op in cover firing while an ally is moving to cover
-            if _op_is_cover(op) and (t - last_shot_time_by_op.get(op_id, -1e9) <= OVERWATCH_FIRE_WINDOW_S):
-                ally_moving_to_cover = any(
-                    str(other.get("id", "")) != op_id
-                    and other.get("alive", 1)
-                    and other.get("mv", False)
-                    and not _op_is_cover(other)
-                    for other in ops
-                )
-                if ally_moving_to_cover:
-                    cover_ops_firing.append((t, op_id))
-
-            # Distract & flank / flank into rear via order or kill or threat bearing shift
+                stealth_starts = {k: v for k, v in stealth_starts.items() if k[0] != oid}
+            firing = recent(shots, oid, t, OVERWATCH_FIRE_WINDOW_S)
             if threats:
-                nearest_thr = min(threats, key=lambda th: _dist2d(pos, th["p"]) if isinstance(th.get("p"), list) else 1e9)
-                thr_p = nearest_thr.get("p")
-                if isinstance(thr_p, list) and len(thr_p) >= 2:
-                    start_t, start_p = op_stealth_start_pos.get(op_id, op_first_pos[op_id])
-                    ang = _flank_angle_deg(start_p, pos, thr_p)
-                    if ang >= FLANK_REAR_MIN_ANGLE_DEG:
-                        if not any(x.tag == "flank_into_rear" and x.actor == op_id for x in report.tactics):
-                            report.tactics.append(
-                                DetectedTactic("flank_into_rear", start_t, t, op_id, f"flanked {ang:.0f} deg around target")
-                            )
-                    if ang >= DISTRACT_FLANK_MIN_ANGLE_DEG:
-                        ally_distracting = any(
-                            str(other.get("id", "")) != op_id
-                            and (
-                                _op_under_fire_recent(other)
-                                or (t - last_shot_time_by_op.get(str(other.get("id", "")), -1e9) <= UNDER_FIRE_RECENT_S)
-                                or (t - last_under_fire_by_op.get(str(other.get("id", "")), -1e9) <= UNDER_FIRE_RECENT_S)
-                            )
-                            for other in ops
-                        )
-                        stealth_or_unseen = _op_is_stealth(op) or int(op.get("seen_by_enemy", 0)) == 0
-                        has_kill = any(k.killer == op_id and k.event_type == "kill" for k in report.kills)
-                        if ally_distracting and stealth_or_unseen and (has_kill or not report.kills):
-                            if not any(x.tag == "distract_and_flank" and x.actor == op_id for x in report.tactics):
-                                report.tactics.append(
-                                    DetectedTactic(
-                                        "distract_and_flank",
-                                        start_t,
-                                        t,
-                                        op_id,
-                                        f"flanked {ang:.0f} deg while ally drew fire",
-                                    )
-                                )
-
-    for op_id, ts in high_ground_spans.items():
-        report.tactics.append(
-            DetectedTactic("high_ground", min(ts), max(ts), op_id, f"elevated >= {HIGH_GROUND_MIN_DZ_CM:.0f} cm while engaging")
-        )
-
-    if cover_ops_firing:
-        by_op: Dict[str, List[float]] = {}
-        for ts, oid in cover_ops_firing:
-            by_op.setdefault(oid, []).append(ts)
-        for oid, ts in by_op.items():
-            report.tactics.append(
-                DetectedTactic("first_in_cover_overwatch", min(ts), max(ts), oid, "fired from cover while ally moved")
-            )
-
-    # Lure then snipe
-    for rt, r_actor, _ in retreat_events:
-        for k in report.kills:
-            if k.event_type == "kill" and k.killer != r_actor and k.dist_cm >= LURE_SNIPE_MIN_DIST_CM and 0.0 <= k.t - rt <= LURE_SNIPE_WINDOW_S:
-                report.tactics.append(
-                    DetectedTactic("lure_then_snipe", rt, k.t, k.killer, f"long-range kill {k.dist_cm/100:.1f}m after {r_actor} retreated")
-                )
-
-    max_unwatched = max(unwatched_sectors_s.values()) if unwatched_sectors_s else 0.0
-    report.unwatched_flank_seconds = round(max_unwatched, 2)
-    if max_unwatched > UNWATCHED_FLANK_MIN_SECONDS:
-        worst_sec = max(unwatched_sectors_s, key=lambda k: unwatched_sectors_s[k])
-        report.tactics.append(
-            DetectedTactic(
-                "unwatched_flank_seconds",
-                0.0,
-                report.duration_s,
-                "squad",
-                f"sector '{worst_sec}' unwatched for {max_unwatched:.1f}s while moving",
-            )
-        )
-
-    if pitch_values:
-        report.scan_pitch_min = round(min(pitch_values), 1)
-        report.scan_pitch_max = round(max(pitch_values), 1)
-        report.scan_pitch_range = round(report.scan_pitch_max - report.scan_pitch_min, 1)
-        report.tactics.append(
-            DetectedTactic(
-                "scan_pitch_range",
-                0.0,
-                report.duration_s,
-                "squad",
-                f"pitch {report.scan_pitch_min:.1f}..{report.scan_pitch_max:.1f} deg (range {report.scan_pitch_range:.1f} deg)",
-            )
-        )
-
-    report.tactics.sort(key=lambda x: (x.t_start, x.tag))
-    return report
+                tid, th = min(threats.items(), key=lambda item: _dist2d(pos, item[1]["p"]))
+                # Both actor positions are capsule centres: height above own roof
+                # cannot substitute for height relative to the nearest enemy.
+                if (firing or op.get("thr_n", 0) > 0) and pos[2] - th["p"][2] >= HIGH_GROUND_MIN_DZ_CM:
+                    high_spans.setdefault(oid, []).append(t)
+                for tid, th in threats.items():
+                    rear_start = flank_starts.setdefault((oid, tid), (t, pos))
+                    rear_angle = _flank_angle_deg(rear_start[1], pos, th["p"])
+                    if (rear_angle > FLANK_REAR_MIN_ANGLE_DEG and "yaw" in th
+                            and _dist2d(rear_start[1], pos) >= FLANK_MIN_MOVEMENT_CM
+                            and _angle_diff_deg(_bearing_deg(th["p"], pos), th["yaw"]) > FLANK_REAR_MIN_ANGLE_DEG):
+                        emit("flank_into_rear", rear_start[0], t, oid, f"behind {tid}'s recorded facing")
+                    start = stealth_starts.get((oid, tid))
+                    if not start or _dist2d(start[1], pos) < FLANK_MIN_MOVEMENT_CM:
+                        continue
+                    angle = _flank_angle_deg(start[1], pos, th["p"])
+                    distract = any(other != oid and (recent(engagements, (other, tid), t)
+                                   or recent(engagements, (tid, other), t))
+                                   for other in ops)
+                    high_overwatch = any(aid != oid and ally.get("p")
+                        and ally["p"][2] - th["p"][2] >= HIGH_GROUND_MIN_DZ_CM
+                        and recent(shots, aid, t, OVERWATCH_FIRE_WINDOW_S) for aid, ally in ops.items())
+                    if (op.get("seen_by_enemy") == 0 and high_overwatch
+                            and _dist2d(start[1], th["p"]) - _dist2d(pos, th["p"]) >= FLANK_MIN_MOVEMENT_CM):
+                        emit("approach_unseen", start[0], t, oid, f"stealth approach to {tid} under elevated overwatch")
+                    if angle > DISTRACT_FLANK_MIN_ANGLE_DEG and distract:
+                        flank_candidates[(oid, tid)] = (start[0], t)
+            if _op_is_cover(op) and firing:
+                for aid, ally in ops.items():
+                    if aid == oid or not ally.get("mv") or _op_is_cover(ally):
+                        continue
+                    if recent(cover_orders, aid, t, COVER_ORDER_WINDOW_S):
+                        overwatch.setdefault(oid, []).append(t)
+        # Consecutive gaps only. Reset on a watched sector, stopped squad or sample gap.
+        if typ == "snap":
+            delta = t - last_t if last_t is not None else 0
+            moving = [o for o in ops.values() if o.get("mv")]
+            anchor = float(moving[0].get("yaw", 0)) if moving else 0
+            for offset in (0, 90, 180, -90):
+                watched = any(("look_yaw" in o or "yaw" in o) and _angle_diff_deg(o.get("look_yaw", o.get("yaw")), anchor + offset) <= UNWATCHED_SECTOR_HALF_ANGLE_DEG for o in ops.values())
+                key = offset
+                if moving and not watched and 0 < delta <= MAX_SAMPLE_GAP_S:
+                    unwatched[key] = unwatched.get(key, 0) + delta
+                    report.unwatched_flank_seconds = max(report.unwatched_flank_seconds, unwatched[key])
+                    if unwatched[key] > UNWATCHED_FLANK_MIN_SECONDS:
+                        emit("unwatched_flank_seconds", t-unwatched[key], t, "squad",
+                             f"relative sector {offset:+} deg unwatched continuously")
+                else:
+                    unwatched[key] = 0
+            last_t = t
+        previous.update(ops)
+        threats_previous.update({tid: dict(th, _observed_t=t) for tid, th in threats.items()})
+    for oid, times in high_spans.items():
+        emit("high_ground", min(times), max(times), oid, "one storey above nearest enemy while engaging", "snapshot geometry")
+    for oid, times in overwatch.items():
+        emit("first_in_cover_overwatch", min(times), max(times), oid, "fired from cover while ally executed cover order")
 
 
 def load_jsonl(path: Path) -> List[Dict[str, Any]]:
@@ -445,9 +334,11 @@ def load_jsonl(path: Path) -> List[Dict[str, Any]]:
 
 
 def format_report(report: TaggerReport) -> str:
+    pitch = (f"{report.scan_pitch_range:.1f} deg ({report.scan_pitch_min:.1f}..{report.scan_pitch_max:.1f})"
+             if any(t.tag == "scan_pitch_range" for t in report.tactics) else "unknown (not recorded)")
     lines = [
         f"Session: {report.session} | Map: {report.map_name} | Duration: {report.duration_s:.1f}s",
-        f"Unwatched flank max: {report.unwatched_flank_seconds:.1f}s | Scan pitch range: {report.scan_pitch_range:.1f} deg ({report.scan_pitch_min:.1f}..{report.scan_pitch_max:.1f})",
+        f"Unwatched flank max: {report.unwatched_flank_seconds:.1f}s | Scan pitch range: {pitch}",
         "",
         "TACTICS DETECTED:",
         f"{'Tactic':<32} {'Start':>7} {'End':>7} {'Actor':<16} Detail",
@@ -457,11 +348,11 @@ def format_report(report: TaggerReport) -> str:
         lines.append("  (none)")
     else:
         for tac in report.tactics:
-            lines.append(f"{tac.tag:<32} {tac.t_start:7.1f} {tac.t_end:7.1f} {tac.actor:<16} {tac.detail}")
+            lines.append(f"{tac.tag:<32} {tac.t_start:7.1f} {tac.t_end:7.1f} {tac.actor:<16} {tac.detail} [round={tac.round_id}; {tac.evidence}]")
     lines.append("")
     lines.append("KILLS / DOWNS:")
     if not report.kills:
-        lines.append("  (none)")
+        lines.append("  (none recorded; legacy absence does not establish zero kills)")
     else:
         for k in report.kills:
             lines.append(
@@ -483,7 +374,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "map": report.map_name,
             "duration_s": report.duration_s,
             "unwatched_flank_seconds": report.unwatched_flank_seconds,
-            "scan_pitch_range": report.scan_pitch_range,
+            "scan_pitch_range": report.scan_pitch_range if any(t.tag == "scan_pitch_range" for t in report.tactics) else None,
             "tactics": [vars(t) for t in report.tactics],
             "kills": [vars(k) for k in report.kills],
         }

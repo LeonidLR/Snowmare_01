@@ -59,6 +59,12 @@ void AOperativeCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDama
 	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
 	{
 		Recorder->RecordDamage(Spec.AttackerSource, this, FinalDamage, Spec.DamageOrigin);
+		if (IsCriticallyWounded() && HealthComponent
+			&& !CriticalWoundRules::IsCritical(CriticalWoundRules::GetWoundConfig(),
+				HealthComponent->GetCurrentHealth() + FinalDamage, HealthComponent->GetMaxHealth()))
+		{
+			Recorder->RecordKillOrDown(this, Spec.AttackerSource, true);
+		}
 	}
 	// G026: a heavy hit during a mantle or a vault does not pull him back. The climb finishes (MantleRules::TraversalCompletes).
 }
@@ -67,7 +73,7 @@ void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSour
 {
 	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
 	{
-		Recorder->RecordKillOrDown(this, AttackerSource, IsPlayerTeam());
+		Recorder->RecordKillOrDown(this, AttackerSource, false);
 	}
 	if (bInCover)
 	{

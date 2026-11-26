@@ -1,5 +1,8 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**121 checkpoint (2026-11-27, gemini/121-recording-tactics).** Reviewed Gemini telemetry; corrected attribution, optical observer/support facts, ground and look measurements, death/down semantics, and conservative round-scoped tactic tagging. Python18/18 PASS; final worker build/Smart/smokes and new PIE acceptance recording pending. Report: `docs/port/codex/outbox/121-recording-tactics.report.md`. Not merge-ready.
+
+
 **Window order rules (`claude/bgen-test`, 2026-11-23 morning; designer decision via Lead).** `WindowOrderRules` + `Content/Data/Interactables/windows.json`:
 (1) Solo with the WHOLE squad box-selected, in a fight (wave / firefight / squad detected): every move order opens the windows on the way;
 (2) formation: a follower never paths / auto-vaults through a WHOLE window, even on the leader's window order - he follows once the leader

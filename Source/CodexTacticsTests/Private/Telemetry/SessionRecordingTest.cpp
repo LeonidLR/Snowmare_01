@@ -3,6 +3,7 @@
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "HAL/FileManager.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
@@ -306,6 +307,53 @@ bool FDemoTacticsEventsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("damage serialized"), Lines[6].Contains(TEXT("\"type\":\"damage\"")));
 	TestTrue(TEXT("kill serialized"), Lines[7].Contains(TEXT("\"type\":\"kill\"")) && Lines[7].Contains(TEXT("\"victim_covered_by_ally\":true")));
 	return true;
+}
+
+DEMO_TEST(HitAttribution)
+bool FDemoHitAttributionTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, FName(TEXT("DemoHitAttributionWorld")));
+    if (!TestNotNull(TEXT("World"), World)) { return false; }
+    FWorldContext& Context = GEngine->CreateNewWorldContext(EWorldType::Game);
+    Context.SetCurrentWorld(World);
+    World->InitializeActorsForPlay(FURL());
+    USessionRecordingSubsystem* Recorder = World->GetSubsystem<USessionRecordingSubsystem>();
+    if (TestNotNull(TEXT("Recorder"), Recorder))
+    {
+        const FString Root = FPaths::AutomationTransientDir() / TEXT("DemoAttribution") / FGuid::NewGuid().ToString();
+        Recorder->StartForTest(Root);
+        Recorder->RecordOrderAt(1., FDemoFacts{});
+        AActor* Shooter = World->SpawnActor<AActor>();
+        AActor* Victim = World->SpawnActor<AActor>();
+        Recorder->RecordShotHit(Shooter, Victim, TEXT("rifle"), 10.f, 300.f);
+        Recorder->RecordDamage(Shooter->GetName(), Victim, 10.f, FVector::ZeroVector);
+        // A later unrelated source in the same frame must invalidate the shot context.
+        Recorder->RecordDamage(TEXT("Burn"), Victim, 5.f, FVector::ZeroVector);
+        Recorder->RecordKillOrDown(Victim, TEXT("Burn"), false);
+        Recorder->FinishAt(61.);
+        TArray<FString> Files;
+        IFileManager::Get().FindFiles(Files, *(Root / TEXT("*.jsonl")), true, false);
+        if (TestEqual(TEXT("One demo"), Files.Num(), 1))
+        {
+            FString Data;
+            FFileHelper::LoadFileToString(Data, *(Root / Files[0]));
+            TestTrue(TEXT("Non-shot death keeps its actual source"), Data.Contains(TEXT("\"killer\":\"Burn\"")));
+            TArray<FString> Lines;
+            Data.ParseIntoArrayLines(Lines);
+            for (const FString& Line : Lines)
+            {
+                if (Line.Contains(TEXT("\"type\":\"kill\"")))
+                {
+                    TestFalse(TEXT("Non-shot death does not inherit old weapon"), Line.Contains(TEXT("\"weapon\":\"rifle\"")));
+                    TestTrue(TEXT("Unresolved attacker awareness is unknown"), Line.Contains(TEXT("\"was_victim_aware\":null")));
+                }
+            }
+        }
+        IFileManager::Get().DeleteDirectory(*Root, false, true);
+    }
+    GEngine->DestroyWorldContext(World);
+    World->DestroyWorld(false);
+    return true;
 }
 
 #undef DEMO_TEST

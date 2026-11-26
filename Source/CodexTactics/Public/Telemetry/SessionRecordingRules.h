@@ -76,6 +76,8 @@ struct FDemoThreat
 	FName Id;
 	FName Archetype;
 	FVector Position = FVector::ZeroVector;
+	double Yaw = 0.;
+	TOptional<bool> InCover;
 };
 
 struct FDemoOp
@@ -86,6 +88,7 @@ struct FDemoOp
 	FVector Position = FVector::ZeroVector;
 	double Yaw = 0.;
 	double ThreatDistance = -1.;
+	double LookYaw = 0.;
 	double ThreatBearing = 0.;
 	double GoalDistance = -1.;
 	double LastOrderTime = 0.;
@@ -120,6 +123,7 @@ struct FDemoEvent
 	float DistanceCm = -1.f;
 	bool bFlag = false;
 	bool bCoveredByAlly = false;
+	bool bContextKnown = true;
 };
 
 struct FDemoUnit

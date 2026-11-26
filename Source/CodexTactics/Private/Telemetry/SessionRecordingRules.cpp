@@ -136,6 +136,8 @@ namespace SessionRecordingJson
 	{
 		Writer.WriteValue(TEXT("id"), Target.Id.ToString());
 		Writer.WriteValue(TEXT("arch"), Target.Archetype.ToString());
+		Writer.WriteValue(TEXT("yaw"), Round(Target.Yaw, 10.));
+		if (Target.InCover.IsSet()) { Writer.WriteValue(TEXT("in_cover"), Target.InCover.GetValue()); }
 		Position(Writer, TEXT("p"), Target.Position);
 	}
 }
@@ -281,6 +283,7 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 				W.WriteValue(TEXT("rt"), Finite(Event.RealTime));
 				W.WriteValue(TEXT("who"), Event.Who.ToString());
 				W.WriteValue(TEXT("whom"), Event.Whom.ToString());
+				W.WriteValue(TEXT("weapon"), Event.Weapon.ToString());
 				W.WriteValue(TEXT("dmg"), Round(Event.Amount, 10.));
 				W.WriteValue(TEXT("dist"), Round(Event.DistanceCm));
 				break;
@@ -290,6 +293,7 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 				W.WriteValue(TEXT("rt"), Finite(Event.RealTime));
 				W.WriteValue(TEXT("who"), Event.Who.ToString());
 				W.WriteValue(TEXT("whom"), Event.Whom.ToString());
+				W.WriteValue(TEXT("weapon"), Event.Weapon.ToString());
 				W.WriteValue(TEXT("dmg"), Round(Event.Amount, 10.));
 				W.WriteValue(TEXT("dist"), Round(Event.DistanceCm));
 				break;
@@ -302,8 +306,16 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 				W.WriteValue(TEXT("victim"), Event.Whom.ToString());
 				W.WriteValue(TEXT("weapon"), Event.Weapon.ToString());
 				W.WriteValue(TEXT("dist"), Round(Event.DistanceCm));
-				W.WriteValue(TEXT("was_victim_aware"), Event.bFlag);
-				W.WriteValue(TEXT("victim_covered_by_ally"), Event.bCoveredByAlly);
+				if (Event.bContextKnown)
+				{
+					W.WriteValue(TEXT("was_victim_aware"), Event.bFlag);
+					W.WriteValue(TEXT("victim_covered_by_ally"), Event.bCoveredByAlly);
+				}
+				else
+				{
+					W.WriteNull(TEXT("was_victim_aware"));
+					W.WriteNull(TEXT("victim_covered_by_ally"));
+				}
 				break;
 			case FDemoEvent::EType::Stealth:
 				W.WriteValue(TEXT("type"), Event.bFlag ? TEXT("stealth_on") : TEXT("stealth_off"));
@@ -423,6 +435,7 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 				W.WriteValue(TEXT("alive"), Op.bAlive ? 1 : 0);
 				Position(W, TEXT("p"), Op.Position);
 				W.WriteValue(TEXT("yaw"), Round(Op.Yaw, 10.));
+				W.WriteValue(TEXT("look_yaw"), Round(Op.LookYaw, 10.));
 				W.WriteValue(TEXT("st"), static_cast<int32>(Op.Stance));
 				W.WriteValue(TEXT("mv"), Op.bMoving);
 				W.WriteValue(TEXT("cov"), Op.bCover);

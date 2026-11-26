@@ -59,6 +59,8 @@ private:
 		FName Weapon;
 		float DistanceCm = -1.f;
 		TWeakObjectPtr<const AActor> Shooter;
+		FString Source;
+		double Time = -1.;
 	};
 
 	void Start(const FString& Directory);
@@ -83,8 +85,6 @@ private:
 	FTimerHandle SnapshotTimer;
 	double GameStart = 0.;
 	double RealStart = 0.;
-	double GroundReferenceZ = 0.;
-	bool bHasGroundReference = false;
 	int32 OrderDepth = 0;
 	int32 SuppressDepth = 0;
 	bool bRecording = false;
