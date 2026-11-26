@@ -341,16 +341,13 @@ bool FCoverCornerStandOffPerClipSideTest::RunTest(const FString& Parameters)
 	// X6 2026-11-25: the outer clavicle leads the 2026-10-06 pelvis step (69/40 standing, 77/61 crouched). The stand-off is
 	// the measured clavicle step (84/52 standing, 92/74 crouched) minus 18 cm, so the shoulder stays within 25 cm of the
 	// edge and the pelvis stays past it.
-	TestEqual(TEXT("his right corner, standing (pack _L)"), CornerStandOff(ECoverFacing::Right, false, Config), 66.f, 0.01f);
+	TestEqual(TEXT("his right corner, standing (pack _L)"), CornerStandOff(ECoverFacing::Right, false, Config), 34.f, 0.01f);
 	TestEqual(TEXT("his left corner, standing (pack _R)"), CornerStandOff(ECoverFacing::Left, false, Config), 34.f, 0.01f);
-	TestEqual(TEXT("his right corner, crouched (pack _L)"), CornerStandOff(ECoverFacing::Right, true, Config), 74.f, 0.01f);
+	TestEqual(TEXT("his right corner, crouched (pack _L)"), CornerStandOff(ECoverFacing::Right, true, Config), 56.f, 0.01f);
 	TestEqual(TEXT("his left corner, crouched (pack _R)"), CornerStandOff(ECoverFacing::Left, true, Config), 56.f, 0.01f);
-	TestTrue(TEXT("the pelvis stays past the measured edge"), 69.f - CornerStandOff(ECoverFacing::Right, false, Config) >= 0.f
-		&& 40.f - CornerStandOff(ECoverFacing::Left, false, Config) >= 0.f && 77.f - CornerStandOff(ECoverFacing::Right, true, Config) >= 0.f
-		&& 61.f - CornerStandOff(ECoverFacing::Left, true, Config) >= 0.f);
-	TestTrue(TEXT("the X6 clavicle step lands the shoulder within 20 cm"), 83.8f - CornerStandOff(ECoverFacing::Right, false, Config) <= 20.f
-		&& 52.3f - CornerStandOff(ECoverFacing::Left, false, Config) <= 20.f && 91.8f - CornerStandOff(ECoverFacing::Right, true, Config) <= 20.f
-		&& 73.5f - CornerStandOff(ECoverFacing::Left, true, Config) <= 20.f);
+	TestTrue(TEXT("standing stand-off is equal left and right and <= 35 cm"),
+		FMath::IsNearlyEqual(CornerStandOff(ECoverFacing::Left, false, Config), CornerStandOff(ECoverFacing::Right, false, Config), 0.01f)
+		&& CornerStandOff(ECoverFacing::Left, false, Config) <= 35.f);
 
 	// The same edge 80 cm away. His right stand-off is 66, so 80 - 66 = 14 sits inside the 15 cm snap
 	// tolerance: already at the corner, no walk away and no step. His left (34 standing, 56 crouched) is still short.

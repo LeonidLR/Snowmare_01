@@ -31,7 +31,7 @@ namespace CornerSlotSmoke
 	constexpr int32 WalkFrames = 60 * 8;
 	constexpr int32 PoseFrames = 60 * 4;
 
-	enum class EStep : uint8 { Warmup, Scan, Begin, WaitWalk, WaitPose, Done };
+	enum class EStep : uint8 { Warmup, Scan, Begin, WaitWalk, WaitPose, MoveOffCorner, Done };
 
 	struct FPick
 	{
@@ -73,6 +73,8 @@ namespace CornerSlotSmoke
 		FPick HighLeft;
 		FPick LowRight;
 		FPick LowLeft;
+		FCoverSlot MoveOffTarget;
+		FVector MoveOffFrom = FVector::ZeroVector;
 		FDelegateHandle EndFrameHandle;
 	};
 
@@ -612,6 +614,23 @@ namespace CornerSlotSmoke
 				if (Runner->Settled >= SettleFrames)
 				{
 					Measure(*World, *Operative, Pick, Case.Label);
+					if (Runner->CaseIndex == UE_ARRAY_COUNT(Cases) - 1)
+					{
+						// 135 Part A: from a corner peek, an order to another cover >= 5 m away must leave the corner and arrive.
+						const FPick& Away = Runner->HighRight.bValid ? Runner->HighRight : Runner->LowRight;
+						if (Away.bValid && FVector::Dist2D(Operative->GetActorLocation(), Away.Mid.WorldLocation) >= 500.f)
+						{
+							Runner->MoveOffTarget = Away.Mid;
+							Runner->MoveOffFrom = Operative->GetActorLocation();
+							const EOperativeOrderResult Res = Operative->OrderTakeCover(Away.Mid, true);
+							Check(Res == EOperativeOrderResult::Accepted, FString::Printf(TEXT("135 Part A: cover order from corner peek accepted (%d)"), static_cast<int32>(Res)));
+							if (Res == EOperativeOrderResult::Accepted)
+							{
+								Go(EStep::MoveOffCorner);
+								return;
+							}
+						}
+					}
 					++Runner->CaseIndex;
 					Go(EStep::Begin);
 				}
@@ -645,6 +664,31 @@ namespace CornerSlotSmoke
 				}
 				++Runner->CaseIndex;
 				Go(EStep::Begin);
+			}
+			return;
+		}
+		case EStep::MoveOffCorner:
+		{
+			AOperativeCharacter* Operative = Runner->Leader.Get();
+			if (!Operative)
+			{
+				Check(false, TEXT("135 Part A: leader gone"));
+				Finish();
+				return;
+			}
+			const float DistToTarget = static_cast<float>(FVector::Dist2D(Operative->GetActorLocation(), Runner->MoveOffTarget.WorldLocation));
+			const float MovedFromCorner = static_cast<float>(FVector::Dist2D(Operative->GetActorLocation(), Runner->MoveOffFrom));
+			if (Operative->bInCover && DistToTarget <= 150.f && MovedFromCorner >= 400.f)
+			{
+				Check(true, FString::Printf(TEXT("135 Part A: left corner peek and arrived at target cover (moved %.0f cm)"), MovedFromCorner));
+				Finish();
+				return;
+			}
+			if (Runner->StepFrame > WalkFrames * 2)
+			{
+				Check(false, FString::Printf(TEXT("135 Part A: stayed at corner or failed to arrive (moved %.0f cm, dist %.0f cm, inCover %d)"),
+					MovedFromCorner, DistToTarget, Operative->bInCover ? 1 : 0));
+				Finish();
 			}
 			return;
 		}

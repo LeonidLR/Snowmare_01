@@ -609,7 +609,8 @@ void UOperativeAnimInstance::UpdateCoverSetAimOffset()
 {
 	// The wired pin drives a cover set's own aim offset in any fire stance. The corner look pose does the same for
 	// CoverIndoor once that pose is on, whether or not the designer has ticked the pin for every cover fire.
-	if ((!bCoverSetAimOffsetWired && !bCornerLookPoseApplied) || ActiveCoverAnimSet.IsEmpty() || !bInCover || !bCoverInFirePose)
+	if ((!bCoverSetAimOffsetWired && !bCornerLookPoseApplied) || ActiveCoverAnimSet.IsEmpty() || !bInCover
+		|| (!bCoverInFirePose && !bCornerLookPoseApplied))
 	{
 		return;
 	}

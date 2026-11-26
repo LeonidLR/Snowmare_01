@@ -1766,6 +1766,8 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
 	bool IsPeekingRoundCorner() const;
+	/** True when standing/crouching at an exposed cover corner (idle or peeking). */
+	bool IsAtPeekableCorner() const;
 
 	/** Rev 5h: the corner peek reveals hidden traps in its sight cone (range, cone, line of sight; TrapSpotRules). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover|Peek")

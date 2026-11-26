@@ -803,10 +803,12 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			Targets.Add(Leader);
 		}
 		bool bSetAny = false;
+		bool bNewlyLocked = false;
 		for (AOperativeCharacter* Op : Targets)
 		{
 			if (Op && LookHoldRules::IsValidLookPoint(Hit.ImpactPoint, Op->GetActorLocation()))
 			{
+				bNewlyLocked |= !Op->HasManualLookPoint();
 				Op->SetManualLookPoint(Hit.ImpactPoint);
 				bSetAny = true;
 			}
@@ -815,9 +817,12 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		{
 			ControllerCommands::Report(this, PlayerCommands::WatchSector, nullptr, false, false, Targets[0], Hit.ImpactPoint);
 			UFloatingTextSubsystem::SpawnAboveOperative(Targets[0], TEXT("LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
-			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+			if (bNewlyLocked)
 			{
-				Messages->PostMessage(Targets[0]->DisplayName, FText::Format(LOCTEXT("Sector", "👁️ [{0}]: Watch sector locked!"), Targets[0]->DisplayName));
+				if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+				{
+					Messages->PostMessage(Targets[0]->DisplayName, FText::Format(LOCTEXT("Sector", "👁️ [{0}]: Watch sector locked!"), Targets[0]->DisplayName));
+				}
 			}
 		}
 		HideCoverPreview();

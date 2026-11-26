@@ -330,8 +330,16 @@ bool AOperativeCharacter::IsCornerHoldSpot() const
 	// Not while the walk to the corner stand-off is still due (bCoverSnapPending: set on entry, decided once the move order
 	// ended) - CornerEntrySmoke 2026-10-07: entering 90 cm from the edge he leaned out and broke the aim for the snap shimmy
 	// in the same instant; with a later snap that is step out -> tuck back -> step out.
-	return bCornerHoldAtEdge && bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight == ECoverHeight::HighCover
-		&& bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing);
+	const bool bAtEdge = bCornerHoldAtEdge && bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight == ECoverHeight::HighCover;
+	if (!bAtEdge)
+	{
+		return false;
+	}
+	if (bCornerLookPose && bHasManualLookPoint && bAtCoverCorner)
+	{
+		return true; // 135: a Shift-click look across the normal keeps the corner hold alive
+	}
+	return bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing);
 }
 
 bool AOperativeCharacter::IsManualCornerPeekSpot() const
@@ -844,9 +852,15 @@ bool AOperativeCharacter::IsPeekingRoundCorner() const
 	return bInCover && bCornerAimActive && (IsManualCornerPeekSpot() || IsCornerHoldSpot());
 }
 
+bool AOperativeCharacter::IsAtPeekableCorner() const
+{
+	return bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight != ECoverHeight::None
+		&& (IsManualCornerPeekSpot() || IsCornerHoldSpot() || (bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing)));
+}
+
 bool AOperativeCharacter::WantsCornerLookPose() const
 {
-	return CoverLookAoRules::WantsPose(bCornerLookPose && IsPeekingRoundCorner(), bHasManualLookPoint);
+	return CoverLookAoRules::WantsPose(bCornerLookPose && (IsPeekingRoundCorner() || IsAtPeekableCorner()), bHasManualLookPoint);
 }
 
 namespace OperativePeekSight
