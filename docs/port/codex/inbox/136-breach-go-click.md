@@ -22,3 +22,6 @@ its roof (and storeys above his) hide via the roof cutaway, showing the floor he
 line of sight / vision cone (fog of war), the cutaway just lets the player see the room layout. Reveal ends when nobody of the squad
 watches through that doorway (or after a short hold, ~5 s). Reuse URoofCutawaySubsystem (same hook as the stacked-at-door finding).
 Smoke step: open a door, peek -> that building's roof hidden, storey = his; walk away -> roof back.
+MUST (designer): the reveal shows the LAYOUT only. Enemies in inner rooms / behind walls stay hidden (no mesh, no marker, no minimap dot);
+only an enemy in his direct line of sight through the doorway is shown. Smoke asserts: enemy in an inner room -> hidden while the roof is
+off; enemy in the doorway's line -> visible.
