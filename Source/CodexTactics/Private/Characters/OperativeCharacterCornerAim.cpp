@@ -17,6 +17,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/PeekSightRules.h"
+#include "Tactics/CoverLookAoRules.h"
 #include "Combat/SightRules.h"
 #include "Combat/SuppressionSubsystem.h"
 #include "Combat/TacticalSightSubsystem.h"
@@ -335,8 +336,19 @@ bool AOperativeCharacter::IsCornerHoldSpot() const
 
 bool AOperativeCharacter::IsManualCornerPeekSpot() const
 {
-	return bManualCornerPeek && bInCover && !bShimmying && !bCoverSnapPending && CurrentCoverHeight != ECoverHeight::None
-		&& CoverFacing == ManualCornerPeekSide && bAtCoverCorner && CoverSlot.IsEdgeExposed(ManualCornerPeekSide);
+	const bool bOrderedEdge = bManualCornerPeek && bInCover && !bShimmying && !bCoverSnapPending
+		&& CurrentCoverHeight != ECoverHeight::None && CoverSlot.IsEdgeExposed(ManualCornerPeekSide);
+	if (!bOrderedEdge)
+	{
+		return false;
+	}
+	// A Shift-click look names the other hand (CoverFacing). He is still at the ordered edge:
+	// ending the peek here would drop the CoverIndoor pose on the first look past the normal.
+	if (bCornerLookPose && bHasManualLookPoint)
+	{
+		return true;
+	}
+	return CoverFacing == ManualCornerPeekSide && bAtCoverCorner;
 }
 
 EOperativeOrderResult AOperativeCharacter::OrderCornerPeek(ECoverFacing Side, float EdgeAlongCm)
@@ -371,6 +383,12 @@ EOperativeOrderResult AOperativeCharacter::OrderCornerPeek(ECoverFacing Side, fl
 			*DisplayName.ToString(), FMath::Abs(Stand - BodyAlong));
 		return EOperativeOrderResult::Refused;
 	}
+	// A new plain peek (the silhouette click) returns to the straight pose. A Shift-click look while already peeking
+	// does not come through here.
+	if (bCornerLookPose)
+	{
+		ClearManualLookPoint();
+	}
 	bool bThere = Order == CoverFacingRules::ECornerPeekOrder::PoseInPlace;
 	if (bCornerAimActive && CoverFacing != Side)
 	{
@@ -389,6 +407,7 @@ EOperativeOrderResult AOperativeCharacter::OrderCornerPeek(ECoverFacing Side, fl
 		}
 		else
 		{
+			CoverFacingRules::PullCornerFeetBackToStand(Target, Side, CoverSlot.WallPoint, CoverSlot.RightTangent(), Stand);
 			TGuardValue<bool> Ordering(bCornerPeekOrdering, true);
 			const EOperativeOrderResult Result = OrderShimmyTo(Target);
 			if (Result != EOperativeOrderResult::Accepted)
@@ -825,10 +844,25 @@ bool AOperativeCharacter::IsPeekingRoundCorner() const
 	return bInCover && bCornerAimActive && (IsManualCornerPeekSpot() || IsCornerHoldSpot());
 }
 
+bool AOperativeCharacter::WantsCornerLookPose() const
+{
+	return CoverLookAoRules::WantsPose(bCornerLookPose && IsPeekingRoundCorner(), bHasManualLookPoint);
+}
+
 namespace OperativePeekSight
 {
 	static TAutoConsoleVariable<int32> CVarPeekSight(TEXT("Codex.Sight.Peek"), 1,
 		TEXT("Peek sight (2026-10-19): 1 a peeking operative sees from his leaned-out eyes in the peek cone (and is seen there); 0 the old rule (his capsule's eyes only)"));
+
+	// G025: the Shift-click look turns this cone. 180 deg follows the look on the short arc; the aim-offset clamp is the later animation step.
+	static FVector ConeDirection(const AOperativeCharacter& Operative, const FVector& Eye, const FVector& Base, float AnimYaw)
+	{
+		FVector Look = FVector::ZeroVector;
+		const bool bLook = Operative.GetManualLookPoint(Look);
+		const float Yaw = PeekSightRules::PeekConeYawDeg(bLook,
+			bLook ? PeekSightRules::LookYawDeg(Eye, Base, Look, 180.f) : 0.f, AnimYaw);
+		return PeekSightRules::TwistedDirection(Base, Yaw);
+	}
 }
 
 EPeekSightPose AOperativeCharacter::GetPeekSightPose() const
@@ -855,12 +889,13 @@ bool AOperativeCharacter::GetPeekSight(FVector& OutEye, FVector& OutDirection) c
 		// 2026-10-20: and out in front of the wall's face line where the clip's head is (CornerLeanDepthCm, measured on the head bone).
 		OutEye = PeekSightRules::CornerLeanEyePoint(PeekSightConfig,
 			CoverRules::CornerLeanPoint(CoverSlot, CoverFacing, Feet + FVector(0.f, 0.f, EyeCm), CoverRules::GetConfig().CornerPeekOffsetCm), CoverSlot.WallNormal);
-		OutDirection = PeekSightRules::TwistedDirection(CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg), GetAppliedAimYaw());
+		OutDirection = OperativePeekSight::ConeDirection(*this, OutEye,
+			CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg), GetAppliedAimYaw());
 		return true;
 	}
-	// Over the top of a low wall: the head above its top, looking across it.
+	// Over the top of a low wall: the head above its top, looking across it. A Shift-click look turns this cone too; with no look the aim stays across the wall.
 	OutEye = PeekSightRules::OverTopEyePoint(PeekSightConfig, Feet, CoverSlot.WallNormal, EyeCm, CoverSlot.WallTopCm);
-	OutDirection = (-CoverSlot.WallNormal).GetSafeNormal2D();
+	OutDirection = OperativePeekSight::ConeDirection(*this, OutEye, (-CoverSlot.WallNormal).GetSafeNormal2D(), 0.f);
 	return true;
 }
 

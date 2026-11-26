@@ -366,6 +366,41 @@
       "unit": "ratio",
       "doc": "Patrol scan: dwell shaping (sign(s)*|s|^exp; 1 = plain sine, lower = longer holds at the ends)."
     },
+    "scan.pitch_amp": {
+      "value": 12,
+      "min": 8,
+      "max": 40,
+      "unit": "deg",
+      "doc": "Formation scan pitch half-range. Open ground spans twice this (the dwell reaches both ends)."
+    },
+    "scan.pitch_high_bias": {
+      "value": 18,
+      "min": 0,
+      "max": 45,
+      "unit": "deg",
+      "doc": "Formation scan pitch centre when the forward probe hits a window, roof or upper floor. 0 on open ground."
+    },
+    "scan.pitch_trace": {
+      "value": 2500,
+      "min": 400,
+      "max": 6000,
+      "unit": "cm",
+      "doc": "How far ahead the scan looks for high geometry."
+    },
+    "scan.pitch_trace_up": {
+      "value": 800,
+      "min": 100,
+      "max": 2500,
+      "unit": "cm",
+      "doc": "How far that probe rises over its forward reach."
+    },
+    "scan.pitch_high_cm": {
+      "value": 150,
+      "min": 40,
+      "max": 600,
+      "unit": "cm",
+      "doc": "A hit this far above the eye is high geometry (a window, a roof, an upper floor)."
+    },
     "halt.side_deg": {
       "value": 60,
       "min": 30,

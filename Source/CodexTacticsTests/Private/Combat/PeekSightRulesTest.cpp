@@ -196,3 +196,31 @@ bool FPeekSightRangeTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("no free corner: never"), IsCornerInPeekReach(false, 500.f, Range));
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPeekSightLookConeTest, "CodexTactics.Combat.Sight.PeekLookCone",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPeekSightLookConeTest::RunTest(const FString&)
+{
+	// G025: at a corner the Shift-click look turns the peek cone. An enemy 50 deg off the default peek aim is outside
+	// the 45 deg half-cone until the look points there. The anim twist is replaced, not added.
+	using namespace PeekSightRules;
+	const FPeekSightConfig Config;
+	const FVector Eye(0.f, 0.f, 160.f);
+	const FVector Aim(1.f, 0.f, 0.f);
+	auto At = [](float YawDeg, float DistanceCm) { return FRotator(0.f, YawDeg, 0.f).Vector() * DistanceCm + FVector(0.f, 0.f, 150.f); };
+	const FVector Ahead = At(0.f, 1000.f);
+	const FVector Left = At(-50.f, 1000.f);
+	TestTrue(TEXT("a look dead ahead does not move the cone"), FMath::IsNearlyEqual(LookYawDeg(Eye, Aim, Ahead, 180.f), 0.f, 0.5f));
+	TestTrue(TEXT("straight ahead stays inside"), IsInCone(Config, Eye, TwistedDirection(Aim, LookYawDeg(Eye, Aim, Ahead, 180.f)), Ahead));
+	TestFalse(TEXT("50 deg left of the default peek: outside the cone"), IsInCone(Config, Eye, Aim, Left));
+	const float Yaw = LookYawDeg(Eye, Aim, Left, 180.f);
+	TestTrue(TEXT("the look yaw is about -50"), FMath::IsNearlyEqual(Yaw, -50.f, 0.5f));
+	const float Replaced = PeekConeYawDeg(true, Yaw, 60.f);
+	TestTrue(TEXT("the look replaces a 60 deg anim twist: he is seen"), IsInCone(Config, Eye, TwistedDirection(Aim, Replaced), Left));
+	TestFalse(TEXT("adding that anim twist swings the cone off him"), IsInCone(Config, Eye, TwistedDirection(Aim, Yaw + 60.f), Left));
+	TestTrue(TEXT("no look: the anim twist is kept"), FMath::IsNearlyEqual(PeekConeYawDeg(false, Yaw, 12.f), 12.f, 0.01f));
+	TestEqual(TEXT("a look on the eye: no yaw"), LookYawDeg(Eye, Aim, Eye, 180.f), 0.f);
+	TestTrue(TEXT("a 90 deg cap holds a look behind him"), FMath::IsNearlyEqual(LookYawDeg(Eye, Aim, At(170.f, 800.f), 90.f), 90.f, 0.2f));
+	return true;
+}

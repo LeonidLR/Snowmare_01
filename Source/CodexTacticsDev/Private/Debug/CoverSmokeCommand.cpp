@@ -776,11 +776,13 @@ namespace CoverSmoke
 			Check(State, Op->bHasCoverThreat && Op->CoverFacing == ECoverFacing::Right, TEXT("threat on the right: faces right (clip side _R)"));
 			Check(State, Op->bAtCoverCorner && Op->IsCoverThreatActive() && Op->IsCoverFireReady(), TEXT("at the right corner with a live threat: IsCoverFireReady"));
 			Check(State, Anim && Anim->bCoverFireReady, TEXT("AnimInstance: bCoverFireReady"));
+			const bool bCrouched = Op->GetStance() == EOperativeStance::Crouching;
 			{
 				const float EdgeRight = 300.f + static_cast<float>(FVector::DotProduct(Op->GetActorLocation() - State.P, State.R));
-				Check(State, EdgeRight <= 69.f - 10.f, FString::Printf(TEXT("... the _L peek (69 cm) clears the real edge (%.0f cm away)"), EdgeRight));
+				const float StandOffRight = CoverFacingRules::CornerStandOff(ECoverFacing::Right, bCrouched, Op->GetCoverFacingConfig());
+				Check(State, FMath::Abs(EdgeRight - StandOffRight) <= 15.f,
+					FString::Printf(TEXT("... standing the _L stand-off from the real edge (%.0f cm, stand-off %.0f)"), EdgeRight, StandOffRight));
 			}
-			const bool bCrouched = Op->GetStance() == EOperativeStance::Crouching;
 			const TArray<TObjectPtr<UAnimSequenceBase>>* FireIdle = Anim ? (bCrouched ? &Anim->CoverCrouchFireIdle : &Anim->CoverStandFireIdle) : nullptr;
 			const int32 RightIndex = CoverFacingRules::ClipIndex(ECoverFacing::Right); // pack _L = his own right
 			const UAnimSequenceBase* IdleRight = FireIdle && FireIdle->IsValidIndex(RightIndex) ? (*FireIdle)[RightIndex].Get() : nullptr;

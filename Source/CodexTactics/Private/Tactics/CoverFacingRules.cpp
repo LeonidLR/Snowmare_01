@@ -358,6 +358,18 @@ namespace CoverFacingRules
 		return Side == ECoverFacing::Right ? EdgeAlongCm - StandOffCm : EdgeAlongCm + StandOffCm;
 	}
 
+	float PullCornerFeetBackToStand(FCoverSlot& Slot, ECoverFacing Side, const FVector& Origin, const FVector& Right, float StandAlongCm)
+	{
+		const float Got = static_cast<float>(FVector::DotProduct(Slot.WorldLocation - Origin, Right));
+		const float PastCm = Side == ECoverFacing::Right ? Got - StandAlongCm : StandAlongCm - Got;
+		if (PastCm <= 0.5f)
+		{
+			return 0.f;
+		}
+		Slot.WorldLocation += Right * (Side == ECoverFacing::Right ? -PastCm : PastCm);
+		return PastCm;
+	}
+
 	bool CornerPeekClickWins(bool bPeekEdgeOfOwnWall, bool bHitSquadBody)
 	{
 		return bPeekEdgeOfOwnWall && !bHitSquadBody;

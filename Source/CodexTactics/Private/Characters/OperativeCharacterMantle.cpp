@@ -621,6 +621,7 @@ void AOperativeCharacter::FinishMantle()
 	bMantling = false;
 	MantleCooldown = static_cast<float>(GetWorld()->GetTimeSeconds()) + Config.CooldownSeconds;
 	RestoreMantleState(false);
+	ReleaseTorsoToMovement(FormationLookYaw.IsSet()); // the climb's mesh yaw does not stay on the walk off the ledge
 	bool bLandedDown = false;
 	if (UKnockdownComponent* Knockdown = FindComponentByClass<UKnockdownComponent>())
 	{
@@ -718,6 +719,10 @@ void AOperativeCharacter::CancelMantle(EMantleCancel Reason)
 		bHasMoveOrder = false;
 	}
 	RestoreMantleState(Reason != EMantleCancel::EndPlay);
+	if (Reason != EMantleCancel::EndPlay)
+	{
+		ReleaseTorsoToMovement(FormationLookYaw.IsSet());
+	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s: climb cancelled (%d)%s"), *DisplayName.ToString(), static_cast<int32>(Reason),
 		bToLanding ? TEXT(" - put on the far side") : TEXT(""));
 }

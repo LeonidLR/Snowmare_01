@@ -29,6 +29,7 @@ namespace
 #include "HAL/IConsoleManager.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimNodeBase.h"
+#include "Animation/BlendSpace.h"
 #include "Engine/World.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/Skeleton.h"
@@ -42,6 +43,7 @@ namespace
 #include "Data/WeaponDataAsset.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Tactics/CoverFacingRules.h"
+#include "Tactics/CoverLookAoRules.h"
 #include "Tactics/RunCornerPeekRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 
@@ -1258,6 +1260,16 @@ void UOperativeAnimInstance::UpdateState()
 		TGuardValue<bool> Landed(bDeathLanded, true);
 		HandleDied(nullptr, FString());
 	}
+	// Before the cover layer picks a clip: a Shift-click look uses CoverIndoor this frame, and a plain peek returns to the entry's set.
+	const bool bWantCornerLook = Operative->WantsCornerLookPose();
+	if (bWantCornerLook != bCornerLookPoseApplied)
+	{
+		bCornerLookPoseApplied = bWantCornerLook;
+		if (bInCover)
+		{
+			ChooseCoverAnimSet(*Operative);
+		}
+	}
 	UpdateCoverLayer(*Operative);
 	UpdateDeathPose(*Operative, StateDeltaSeconds);
 	bIsMoving = Speed > 5.f;
@@ -1383,31 +1395,89 @@ void UOperativeAnimInstance::UpdateLeftHandIK(const AOperativeCharacter& Operati
 	}
 }
 
+void UOperativeAnimInstance::ReleaseAimAxes(bool bClearPitch)
+{
+	AimYaw = 0.f;
+	AimYawTarget = 0.f;
+	bAimYawOutOfReach = false;
+	if (bClearPitch)
+	{
+		AimPitch = 0.f;
+		AimPitchTarget = 0.f;
+	}
+}
+
 void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operative, float DeltaSeconds)
 {
 	// The pitch from the stance's muzzle height (stable: it does not move with the pose the offset itself bends) to the
-	// point the tracer flies to (the target's capsule centre).
+	// point the tracer flies to (the target's capsule centre). A Shift-click look at the corner peek replaces that point:
+	// yaw and pitch follow the look, clamped to the CoverIndoor blend space. The sight cone does not read this clamp
+	// (PeekConeYawDeg keeps the look).
 	FVector AimPoint = FVector::ZeroVector;
+	FVector LookPoint = FVector::ZeroVector;
 	const UTurnBasedCombatSubsystem* TurnBasedMode = Operative.GetWorld() ? Operative.GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
 	bAimOffsetTurnBasedOff = !bAimOffsetInTurnBased && TurnBasedMode && TurnBasedMode->IsActive();
-	bHasAimTarget = bAimOffset && !bAimOffsetTurnBasedOff && Operative.GetAimTargetPoint(AimPoint);
-	AimPitchTarget = bHasAimTarget ? AimOffsetRules::PitchToTarget(Operative.GetMuzzleLocation(), AimPoint, AimPitchClampDegrees) : 0.f;
-	AimPitch = FMath::Clamp(FMath::FInterpTo(AimPitch, AimPitchTarget, DeltaSeconds, AimPitchInterpSpeed), -AimPitchClampDegrees, AimPitchClampDegrees);
-	if (!bHasAimTarget && FMath::Abs(AimPitch) < 0.05f)
+	const bool bCornerLookPoint = bAimOffset && !bAimOffsetTurnBasedOff
+		&& Operative.WantsCornerLookPose() && Operative.GetManualLookPoint(LookPoint);
+	bHasAimTarget = bAimOffset && !bAimOffsetTurnBasedOff && (bCornerLookPoint || Operative.GetAimTargetPoint(AimPoint));
+	if (bCornerLookPoint)
+	{
+		AimPoint = LookPoint;
+	}
+	float YawLimit = AimYawClampDegrees;
+	float PitchLimit = AimPitchClampDegrees;
+	if (bCornerLookPoint && ActiveAimOffset)
+	{
+		const FBlendParameter& YawAxis = ActiveAimOffset->GetBlendParameter(0);
+		const FBlendParameter& PitchAxis = ActiveAimOffset->GetBlendParameter(1);
+		YawLimit = CoverLookAoRules::AxisAbs(YawAxis.Min, YawAxis.Max, AimYawClampDegrees);
+		PitchLimit = CoverLookAoRules::AxisAbs(PitchAxis.Min, PitchAxis.Max, AimPitchClampDegrees);
+	}
+	if (bCornerLookPoint)
+	{
+		// Not YawTargetWithinReach: a look past the rifle's 60 deg twist is still inside the CoverIndoor yaw axis, and
+		// a look behind the pose must stay clamped there instead of easing the torso back to 0.
+		float Yaw = AimOffsetRules::YawToTarget(Operative.GetStanceAimOrigin(), Operative.GetStanceAimBaseDirection(), LookPoint, 180.f);
+		float Pitch = AimOffsetRules::PitchToTarget(Operative.GetMuzzleLocation(), LookPoint, PitchLimit);
+		CoverLookAoRules::ClampAxes(Yaw, Pitch, YawLimit, PitchLimit);
+		AimYawTarget = Yaw;
+		AimPitchTarget = Pitch;
+		bAimYawOutOfReach = false;
+	}
+	else
+	{
+		// Formation scan pitch (G025): the sector already turns the actor for yaw. The aim offset only nods.
+		// A combat aim and the corner look both win. OrderMoveTo does not clear this pitch while the look is set.
+		const TOptional<float> ScanPitch = Operative.GetFormationLookPitch();
+		const bool bScanPitch = bAimOffset && !bAimOffsetTurnBasedOff && !bHasAimTarget
+			&& Operative.IsFacingFormationSector() && ScanPitch.IsSet();
+		if (bScanPitch)
+		{
+			AimPitchTarget = FMath::Clamp(ScanPitch.GetValue(), -AimPitchClampDegrees, AimPitchClampDegrees);
+			AimYawTarget = 0.f;
+			bAimYawOutOfReach = false;
+		}
+		else
+		{
+			AimPitchTarget = bHasAimTarget ? AimOffsetRules::PitchToTarget(Operative.GetMuzzleLocation(), AimPoint, AimPitchClampDegrees) : 0.f;
+			// The yaw twist: only in an aiming pose (out of cover, or the corner fire stance) - the plain cover idle does not twist.
+			const bool bYawPose = !bInCover || Operative.IsCornerAimActive();
+			// No twist while walking a turn-based grid path (the body turns cell by cell along it; user PIE video
+			// AnimOffset_Bug_01 2026-10-08) - it fades back in when he stands. The reference is the pose's own aim direction, the
+			// AO excluded (AOperativeCharacter::GetStanceAimBaseDirection), so the twist never feeds back into its own input.
+			const bool bGridWalk = TurnBasedMode && TurnBasedMode->IsActive() && Operative.GetVelocity().SizeSquared2D() > 20.f * 20.f;
+			const float RawYaw = bHasAimTarget && bYawPose && !bGridWalk
+				? AimOffsetRules::YawToTarget(Operative.GetStanceAimOrigin(), Operative.GetStanceAimBaseDirection(), AimPoint, 180.f) : 0.f;
+			AimYawTarget = bHasAimTarget && bYawPose && !bGridWalk
+				? AimOffsetRules::YawTargetWithinReach(RawYaw, AimYawClampDegrees, AimYawClampDegrees + AimYawReachMarginDegrees, 15.f, bAimYawOutOfReach) : 0.f;
+		}
+	}
+	AimPitch = FMath::Clamp(FMath::FInterpTo(AimPitch, AimPitchTarget, DeltaSeconds, AimPitchInterpSpeed), -PitchLimit, PitchLimit);
+	if (!bHasAimTarget && !Operative.IsFacingFormationSector() && FMath::Abs(AimPitch) < 0.05f)
 	{
 		AimPitch = 0.f;
 	}
-	// The yaw twist: only in an aiming pose (out of cover, or the corner fire stance) - the plain cover idle does not twist.
-	const bool bYawPose = !bInCover || Operative.IsCornerAimActive();
-	// No twist while walking a turn-based grid path (the body turns cell by cell along it; user PIE video
-	// AnimOffset_Bug_01 2026-10-08) - it fades back in when he stands. The reference is the pose's own aim direction, the
-	// AO excluded (AOperativeCharacter::GetStanceAimBaseDirection), so the twist never feeds back into its own input.
-	const bool bGridWalk = TurnBasedMode && TurnBasedMode->IsActive() && Operative.GetVelocity().SizeSquared2D() > 20.f * 20.f;
-	const float RawYaw = bHasAimTarget && bYawPose && !bGridWalk
-		? AimOffsetRules::YawToTarget(Operative.GetStanceAimOrigin(), Operative.GetStanceAimBaseDirection(), AimPoint, 180.f) : 0.f;
-	AimYawTarget = bHasAimTarget && bYawPose && !bGridWalk
-		? AimOffsetRules::YawTargetWithinReach(RawYaw, AimYawClampDegrees, AimYawClampDegrees + AimYawReachMarginDegrees, 15.f, bAimYawOutOfReach) : 0.f;
-	AimYaw = FMath::Clamp(FMath::FInterpTo(AimYaw, AimYawTarget, DeltaSeconds, AimYawInterpSpeed), -AimYawClampDegrees, AimYawClampDegrees);
+	AimYaw = FMath::Clamp(FMath::FInterpTo(AimYaw, AimYawTarget, DeltaSeconds, AimYawInterpSpeed), -YawLimit, YawLimit);
 	if (AimYawTarget == 0.f && FMath::Abs(AimYaw) < 0.05f)
 	{
 		AimYaw = 0.f;
@@ -2281,6 +2351,9 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	if (bCoverInFirePose && !bShimmying)
 	{
 		CoverFirePoseFacing = CoverFacing; // the side the fire idle is drawn on (a shimmy may turn the facing before the pose ends)
+		// A look that crosses the corner swaps this fire idle on its own. The wall-idle side switch is for a facing change
+		// outside the fire pose; leaving it pending would replay that switch after the peek.
+		bCoverSetFacingChangePending = false;
 	}
 	if (bWantFirePose && !bCoverInFirePose && TryCoverSetOverSideSwitch())
 	{

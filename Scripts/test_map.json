@@ -19,7 +19,8 @@
     "StartLightingSmoke", "StartSnowSmoke", "FormationWallHugSmoke", "FormationFenceCrossSmoke", "StartFlickerSmoke", "LevelGenBuildingsSmoke", "RoofCutawayStoreySmoke", "CutawayClickSmoke",
     "SectorBoundarySmoke", "SectorRoundsSmoke", "CorpseSearchSmoke",
     "DropLinkReachSmoke", "ColdIndoorsSmoke", "WindowStairHoverSmoke", "FormationStairSmoke", "FormationWindowSmoke", "CoverIndoorSmoke",
-    "DoorsSmoke", "DoorBreachSmoke", "WindowCoverFireSmoke", "WindowDetourSmoke"
+    "DoorsSmoke", "DoorBreachSmoke", "WindowCoverFireSmoke", "WindowDetourSmoke", "CornerSlotSmoke",
+    "TorsoDriftSmoke", "FormationScanPitchSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -33,7 +34,7 @@
   },
   "smokeOptions": {
     "CorpseSearchSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "timeout": 300, "_why": "Task 130: hover Fresnel + walk-to-body search + once-only hostile PMC loot + sector fallen squad member remains"},
-    "CoverIndoorSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 300, "_why": "Indoor cover animation sets and outdoor M4 control. Generated Riffle clips are needed. Requires the untracked Kit map, provided in the main checkout and both worker roots. The smoke runner reports map missing elsewhere."},
+    "CoverIndoorSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 420, "_why": "Indoor cover animation sets and outdoor M4 control, plus G025 corner looks (both hands, up and down, stand and crouch). Generated Riffle clips are needed. Requires the untracked Kit map, provided in the main checkout and both worker roots. The smoke runner reports map missing elsewhere."},
     "DoorsSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 600, "_why": "G018: openable doors on the kept kit showcase. The grey L_Gen_StoryShowcase was archived in 061."},
     "DoorBreachSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 600, "_why": "G018: doorway stack-up retargeted off archived L_Gen_Depot_1 onto the kept kit showcase."},
     "VehicleDamageSmoke": {"map": "/Game/Maps/L_VehicleTest", "_why": "Programmatically spawned APC checks. Retargeted to the retained vehicle map in 061."},
@@ -64,6 +65,9 @@
     "FormationWindowSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 400, "_why": "window rule 2 (designer 2026-11-23, WindowOrderRules): the formation outside a ground-floor window - a plain click behind it takes no whole window (8 s, unbroken); the click on the window: the leader breaks it climbing, every follower follows through within 40 s, none before it is broken Requires the untracked Kit map, provided in the main checkout and both worker roots. The smoke runner reports map missing elsewhere."},
     "WindowCoverFireSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 400, "_why": "G016: both faces of a kit window, crouch and Aim2 when the set is riffle, the first cartridge breaks intact glass, a neighbour slot and a follower stay ordinary cover. An empty outdoor set is the side fallback. Codex.Cover.RiffleOutdoor 1 is a separate run. Requires the untracked Kit map."},
     "WindowDetourSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 600, "_why": "G024: a sector-building window on X6, the operative 6 m outside, one climb-in click. FAIL if he enters any other opening before that window or ends still outside."},
+    "CornerSlotSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 400, "_why": "G025: corner slots on X6 blocks, both hands, stand and crouch. Shoulder <= 25 cm from the edge, penetration <= 2 cm."},
+    "TorsoDriftSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 400, "_why": "G025: cover, climb, look left, look right, neutral, walk 10 m. Mesh forward versus velocity <= 10 deg after 0.5 s."},
+    "FormationScanPitchSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 400, "_why": "G025: formation scan pitch. Open ground spans >= 20 deg. A walk toward an X6 building records aim pitch > +10 deg."},
     "FormationStairSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json -DPCVars=Codex.Doors.InnerLockedShare=0", "timeout": 900, "_why": "designer 2026-11-22: the squad stuck on the stairwell - the formation climbs every showcase building storey by storey on the player's click Requires the untracked Kit map, provided in the main checkout and both worker roots. The smoke runner reports map missing elsewhere."},
     "WindowStairHoverSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 400, "_why": "designer test 2026-11-22: the window silhouette + window click (through it, breaks it) and the stair-up silhouette + click (up a storey), real cursor rays and the real click on the dressed showcase Requires the untracked Kit map, provided in the main checkout and both worker roots. The smoke runner reports map missing elsewhere."},
     "LevelGenBuildingsSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelGenBuildingsSmokeMaxFail=10", "timeout": 180, "_why": "048: report complete operative nav paths from every exterior door to every room, landing and walkable roof on the old X6 layout" },
@@ -1310,6 +1314,20 @@
       "globs": ["Source/**/Debug/RampFightSmoke*", "Source/**/Combat/SightRules*", "Source/**/Combat/TacticalSight*", "Source/**/Combat/SquadFireRules*", "Source/**/Characters/EnemyAIRules*", "Source/**/Characters/MeleeLineRules*", "Source/**/Combat/CombatGround*"],
       "tests": ["CodexTactics.Combat.Sight", "CodexTactics.Combat.SquadFire", "CodexTactics.Combat.FireGate", "CodexTactics.Characters.EnemyAI"],
       "smokes": ["TurnArenaLakeSmoke", "TutorialAmbushLakeSmoke"]
+    },
+    {
+      "name": "g025-corner-slot",
+      "_comment": "G025 corner position on X6 blocks (designer 2026-11-25): shoulder within 25 cm of the edge, penetration <= 2 cm, both hands, stand and crouch.",
+      "globs": ["Source/**/Debug/CornerSlotSmoke*"],
+      "tests": [],
+      "smokes": ["CornerSlotSmoke"]
+    },
+    {
+      "name": "g025-look",
+      "_comment": "G025 corner look aim offset, torso reset, and formation scan pitch.",
+      "globs": ["Source/**/Tactics/CoverLookAoRules*", "Source/**/Tactics/TorsoResetRules*", "Source/**/Debug/TorsoDriftSmoke*", "Source/**/Debug/FormationScanPitchSmoke*", "Source/**/Formation/FormationSectorRules*", "Source/**/Characters/OperativeAnimInstance.cpp", "Source/**/Characters/OperativeCharacterAim.cpp", "Source/**/Characters/SquadSubsystemFormation.cpp"],
+      "tests": ["CodexTactics.Tactics.Cover.LookAo", "CodexTactics.Tactics.Torso.Reset", "CodexTactics.Formation.ScanPitch", "CodexTactics.Formation.Tuning"],
+      "smokes": ["TorsoDriftSmoke", "FormationScanPitchSmoke", "CoverIndoorSmoke"]
     }
   ]
 }
