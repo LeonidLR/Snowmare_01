@@ -18,3 +18,9 @@ not released by a new move order, or the corner-watch hold re-asserting the slot
 Designer addendum: the reverse works (from the low cover, an order to run left to the corner is carried out). So it is one-way: corner peek -> cover fails.
 Cover orders are two-click (ClickPreview Arm -> confirm, CodexTacticsPlayerControllerClickPreview.cpp ~740): check first whether the 2nd click
 while the leader is in CornerPeek re-arms / is dropped instead of confirming (leader-state / peek hold check in the confirm path), then the movement side.
+
+## 135 part C - left corner slot too far from the edge (designer 2026-11-26, screenshot: Engineer at a LEFT wall corner, ~1 m back from the edge)
+At a corner on his LEFT the operative still stands far from the wall end (right corners are fine). Same one-sidedness as part B: check the
+left/right mirror of the corner slot offset (CoverFacingRules corner slot / G025 slot), unit test both sides: distance slot -> wall end equal
+left and right (target <= ~35 cm from the edge, as on the right).
+## 135 part D - small: "[Engineer]: Watch sector locked!" posted 8x in a row in the message log; post it once per lock (dedupe / only on change).
