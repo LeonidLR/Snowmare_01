@@ -133,6 +133,10 @@ public:
 	 * fighters advance on it by bounding overwatch instead of holding in ambush. nullptr clears it.
 	 */
 	void SetTeamAssault(int32 TeamId, const FVector* Point);
+	/** Transitions a relocated team to hunt/assault TargetPoint immediately so combat contact follows. */
+	void EngageRelocatedTeam(int32 TeamId, const FVector& TargetPoint);
+	/** Latest LastSeenContactTime or LastShotTime across all tracked teams (-1e9 when none). */
+	double GetLatestContactActivityTime() const;
 	/** The team has met the enemy in this fight. */
 	bool HasTeamContact(int32 TeamId) const;
 	/**

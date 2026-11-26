@@ -9,6 +9,7 @@
 #include "CodexTactics.h"
 #include "Combat/DeathCinematicSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "Containers/Ticker.h"
 #include "Core/MissionSubsystem.h"
 #include "Data/CombatTypes.h"
@@ -58,7 +59,10 @@ namespace SectorRoundsSmoke
 		int32 AccPmcShots[4]{};
 		int32 AccPmcHits[4]{};
 		bool bRpgCapEngineer = false;
+		bool bRelocateNoContact = false;
 		int32 SubStage = 0;
+		TArray<TWeakObjectPtr<AOperativeCharacter>> RelocatePmcActors;
+		TArray<float> RelocatePmcHealth;
 	};
 
 	bool Finish(bool bPass, const TCHAR* What)
@@ -421,6 +425,128 @@ namespace SectorRoundsSmoke
 			}
 			return true;
 		}
+		if (State->bRelocateNoContact)
+		{
+			const double Now = World->GetTimeSeconds();
+			const FSectorRoundView View = Training->GetRoundView();
+			const FSectorFightConfig& Config = Training->GetFightConfig();
+			const FTrainingSector& Sector = *Training->GetSector();
+			if (View.Phase != ESectorRoundPhase::Fighting || View.Number < 1)
+			{
+				return Now - State->StageAt < 40.0 || Finish(false, TEXT("RelocateNoContact: round never started"));
+			}
+			if (State->SubStage == 0)
+			{
+				State->RelocatePmcActors.Reset();
+				State->RelocatePmcHealth.Reset();
+				for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+				{
+					AOperativeCharacter* Op = *It;
+					if (Op && !Op->IsActorBeingDestroyed() && !Op->IsKilledInAction() && !Op->IsPlayerTeam())
+					{
+						State->RelocatePmcActors.Add(Op);
+						State->RelocatePmcHealth.Add(Op->HealthComponent ? Op->HealthComponent->GetCurrentHealth() : 0.f);
+					}
+				}
+				if (State->RelocatePmcActors.IsEmpty() || Training->GetRelocateCount() != 0)
+				{
+					return Finish(false, TEXT("RelocateNoContact: missing initial PMCs or unexpected relocate"));
+				}
+				State->Mark = Now;
+				State->SubStage = 1;
+				return true;
+			}
+			// Wait for the forced no-contact timer to expire; keep operatives parked so neither side walks into LOS early.
+			if (Training->GetRelocateCount() == 0)
+			{
+				for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+				{
+					if (*It && !It->IsActorBeingDestroyed())
+					{
+						(*It)->StopOperative();
+					}
+				}
+				return Now < State->Mark + Config.NoContactRelocateS + 15.0
+					|| Finish(false, TEXT("RelocateNoContact: relocation did not trigger after delay"));
+			}
+			if (Now - State->Mark < Config.NoContactRelocateS - 0.5)
+			{
+				return Finish(false, TEXT("RelocateNoContact: triggered before no_contact_relocate_s"));
+			}
+			TArray<AOperativeCharacter*> Players;
+			TArray<AOperativeCharacter*> Pmcs;
+			FVector PlayerCentroid = FVector::ZeroVector;
+			FVector PmcCentroid = FVector::ZeroVector;
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(SmokeRelocateLos), false);
+			for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+			{
+				AOperativeCharacter* Op = *It;
+				if (!Op || Op->IsActorBeingDestroyed() || Op->IsKilledInAction())
+				{
+					continue;
+				}
+				Params.AddIgnoredActor(Op);
+				if (Op->IsPlayerTeam())
+				{
+					Players.Add(Op);
+					PlayerCentroid += Op->GetActorLocation();
+				}
+				else
+				{
+					Pmcs.Add(Op);
+					PmcCentroid += Op->GetActorLocation();
+				}
+			}
+			if (Players.IsEmpty() || Pmcs.Num() != State->RelocatePmcActors.Num())
+			{
+				return Finish(false, TEXT("RelocateNoContact: PMC count changed on relocate"));
+			}
+			for (int32 i = 0; i < State->RelocatePmcActors.Num(); ++i)
+			{
+				AOperativeCharacter* Expected = State->RelocatePmcActors[i].Get();
+				const float Hp = Expected && Expected->HealthComponent ? Expected->HealthComponent->GetCurrentHealth() : -1.f;
+				if (!Expected || !Pmcs.Contains(Expected) || !FMath::IsNearlyEqual(Hp, State->RelocatePmcHealth[i], 0.1f))
+				{
+					return Finish(false, TEXT("RelocateNoContact: PMC unit or HP not preserved"));
+				}
+			}
+			PlayerCentroid /= static_cast<double>(Players.Num());
+			PmcCentroid /= static_cast<double>(Pmcs.Num());
+			const float ReportedDistM = Training->GetLastRelocateDistanceM();
+			const float MeasuredDistM = static_cast<float>(FVector::Dist2D(PmcCentroid, PlayerCentroid) / 100.0);
+			if (ReportedDistM < Config.RelocateDistanceM - 5.f || ReportedDistM > Config.RelocateDistanceM + 5.f
+				|| MeasuredDistM < Config.RelocateDistanceM - 5.f || MeasuredDistM > Config.RelocateDistanceM + 5.f)
+			{
+				return Finish(false, *FString::Printf(TEXT("RelocateNoContact: dist out of 35..45 m (reported %.1f m, measured %.1f m)"),
+					ReportedDistM, MeasuredDistM));
+			}
+			if (Training->GetLastRelocateLos())
+			{
+				return Finish(false, TEXT("RelocateNoContact: relocated point had LOS"));
+			}
+			for (const AOperativeCharacter* PmcOp : Pmcs)
+			{
+				const FVector Feet = PmcOp->GetActorLocation() - FVector(0.0, 0.0, PmcOp->GetSimpleCollisionHalfHeight());
+				if (!TrainingSectorRules::Contains(Sector.Area, PmcOp->GetActorLocation()) || Feet.Z > 110.0)
+				{
+					return Finish(false, TEXT("RelocateNoContact: PMC off ground or outside sector"));
+				}
+				const FVector PmcEye = UTacticalSightSubsystem::EyePoint(*PmcOp);
+				for (const AOperativeCharacter* Player : Players)
+				{
+					if (FVector::Dist2D(PmcOp->GetActorLocation(), Player->GetActorLocation()) / 100.0 < Config.MinStartPostDistanceM - 0.5)
+					{
+						return Finish(false, TEXT("RelocateNoContact: PMC closer than min_start_post_distance_m"));
+					}
+					FHitResult Hit;
+					if (!World->LineTraceSingleByChannel(Hit, PmcEye, UTacticalSightSubsystem::EyePoint(*Player), ECC_Visibility, Params))
+					{
+						return Finish(false, TEXT("RelocateNoContact: live LOS between relocated PMC and player"));
+					}
+				}
+			}
+			return Finish(true, *FString::Printf(TEXT("pmc_relocated after %.1f s at %.1f m (no LOS, on ground)"), Now - State->Mark, MeasuredDistM));
+		}
 		const double Now = World->GetTimeSeconds();
 		const FSectorRoundView View = Training->GetRoundView();
 		const FSectorFightConfig& Config = Training->GetFightConfig();
@@ -592,6 +718,10 @@ namespace SectorRoundsSmoke
 			else if (FParse::Value(*Arg, TEXT("RpgCapEngineer="), Val))
 			{
 				State->bRpgCapEngineer = Val != 0;
+			}
+			else if (FParse::Value(*Arg, TEXT("RelocateNoContact="), Val))
+			{
+				State->bRelocateNoContact = Val != 0;
 			}
 		}
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float) { return Step(State); }), 0.f);

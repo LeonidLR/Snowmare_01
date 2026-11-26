@@ -5,6 +5,9 @@
   "ammo_mode": "resupply",
   "resupply_delay_s": 20,
   "launcher_rockets_per_round": 2,
+  "no_contact_relocate_s": 90,
+  "relocate_distance_m": 40,
+  "relocate_max_per_round": 3,
   "sectors": [
     {
       "id": 1,

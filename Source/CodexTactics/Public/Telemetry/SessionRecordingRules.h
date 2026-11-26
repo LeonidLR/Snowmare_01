@@ -32,8 +32,11 @@ struct FDemoRoundEvent
 	int32 ShotsPmc[ShotBuckets]{};
 	int32 HitsPmc[ShotBuckets]{};
 	float DurationS = 0.f;
+	float RelocateDistanceM = 0.f;
 	EDemoRoundResult Result = EDemoRoundResult::None;
 	bool bStart = true;
+	bool bPmcRelocated = false;
+	bool bRelocateLos = false;
 };
 
 struct FDemoGate
