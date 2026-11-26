@@ -12,6 +12,7 @@
     "smokes": ["TurnArenaLakeSmoke", "LowCoverMoveLakeSmoke"]
   },
   "smokeRegistry": [
+    "RoofLadderSmoke",
     "VehicleCombatSmoke", "VehicleDamageSmoke", "GeneratedPropsX6Smoke", "MainMenuSmoke", "FrontendSmoke", "TutorialSaveSmoke", "InteriorExitSmoke",
     "PeekMinesSmoke", "CoverSwitchLakeSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke",
     "TutorialAmbushLakeMineSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "TurnArenaLakeSmoke", "TurnArenaYardSmoke",
@@ -33,6 +34,7 @@
     "_comment": "Smokes known to pass only on a re-run, name -> reason (smoke_parallel prints them apart from NEW flaky ones). Goal: empty. Cleanup day 2026-10-15 fixed CornerHold, TurnBasedAim, Knockdown, Cover, LevelWave, GroupSelect, TurnBlastDeath, EnemyTactics (+ Panic, SquadControl, VisionCone failing) - see docs/port/KNOWN_GAPS.md (the old HANDOFF section 9)."
   },
   "smokeOptions": {
+    "RoofLadderSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 300, "_why": "139: gallery roof click via actual ladder, link projections and partial-path diagnosis"},
     "CorpseSearchSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "timeout": 300, "_why": "Task 130: hover Fresnel + walk-to-body search + once-only hostile PMC loot + sector fallen squad member remains"},
     "CoverIndoorSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 420, "_why": "Indoor cover animation sets and outdoor M4 control, plus G025 corner looks (both hands, up and down, stand and crouch). Generated Riffle clips are needed. Requires the untracked Kit map, provided in the main checkout and both worker roots. The smoke runner reports map missing elsewhere."},
     "DoorsSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 600, "_why": "G018: openable doors on the kept kit showcase. The grey L_Gen_StoryShowcase was archived in 061."},
@@ -173,6 +175,7 @@
   },
   "nonSmokeDebugCommands": ["PmcArena", "LevelGenIslandsProbe", "GiveWeapon", "MortarList", "MortarMan", "MortarFire", "MortarCease", "MortarCrewPmc", "ShotgunD1Shots", "ShotgunLoopShots", "RpgShots", "RecoilProbe", "CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots", "StoryShowcaseFixShots"],
   "rules": [
+    {"name": "roof-ladder-139", "globs": ["Source/**/Debug/RoofLadderSmoke*"], "tests": [], "smokes": ["RoofLadderSmoke"]},
     {
       "name": "training-sector",
       "globs": ["Source/**/Training/TrainingSector*", "Source/**/Debug/SectorBoundarySmokeCommand.cpp", "Source/**/Debug/SectorRoundsSmokeCommand.cpp", "Source/**/Telemetry/SessionRecordingRules.*", "Source/**/Telemetry/SessionRecordingSubsystem.*", "Source/**/Characters/OperativeCharacterHealth.cpp", "Source/**/UI/CodexTacticsHUD.*", "Content/Data/LevelJson/L_Gen_Depot_1_X6.sectors.json"],
