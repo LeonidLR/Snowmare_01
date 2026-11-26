@@ -1,0 +1,11 @@
+# Gemini 135 (Hydrogen; Lead reviews) - corner look turns the body both ways (designer playtest 2026-11-26, sector 1)
+
+Designer: corner take + peek is better now. Shift+click changes the look direction at a corner, but the BODY pose only follows when the look goes
+to the LEFT; to the right (and generally while standing at a corner) the body stays put. The body must follow the look in both directions, also
+when the operative stands at the corner. Use the aim offset (AO yaw + pitch) in the anim instance, clamped to the AO range; rotate the actor only
+when the look leaves the AO range (and only if the corner rules allow it).
+- Area: OperativeCharacterCornerAim.cpp (G025 cone / slot / AO + G023 roof over-top, already merged together on your G023 branch),
+  OperativeAnimInstance (AO inputs), CoverFacingRules / RunCornerPeekRules. Find why only the left side feeds the AO (sign / side mirror / clamp).
+- Pure rules -> unit tests for both sides (left / right corner x look left / right). Smoke: extend CornerPeek / TorsoDrift smoke with a right-look check.
+- Branch gemini/135-corner-look-body from origin/main AFTER G023 is merged. Build via machine_dispatch.py; report docs/port/gemini/outbox/135-corner-look-body.report.md;
+  FINISH line `135 FINISH | PASS/FAIL | <hash> | ...`. Queue: right after G023, before 121.
