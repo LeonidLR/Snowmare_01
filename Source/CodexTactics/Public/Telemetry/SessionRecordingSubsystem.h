@@ -26,11 +26,20 @@ public:
 	void OnTrainingSectorChanged();
 	void RecordMode(EDemoMode Mode, bool bOn);
 	void RecordSectorRound(const FDemoRoundEvent& Event);
+	void RecordShotHit(const AActor* Shooter, const AActor* Victim, FName WeaponId, float Damage, float DistanceCm);
+	/** Arm only the synchronous hit context; the health component records the actual loss once. */
+	void RecordDamageContext(const AActor* Attacker, const AActor* Victim, const FString& Source, FName WeaponId = NAME_None);
+	void RecordDamage(const FString& AttackerSource, const AActor* Victim, float Damage, const FVector& DamageOrigin);
+	void RecordKillOrDown(const AActor* Victim, const FString& AttackerSource, bool bIsDown);
+	void RecordStealth(const AOperativeCharacter* Op, bool bEnabled);
+	void RecordCover(const AOperativeCharacter* Op, bool bEntered, FName HeightName);
+	void RecordClimb(const AActor* Op, FName Kind, float HeightCm);
 	void MarkSession(const FString& Mark) { Session.Mark = Mark; }
 
 #if WITH_DEV_AUTOMATION_TESTS
 	void StartForTest(const FString& Directory);
 	void RecordOrderAt(double Time, const FDemoFacts& Facts);
+	void RecordEventAt(const FDemoEvent& Event);
 	void SnapshotAt(double Time);
 	void FinishAt(double Time);
 #endif
@@ -44,6 +53,16 @@ private:
 		FName Id;
 		FName Order;
 		double Time = 0.;
+	};
+
+	struct FLastHitContext
+	{
+		FName Who;
+		FName Weapon;
+		float DistanceCm = -1.f;
+		TWeakObjectPtr<const AActor> Shooter;
+		FString Source;
+		double Time = -1.;
 	};
 
 	void Start(const FString& Directory);
@@ -62,6 +81,7 @@ private:
 
 	FDemoSession Session;
 	TArray<FLastOrder> LastOrders;
+	TMap<FName, FLastHitContext> LastHitsByVictim;
 	FString OutputDirectory;
 	FName Suppressed;
 	FTimerHandle SnapshotTimer;

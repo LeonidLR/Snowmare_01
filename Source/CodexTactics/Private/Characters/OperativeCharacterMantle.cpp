@@ -27,6 +27,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/MantleNavigation.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Misc/MemStack.h"
 #include "Interactables/VaultNavigation.h"
 #include "MotionWarpingComponent.h"
@@ -631,6 +632,11 @@ void AOperativeCharacter::FinishMantle()
 	if (UMantleSubsystem* Mantle = GetWorld() ? GetWorld()->GetSubsystem<UMantleSubsystem>() : nullptr)
 	{
 		Mantle->Release(this);
+	}
+	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+	{
+		Recorder->RecordClimb(this, bMantleOnTop ? FName(TEXT("roof")) : FName(TEXT("mantle")),
+			static_cast<float>(FMath::Abs(MantleLandingFeet.Z - MantleBaseFeet.Z)));
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s landed %s (%.0f cm off the plan; the wall guard pushed %.0f cm)"), *DisplayName.ToString(),
 		bMantleOnTop ? TEXT("on top") : TEXT("over"), LastMantleLandingError, MantleGuardPushCm);

@@ -13,6 +13,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Tactics/LookHoldRules.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 
 bool AOperativeCharacter::CanEnterStealthWithoutFormation() const
@@ -90,6 +91,10 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 		ApplyMovementParams();
 	}
 	RefreshStealthVisuals();
+	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+	{
+		Recorder->RecordStealth(this, bStealthMode);
+	}
 	return true;
 }
 

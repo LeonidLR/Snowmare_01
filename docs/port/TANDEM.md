@@ -1486,3 +1486,12 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 2026-11-11 Codex stealth checkpoint: male/female/rendered smokes and 44 tests PASS, 3 game-camera frames copied to main Saved/Orchestrator/stealth (explicit task exception). No main assets/push. Female fixture uses existing optimized female body in memory because movement-map roster overrides all bodies male.
 
 2026-11-11 Codex: stealth 003 final verification report complete, designer notified to test interim L_MovementTest / STEALTH or7. Source remains interim-only. New designer priority via Claude: 004 hitch then005 ragdoll beforeC5/C6.
+
+
+**121 checkpoint (2026-11-27, gemini/121-recording-tactics).** Reviewed Gemini telemetry; corrected attribution, optical observer/support facts, ground and look measurements, death/down semantics, and conservative round-scoped tactic tagging. Python18/18 PASS; final worker build/Smart/smokes and new PIE acceptance recording pending. Report: `docs/port/codex/outbox/121-recording-tactics.report.md`. Not merge-ready.
+
+- 121 offline edge correction (2026-11-27): round_end sorts after same-timestamp kills, preserving the final kill and completed flank; Python19/19 PASS. Final runtime/PIE validation remains pending (task121 report).
+
+- 121 direct-loss completeness checkpoint (2026-11-27): health recording now observes actual common health decreases (normal/direct/cold/burning/bleeding) exactly once, removing actor callback duplication. Known TakeHit attackers arm a synchronous context; critical down is recorded across the same paths. Added C++ AllHealthLossPaths coverage; final worker checks pending.
+
+**121 BLOCKER (2026-11-27): real PIE acceptance evidence still needed.** C++8de50957: worker build PASS410.31s; Smart848/848 PASS including HitAttribution/AllHealthLossPaths; all16 mapped smokes PASS first try; Python20/20 PASS including actual null-target schema and round-end ties. Recording facts/tagger finished and reviewed, but no real new PIE fight showing all3 core tactics was captured in this headless run. Synthetic fixture is not acceptance evidence. See `docs/port/codex/outbox/121-recording-tactics.report.md`. Stop here; Lead owns the next task.
