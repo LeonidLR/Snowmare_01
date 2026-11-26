@@ -28,6 +28,7 @@
 #include "Tactics/CoverArrivalRules.h"
 #include "Tactics/CoverDecisionRules.h"
 #include "Tactics/CoverFacingRules.h"
+#include "Tactics/CoverLookAoRules.h"
 #include "Tactics/CoverRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/LookHoldRules.h"
@@ -546,6 +547,8 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 		bRunCornerPeekPending = false;
 	}
 	bInCover = false;
+	bCornerLookPose = false; // leaving the corner drops the CoverIndoor look pose
+	ReleaseTorsoToMovement(FormationLookYaw.IsSet()); // the lean's mesh yaw does not stay on the walk out
 	CoverLookSide.Reset(); // the wall group's side belongs to that slot
 	CurrentCoverHeight = ECoverHeight::None;
 	bShimmying = false;
@@ -1023,8 +1026,24 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 	{
 		CoverFacing = ManualCornerPeekSide; // the ordered corner, whatever the threat side (until another order)
 	}
+	// A Shift-click look at this peek picks the hand from the look versus the wall normal. It does not walk him to the
+	// other edge (bManualCornerPeek still blocks the snap below).
+	if (WantsCornerLookPose())
+	{
+		FVector Look = FVector::ZeroVector;
+		if (GetManualLookPoint(Look))
+		{
+			const float Signed = CoverLookAoRules::SignedYawFromNormal(CoverSlot.WallNormal, Look - GetActorLocation());
+			CoverFacing = CoverLookAoRules::SideFromLook(Signed, CoverFacing, Config.CornerLookSideHysteresisDeg);
+		}
+	}
 	const bool bWasAtCorner = bAtCoverCorner;
 	bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, CoverFacing, Config);
+	// The look may name the other hand. The body stays at the ordered edge, so the corner flag stays too.
+	if (!bAtCoverCorner && bManualCornerPeek && WantsCornerLookPose())
+	{
+		bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, ManualCornerPeekSide, Config);
+	}
 	if (bAtCoverCorner && !bWasAtCorner && bInCover && !bShimmying)
 	{
 		RaiseCoverEvent(GameplayEvents::CornerReached, CoverSlot, CoverFacing == ECoverFacing::Left ? FName(TEXT("Left")) : FName(TEXT("Right")));
@@ -1033,7 +1052,7 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: turns along the wall to the %s (threat %s)"), *DisplayName.ToString(),
 			CoverFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right"), bHasCoverThreat ? TEXT("known") : TEXT("none, nearest edge"));
-		bCoverSnapPending |= bAllowSnap && !bShimmying && !bManualCornerPeek && !CoverLookSide.IsSet();
+		bCoverSnapPending |= bAllowSnap && !bShimmying && !bManualCornerPeek && !CoverLookSide.IsSet() && !WantsCornerLookPose();
 	}
 }
 

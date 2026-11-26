@@ -113,12 +113,26 @@ void AOperativeCharacter::SetManualLookPoint(const FVector& WorldPoint)
 	ManualLookPoint = WorldPoint;
 	ClearIdleFacing();
 	bExplicitFacing = false;
+	// A look set while the plain corner peek is already up switches to the CoverIndoor pose. A look before that peek
+	// stays a look hold only (the peek order and the cover entry clear it).
+	if (IsPeekingRoundCorner())
+	{
+		bCornerLookPose = true;
+	}
 }
 
 void AOperativeCharacter::ClearManualLookPoint()
 {
+	const bool bHadLook = bHasManualLookPoint;
 	bHasManualLookPoint = false;
 	ManualLookPoint = FVector::ZeroVector;
+	bCornerLookPose = false;
+	// Neutral look (Shift-click on himself) and every other clear. Cover entry calls this after bInCover is set,
+	// so the release no-ops there and the entry yaw blend keeps the mesh.
+	if (bHadLook)
+	{
+		ReleaseTorsoToMovement(FormationLookYaw.IsSet());
+	}
 }
 
 void AOperativeCharacter::SetStealthManualLookTarget(const FVector& WorldPoint)

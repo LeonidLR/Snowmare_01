@@ -217,6 +217,16 @@ struct CODEXTACTICS_API FFormationConfig
 	float ScanAmpLead = 30.f;
 	/** [scan.dwell_exp] Scan shape sign(sin) * |sin|^exp: below 1 it dwells at the sector's ends. */
 	float ScanDwellExp = 0.45f;
+	/** [scan.pitch_amp] Formation scan pitch half-range, deg. Open ground spans 2 * this (dwell reaches +-1). */
+	float ScanPitchAmp = 12.f;
+	/** [scan.pitch_high_bias] Pitch centre when the forward probe hits high geometry, deg. 0 on open ground. */
+	float ScanPitchHighBias = 18.f;
+	/** [scan.pitch_trace] Forward reach of the high-geometry probe, cm. */
+	float ScanPitchTraceCm = 2500.f;
+	/** [scan.pitch_trace_up] How far that probe rises over its forward reach, cm. */
+	float ScanPitchTraceUpCm = 800.f;
+	/** [scan.pitch_high_cm] A hit this far above the eye counts as a window, roof or upper floor, cm. */
+	float ScanPitchHighCm = 150.f;
 	/** [halt.side_deg] Short halt: the flankers' sector centres (P 2, L 10 o'clock), deg. */
 	float HaltSideDeg = 60.f;
 	/** [column.side_deg] Wide column (herringbone) sectors P +70 / L -70, deg. */

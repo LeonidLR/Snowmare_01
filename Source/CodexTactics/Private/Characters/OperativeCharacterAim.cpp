@@ -28,7 +28,9 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/LookHoldRules.h"
+#include "Tactics/TorsoResetRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 namespace OperativeAimLocal
 {
@@ -358,6 +360,25 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		}
 	}
 	BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, Offset, DeltaTime, 6.f);
+}
+
+void AOperativeCharacter::ReleaseTorsoToMovement(bool bKeepAimPitch)
+{
+	if (bInCover || bMantling)
+	{
+		return;
+	}
+	const TorsoResetRules::FRelease Release = TorsoResetRules::AfterExit(bKeepAimPitch);
+	ResetBodyOffsets();
+	BarrelYawOffset = Release.BarrelYawDeg;
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->bUseControllerDesiredRotation = Release.bControllerDesiredRotation;
+	}
+	if (UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+	{
+		Anim->ReleaseAimAxes(Release.bClearAimPitch);
+	}
 }
 
 void AOperativeCharacter::StopAndFace(const FVector& Location)

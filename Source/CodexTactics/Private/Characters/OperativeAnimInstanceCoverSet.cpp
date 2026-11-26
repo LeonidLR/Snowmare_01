@@ -226,6 +226,12 @@ void UOperativeAnimInstance::ChooseCoverAnimSet(const AOperativeCharacter& Opera
 		{
 			Wanted.Reset(); // the set has no clips for this body
 		}
+		// A Shift-click look at the corner peek uses the CoverIndoor (riffle) poses even outdoors. A plain peek keeps
+		// the set this entry already chose.
+		if (Operative.WantsCornerLookPose() && LoadedCoverSets.Contains(TEXT("riffle")))
+		{
+			Wanted = TEXT("riffle");
+		}
 	}
 	else
 	{
@@ -601,7 +607,9 @@ bool UOperativeAnimInstance::PlayCoverSetGrenadeThrow(AOperativeCharacter& Opera
 
 void UOperativeAnimInstance::UpdateCoverSetAimOffset()
 {
-	if (!bCoverSetAimOffsetWired || ActiveCoverAnimSet.IsEmpty() || !bInCover || !bCoverInFirePose)
+	// The wired pin drives a cover set's own aim offset in any fire stance. The corner look pose does the same for
+	// CoverIndoor once that pose is on, whether or not the designer has ticked the pin for every cover fire.
+	if ((!bCoverSetAimOffsetWired && !bCornerLookPoseApplied) || ActiveCoverAnimSet.IsEmpty() || !bInCover || !bCoverInFirePose)
 	{
 		return;
 	}

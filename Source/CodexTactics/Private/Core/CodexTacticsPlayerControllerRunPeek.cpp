@@ -87,12 +87,14 @@ FCoverSlot ACodexTacticsPlayerController::ResolveCornerStandSlot(const FCoverSlo
 		const float Along = StandAlong + (Side == ECoverFacing::Right ? -Back : Back);
 		if (CoverTraceRules::FindShimmySlot(GetWorld(), Base, Base.WallPoint + Right * Along, Corner) && (!Base.WallActor.IsValid() || Corner.WallActor == Base.WallActor))
 		{
+			CoverFacingRules::PullCornerFeetBackToStand(Corner, Side, Base.WallPoint, Right, Along);
 			return Corner;
 		}
 	}
 	Corner = Base;
 	Corner.WorldLocation += Right * StandAlong;
 	Corner.WallPoint += Right * StandAlong;
+	CoverFacingRules::PullCornerFeetBackToStand(Corner, Side, Base.WallPoint, Right, StandAlong);
 	return Corner;
 }
 

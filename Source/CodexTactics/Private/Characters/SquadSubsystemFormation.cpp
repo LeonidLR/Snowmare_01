@@ -163,6 +163,27 @@ namespace SquadSubsystemFormationLocal
 	{
 		return static_cast<float>(Actor.GetActorLocation().Z) - Actor.GetSimpleCollisionHalfHeight();
 	}
+
+	/** G025: high geometry in front (a window, a roof, an upper floor) biases the scan pitch up. Open ground returns 0. */
+	float ScanPitchHighBias(const AOperativeCharacter& Operative, const FFormationConfig& Config)
+	{
+		UWorld* World = Operative.GetWorld();
+		if (!World || Config.ScanPitchTraceCm <= 0.f)
+		{
+			return 0.f;
+		}
+		const FVector Eye = Operative.GetPawnViewLocation();
+		const FVector End = Eye + Operative.GetActorForwardVector() * Config.ScanPitchTraceCm + FVector(0.f, 0.f, Config.ScanPitchTraceUpCm);
+		FHitResult Hit;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(FormationScanPitch), false, &Operative);
+		FCollisionObjectQueryParams Objects;
+		Objects.AddObjectTypesToQuery(ECC_WorldStatic);
+		if (!World->LineTraceSingleByObjectType(Hit, Eye, End, Objects, Params))
+		{
+			return 0.f;
+		}
+		return Hit.ImpactPoint.Z - Eye.Z > Config.ScanPitchHighCm ? Config.ScanPitchHighBias : 0.f;
+	}
 }
 
 void USquadSubsystem::ApplyFormationFrame()
@@ -180,6 +201,7 @@ void USquadSubsystem::ApplyFormationFrame()
 		if (Operative->IsInStealthMode())
 		{
 			Operative->SetFormationLookYaw(TOptional<float>());
+			Operative->SetFormationLookPitch(TOptional<float>());
 			LookFilters.Remove(Member);
 			continue;
 		}
@@ -199,6 +221,16 @@ void USquadSubsystem::ApplyFormationFrame()
 		}
 		const float* Yaw = Filtered.IsSet() ? &Filtered.GetValue() : nullptr;
 		Operative->SetFormationLookYaw(Filtered);
+		if (Filtered.IsSet())
+		{
+			EFormationRole ScanRole = EFormationRole::Commander;
+			GetFormationRole(Operative, ScanRole);
+			Operative->SetFormationLookPitch(FormationSectorRules::LookPitch(ScanRole, Sectors.PatrolTime, SquadSubsystemFormationLocal::ScanPitchHighBias(*Operative, FilterConfig), FilterConfig));
+		}
+		else
+		{
+			Operative->SetFormationLookPitch(TOptional<float>());
+		}
 		const float* Logged = LastLoggedLook.Find(Member);
 		const float LookNow = Yaw ? *Yaw : 99999.f;
 		if (bDebugLooks && (!Logged || FMath::Abs(FMath::FindDeltaAngleDegrees(*Logged, LookNow)) > 5.f || (*Logged > 9999.f) != (LookNow > 9999.f)))

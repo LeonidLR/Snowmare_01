@@ -157,4 +157,14 @@ public:
 	/** One line per AnimGraph node with its pose inputs (what feeds them) - the setup scripts' report. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
 	static FString DescribeAnimGraph(UAnimBlueprint* AnimBlueprint);
+
+	/**
+	 * Binds every Aim Offset node (UAnimGraphNode_RotationOffsetBlendSpace) in an existing AnimGraph, including state
+	 * graphs, without rebuilding it. An unlinked Blend Space pin is shown and bound to ActiveAimOffset; unlinked X / Y
+	 * pins are bound to AimYaw / AimPitch. A pin that already has a link is left as the designer set it. Alpha is not
+	 * touched. Idempotent. Compiles only when a pin was bound. The caller saves.
+	 * @return false when there is no AnimGraph, no aim-offset node, or the compile failed.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Editor")
+	static bool BindCoverLookAimOffset(UAnimBlueprint* AnimBlueprint, FString& OutReport);
 };

@@ -2,6 +2,7 @@
 
 #include "AnimGraphNode_BlendListByBool.h"
 #include "AnimGraphNode_BlendSpacePlayer.h"
+#include "AnimGraphNode_RotationOffsetBlendSpace.h"
 #include "AnimGraphNode_LayeredBoneBlend.h"
 #include "AnimGraphNode_Root.h"
 #include "AnimGraphNode_RotateRootBone.h"
@@ -854,6 +855,115 @@ namespace OperativeAnimGraph
 		}
 		return Label;
 	}
+}
+
+bool UOperativeAnimGraphLibrary::BindCoverLookAimOffset(UAnimBlueprint* AnimBlueprint, FString& OutReport)
+{
+	using namespace OperativeAnimGraph;
+	OutReport.Reset();
+	UEdGraph* AnimGraph = FindAnimGraph(AnimBlueprint);
+	if (!AnimGraph)
+	{
+		OutReport = TEXT("no AnimGraph");
+		return false;
+	}
+	TArray<UEdGraph*> Graphs;
+	TArray<UEdGraph*> Pending;
+	Pending.Add(AnimGraph);
+	for (int32 Index = 0; Index < Pending.Num(); ++Index)
+	{
+		UEdGraph* Graph = Pending[Index];
+		if (!Graph || Graphs.Contains(Graph))
+		{
+			continue;
+		}
+		Graphs.Add(Graph);
+		for (UEdGraph* Sub : Graph->SubGraphs)
+		{
+			Pending.Add(Sub);
+		}
+		for (UEdGraphNode* Node : Graph->Nodes)
+		{
+			if (!Node)
+			{
+				continue;
+			}
+			for (UEdGraph* Sub : Node->GetSubGraphs())
+			{
+				Pending.Add(Sub);
+			}
+		}
+	}
+	int32 Found = 0;
+	int32 Changed = 0;
+	bool bOk = true;
+	for (UEdGraph* Graph : Graphs)
+	{
+		TArray<UAnimGraphNode_RotationOffsetBlendSpace*> Nodes;
+		Graph->GetNodesOfClass(Nodes);
+		for (UAnimGraphNode_RotationOffsetBlendSpace* Node : Nodes)
+		{
+			UEdGraphPin* PoseOut = Node->FindPin(TEXT("Pose"), EGPD_Output);
+			const bool bInPose = PoseOut && PoseOut->LinkedTo.Num() > 0;
+			++Found;
+			if (!bInPose)
+			{
+				OutReport += FString::Printf(TEXT("%s %s: pose output unlinked, left alone\n"), *Graph->GetName(), *NodeLabel(Node));
+				continue;
+			}
+			FBuilder Build{Graph, OutReport};
+			auto Ensure = [&](const TCHAR* PinName, FName Variable, bool bShow)
+			{
+				UEdGraphPin* Pin = Node->FindPin(FName(PinName), EGPD_Input);
+				if (!Pin && bShow)
+				{
+					FBuilder::ShowPins(Node, {PinName});
+					Pin = Node->FindPin(FName(PinName), EGPD_Input);
+					OutReport += FString::Printf(TEXT("%s %s: showed pin %s\n"), *Graph->GetName(), *NodeLabel(Node), PinName);
+					++Changed;
+				}
+				if (!Pin)
+				{
+					OutReport += FString::Printf(TEXT("%s %s: pin %s missing\n"), *Graph->GetName(), *NodeLabel(Node), PinName);
+					bOk = false;
+					return;
+				}
+				if (Pin->LinkedTo.Num() > 0)
+				{
+					FString Source = NodeLabel(Pin->LinkedTo[0]->GetOwningNode());
+					if (const UK2Node_VariableGet* Getter = Cast<UK2Node_VariableGet>(Pin->LinkedTo[0]->GetOwningNode()))
+					{
+						Source = Getter->VariableReference.GetMemberName().ToString();
+					}
+					OutReport += FString::Printf(TEXT("%s %s: kept %s <- %s\n"), *Graph->GetName(), *NodeLabel(Node), PinName, *Source);
+					return;
+				}
+				Build.BindVariable(Variable, Node, PinName);
+				bOk = bOk && Build.bOk;
+				OutReport += FString::Printf(TEXT("%s %s: bound %s <- %s\n"), *Graph->GetName(), *NodeLabel(Node), PinName, *Variable.ToString());
+				++Changed;
+			};
+			Ensure(TEXT("BlendSpace"), TEXT("ActiveAimOffset"), true);
+			Ensure(TEXT("X"), TEXT("AimYaw"), false);
+			Ensure(TEXT("Y"), TEXT("AimPitch"), false);
+		}
+	}
+	if (Found == 0)
+	{
+		OutReport += TEXT("no Aim Offset (RotationOffsetBlendSpace) node\n");
+		return false;
+	}
+	OutReport += FString::Printf(TEXT("aim offset nodes %d, bindings changed %d\n"), Found, Changed);
+	if (!bOk)
+	{
+		return false;
+	}
+	if (Changed == 0)
+	{
+		OutReport += TEXT("already bound; graph not recompiled\n");
+		return true;
+	}
+	return CompileAnimGraphAndReport(AnimBlueprint, AnimGraph, OutReport);
 }
 
 FString UOperativeAnimGraphLibrary::DescribeSkeleton(USkeleton* Skeleton)

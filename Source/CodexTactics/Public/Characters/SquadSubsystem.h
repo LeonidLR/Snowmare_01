@@ -434,8 +434,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	FVector PlanMove(AOperativeCharacter* Operative, const FVector& Destination, bool bSprint, float Radius);
 
-	/** Plan a formation offset with the player's actual group click as a fallback if that offset is unreachable. */
-	FVector PlanGroupMove(AOperativeCharacter* Operative, const FVector& Destination, const FVector& GroupAnchor, bool bSprint, float Radius);
+	/** Plan a formation offset with the player's actual group click as a fallback if that offset is unreachable.
+	 *  WindowApproach, when set, is the near face of an explicit window order (G024b): the release arms it before the walk. */
+	FVector PlanGroupMove(AOperativeCharacter* Operative, const FVector& Destination, const FVector& GroupAnchor, bool bSprint, float Radius,
+		const FVector* WindowApproach = nullptr);
 
 	/** Where Operative stood when the current tactical pause began; false outside a pause. */
 	bool GetPauseOrigin(const AOperativeCharacter* Operative, FVector& OutOrigin) const;
@@ -1071,13 +1073,17 @@ private:
 	/** The squad tick of a pending leader (SquadOrderRules::StepPendingLeader). */
 	void UpdatePendingLeader();
 
-	FVector StorePlannedMove(AOperativeCharacter* Operative, const FVector& Destination, bool bSprint, float Radius, const FVector* GroupAnchor);
+	FVector StorePlannedMove(AOperativeCharacter* Operative, const FVector& Destination, bool bSprint, float Radius, const FVector* GroupAnchor,
+		const FVector* WindowApproach = nullptr);
 
 	struct FPlannedOrder
 	{
 		FVector Destination = FVector::ZeroVector;
 		TOptional<FVector> GroupFallback;
 		bool bSprint = false;
+		/** G024b: an explicit window order. The release walks to WindowApproach first, then to Destination. */
+		bool bWindowFile = false;
+		FVector WindowApproach = FVector::ZeroVector;
 	};
 
 	/** The group-mode wall layout planned in the tactical pause (PlanFormationWall), ordered on the release. */

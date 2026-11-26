@@ -463,6 +463,8 @@ public:
 	void SetManualLookPoint(const FVector& WorldPoint);
 	void ClearManualLookPoint();
 	bool HasManualLookPoint() const { return bHasManualLookPoint; }
+	/** CoverIndoor aim offset: a Shift-click look while the corner peek is up. A new plain peek or leaving the corner turns it off. */
+	bool WantsCornerLookPose() const;
 	bool GetManualLookPoint(FVector& OutPoint) const;
 	bool GetActiveLookPoint(FVector& OutPoint) const;
 	bool IsLookHoldEligible() const;
@@ -2122,17 +2124,17 @@ public:
 	int32 GetCoverOpenShots() const { return CoverOpenShots; }
 
 	/**
-	 * Corner stand-off per pack clip side and stance, cm (FCoverFacingConfig defaults, measured 2026-10-06: the peek
-	 * clip's body step-out minus 12 cm). _L plays at his own right corner, _R at his left.
+	 * Corner stand-off per pack clip side and stance, cm (FCoverFacingConfig defaults). _L plays at his own right corner,
+	 * _R at his left. X6 2026-11-25: the outer shoulder, not the 2026-10-06 pelvis step, stays within 25 cm of the edge.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
-	float CoverStandOffStandPackLCm = 57.f;
+	float CoverStandOffStandPackLCm = 66.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
-	float CoverStandOffStandPackRCm = 28.f;
+	float CoverStandOffStandPackRCm = 34.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
-	float CoverStandOffCrouchPackLCm = 65.f;
+	float CoverStandOffCrouchPackLCm = 74.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
-	float CoverStandOffCrouchPackRCm = 49.f;
+	float CoverStandOffCrouchPackRCm = 56.f;
 
 	/** The facing rules' config with this operative's tunables (stand-offs). */
 	FCoverFacingConfig GetCoverFacingConfig() const;
@@ -2254,6 +2256,13 @@ public:
 	 * Blueprint place on the capsule (a load in place, a teleport).
 	 */
 	void ResetBodyOffsets();
+
+	/**
+	 * G025: an exit (neutral look, cover leave, mantle end, a player's move order) puts the mesh yaw, the barrel
+	 * and the controller-desired rotation back on the move. Aim pitch stays when bKeepAimPitch (a formation scan).
+	 * No-op in cover or mid-mantle: those poses own the mesh, and cover entry has already set bInCover.
+	 */
+	void ReleaseTorsoToMovement(bool bKeepAimPitch);
 
 	/**
 	 * Rev 2026-10-19 (user: "the save keeps the state the character was in BEFORE the load"): a load in place applies the saved fields on
@@ -2572,6 +2581,13 @@ public:
 	 * > movement direction. Not prone, sprinting, carrying or on the turn-based grid.
 	 */
 	void SetFormationLookYaw(const TOptional<float>& Yaw) { FormationLookYaw = Yaw; }
+
+	/**
+	 * Formation scan pitch this frame (FormationSectorRules::LookPitch), degrees, + up. Unset = no scan.
+	 * UpdateAimOffset feeds it to AimPitch while the sector owns the facing and there is no combat aim.
+	 */
+	void SetFormationLookPitch(const TOptional<float>& Pitch) { FormationLookPitch = Pitch; }
+	TOptional<float> GetFormationLookPitch() const { return FormationLookPitch; }
 
 	/**
 	 * Doors R2 (designer bug 2026-11-22 "the first kick hits the door, the second the air"): while he works a door (every kick attempt, the
@@ -2976,6 +2992,8 @@ private:
 	bool bHasIdleFacing = false;
 	/** Formation look sectors (SetFormationLookYaw / SetFormationPaceMultiplier / SetFormationWallPose). */
 	TOptional<float> FormationLookYaw;
+	/** SetFormationLookPitch: the scan pitch, degrees. Unset when the yaw look is cleared. */
+	TOptional<float> FormationLookPitch;
 	/** SetDoorFacingLock: the yaw the door work holds (unset = none). */
 	TOptional<float> DoorFacingYaw;
 	TOptional<float> GrenadeFacingYaw;
@@ -3647,6 +3665,8 @@ private:
 	bool bStealthFast = false;
 	UPROPERTY(Transient)
 	bool bHasManualLookPoint = false;
+	/** Set with a Shift-click look while already peeking the corner; cleared with the look, a new plain peek, or leaving cover. */
+	bool bCornerLookPose = false;
 	UPROPERTY(Transient)
 	FVector ManualLookPoint = FVector::ZeroVector;
 	TWeakObjectPtr<AActor> StealthAutoLookActor;

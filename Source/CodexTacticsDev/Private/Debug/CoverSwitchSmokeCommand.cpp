@@ -1083,7 +1083,7 @@ namespace CoverSwitchSmoke
 				World->LineTraceSingleByChannel(Hit, Start, Start + State.F * 400.f, ECC_Visibility, Params);
 				return Hit;
 			};
-			const float CornerR = State.BMinR + 57.f; // the Right stand-off from B's near corner
+			const float CornerR = State.BMinR + Op->GetCoverFacingConfig().StandStandOffPackLCm; // the Right stand-off from B's near corner
 			FVector GhostNear = FVector::ZeroVector;
 			for (const float AtR : { State.BMinR + 40.f, State.BMinR + 150.f })
 			{

@@ -512,6 +512,32 @@ void UPmcSquadSubsystem::SetTeamAssault(int32 TeamId, const FVector* Point)
 	}
 }
 
+void UPmcSquadSubsystem::EngageRelocatedTeam(int32 TeamId, const FVector& TargetPoint)
+{
+	FTeam& Team = TeamOf(TeamId);
+	if (Team.Posture.IsSet() && Team.Posture.GetValue() != EPmcPosture::Hunt)
+	{
+		Team.Posture = EPmcPosture::Hunt;
+		Team.bHuntTeam = true;
+	}
+	Team.PlayerStart = TargetPoint;
+	Team.PostureLeg = FMath::Max(Team.PostureLeg, 1);
+	Team.PostureTimer = HuntLegSeconds;
+	Team.AssaultPoint = TargetPoint;
+	Team.bCommanded = true;
+	Team.DecisionTimer = 0.f;
+}
+
+double UPmcSquadSubsystem::GetLatestContactActivityTime() const
+{
+	double Latest = -1e9;
+	for (const TPair<int32, FTeam>& Pair : Teams)
+	{
+		Latest = FMath::Max(Latest, FMath::Max(Pair.Value.LastSeenContactTime, Pair.Value.LastShotTime));
+	}
+	return Latest;
+}
+
 void UPmcSquadSubsystem::SetTeamObjective(int32 TeamId, EPmcRole Role, const FVector& Location, float RadiusCm, float LevelToleranceCm)
 {
 	FTeam& Team = TeamOf(TeamId);
