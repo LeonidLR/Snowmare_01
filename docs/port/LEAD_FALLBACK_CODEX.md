@@ -49,3 +49,6 @@ Known flaky: FormationStairSmoke S04 leg (83 s budget) failed once then passed (
 Designer decisions today: smoke grenade cloud 60 s + 15 s fade, squad throws smoke on retreat + on order; control groups max 4 (F1-F4);
 straight moves 1+2, waypoints only in tactical pause; Shift+click = world direction lock (variant B, keep it); FocalRig pilot after the
 weekend demo check (memory focalrig-pilot); HTN plugin rejected; stay on Unreal (Godot back-port ~4-6 months).
+API credit: ~7.5 USD left under the 100 USD hard cap (Saved/Orchestrator/api_spend.jsonl); designer 11-26: agents may use it for one
+Sonnet review of their own diff per L3 task (api_task.py, changed files only). Monthly code audit (Fable, separate $ budget) - talk with
+the designer on 11-28; plan: Codex runs Scripts/Tools/weekly_audit.ps1 first, Fable only on 8-10 hot systems.
