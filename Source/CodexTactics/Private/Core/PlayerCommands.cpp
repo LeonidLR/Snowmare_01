@@ -223,7 +223,7 @@ namespace PlayerCommands
 			{ Suppress, TEXT("Shift+Click"), TEXT("Combat"), TEXT("Shift + click on enemies: suppressive fire (red)") },
 			{ PriorityTarget, TEXT("Click enemy"), TEXT("Combat"), TEXT("Priority target") },
 			{ ToggleVisionCones, TEXT("O"), TEXT("Combat"), TEXT("Show / hide the enemies' vision cones on the ground") },
-			{ ToggleSquadVisionCones, TEXT("Shift+O"), TEXT("Combat"), TEXT("Show / hide your squad's vision cones: what your operatives can see") },
+			{ ToggleSquadVisionCones, TEXT("Shift+O"), TEXT("Combat"), TEXT("Show / hide the vision cones of the selected operatives (leader or box selection)") },
 			{ GrenadeAim, TEXT("G"), TEXT("Combat"), TEXT("Grenade") },
 			{ GrenadeThrow, TEXT("LMB"), TEXT("Combat"), TEXT("Throw the grenade") },
 			{ FlareAim, TEXT("Shift+G"), TEXT("Combat"), TEXT("Signal flare") },

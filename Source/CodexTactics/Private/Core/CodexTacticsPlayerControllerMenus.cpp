@@ -195,7 +195,7 @@ void ACodexTacticsPlayerController::SquadVisionConesKey()
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
 		Messages->PostMessage(LOCTEXT("SquadSpeaker", "SQUAD"), bOn
-			? LOCTEXT("SquadVisionConesOn", "Squad vision cones ON: what your operatives can see is drawn on the ground.")
+			? LOCTEXT("SquadVisionConesOn", "Vision cones ON: what the selected operatives can see is drawn on the ground.")
 			: LOCTEXT("SquadVisionConesOff", "Squad vision cones OFF."));
 	}
 }

@@ -133,8 +133,11 @@ void AOperativeCharacter::UpdateVisionCone(float DeltaTime)
 	}
 	const bool bAlive = HealthComponent && HealthComponent->IsAlive();
 	// Shown by the BP / actor setting, or by the player's squad-cone toggle (Shift+O, 2026-10-20); the debug CVar 0 / 1 overrides both.
+	// Designer 2026-11-26: the toggle shows only the SELECTED operatives (the leader, or the box-selected group), to focus on one.
+	const USquadSubsystem* ConeSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	const bool bSelectedForCones = ConeSquad && (ConeSquad->GetLeader() == this || ConeSquad->IsGroupSelected(this));
 	const bool bVisible = VisionConeRules::ResolveVisible(UVisionConeComponent::GetGlobalMode(), bShowVisionCone, bAlive,
-		UVisionConeComponent::IsPlayerSquadConesOn());
+		UVisionConeComponent::IsPlayerSquadConesOn() && bSelectedForCones);
 	if (bVisible)
 	{
 		VisionConeCheckTimer -= DeltaTime;
