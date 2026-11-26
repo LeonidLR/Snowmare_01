@@ -1,35 +1,54 @@
-# 139 — WIP checkpoint: roof ladder no path
+# 139 — диагностика лестницы на крышу / No way up
 
-Статус: **LIMIT — НЕ ЗАВЕРШЕНО**. Codex primary used90%, осталось10%; работа остановлена по правилу дизайнера до сброса 2026-11-26 13:16 Asia/Jerusalem. Диагностика подготовлена; игровой фикс ещё не внесён.
-Ветка `codex/139-roof-ladder-no-path`, worktree `C:/Work/Lanes/CodexTactics-139`, база `5e510025` (origin/main при старте).
+Статус: В РАБОТЕ после RESUME Lead#1388. Worktree C:/Work/Lanes/CodexTactics-139, ветка codex/139-roof-ladder-no-path. В собственную ветку влит origin/main b65ec5f7 (merge abb03556), main не менялся.
 
-## Найдено до правки
+## Подтверждённая причина
 
-- Лог дизайнера `docs/port/codex/inbox/139-roof-ladder-excerpt.log`: roof clicks `(11446..11700,-7557..-7667,300)` принимаются, боец остаётся у стены; нет события reached ladder link. Partial path пока гипотеза по логу, не подтверждён runtime probe.
-- В accepted layout `Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1_x6.json` точка `(11500,-7640)` принадлежит `B_x1_3_1_t1004_gallery`: footprint `[[11151.85,-7977.43],[11852.85,-7194.43]]`, height300, floors1, roof_walkable=true, внутренних stairs/hatches нет.
-- Его ladder id `LAD_B_x1_3_1_t1004_gallery`: pos `(11609.9,-7977.77)`, yaw -83.5, rungs8, plinth8.8; authored foot `(11621.22,-8077.13)`, top `(11597.45,-7868.48)`.
-- Builder уже поддерживает authored landing inset для roof ladders (`Scripts/Editor/build_levelgen_map.py:1381–1390`, `:1727–1740`): выставляет top_standoff/top_exit_standoff по layout top. Нельзя предполагать, что сохранённый ALadderActor текущей карты имеет эти значения: это должен подтвердить runtime log.
-- `ALadderActor` default TopStandoff49.1 / TopExitStandoff40.0; возможен старый inset у парапета, но это **не подтверждённый диагноз**.
+Baseline worker build PASS381.82s. Smoke CodexTactics.RoofLadderSmoke FAIL48.6s, сохраняет требование feet>=290 и реального подъёма по лестнице за60s. Лог: Saved/Logs/Worker/dispatch-20261126-163537-103732/Smoke-RoofLadderSmoke.log.
 
-## Что подготовлено
+Фактическая лестница: LadderActor_22, tags ladder=LAD_B_x1_3_1_t1004_gallery, to=roof:B_x1_3_1_t1004_gallery. Позиция11611.60,-7992.70,8.80, yaw-83.5,8 ступеней, climbable/link enabled. Сохранённые TopStandoff49.1 и TopExitStandoff40.0 слишком малы:
 
-- Новый `Source/CodexTacticsDev/Private/Debug/RoofLadderSmokeCommand.cpp`, команда **CodexTactics.RoofLadderSmoke**.
-- На X6: ждёт preload/nav, выключает фоновых PMC/pressure, находит фактическую лестницу у цели, пишет actor name/tags/transform/standoffs/enabled, bottom/top/exit/roof-goal и их nav projections, complete/partial paths с окнами/без окон, затем настоящий formation roof click.
-- Требует, чтобы лидер поднялся по ladder и feet>=290 за60 s; иначе FAIL с фактическим положением. Геометрия, карта и ladder не подправляются.
-- `Scripts/test_map.json`: регистрация, X6 options, отдельный impact rule.
-- `Scripts/test.ps1 -CheckMap`: PASS. Компиляция и сам smoke ещё **не выполнены/не подтверждены**.
-- Gameplay C++ и данные не менялись. Feedback **No way up пока НЕ реализован**.
+- bottom11626.28,-8059.67,8.8 -> nav11626.28,-8059.67,10 (offset1.2cm).
+- top11613.00,-7943.12,300 -> nav11613.00,-7904,310 (offset40.4cm).
+- exit11614.03,-7952.16,300 -> nav11614.03,-7904,310 (offset49.2cm).
+- roof goal11510,-7621,300 -> nav11510,-7621,310 (offset10cm).
+- Оба пути bottom->roof, default и no-window, valid1/partial1, конец на земле11565.56,-8037.72,10. После60s feet11.0/climbs0. Причина не в formation filter: исходная навигационная связь на верхней площадке не подключена.
 
-## Следующий шаг после сброса
+Предлагаемая data/map правка для Lead: применить authored top11597.45,-7868.48 к LadderActor_22 — порядка125cm от фактической плоскости ступеней, то есть TopStandoff125/TopExitStandoff125 вместо49.1/40.0; перестроить navmesh и проверить исходный smoke. Builder Scripts/Editor/build_levelgen_map.py уже выставляет authored inset для facade roof ladders (uses_layout_top): сохранённый actor текущей карты всё ещё имеет старые defaults. Карта, JSON дизайнера и assets не правились. Диагноз передан Lead#1403.
 
-1. Проверить существующий dispatcher build (lane139, исходно PID93976). Последнее наблюдение ДО LIMIT: сборка стартовала на worker10:03:13; sync token DESKTOP-6RLUUV8-94560-20261126-100234, исходный HEAD5e510025 + новый smoke через ExtraZip. Её результат после LIMIT не проверялся; новых smoke после LIMIT не запускалось. При отсутствии результата: `python Scripts/Tools/machine_dispatch.py build --lane C:/Work/Lanes/CodexTactics-139`.
-2. `python Scripts/Tools/machine_dispatch.py smoke --lane C:/Work/Lanes/CodexTactics-139 --smokes CodexTactics.RoofLadderSmoke --jobs 1`.
-3. По `[RoofLadder]` установить реальные actor/link ends/navmesh projections и partial path. При data issue — точный ladder/roof и предлагаемый inset/data fix в отчёте, без записи карты/X6 JSON. При runtime issue — минимальный фикс.
-4. Добавить понятное сообщение No way up для недоступной верхней цели; сейчас OrderGroupMove игнорирует EOperativeOrderResult, а RequestMove принимает successful partial path. Сохранить подход к locked door и разрешённые partial moves на том же уровне; unit test для чистой логики, если она выделяется.
-5. Build + Smart + smoke + локальный audit; TypeSafe пропускать по прямому решению дизайнера (из задачи134). FINISH только после реального завершения.
+## Подготовлено после baseline
 
-## Границы и лимит
+- Чистое правило OperativeMovementRules::HasNoWayUp: верхняя цель требует полного маршрута, заканчивающегося на её уровне (slack80cm); обычные partial approaches на том же уровне и спуски не меняются.
+- RequestMove для собственной команды игрока отказывает с сообщением No way up, вместо молчаливой ходьбы к стене. Formation follow и PMC не меняются; locked-door redirect выполняется раньше в click handler.
+- Unit Movement.NoWayUp: неполный путь, проекция на нижний пол, отсутствие пути, disconnected upper island, нормальная лестница/ступени, тот же уровень, граница80cm, спуск.
+- Smoke также проверяет реальный отказ/сообщение/отсутствие собственной ходьбы на невозможной верхней цели. Исходный RoofLadderSmoke не исправляет геометрию и сохраняет строгую проверку подъёма.
+- Отдельный RoofLadderRepairProbe меняет только runtime link/climb targets на125cm, ничего не сохраняет; нужен для доказательства предлагаемой data fix, не заменяет исходный smoke.
+- Оба smoke явно используют -Sector=0, чтобы чужой сохранённый тренировочный сектор не обрезал путь.
 
-Карты, `.uasset`, Config, VFX и несохранённый `L_Gen_Depot_1_X6.json` в main не менялись. Бинарные зависимости только прочитаны из main в собственный worktree, чтобы remote build не скачивал старые EXE; до успешной сборки139 они не считаются проверенной сборкой139.
-Merge/push не выполнялись. Очередь Lead: **139 -> 136 -> 137 -> 138 -> 140 -> G022**; G022 только после merge G023.
-Сброс текущего окна Codex: **2026-11-26 13:16 Asia/Jerusalem**. При10% остатка — LIMIT и ожидание reset.
+## Текущие проверки
+
+CheckMap PASS. Вторая worker-сборка (No way up + repair probe) PASS406.48s. Smart -SkipSmokes -Base origin/main: PASS320/320,85s (319 success,1 success-with-warnings,0 failed), включая Movement.NoWayUp. Совместимые smoke ещё идут; их полный итог пока не заявлен. Внешний TypeSafe пропущен по прямому решению дизайнера; только локальный аудит границ. Merge/push не выполнялись. Следующая задача147, затем143->146->136->137->138->140->G022.
+
+## Проверено после правки
+
+Код сохранён в44863738. Вторая серия worker проверок:
+
+- RoofLadderSmoke на сохранённой карте по-прежнему FAIL: невозможная верхняя цель1300 корректно возвращает Unreachable, сообщение и отсутствие собственной ходьбы; реальная крыша300 тоже получает No way up (partial1), боец остаётся feet2.2 без ложного подхода к стене. Строгое требование z>=290/подъёма сохранено, knownFail не выставлялся.
+- RoofLadderRepairProbe PASS: только в памяти TopStandoff/TopExitStandoff125; top/exit11604.40,-7867.71,300 проецируются без XY-смещения в navz310. После обновления nav-link реальная formation-команда получает partial0. Лог14:49:23.222Z: reached LadderActor_22 link going up;14:49:24.097Z: feet302.2 за7.2s; итогPASS14:49:24.108Z.
+- Ни smoke, ни игровой код не сохраняют карту. Применение data fix к сохранённому actor остаётся у Lead. Повторная engine-сборка после редактирования карты не нужна, но нужен исходный RoofLadderSmoke после обновления navmesh.
+
+## Compatibility finding (исправляется, не закрыто)
+
+Первая серия9 smoke: RoofLadderRepairProbe, WindowDetour, WindowCoverFire, CutawayClick, CoverIndoor, FormationWallHug PASS; RoofLadderSmoke FAIL на сохранённой карте; LowCoverMoveLake и FormationStair FAIL из-за новой проверки высоты. Логи в Saved/Logs/Worker/dispatch-20261126-164737-100060/.
+
+Подтверждение регрессии: LowCoverMoveLake передаёт GoalZ89.5 при feet2.2, полный путь заканчивается z0; locked-door approach FormationStair передаёт GoalZ92.15 при feet2.2, полный путь заканчивается z10. Это существующие capsule-centre вызовы, а не верхний этаж. Проверка теперь учитывает высоту капсулы: верхняя цель должна быть выше feet + max(80cm, capsuleHalfHeight+20cm); оценка end-level остаётся80cm. Добавлены точный legacy low-cover regression и отдельный prone-capsule case. Сами smoke не менялись. Третья worker-сборка стартовала16:55; повторные тесты этой ревизии ещё НЕ выполнены. Промежуточный44863738 не является финальным (Lead предупреждён#1409).
+
+## Resume checkpoint — 2026-11-26 evening
+
+- Final code revision: 9ce2d0f5 (capsule-centre compatibility correction).
+- Third worker build: PASS, 416.42 s; Saved/Logs/Worker/build-20261126-165459-91580/Build.log ends Result: Succeeded.
+- git diff --check: PASS. No designer JSON, map, asset, Config or VFX edits.
+- Rechecks launched: smart unit tests (session 44650), focused Movement.NoWayUp (session 31742), dispatcher four smokes (session 44620, dispatcher pid 96588). Results pending at this checkpoint; do not claim regression closure.
+- Dispatcher request: RoofLadderSmoke, RoofLadderRepairProbe, LowCoverMoveLakeSmoke, FormationStairSmoke; jobs=2. Initial sandbox denied queue lock; authorized escalated retry accepted. No approval rejection.
+- Saved map remains blocked by LadderActor_22 upper landing inset, documented above. Repair probe passes only transient geometry; ordinary roof smoke must remain strict.
+- Current designer queue supersedes older paragraphs: 139 -> 121 -> 148 -> 149 -> 147. Reuse existing 121 lane; review Gemini fbad5357 before creating codex branch. No extra lanes, no main push.
