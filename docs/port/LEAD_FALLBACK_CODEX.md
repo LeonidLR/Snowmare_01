@@ -34,8 +34,10 @@ executor as usual. The Claude Lead updates the STATE block below after every mer
   `pro` subagent, the Lead reviews every diff.
 - Spend little: react only to FINISH / blockers / the designer.
 
-## STATE (updated by the Claude Lead - 2026-11-26 ~16:45)
-origin/main b65ec5f7. Merged today: G023 + Codex 134 (4851b3aa), Gemini 135 (10963d3a), Codex 142 TG Main/Play switch (549b0868),
+## STATE (updated by the Claude Lead - 2026-11-26 ~17:40)
+origin/main 8d4bafbc (+ docs). 17:35 merged claude/firstaid-cover (24771d72: cover no longer blocks first aid; gate v7-5 green).
+Live queues (re-plan, supersedes the lines below): Codex 139 -> 121 -> 148 -> 149 -> 147; Gemini 145 -> 150 -> 135b -> 141 -> 144.
+Designer away tonight (Saved/Lead/MAIN_PC_FREE set - delete when he is back). Merged today: G023 + Codex 134 (4851b3aa), Gemini 135 (10963d3a), Codex 142 TG Main/Play switch (549b0868),
 lanes auto-cleanup (8605d41d), claude/ux-1126 = selected-only vision cones (Shift+O), inventory closes on item pick, Take ALL closes loot (82c06f7b).
 Play copy = a12dea10 built (has 135; NOT yet ux-1126 - update when its editor is closed).
 Codex queue: 139 roof ladder no path (WIP 29de97cd) -> 147 PMC fled = tactical defeat (designer plays sectors) -> 143 threat arrows ->
