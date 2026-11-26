@@ -3011,6 +3011,9 @@ private:
 	TWeakObjectPtr<AActor> LastThreat;
 	FVector LastThreatLocation = FVector::ZeroVector;
 	bool bFoughtThisFight = false;
+	double LastThreatContactTime = -1000.0;
+	bool bPendingArrivalFacingLog = false;
+	float ArrivalTravelYaw = 0.f;
 	bool bExplicitFacing = false;
 	/** The yaw of the player's facing order (SetFacingPoint) he returns to after the fight (ThreatFacingRules::ShouldReturnToOrderedFacing). */
 	float OrderedFacingYaw = 0.f;

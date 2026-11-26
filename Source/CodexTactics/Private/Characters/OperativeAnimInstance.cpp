@@ -1451,9 +1451,20 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 		const TOptional<float> ScanPitch = Operative.GetFormationLookPitch();
 		const bool bScanPitch = bAimOffset && !bAimOffsetTurnBasedOff && !bHasAimTarget
 			&& Operative.IsFacingFormationSector() && ScanPitch.IsSet();
+		const bool bLookHoldPitch = bAimOffset && !bAimOffsetTurnBasedOff && !bHasAimTarget && !bScanPitch
+			&& !bIsSprinting && Operative.GetActiveLookPoint(LookPoint);
 		if (bScanPitch)
 		{
 			AimPitchTarget = FMath::Clamp(ScanPitch.GetValue(), -AimPitchClampDegrees, AimPitchClampDegrees);
+			AimYawTarget = 0.f;
+			bAimYawOutOfReach = false;
+		}
+		else if (bLookHoldPitch)
+		{
+			const float LookPitch = (Operative.HasManualLookPoint() && Operative.IsLookHoldEligible())
+				? Operative.GetManualLookPitchDeg()
+				: AimOffsetRules::PitchToTarget(Operative.GetMuzzleLocation(), LookPoint, PitchLimit);
+			AimPitchTarget = FMath::Clamp(LookPitch, -PitchLimit, PitchLimit);
 			AimYawTarget = 0.f;
 			bAimYawOutOfReach = false;
 		}
@@ -1473,7 +1484,7 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 		}
 	}
 	AimPitch = FMath::Clamp(FMath::FInterpTo(AimPitch, AimPitchTarget, DeltaSeconds, AimPitchInterpSpeed), -PitchLimit, PitchLimit);
-	if (!bHasAimTarget && !Operative.IsFacingFormationSector() && FMath::Abs(AimPitch) < 0.05f)
+	if (!bHasAimTarget && !Operative.IsFacingFormationSector() && !(Operative.HasManualLookPoint() && Operative.IsLookHoldEligible()) && FMath::Abs(AimPitch) < 0.05f)
 	{
 		AimPitch = 0.f;
 	}
