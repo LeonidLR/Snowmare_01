@@ -11,3 +11,9 @@ climb as now. Ideally a plain formation move to a far-side point also routes ove
   #3 waits -> all 3 cross by climbing, nobody runs around.
 - Branch codex/138-fence-queue-new-order from origin/main; build via machine_dispatch.py / build.ps1 -Remote worker; report docs/port/codex/outbox/138-fence-queue-new-order.report.md;
   FINISH `138 FINISH | PASS/FAIL | <hash> | ...`. Queue: after 137, before G022. TypeSafe audit: local boundary audit only.
+
+Designer addendum (the real point): in combat he clicks fast and often; a new click must not wreck a traversal already in progress or queued.
+General rule for this task: a committed traversal step (fence / obstacle climb, window, ladder, door pass) is finished, and the new order is
+applied after it (buffered as "continue to"). Only an order that clearly reverses (target back on the near side) cancels a step not yet started.
+Audit which traversal steps a re-click cancels today (mantle queue, window, ladder queue, door) and list them in the report; fix the formation fence
+queue here, the others only if the same small change covers them (else list them as 138b).
