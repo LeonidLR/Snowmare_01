@@ -549,6 +549,10 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 	bInCover = false;
 	bCornerLookPose = false; // leaving the corner drops the CoverIndoor look pose
 	ReleaseTorsoToMovement(FormationLookYaw.IsSet()); // the lean's mesh yaw does not stay on the walk out
+	if (UOperativeAnimInstance* LeaveAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+	{
+		LeaveAnim->ReleasePeekStanceYawLock(); // 135 Part A: a move/cover order off the corner releases any active peek yaw lock
+	}
 	CoverLookSide.Reset(); // the wall group's side belongs to that slot
 	CurrentCoverHeight = ECoverHeight::None;
 	bShimmying = false;
@@ -1040,9 +1044,12 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 	const bool bWasAtCorner = bAtCoverCorner;
 	bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, CoverFacing, Config);
 	// The look may name the other hand. The body stays at the ordered edge, so the corner flag stays too.
-	if (!bAtCoverCorner && bManualCornerPeek && WantsCornerLookPose())
+	if (!bAtCoverCorner && WantsCornerLookPose())
 	{
-		bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, ManualCornerPeekSide, Config);
+		bAtCoverCorner = bManualCornerPeek
+			? CoverFacingRules::IsAtCorner(CoverSlot, ManualCornerPeekSide, Config)
+			: (CoverFacingRules::IsAtCorner(CoverSlot, ECoverFacing::Left, Config)
+				|| CoverFacingRules::IsAtCorner(CoverSlot, ECoverFacing::Right, Config));
 	}
 	if (bAtCoverCorner && !bWasAtCorner && bInCover && !bShimmying)
 	{
