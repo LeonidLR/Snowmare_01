@@ -52,3 +52,8 @@ weekend demo check (memory focalrig-pilot); HTN plugin rejected; stay on Unreal 
 API credit: ~7.5 USD left under the 100 USD hard cap (Saved/Orchestrator/api_spend.jsonl); designer 11-26: agents may use it for one
 Sonnet review of their own diff per L3 task (api_task.py, changed files only). Monthly code audit (Fable, separate $ budget) - talk with
 the designer on 11-28; plan: Codex runs Scripts/Tools/weekly_audit.ps1 first, Fable only on 8-10 hot systems.
+
+## Re-plan 2026-11-26 evening (designer: Gemini unreliable, rely on Codex)
+Codex: 139 (finishing) -> 121 full recording (Gemini WIP fbad5357; needed before the designer's fights 11-27) -> 147 PMC fled = win ->
+148 fight replay + building numbers + drawn routes -> 143 -> 146 -> 136 -> 137 -> 138 -> 140 -> G022 -> smoke grenade.
+Gemini (smaller, always reviewed): 145 (+B) -> 135b -> 141 -> 144.

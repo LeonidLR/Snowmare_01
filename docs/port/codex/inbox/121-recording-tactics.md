@@ -19,3 +19,8 @@ Report + "121 FINISH | ..." in chat. Never push.
 ADDED 11-25: tag ALL patterns of docs/design/ai/DESIGNER_TACTICS_DOCTRINE_2026-11-25.md - also prone_then_crawl_to_cover,
 first_in_cover_overwatch (fires while an ally is moving to cover), flank_into_rear (> 120 deg around the target), unwatched_flank_seconds
 (no operative's look within 60 deg of a sector for > N s while moving), scan_pitch_range.
+
+REASSIGNED BACK TO CODEX 2026-11-26 evening (designer: rely more on Codex). Gemini's paused WIP: branch gemini/121-recording-tactics at fbad5357
+(worker build OK; plan: shot_hit/damage/kill/down/stealth/cover/climb events + snap fields + demo_tactics.py tagger). Review it; reuse what is
+sound or restart from origin/main. Also: make demo_tactics.py recover what it can from the OLD format (44 fights in Saved/Demos) and report.
+Priority: the designer plays ~21 more fights tomorrow 11-27 - this must be in the play copy before he starts.

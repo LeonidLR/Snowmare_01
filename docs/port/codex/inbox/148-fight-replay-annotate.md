@@ -1,4 +1,4 @@
-# Gemini 148 (L3; pro-subagent self-review + one api_task Sonnet review; Lead reviews) - Training Ground: 2D fight replay + designer's drawn routes (designer 2026-11-26)
+# Codex 148 (L3; one api_task Sonnet review; Lead reviews) - Training Ground: 2D fight replay + designer's drawn routes (designer 2026-11-26)
 
 Goal: the designer re-watches his sector fights top-down, comments, and DRAWS how it should have been done; a script turns the drawings into
 data the trainer / Lead can use. No video rendering, no UE: a TG tab reading Saved/Demos/*.jsonl in the browser.
@@ -21,6 +21,6 @@ D. DECODER script Scripts/Tools/demo_notes.py: reads .notes.json + the map -> pl
    "t=02:14 Commander: route passes building 2 on its RIGHT (east) side, 1.5 m off the wall, then to the low cover at (x,y)",
    "zone: overwatch from the roof of building 5", per route: buildings passed with side, covers touched, length, crossings of open ground.
    Output a short .md + JSON; unit tests for the side-of-building / passing rules.
-- Node tests one file / concurrency 2, dev server on 5180+ and stop it. Report docs/port/gemini/outbox/148-fight-replay-annotate.report.md
-  with 2-3 screenshots (replay of a real 11-26 recording with a drawn route). Branch gemini/148-fight-replay-annotate. FINISH `148 FINISH | ...`.
+- Node tests one file / concurrency 2, dev server on 5180+ and stop it. Report docs/port/codex/outbox/148-fight-replay-annotate.report.md
+  with 2-3 screenshots (replay of a real 11-26 recording with a drawn route). Branch codex/148-fight-replay-annotate. FINISH `148 FINISH | ...`.
   Queue: right after 121 (needs its events), before 135b.
