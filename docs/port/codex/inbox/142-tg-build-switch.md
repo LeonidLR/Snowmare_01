@@ -12,3 +12,8 @@ switch next to the sector buttons: build = Main | Play (default Play when it is 
 - Unit tests (trainingApi.test.ts): build=play uses the play uproject + cwd, build=main unchanged, bad build -> 400, play editor running -> 409.
 - Branch codex/142-tg-build-switch from origin/main; node tests one file / concurrency 2; dev server on 5180+ and stop it; report
   docs/port/codex/outbox/142-tg-build-switch.report.md; FINISH `142 FINISH | ...`. Queue: right after 139 (designer wants it soon).
+
+URGENT (designer 2026-11-26 13:25): do 142 NOW, before 139 (commit 139 WIP first). He must not launch Play by commands.
+Also prove the recordings: a sector fight launched from TG with build=play writes its demo .jsonl into the shared Saved/Demos (junction
+CodexTactics-play/Saved/Demos -> main) and TG's fights-per-sector table (129) counts it. Check the other junctions too (Saved/Training,
+Content/Maps/KitPilot); report them. UI: the switch must be visible on the sector buttons panel and on "open editor", in Russian.
