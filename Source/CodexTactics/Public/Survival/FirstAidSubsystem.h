@@ -84,6 +84,9 @@ public:
 	/** Operative treats or is treated now (walking over counts). */
 	bool IsInTreatment(const AOperativeCharacter* Operative) const;
 
+	/** G023: operative is actively treating or pre-turning for aid (not just walking over). */
+	bool IsActivelyTreating(const AOperativeCharacter* Operative) const;
+
 	/** The designer's tier of an operative now. */
 	static FirstAidRules::ETier TierOf(const AOperativeCharacter& Operative);
 
@@ -149,6 +152,7 @@ private:
 		float PatientBaseYaw = 0.f;
 		float HelperFaceYaw = 0.f;
 		bool bHelperFacing = false;
+		bool bWaitingToFace = false;
 		FFirstAidRecord Record;
 	};
 

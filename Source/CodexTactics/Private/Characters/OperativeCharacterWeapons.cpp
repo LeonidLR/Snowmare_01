@@ -28,6 +28,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/TurretActor.h"
 #include "Survival/ColdSurvivalComponent.h"
+#include "Survival/FirstAidSubsystem.h"
 #include "Training/TrainingSectorSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
@@ -378,6 +379,14 @@ bool AOperativeCharacter::CanShoot() const
 	if (ColdSurvival && ColdSurvival->IsWeaponFrozen())
 	{
 		return false;
+	}
+	// G023: an operative actively treating a teammate keeps his hands and chest on the patient instead of snapping to combat targets.
+	if (const UFirstAidSubsystem* FirstAid = GetWorld() ? GetWorld()->GetSubsystem<UFirstAidSubsystem>() : nullptr)
+	{
+		if (FirstAid->IsActivelyTreating(this))
+		{
+			return false;
+		}
 	}
 	return true;
 }

@@ -106,7 +106,7 @@ private:
 
 	struct FEnemyView
 	{
-		AEnemyCharacter* Enemy = nullptr;
+		AActor* Enemy = nullptr;
 		FVector Location = FVector::ZeroVector;
 		/** A marksman aiming at this squad member (nullptr: not aiming). */
 		const AOperativeCharacter* AimTarget = nullptr;

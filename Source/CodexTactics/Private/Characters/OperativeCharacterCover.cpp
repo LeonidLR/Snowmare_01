@@ -706,9 +706,15 @@ FVector AOperativeCharacter::GetCoverFireOrigin() const
 	{
 		return Muzzle; // through the opening, not round a corner
 	}
+	if (bInCover && CurrentCoverHeight == ECoverHeight::LowCover && !IsManualCornerPeekSpot() && Stance != EOperativeStance::Prone)
+	{
+		// G023: low cover (incl. 95-100 cm roof parapets) fires over the top from standing-height + slight forward lean so downward rays clear the lip.
+		const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+		return CoverFacingRules::OverTopFirePoint(Feet, CoverSlot.WallNormal, CoverSlot.WallTopCm);
+	}
 	if (!bInCover || (CurrentCoverHeight != ECoverHeight::HighCover && !(bCornerAimActive && IsManualCornerPeekSpot())))
 	{
-		return Muzzle; // low cover: over the top (a manual low-cover corner peek fires round its end, rev 5e)
+		return Muzzle;
 	}
 	return CornerFireOriginFor(CoverSlot, CoverFacing, Muzzle);
 }

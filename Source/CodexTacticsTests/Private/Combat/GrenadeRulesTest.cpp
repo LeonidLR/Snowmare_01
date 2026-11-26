@@ -35,6 +35,16 @@ bool FGrenadeRulesTest::RunTest(const FString&)
 	const FVector Top = GrenadeRules::ArcPoint(FVector::ZeroVector, FVector(1000.f, 0.f, 0.f), 0.5f);
 	TestTrue(TEXT("Arc apex 2.6 m at the middle"), Top.Equals(FVector(500.f, 0.f, 260.f), 0.1f));
 	TestTrue(TEXT("Arc ends on the target"), GrenadeRules::ArcPoint(FVector::ZeroVector, FVector(1000.f, 0.f, 0.f), 1.f).Equals(FVector(1000.f, 0.f, 0.f), 0.1f));
+
+	// G023: pre-throw facing alignment rules.
+	TestEqual(TEXT("ThrowYaw east (+X)"), GrenadeRules::ThrowYaw(FVector::ZeroVector, FVector(500.f, 0.f, -200.f)), 0.f, 0.01f);
+	TestEqual(TEXT("ThrowYaw south (+Y)"), GrenadeRules::ThrowYaw(FVector::ZeroVector, FVector(0.f, 500.f, 0.f)), 90.f, 0.01f);
+	TestEqual(TEXT("ThrowYaw behind (-X)"), FMath::Abs(GrenadeRules::ThrowYaw(FVector::ZeroVector, FVector(-500.f, 0.f, 0.f))), 180.f, 0.01f);
+	TestEqual(TEXT("ThrowYaw zero delta preserves fallback"), GrenadeRules::ThrowYaw(FVector(10.f, 20.f, 0.f), FVector(10.f, 20.f, 100.f), -45.f), -45.f, 0.01f);
+	TestEqual(TEXT("ThrowErrorDeg wraps across +-180"), GrenadeRules::ThrowErrorDeg(170.f, -170.f), 20.f, 0.01f);
+	TestFalse(TEXT("Already facing within 15 deg skips pre-turn"), GrenadeRules::NeedsPreTurn(14.f));
+	TestTrue(TEXT("Side/backfacing (> 15 deg) triggers pre-turn"), GrenadeRules::NeedsPreTurn(90.f));
+	TestEqual(TEXT("StepThrowYaw turns smoothly across +-180"), GrenadeRules::StepThrowYaw(170.f, -170.f, 900.f, 0.01f), 179.f, 0.01f);
 	return true;
 }
 
