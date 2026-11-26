@@ -15,3 +15,6 @@ An operative peeking around a corner gets a click order to run to a cover on the
 accepted, but he stays at the corner and never leaves. Suspects: G025 corner peek state / RunPeekYawLock / peek stance yaw lock (BeginPeekStanceYawLock)
 not released by a new move order, or the corner-watch hold re-asserting the slot. Repro in a smoke (corner peek -> move order to a cover
 >= 5 m away -> must arrive), fix the root cause, keep G025 / G023 behaviour. Same branch gemini/135-corner-look-body, part A commit first.
+Designer addendum: the reverse works (from the low cover, an order to run left to the corner is carried out). So it is one-way: corner peek -> cover fails.
+Cover orders are two-click (ClickPreview Arm -> confirm, CodexTacticsPlayerControllerClickPreview.cpp ~740): check first whether the 2nd click
+while the leader is in CornerPeek re-arms / is dropped instead of confirming (leader-state / peek hold check in the confirm path), then the movement side.
