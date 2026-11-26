@@ -21,3 +21,4 @@ ordered yaw, or a cover facing kept after leaving the cover. Add one log line on
 watch sector / F-1 return / cover facing / travel) and the yaw; fix the stale source. Rule: a plain move order ends at the travel
 direction unless a look lock is active (and an active lock is shown on the HUD / vision cone).
 Smoke: Shift+click a look, then plain move order elsewhere -> on arrival yaw = travel yaw +-15 deg (or the lock if the design keeps it - report).
+Designer: after a new sector round started the bug was gone -> stale per-operative state that the round reset clears (look / watch sector / ordered facing). Reproduce within ONE round: Shift+click, several moves, cover in/out, sprint.
