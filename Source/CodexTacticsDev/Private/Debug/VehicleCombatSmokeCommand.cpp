@@ -360,6 +360,9 @@ namespace VehicleCombatSmoke
 			Vehicles->MountImmediately(State.Commander.Get(), Apc);
 			Squad->SetLeader(State.Commander.Get());
 			Squad->SetSquadPosture(ESquadFirePosture::Aggressive);
+			// Keep dismounted Medic passive during turret stages so she never shoots the Stage 6 dead-zone hound.
+			State.Medic->bHasPostureOverride = true;
+			State.Medic->PostureOverride = ESquadFirePosture::Passive;
 			Check(State, Apc->GetSeatOf(State.Engineer.Get()) == EVehicleSeat::Driver && Apc->Turret->GetGunner() == State.Commander.Get(),
 				TEXT("Engineer drives, Commander mans the turret"));
 			// The vendor rig: the wheel bone's height over the ground = the wheel radius the spin uses.

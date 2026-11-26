@@ -52,6 +52,7 @@ struct CODEXTACTICS_API FSectorFightConfig
 	float ResupplyDelayS = 20.f;
 	float MinStartPostDistanceM = 40.f;
 	float RespawnGraceS = 3.f;
+	int32 LauncherRocketsPerRound = 2;
 	ESectorAmmoMode AmmoMode = ESectorAmmoMode::Resupply;
 };
 

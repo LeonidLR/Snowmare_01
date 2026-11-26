@@ -206,6 +206,7 @@ namespace TrainingSectorFight
 		Out.ResupplyDelayS = Read(TEXT("resupply_delay_s"), Out.ResupplyDelayS);
 		Out.MinStartPostDistanceM = Read(TEXT("min_start_post_distance_m"), Out.MinStartPostDistanceM);
 		Out.RespawnGraceS = Read(TEXT("respawn_grace_s"), Out.RespawnGraceS);
+		Out.LauncherRocketsPerRound = FMath::Max(0, FMath::RoundToInt(Read(TEXT("launcher_rockets_per_round"), static_cast<float>(Out.LauncherRocketsPerRound))));
 		FString Mode;
 		if (Json.TryGetStringField(TEXT("ammo_mode"), Mode))
 		{

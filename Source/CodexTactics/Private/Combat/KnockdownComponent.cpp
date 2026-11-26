@@ -1,4 +1,5 @@
 #include "Combat/KnockdownComponent.h"
+#include "Characters/MantleRules.h"
 #include "Core/CodexGameplayRandom.h"
 #include "Vehicles/VehicleSubsystem.h"
 
@@ -131,7 +132,8 @@ bool UKnockdownComponent::CanFallNow() const
 	{
 		// Already lying in the snow (prone) or mid-vault: nothing to knock over.
 		// Falling off a ladder: the knockdown comes on landing (ULadderClimbComponent, LADDERS.md 7.7).
-		return Operative->GetStance() != EOperativeStance::Prone && !Operative->IsVaulting()
+		// A mantle or a vault defers the knockdown until the landing (StartKnockdown). He can still be asked to fall.
+		return Operative->GetStance() != EOperativeStance::Prone
 			&& !(Operative->LadderClimb && Operative->LadderClimb->IsDropping());
 	}
 	if (const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Owner))
@@ -214,14 +216,44 @@ int32 UKnockdownComponent::NotifyExplosion(UWorld* World, const FVector& Center)
 	return Count;
 }
 
+void UKnockdownComponent::ClearDeferredKnockdown()
+{
+	bDeferredUntilLanding = false;
+}
+
+void UKnockdownComponent::FlushDeferredKnockdown()
+{
+	if (!bDeferredUntilLanding)
+	{
+		return;
+	}
+	if (const AOperativeCharacter* Climber = Cast<AOperativeCharacter>(GetOwner()); Climber && (Climber->IsMantling() || Climber->IsVaulting()))
+	{
+		return;
+	}
+	const EKnockdownDirection Direction = DeferredDirection;
+	const EKnockdownCause Cause = DeferredCause;
+	const float PlayRate = DeferredPlayRate;
+	const float DownedScale = DeferredDownedScale;
+	bDeferredUntilLanding = false;
+	StartKnockdown(Direction, Cause, PlayRate, DownedScale);
+}
+
 bool UKnockdownComponent::StartKnockdown(EKnockdownDirection Direction, EKnockdownCause Cause, float PlayRateScale, float DownedTimeScale)
 {
 	const FKnockdownConfig& Config = KnockdownRules::GetConfig();
 	const EKnockdownDirection Side = Direction == EKnockdownDirection::None ? EKnockdownDirection::Back : Direction;
-	// Mantling (designer Q5, 2026-11-15): knocked down mid-climb he drops back to the base first; the knockdown then plays there.
-	if (AOperativeCharacter* Climber = Cast<AOperativeCharacter>(GetOwner()); Climber && Climber->IsMantling())
+	// G026: knocked down mid-climb, the traversal finishes and this knockdown plays on the far side.
+	if (AOperativeCharacter* Climber = Cast<AOperativeCharacter>(GetOwner()); Climber && (Climber->IsMantling() || Climber->IsVaulting())
+		&& MantleRules::TraversalCompletes(MantleRules::ETraversalInterrupt::Knockdown))
 	{
-		Climber->CancelMantle(EMantleCancel::Knockdown);
+		bDeferredUntilLanding = true;
+		DeferredDirection = Side;
+		DeferredCause = Cause;
+		DeferredPlayRate = PlayRateScale;
+		DeferredDownedScale = DownedTimeScale;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Knockdown] %s: the knockdown waits until the far side"), *GetUnitName());
+		return true;
 	}
 	// Knocked down on a ladder (user decision 2026-10-22): he falls to the bottom; this knockdown plays on landing, with fall damage.
 	if (ULadderClimbComponent* Ladder = GetOwner() ? GetOwner()->FindComponentByClass<ULadderClimbComponent>() : nullptr; Ladder && Ladder->IsClimbing())

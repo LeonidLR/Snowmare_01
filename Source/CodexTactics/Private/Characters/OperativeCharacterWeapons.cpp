@@ -16,6 +16,8 @@
 #include "Combat/GrenadeActor.h"
 #include "Combat/GrenadeSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/LauncherRules.h"
+#include "Combat/LauncherTacticsRules.h"
 #include "Combat/WeaponBallisticsRules.h"
 #include "Data/WeaponDataAsset.h"
 #include "Data/WeaponRoster.h"
@@ -26,8 +28,42 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/TurretActor.h"
 #include "Survival/ColdSurvivalComponent.h"
+#include "Training/TrainingSectorSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
+
+namespace OperativeWeaponsLocal
+{
+	bool IsLauncherWeapon(const UWeaponDataAsset* Weapon)
+	{
+		return Weapon && (Weapon->Stats.Handling == EWeaponHandling::Launcher || Weapon->WeaponId == TEXT("rpg7"));
+	}
+
+	bool IsLauncherId(const AOperativeCharacter& Op, const FString& WeaponId)
+	{
+		if (WeaponId == TEXT("rpg7"))
+		{
+			return true;
+		}
+		for (const UWeaponDataAsset* W : Op.AvailableWeapons)
+		{
+			if (W && W->WeaponId == WeaponId && IsLauncherWeapon(W))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	int32 LauncherCap(const AOperativeCharacter& Op)
+	{
+		if (const UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(Op.GetWorld()); Training && Training->HasActiveSector())
+		{
+			return Training->GetFightConfig().LauncherRocketsPerRound;
+		}
+		return LauncherRules::DefaultRocketsPerRound;
+	}
+}
 
 void AOperativeCharacter::EquipWeapon(UWeaponDataAsset* NewWeapon)
 {
@@ -36,6 +72,13 @@ void AOperativeCharacter::EquipWeapon(UWeaponDataAsset* NewWeapon)
 	{
 		CurrentClip = CurrentWeapon->Stats.Ammo.MagazineSize;
 		ReserveAmmo = CurrentWeapon->Stats.Ammo.ReserveAmmo;
+		if (OperativeWeaponsLocal::IsLauncherWeapon(CurrentWeapon))
+		{
+			const LauncherRules::FLauncherAmmoCap Capped = LauncherRules::CapAmmo(CurrentClip, ReserveAmmo,
+				OperativeWeaponsLocal::LauncherCap(*this), RocketsFiredThisRound);
+			CurrentClip = Capped.Clip;
+			ReserveAmmo = Capped.Reserve;
+		}
 	}
 	bIsReloading = false;
 	ReloadTimer = 0.0f;
@@ -66,6 +109,13 @@ void AOperativeCharacter::InitArsenal(const TArray<UWeaponDataAsset*>& Weapons, 
 			// The M16 takes the level's rifle reserve, the pistol its Godot 24; any other weapon its own data (the D-1: 40 shells; was 0).
 			Ammo.Reserve = Weapon->WeaponId == TEXT("m16") ? RifleReserve
 				: (Weapon->WeaponId == TEXT("pistol") ? 24 : FMath::Max(0, Weapon->Stats.Ammo.ReserveAmmo));
+			if (OperativeWeaponsLocal::IsLauncherWeapon(Weapon))
+			{
+				const LauncherRules::FLauncherAmmoCap Capped = LauncherRules::CapAmmo(Ammo.Clip, Ammo.Reserve,
+					OperativeWeaponsLocal::LauncherCap(*this), RocketsFiredThisRound);
+				Ammo.Clip = Capped.Clip;
+				Ammo.Reserve = Capped.Reserve;
+			}
 		}
 	}
 	// Rounds picked up before the arsenal existed (loot) join their weapon.
@@ -73,7 +123,15 @@ void AOperativeCharacter::InitArsenal(const TArray<UWeaponDataAsset*>& Weapons, 
 	{
 		if (FWeaponAmmoState* Ammo = AmmoInventory.Find(It.Key().ToString()))
 		{
-			Ammo->Reserve += It.Value();
+			if (OperativeWeaponsLocal::IsLauncherId(*this, It.Key().ToString()))
+			{
+				Ammo->Reserve += LauncherRules::CapReserveToAdd(Ammo->Clip, Ammo->Reserve, It.Value(),
+					OperativeWeaponsLocal::LauncherCap(*this), RocketsFiredThisRound);
+			}
+			else
+			{
+				Ammo->Reserve += It.Value();
+			}
 			It.RemoveCurrent();
 		}
 	}
@@ -199,6 +257,25 @@ FWeaponAmmoState AOperativeCharacter::GetAmmoState(const FString& WeaponId) cons
 
 void AOperativeCharacter::AddAmmo(const FString& WeaponId, int32 Count)
 {
+	if (OperativeWeaponsLocal::IsLauncherId(*this, WeaponId))
+	{
+		const int32 Cap = OperativeWeaponsLocal::LauncherCap(*this);
+		if (CurrentWeapon && CurrentWeapon->WeaponId == WeaponId)
+		{
+			ReserveAmmo += LauncherRules::CapReserveToAdd(CurrentClip, ReserveAmmo, Count, Cap, RocketsFiredThisRound);
+		}
+		else if (FWeaponAmmoState* Ammo = AmmoInventory.Find(WeaponId))
+		{
+			Ammo->Reserve += LauncherRules::CapReserveToAdd(Ammo->Clip, Ammo->Reserve, Count, Cap, RocketsFiredThisRound);
+		}
+		else
+		{
+			int32& Extra = ExtraAmmo.FindOrAdd(FName(*WeaponId));
+			const int32 Budget = FMath::Max(0, Cap - RocketsFiredThisRound);
+			Extra = FMath::Clamp(Extra + Count, 0, Budget);
+		}
+		return;
+	}
 	if (CurrentWeapon && CurrentWeapon->WeaponId == WeaponId)
 	{
 		ReserveAmmo += Count;
@@ -407,17 +484,20 @@ void AOperativeCharacter::AutoSwitchOnEmpty()
 		const FWeaponAmmoState Ammo = GetAmmoState(Id);
 		return bOwned && (Ammo.Clip > 0 || Ammo.Reserve > 0 || Ammo.Reserve == -1);
 	};
-	// The primary weapon first (the M16; the Engineer's D-1 shotgun, 2026-11-08), then the pistol.
+	// The primary weapon first (the M16; the Engineer's D-1 shotgun, 2026-11-08), then another rifle/shotgun, then the pistol.
 	const FString Primary = GetPrimaryWeaponId();
 	if (!Primary.IsEmpty() && Primary != TEXT("pistol") && Usable(*Primary))
 	{
 		SwitchToWeaponById(Primary);
 		return;
 	}
-	if (Usable(TEXT("pistol")))
+	for (const TCHAR* Alt : { TEXT("m16"), TEXT("shotgun"), TEXT("pistol") })
 	{
-		SwitchToWeaponById(TEXT("pistol"));
-		return;
+		if (Usable(Alt))
+		{
+			SwitchToWeaponById(Alt);
+			return;
+		}
 	}
 	if (GrenadesCount > 0 && AIGrenadeCooldown <= 0.f)
 	{
@@ -510,5 +590,48 @@ void AOperativeCharacter::UpdateSidearmReturn(float DeltaTime)
 		}
 	}
 	bSidearmDrawnByRule = false;
+}
+
+void AOperativeCharacter::UpdateShotgunRifleChoice()
+{
+	if (!CurrentWeapon || CurrentWeapon->WeaponId == TEXT("grenade") || IsLauncherEquipped() || bSidearmDrawnByRule)
+	{
+		return;
+	}
+	auto HasUsable = [this](const TCHAR* Id)
+	{
+		const bool bOwned = AvailableWeapons.ContainsByPredicate([Id](const UWeaponDataAsset* W) { return W && W->WeaponId == Id; });
+		const FWeaponAmmoState Ammo = GetAmmoState(Id);
+		return bOwned && (Ammo.Clip > 0 || Ammo.Reserve > 0 || Ammo.Reserve == -1);
+	};
+	const bool bHasShotgun = HasUsable(TEXT("shotgun"));
+	const bool bHasRifle = HasUsable(TEXT("m16"));
+	if (!bHasShotgun || !bHasRifle)
+	{
+		return;
+	}
+	const UWorld* World = GetWorld();
+	const double Now = World ? World->GetTimeSeconds() : 0.0;
+	const bool bPicked = LauncherTacticsRules::IsPlayerPickHeld(LauncherTacticsRules::GetConfig(),
+		PlayerWeaponPickTime < -999.0 ? -1.f : static_cast<float>(Now - PlayerWeaponPickTime));
+	float NearestCm = -1.f;
+	for (AActor* Other : OperativeCharacterInternal::GatherTargetsFor(*this))
+	{
+		if (OperativeCharacterInternal::IsLiveTargetOf(*this, Other))
+		{
+			const float Dist = static_cast<float>(FVector::Dist2D(GetActorLocation(), Other->GetActorLocation()));
+			NearestCm = NearestCm < 0.f ? Dist : FMath::Min(NearestCm, Dist);
+		}
+	}
+	const EShotgunRifleSwitch Choice = SidearmRules::ChooseShotgunOrRifle(
+		SidearmRules::Get(), NearestCm, bHasShotgun, bHasRifle, CurrentWeapon->WeaponId, bPicked);
+	if (Choice == EShotgunRifleSwitch::SwitchToShotgun)
+	{
+		SwitchToWeaponById(TEXT("shotgun"));
+	}
+	else if (Choice == EShotgunRifleSwitch::SwitchToRifle)
+	{
+		SwitchToWeaponById(TEXT("m16"));
+	}
 }
 

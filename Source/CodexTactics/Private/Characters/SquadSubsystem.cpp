@@ -631,6 +631,25 @@ void USquadSubsystem::SetFollowersHolding(bool bHold)
 	}
 }
 
+void USquadSubsystem::ArmPostActionHold(const TCHAR* Reason)
+{
+	bPostFightHold = true;
+	for (FFollowerState& Follower : Followers)
+	{
+		Follower.bParked = true;
+		Follower.RepathTimeRemaining = 0.f;
+	}
+	if (Reason && *Reason)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Squad: %s - the followers hold their spots until the leader moves"), Reason);
+	}
+}
+
+void USquadSubsystem::ClearPostActionHold()
+{
+	bPostFightHold = false;
+}
+
 bool USquadSubsystem::IsStealthBlockedByFormation(const AOperativeCharacter& Operative) const
 {
 	const AOperativeCharacter* Target = &Operative;
@@ -1323,13 +1342,7 @@ void USquadSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatM
 	// they fought from (stance, cover) until the leader moves.
 	if (Phase != LastPhase && SquadOrderRules::ArmsPostFightHold(LastPhase, Phase))
 	{
-		bPostFightHold = true;
-		for (FFollowerState& Follower : Followers)
-		{
-			Follower.bParked = true;
-			Follower.RepathTimeRemaining = 0.f;
-		}
-		UE_LOG(LogCodexTactics, Display, TEXT("Squad: the fight is over - the followers hold their spots until the leader moves"));
+		ArmPostActionHold(TEXT("the fight is over"));
 	}
 	LastPhase = Phase;
 	EnforceFormationStealthRule();
@@ -1860,7 +1873,10 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	// he was given — no copy of the leader's stance (Godot can_sync_stance); only Alt + Z / C / V sets the whole squad.
 	// Bug 2026-10-20: a crouch the SQUAD gave him (Regroup's copy, Solo's guard crouch, a confinement) does not keep him from running with
 	// the sprinting leader - he stands up (the clip defers the move below), then sprints.
-	if (CVarSquadFollowerSprintStandUp.GetValueOnGameThread() != 0
+	// G026: a man who has taken his wall slot stays down. Crouching on his own arrival used to wait for the slot yaw, which
+	// was also after the leader stopped sprinting. Standing him back up left the wall pose set and the stance standing.
+	if (!Operative->IsInFormationWallPose()
+		&& CVarSquadFollowerSprintStandUp.GetValueOnGameThread() != 0
 		&& SquadOrderRules::ShouldStandToSprintWithLeader(LeaderRef.IsSprinting(), Operative->GetStance() == EOperativeStance::Crouching,
 			Operative->IsStanceFromSquad(), Operative->CanSprint()))
 	{

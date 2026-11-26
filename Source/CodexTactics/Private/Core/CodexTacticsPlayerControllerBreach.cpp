@@ -11,6 +11,7 @@
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/SquadOrderRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
@@ -18,6 +19,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
+#include "Interactables/DoorActor.h"
 #include "Interactables/DoorwaySubsystem.h"
 #include "Interactables/InteractionSubsystem.h"
 #include "NavigationSystem.h"
@@ -58,6 +60,10 @@ namespace ControllerBreachLocal
 		const FVector Right = EntryRight(Outward);
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(BreachRoom), false);
 		for (TActorIterator<APawn> It(World); It; ++It)
+		{
+			Params.AddIgnoredActor(*It);
+		}
+		for (TActorIterator<ADoorActor> It(World); It; ++It)
 		{
 			Params.AddIgnoredActor(*It);
 		}
@@ -254,7 +260,12 @@ bool ACodexTacticsPlayerController::OrderBreach(const FBreachPlan& Plan, bool bS
 		return Demo.SetResult(false);
 	}
 	EndBreach(TEXT("a new breach order"));
-	Squad->HandOverLeadForOrder(Leader, TEXT("a breach order"));
+	Squad->ClearPostActionHold();
+	Squad->HandOverLeadForOrder(nullptr, TEXT("a breach order"));
+	if (AOperativeCharacter* CurrentLeader = Squad->GetLeader(); CurrentLeader && Plan.Members.Contains(CurrentLeader))
+	{
+		Leader = CurrentLeader;
+	}
 	// Formation: the others hold where their own breach order leaves them (not pulled back into the formation).
 	const bool bFormation = !Squad->IsSoloMode() && !Squad->HasMultiSelection() && Plan.Members.Num() > 1;
 	if (bFormation)
@@ -566,11 +577,16 @@ void ACodexTacticsPlayerController::EndBreach(const TCHAR* Why)
 			Operative->ClearManualLookPoint(); // the sector looks of the breach end with it
 		}
 	}
+	const bool bHoldCleared = Breach.Phase == EBreachPhase::Cleared;
 	if (Breach.bHoldSet)
 	{
 		if (USquadSubsystem* Squad = GetSquad())
 		{
 			Squad->SetFollowersHolding(Breach.bHoldBefore);
+			if (SquadOrderRules::ShouldHoldClearedBreachSpots(bHoldCleared, Squad->IsSoloMode(), Breach.bHoldBefore))
+			{
+				Squad->ArmPostActionHold(TEXT("the room is clear"));
+			}
 		}
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Breach] session ends (%s)"), Why);

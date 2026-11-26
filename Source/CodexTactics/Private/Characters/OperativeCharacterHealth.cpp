@@ -55,11 +55,7 @@ void AOperativeCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDama
 {
 	LastDamageType = Spec.DamageType;
 	LastDamageAmount = FinalDamage;
-	// Mantling (designer Q5, 2026-11-15): a heavy hit mid-climb drops him back to the base (a knockdown does it in UKnockdownComponent).
-	if (bMantling && MantleRules::IsHeavyHit(MantleRules::GetConfig(), FinalDamage))
-	{
-		CancelMantle(EMantleCancel::HeavyHit);
-	}
+	// G026: a heavy hit during a mantle or a vault does not pull him back. The climb finishes (MantleRules::TraversalCompletes).
 }
 
 void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
@@ -445,14 +441,14 @@ void AOperativeCharacter::SpawnRemainsLoot()
 		if (CurrentWeapon && !CurrentWeapon->WeaponId.IsEmpty())
 		{
 			HostileWeapons.AddUnique(CurrentWeapon->WeaponId);
-			HostileClipSizes.Add(CurrentWeapon->WeaponId, CurrentWeapon->MaxClipSize);
+			HostileClipSizes.Add(CurrentWeapon->WeaponId, CurrentWeapon->Stats.Ammo.MagazineSize);
 		}
 		for (const UWeaponDataAsset* Weapon : AvailableWeapons)
 		{
 			if (Weapon && !Weapon->WeaponId.IsEmpty())
 			{
 				HostileWeapons.AddUnique(Weapon->WeaponId);
-				HostileClipSizes.Add(Weapon->WeaponId, Weapon->MaxClipSize);
+				HostileClipSizes.Add(Weapon->WeaponId, Weapon->Stats.Ammo.MagazineSize);
 			}
 		}
 	}

@@ -164,6 +164,11 @@ public:
 	int32 GetKnockdownCount() const { return KnockdownCount; }
 	int32 GetRecoveryCount() const { return RecoveryCount; }
 
+	/** A knockdown asked for during a mantle or a vault. It plays on the landing (G026). */
+	bool HasDeferredKnockdown() const { return bDeferredUntilLanding; }
+	void FlushDeferredKnockdown();
+	void ClearDeferredKnockdown();
+
 private:
 	bool StartKnockdown(EKnockdownDirection Direction, EKnockdownCause Cause, float PlayRateScale = 1.f, float DownedTimeScale = 1.f);
 	void SetPhase(EKnockdownPhase NewPhase, EKnockdownPhase OldPhase);
@@ -181,6 +186,12 @@ private:
 	void HandleOwnerDied(AActor* Victim, const FString& AttackerSource);
 
 	FKnockdownState State;
+	/** A knockdown that waits for a mantle or a vault to land (G026). */
+	bool bDeferredUntilLanding = false;
+	EKnockdownDirection DeferredDirection = EKnockdownDirection::Back;
+	EKnockdownCause DeferredCause = EKnockdownCause::HeavyHit;
+	float DeferredPlayRate = 1.f;
+	float DeferredDownedScale = 1.f;
 	/** TryKnockDown's blow source for the knockback throw (StartKnockdown -> ULedgeFallComponent::TryKnockbackFall); invalid elsewhere. */
 	bool bKnockbackSourceValid = false;
 	FVector KnockbackSource = FVector::ZeroVector;

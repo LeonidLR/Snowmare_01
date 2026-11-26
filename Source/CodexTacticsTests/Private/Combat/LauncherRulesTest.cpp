@@ -153,6 +153,17 @@ bool FRpgRulesTest::RunTest(const FString&)
 		}
 	}
 	TestTrue(TEXT("misses fall on both sides"), LauncherRules::MissPoint(AimPoint, Aim, 0.5f, 0.2f).Y * LauncherRules::MissPoint(AimPoint, Aim, 0.5f, 0.8f).Y < 0.f);
+
+	// Rockets per round cap: max 2 total (1 loaded + 1 spare), never exceeded on init or add.
+	const LauncherRules::FLauncherAmmoCap InitCap = LauncherRules::CapAmmo(1, 3, 2);
+	TestEqual(TEXT("cap clip 1"), InitCap.Clip, 1);
+	TestEqual(TEXT("cap reserve 1"), InitCap.Reserve, 1);
+	TestEqual(TEXT("cap add when full (1+1) -> 0"), LauncherRules::CapReserveToAdd(1, 1, 5, 2), 0);
+	TestEqual(TEXT("cap add when 1+0 -> 1"), LauncherRules::CapReserveToAdd(1, 0, 5, 2), 1);
+	TestEqual(TEXT("cap add when 0+0 -> 2"), LauncherRules::CapReserveToAdd(0, 0, 5, 2), 2);
+	TestEqual(TEXT("fire 2 -> AddAmmo(5) -> holds 0"), LauncherRules::CapReserveToAdd(0, 0, 5, 2, 2), 0);
+	TestEqual(TEXT("fire 1 -> AddAmmo(5) -> at most 1"), LauncherRules::CapReserveToAdd(0, 0, 5, 2, 1), 1);
+	TestEqual(TEXT("fire 2 -> CapAmmo -> 0+0"), LauncherRules::CapAmmo(1, 1, 2, 2).Clip + LauncherRules::CapAmmo(1, 1, 2, 2).Reserve, 0);
 	return true;
 }
 

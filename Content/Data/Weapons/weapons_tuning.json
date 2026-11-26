@@ -110,7 +110,9 @@
     "threat_range_m": 10,
     "draw_s": 0.35,
     "holster_after_s": 3,
-    "reload_in_cover": true
+    "reload_in_cover": true,
+    "shotgun_switch_range_m": 12,
+    "shotgun_switch_back_range_m": 15
   },
   "loadouts": {
     "comment": "The player's squad: each role's weapons, the first in hands (WeaponLoadoutRules; designer decision 21+, 2026-11-03 / 11-08: the Engineer carries the D-1 shotgun as his primary weapon and no M16). A role not listed keeps the game mode's StartingArsenal + ExtraWeapons. PMC fighters: pmc_operators.json weapon_pool. The Commander carries the RPG-7 (the game designer's decision 2026-11-09: only the Commander in our squad; the selector X cycles to it, the launcher rule draws it on its own - launcher_tactics.json).",
@@ -122,6 +124,7 @@
     ],
     "engineer": [
       "shotgun",
+      "m16",
       "pistol",
       "grenade"
     ],
@@ -369,7 +372,7 @@
       "armor_penetration": 0.8,
       "penetration_class": "vehicle",
       "max_clip_size": 1,
-      "default_reserve_ammo": 3,
+      "default_reserve_ammo": 1,
       "reload_time": 2.333,
       "max_range_cells": 12,
       "suppression_weight": 3,
