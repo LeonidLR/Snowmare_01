@@ -22,3 +22,4 @@ watch sector / F-1 return / cover facing / travel) and the yaw; fix the stale so
 direction unless a look lock is active (and an active lock is shown on the HUD / vision cone).
 Smoke: Shift+click a look, then plain move order elsewhere -> on arrival yaw = travel yaw +-15 deg (or the lock if the design keeps it - report).
 Designer: after a new sector round started the bug was gone -> stale per-operative state that the round reset clears (look / watch sector / ordered facing). Reproduce within ONE round: Shift+click, several moves, cover in/out, sprint.
+Designer repro (2026-11-26 later): the turn bug starts AFTER the operative goes up onto a building roof by a RAMP. Suspect a yaw saved on the ramp / roof (e.g. G023 over-top fire roof state) never cleared, reused on every arrival until the round reset.
