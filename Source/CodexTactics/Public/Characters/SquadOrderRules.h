@@ -172,6 +172,7 @@ namespace SquadOrderRules
 		bool bInCover = false;
 		bool bInStealth = false;
 		bool bLockedProne = false;
+		bool bTraversalOrSniperHold = false;
 	};
 
 	/** Stance and gait output resolved by ResolveFormationFollowStanceGait. */

@@ -36,14 +36,16 @@ namespace FormationRunStanceSmoke
 	struct FRunner
 	{
 		EStep Step = EStep::Warmup;
+		SmokeUtils::FPreloadGate Gate;
+		bool bPmcStopped = false;
 		int32 Failures = 0;
 		double StepSince = 0.0;
 		FVector SprintDest = FVector::ZeroVector;
 		FVector StartLoc = FVector::ZeroVector;
 		FDelegateHandle EndFrameHandle;
 		TWeakObjectPtr<UWorld> World;
-		TMap<AOperativeCharacter*, double> StandTimes;
-		TMap<AOperativeCharacter*, double> RunSpeedTimes;
+		TMap<TWeakObjectPtr<AOperativeCharacter>, double> StandTimes;
+		TMap<TWeakObjectPtr<AOperativeCharacter>, double> RunSpeedTimes;
 	};
 
 	TSharedPtr<FRunner> Runner;
@@ -115,6 +117,23 @@ namespace FormationRunStanceSmoke
 		if (!World || R.Step == EStep::Done)
 		{
 			return;
+		}
+		const SmokeUtils::EPreloadGate PreloadState = R.Gate.Poll(World);
+		if (PreloadState == SmokeUtils::EPreloadGate::Waiting)
+		{
+			R.StepSince = World->GetTimeSeconds();
+			return;
+		}
+		if (PreloadState == SmokeUtils::EPreloadGate::Failed)
+		{
+			Check(false, FString::Printf(TEXT("world preload failed: %s"), *R.Gate.FailReason));
+			Finish();
+			return;
+		}
+		if (!R.bPmcStopped)
+		{
+			SmokeUtils::StopLevelPmc(World);
+			R.bPmcStopped = true;
 		}
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
@@ -219,18 +238,19 @@ namespace FormationRunStanceSmoke
 		}
 		case EStep::SingleClickWalk:
 		{
-			if (T < 1.0)
+			if (T < 1.2)
 			{
 				return;
 			}
 			for (AOperativeCharacter* F : Followers)
 			{
 				const float Speed2D = static_cast<float>(F->GetVelocity().Size2D());
-				Check(F->GetStance() == EOperativeStance::Standing && !F->IsSprinting() && Speed2D < RunGate,
-					FString::Printf(TEXT("single click -> follower %s walks (stance %d, sprinting %d, speed %.0f)"),
-						*F->DisplayName.ToString(), static_cast<int32>(F->GetStance()), F->IsSprinting() ? 1 : 0, Speed2D));
+				const float DistToLeader = static_cast<float>(FVector::Dist2D(F->GetActorLocation(), Leader->GetActorLocation()));
+				Check(F->GetStance() == EOperativeStance::Standing && !F->IsSprinting() && Speed2D > 80.f && Speed2D < RunGate && DistToLeader < 600.f,
+					FString::Printf(TEXT("single click -> follower %s walks (stance %d, sprinting %d, speed %.0f, distLeader %.0f)"),
+						*F->DisplayName.ToString(), static_cast<int32>(F->GetStance()), F->IsSprinting() ? 1 : 0, Speed2D, DistToLeader));
 			}
-			PC->CycleLeaderStance(); // Standing -> Crouching on leader -> stood-up followers follow leader back to crouch
+			PC->StanceCrouch(); // C key -> Leader crouches -> stood-up followers follow leader back to crouch
 			R.Step = EStep::LeaderCrouchReturn;
 			R.StepSince = Now;
 			return;
@@ -272,10 +292,11 @@ namespace FormationRunStanceSmoke
 				FString::Printf(TEXT("prone follower stood up and running (stance %d, sprint %d, speed %.0f >= %.0f, %.2fs)"),
 					static_cast<int32>(Followers[0]->GetStance()), Followers[0]->IsSprinting() ? 1 : 0, Speed2D, RunGate, T));
 
-			// Verify Solo remains untouched
+			// Verify Solo remains untouched while Leader actually sprints
 			Squad->EnterSoloMode();
 			PC->SetEntireSquadStance(EOperativeStance::Crouching);
-			Leader->OrderMoveTo(FindReachablePoint(*World, Leader->GetActorLocation(), 1200.f), true);
+			Check(Leader->OrderMoveTo(FindReachablePoint(*World, Leader->GetActorLocation(), 1600.f), true) == EOperativeOrderResult::Accepted,
+				TEXT("Solo mode leader double-click sprint accepted"));
 			R.Step = EStep::SoloUnchanged;
 			R.StepSince = Now;
 			return;
@@ -286,6 +307,10 @@ namespace FormationRunStanceSmoke
 			{
 				return;
 			}
+			const float LeaderSpeed2D = static_cast<float>(Leader->GetVelocity().Size2D());
+			Check(Leader->GetStance() == EOperativeStance::Standing && Leader->IsSprinting() && LeaderSpeed2D >= RunGate,
+				FString::Printf(TEXT("Solo mode: leader itself stands and runs (stance %d, sprint %d, speed %.0f >= %.0f)"),
+					static_cast<int32>(Leader->GetStance()), Leader->IsSprinting() ? 1 : 0, LeaderSpeed2D, RunGate));
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				if (Member && Member != Leader && !Member->bGuarding)

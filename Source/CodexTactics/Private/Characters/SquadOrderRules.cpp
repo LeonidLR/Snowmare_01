@@ -73,8 +73,12 @@ namespace SquadOrderRules
 	{
 		FFormationFollowStanceGait Out;
 		Out.DesiredStance = Facts.FollowerStance;
-		if (!Facts.bInFormation)
+		if (!Facts.bInFormation || Facts.bTraversalOrSniperHold)
 		{
+			if (Facts.bInFormation && Facts.bTraversalOrSniperHold)
+			{
+				Out.bNextStoodUpForLeaderSprint = Facts.bStoodUpForLeaderSprint && Facts.bStanceFromSquad;
+			}
 			return Out;
 		}
 		if (Facts.bLeaderSprinting)

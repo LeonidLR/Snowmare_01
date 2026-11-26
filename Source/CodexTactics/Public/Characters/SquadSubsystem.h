@@ -1139,6 +1139,8 @@ private:
 		TOptional<ESquadRegroupPace> LoggedPace;
 	};
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FFastRegroupState> FastRegroups;
+	/** Task 150: operatives stood up from crouch/prone to sprint with the leader; survives RebuildFollowers(). */
+	TSet<TWeakObjectPtr<AOperativeCharacter>> StoodUpForSprint;
 	/** This frame's combat facts for the regroup pace (a fight, an enemy known to the squad, a member under fire / suppressed). */
 	bool bFrameRegroupCombat = false;
 	/**
@@ -1274,8 +1276,6 @@ private:
 		bool bReformAlongWall = false;
 		/** Item 2 (2026-11-03): steering the final approach into his wall place (TryWallFinalApproach); logged once per approach. */
 		bool bFinalApproach = false;
-		/** Task 150: stood up from crouch/prone to sprint with the leader; syncs to leader stance on walk/crouch until overridden. */
-		bool bStoodUpForLeaderSprint = false;
 	};
 
 	/** Formation look sectors: the state over frames (SquadSubsystemFormation.cpp). */

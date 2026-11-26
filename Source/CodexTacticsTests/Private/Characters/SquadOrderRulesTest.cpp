@@ -252,6 +252,27 @@ bool FSquadOrderFormationFollowStanceGaitTest::RunTest(const FString&)
 	Res = ResolveFormationFollowStanceGait(Guard);
 	TestFalse(TEXT("Critically wounded / locked prone stays down"), Res.bChangeStance || Res.bSprint);
 
+	Guard = CrouchedSprint;
+	Guard.bHoldsApproachLook = true;
+	Res = ResolveFormationFollowStanceGait(Guard);
+	TestFalse(TEXT("Rear/flank approach look holds crouch/walk"), Res.bChangeStance || Res.bSprint);
+
+	Guard = CrouchedSprint;
+	Guard.bInWallPose = true;
+	Res = ResolveFormationFollowStanceGait(Guard);
+	TestFalse(TEXT("Follower in formation wall pose stays crouched"), Res.bChangeStance || Res.bSprint);
+
+	Guard = CrouchedSprint;
+	Guard.bTraversalOrSniperHold = true;
+	Res = ResolveFormationFollowStanceGait(Guard);
+	TestFalse(TEXT("Traversal/sniper hold keeps stance and skips sprint"), Res.bChangeStance || Res.bSprint);
+
+	FFormationFollowOrderFacts LeaderProne = SingleClickWalk;
+	LeaderProne.LeaderStance = EOperativeStance::Prone;
+	Res = ResolveFormationFollowStanceGait(LeaderProne);
+	TestTrue(TEXT("Stood-up follower copies leader Prone when Z pressed"), Res.bChangeStance && Res.DesiredStance == EOperativeStance::Prone);
+	TestFalse(TEXT("Clears stood-up flag once returned to Prone"), Res.bNextStoodUpForLeaderSprint);
+
 	return true;
 }
 
