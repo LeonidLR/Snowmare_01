@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { LayoutView } from './LayoutView';
 import { planTransform, toScreen } from '../levelgen/planView';
 import { X6 } from '../aiTraining/trainingTypes';
-import type { SectorFightRow, SectorFightStats, TrainingData, TrainingMapId, TrainingSector, TrainingSelection } from '../aiTraining/trainingTypes';
+import type { SectorFightRow, SectorFightStats, TrainingData, TrainingBuildId, TrainingMapId, TrainingSector, TrainingSelection } from '../aiTraining/trainingTypes';
 
 const API = '/api/ai-training';
 const panel = 'rounded-xl border border-slate-800 bg-slate-900/70';
@@ -196,12 +196,18 @@ export function AiTrainingDepartment() {
   const [launching, setLaunching] = useState<'editor' | 'play' | null>(null);
   const [launchStatus, setLaunchStatus] = useState('');
   const [copiedCmd, setCopiedCmd] = useState(false);
+  const [build, setBuild] = useState<TrainingBuildId>('main');
   useEffect(() => {
     const controller = new AbortController();
     fetch(API, { signal: controller.signal }).then(async (response) => {
       if (!response.ok) throw new Error('Не удалось загрузить настройки тренировки');
       return await response.json() as TrainingData;
-    }).then((result) => { setData(result); setDraft(result.active); }).catch((failure: unknown) => {
+    }).then((result) => {
+      setData(result); setDraft(result.active);
+      let remembered: string | null = null;
+      try { remembered = localStorage.getItem('tg.training.build'); } catch { /* Storage is optional. */ }
+      setBuild(remembered === 'main' || remembered === 'play' ? remembered : result.builds?.defaultBuild ?? 'main');
+    }).catch((failure: unknown) => {
       if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : String(failure));
     });
     return () => controller.abort();
@@ -226,7 +232,7 @@ export function AiTrainingDepartment() {
     setError('');
     setLaunchStatus('');
     try {
-      const response = await fetch('/api/training/open-editor', { method: 'POST' });
+      const response = await fetch('/api/training/open-editor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ build }) });
       const result = await response.json() as { pid?: number | null; error?: string };
       if (!response.ok) throw new Error(result.error ?? 'Не удалось открыть редактор');
       setLaunchStatus(result.pid ? `Редактор запущен, pid ${result.pid}` : 'Редактор запущен');
@@ -244,7 +250,7 @@ export function AiTrainingDepartment() {
       const response = await fetch('/api/training/play', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sector: draft.sector }),
+        body: JSON.stringify({ sector: draft.sector, build }),
       });
       const result = await response.json() as { pid?: number | null; active?: TrainingSelection; error?: string };
       if (!response.ok) throw new Error(result.error ?? 'Не удалось запустить игру');
@@ -288,6 +294,17 @@ export function AiTrainingDepartment() {
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
+          <label className="grid gap-1 text-xs text-slate-400">Сборка для игры и редактора
+            <select className={field} value={build} disabled={saving || Boolean(launching)} onChange={(event) => {
+              const selectedBuild = event.target.value as TrainingBuildId;
+              setBuild(selectedBuild);
+              try { localStorage.setItem('tg.training.build', selectedBuild); } catch { /* Storage is optional. */ }
+            }}>
+              <option value="play" disabled={!data.builds?.play.available}>Play — игровая копия</option>
+              <option value="main">Main — основная копия</option>
+            </select>
+            <span role="status">{data.builds?.play.label ?? 'Состояние Play неизвестно'}</span>
+          </label>
           <label className="grid gap-1 text-xs text-slate-400">Карта
             <select className={field} value={draft.map} disabled={saving || Boolean(launching)}
               onChange={(event) => setDraft({ map: event.target.value as TrainingMapId, sector: 0 })}>
@@ -306,11 +323,11 @@ export function AiTrainingDepartment() {
           </button>
           <button type="button" onClick={playSector} disabled={saving || Boolean(launching) || draft.map !== X6}
             className="rounded-md bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-emerald-300 disabled:bg-slate-800 disabled:text-slate-500">
-            {launching === 'play' ? 'Запуск…' : `Играть сектор ${draft.sector}`}
+            {launching === 'play' ? 'Запуск…' : `Играть сектор ${draft.sector} (${build === 'play' ? 'Play' : 'Main'})`}
           </button>
           <button type="button" onClick={openEditor} disabled={saving || Boolean(launching)}
             className="rounded-md border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 hover:border-cyan-400 hover:bg-slate-700 disabled:opacity-50">
-            {launching === 'editor' ? 'Открытие…' : 'Открыть редактор'}
+            {launching === 'editor' ? 'Открытие…' : `Открыть редактор (${build === 'play' ? 'Play' : 'Main'})`}
           </button>
         </div>
       </header>
