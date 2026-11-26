@@ -15,3 +15,10 @@ Designer finding 2026-11-26 (later): the entry already works when he can click t
 When the roof does not disappear there is nothing inside to click, so the entry is impossible. So 136 = make the door itself the "go in" target
 (no dependency on the roof cutaway), reusing the existing floor-click entry path. Also check why the roof sometimes does not hide while the squad
 is stacked at that building's door (stacked at a door = treat the squad as "at the building" for the cutaway); report it, fix if small.
+
+## 136 part B - door peek reveals the building (designer 2026-11-26, for enemies inside buildings later)
+An operative who runs up to a door, opens it and looks inside (like a corner peek, through the open doorway) "lights up" that building:
+its roof (and storeys above his) hide via the roof cutaway, showing the floor he stands on. Enemies inside are still revealed only by
+line of sight / vision cone (fog of war), the cutaway just lets the player see the room layout. Reveal ends when nobody of the squad
+watches through that doorway (or after a short hold, ~5 s). Reuse URoofCutawaySubsystem (same hook as the stacked-at-door finding).
+Smoke step: open a door, peek -> that building's roof hidden, storey = his; walk away -> roof back.
