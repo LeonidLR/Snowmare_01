@@ -53,3 +53,5 @@ Snapshots add stealth, in_cover, height (feet above the sight system's ground co
 A synthetic fixture verifies the offline rules only. A short new PIE recording showing the three core tactics is a separate acceptance gate; it is not replaced by synthetic evidence. See the task121 report for validation status.
 
 - 121 offline edge correction (2026-11-27): round_end sorts after same-timestamp kills, preserving the final kill and completed flank; Python19/19 PASS. Final runtime/PIE validation remains pending (task121 report).
+
+- 121 direct-loss completeness checkpoint (2026-11-27): health recording now observes actual common health decreases (normal/direct/cold/burning/bleeding) exactly once, removing actor callback duplication. Known TakeHit attackers arm a synchronous context; critical down is recorded across the same paths. Added C++ AllHealthLossPaths coverage; final worker checks pending.

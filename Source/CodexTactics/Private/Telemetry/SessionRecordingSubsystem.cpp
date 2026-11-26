@@ -283,6 +283,14 @@ void USessionRecordingSubsystem::RecordShotHit(const AActor* Shooter, const AAct
 	Event.DistanceCm = DistanceCm;
 }
 
+void USessionRecordingSubsystem::RecordDamageContext(const AActor* Attacker, const AActor* Victim, const FString& Source, FName WeaponId)
+{
+	if (!bRecording || !Suppressed.IsNone() || !GetWorld() || !Attacker || !Victim) { return; }
+	LastHitsByVictim.Add(Victim->GetFName(), FLastHitContext{ Attacker->GetFName(), WeaponId,
+		static_cast<float>(FVector::Dist2D(Attacker->GetActorLocation(), Victim->GetActorLocation())),
+		Attacker, Source, GetWorld()->GetTimeSeconds() });
+}
+
 void USessionRecordingSubsystem::RecordDamage(const FString& AttackerSource, const AActor* Victim, float Damage, const FVector& DamageOrigin)
 {
 	if (!bRecording || !Suppressed.IsNone() || !GetWorld() || !Victim || Damage <= 0.f)

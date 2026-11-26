@@ -5,12 +5,13 @@ Status: validation in progress; NOT MERGE-READY. Existing lane and branch `gemin
 ## Review and changes
 
 - Preserved additive v1 event and snapshot format and Gemini's stealth/cover/climb hooks. Shot hits now include weapon; damage and lethal attribution accept only a synchronous matching attacker context, invalidating unrelated later damage and resetting on round boundaries. Unknown attacker awareness/support serialize as null.
+- Common health recording captures ordinary hits, direct melee/freezing loss, burning and bleeding exactly once using actual health delta; actor callback duplicates are removed. TakeHit preserves the concrete attacker context. Damage arithmetic and health/death ordering are unchanged.
 - Death records are kills for either side. Crossing the critical-health threshold records down separately; zero-health player death is no longer mislabeled down.
 - Victim awareness and allied support use each observer's sight and obstruction/FOV checks. Replaced proximity-only support and team-shared visibility/selected-target observer counts. Optical `seen_by_enemy` counts live observers, not team reports.
 - Ground height uses the existing sight system's downward ground-column measurement, including roof starts. Manual Shift-look pitch is captured before formation scan pitch. Active look yaw is additive so manual/torso looks can cover a sector even while the body faces elsewhere.
 - Added threat facing and optional cover evidence for rear/lure classification; cover remains unknown for bodies that do not expose this state.
 - Offline tagger sorts timestamps (round end follows same-time kills), isolates rounds, uses legacy `cov` and clip changes, and does not invent stealth, zero visibility, kills or open-ground evidence. High ground is relative to the nearest enemy; same-height roofs do not qualify. Distract/flank requires stealth displacement beyond 90 degrees, same-target allied engagement and a matching, nearby-in-time kill. Rear flank additionally needs recorded target facing. Overwatch requires a cover order; crawl resets on standing. Lure requires the same enemy to follow the retreat into explicitly open ground, then a long-distance kill by a different ally. Unwatched sectors require consecutive gaps, not a session sum. Fast rear flanks do not require stealth; approach_unseen requires explicitly zero enemy observers plus elevated overwatch.
-- Added 19 Python positive/negative cases, plus a C++ runtime hit-attribution regression test. No smoke assertions weakened.
+- Added 19 Python positive/negative cases, plus C++ runtime hit-attribution and all-health-loss-path regression tests. No smoke assertions weakened.
 - Removed implicit `git lfs push` from lane worker_sync scripts: code shipping uses bundles. Earlier already-running sync invocations executed the old automatic LFS object-upload command; branch refs were not pushed.
 
 ## Evidence so far

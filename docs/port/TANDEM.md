@@ -1491,3 +1491,5 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 **121 checkpoint (2026-11-27, gemini/121-recording-tactics).** Reviewed Gemini telemetry; corrected attribution, optical observer/support facts, ground and look measurements, death/down semantics, and conservative round-scoped tactic tagging. Python18/18 PASS; final worker build/Smart/smokes and new PIE acceptance recording pending. Report: `docs/port/codex/outbox/121-recording-tactics.report.md`. Not merge-ready.
 
 - 121 offline edge correction (2026-11-27): round_end sorts after same-timestamp kills, preserving the final kill and completed flank; Python19/19 PASS. Final runtime/PIE validation remains pending (task121 report).
+
+- 121 direct-loss completeness checkpoint (2026-11-27): health recording now observes actual common health decreases (normal/direct/cold/burning/bleeding) exactly once, removing actor callback duplication. Known TakeHit attackers arm a synchronous context; critical down is recorded across the same paths. Added C++ AllHealthLossPaths coverage; final worker checks pending.

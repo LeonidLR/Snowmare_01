@@ -79,10 +79,6 @@ void AEnemyCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDamage)
 	}
 	LastDamageType = Spec.DamageType;
 	LastDamageAmount = FinalDamage;
-	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
-	{
-		Recorder->RecordDamage(Spec.AttackerSource, this, FinalDamage, Spec.DamageOrigin);
-	}
 	if (!Spec.DamageOrigin.IsZero())
 	{
 		LastHitDirection = (GetActorLocation() - Spec.DamageOrigin).GetSafeNormal();

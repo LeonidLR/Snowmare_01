@@ -56,16 +56,6 @@ void AOperativeCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDama
 {
 	LastDamageType = Spec.DamageType;
 	LastDamageAmount = FinalDamage;
-	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
-	{
-		Recorder->RecordDamage(Spec.AttackerSource, this, FinalDamage, Spec.DamageOrigin);
-		if (IsCriticallyWounded() && HealthComponent
-			&& !CriticalWoundRules::IsCritical(CriticalWoundRules::GetWoundConfig(),
-				HealthComponent->GetCurrentHealth() + FinalDamage, HealthComponent->GetMaxHealth()))
-		{
-			Recorder->RecordKillOrDown(this, Spec.AttackerSource, true);
-		}
-	}
 	// G026: a heavy hit during a mantle or a vault does not pull him back. The climb finishes (MantleRules::TraversalCompletes).
 }
 
@@ -579,6 +569,12 @@ float AOperativeCharacter::ResolveIncomingHit(EOperativeHitKind Kind, float Amou
 	if (OperativeCharacterInternal::IsRangedEnemyActor(AttackerActor))
 	{
 		RecentRangedDamage += Final; // the corner-aim duck counts only what the corner protects from (2026-10-07 horde fix)
+	}
+	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this); Recorder && AttackerActor)
+	{
+		const AOperativeCharacter* Shooter = Cast<AOperativeCharacter>(AttackerActor);
+		Recorder->RecordDamageContext(AttackerActor, this, Attacker,
+			Shooter && Shooter->CurrentWeapon ? FName(*Shooter->CurrentWeapon->WeaponId) : NAME_None);
 	}
 	HealthComponent->ApplyDirectHealthLoss(Final, Attacker);
 	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)

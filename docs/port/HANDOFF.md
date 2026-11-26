@@ -754,3 +754,5 @@ Newest first, one table row per commit (`| Commit | What |`). Append your row at
 - 2026-11-16: Gemini CLI runner `f0a65516` ([CLI_RULES.md](gemini/CLI_RULES.md)); fallback/FINISH rules `46f3e8e3`, token/cost ledger `9995dde8`, job arguments `3111fc6e`, quote/newline and HTTP 402 handling `2b99cd57`; usage-test merge `4d069017` is covered above. No separate runner report was added in those direct commits.
 
 - 121 offline edge correction (2026-11-27): round_end sorts after same-timestamp kills, preserving the final kill and completed flank; Python19/19 PASS. Final runtime/PIE validation remains pending (task121 report).
+
+- 121 direct-loss completeness checkpoint (2026-11-27): health recording now observes actual common health decreases (normal/direct/cold/burning/bleeding) exactly once, removing actor callback duplication. Known TakeHit attackers arm a synchronous context; critical down is recorded across the same paths. Added C++ AllHealthLossPaths coverage; final worker checks pending.

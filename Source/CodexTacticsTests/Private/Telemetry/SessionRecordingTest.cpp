@@ -4,6 +4,7 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "Combat/HealthComponent.h"
 #include "HAL/FileManager.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
@@ -348,6 +349,57 @@ bool FDemoHitAttributionTest::RunTest(const FString& Parameters)
                     TestTrue(TEXT("Unresolved attacker awareness is unknown"), Line.Contains(TEXT("\"was_victim_aware\":null")));
                 }
             }
+        }
+        IFileManager::Get().DeleteDirectory(*Root, false, true);
+    }
+    GEngine->DestroyWorldContext(World);
+    World->DestroyWorld(false);
+    return true;
+}
+
+DEMO_TEST(AllHealthLossPaths)
+bool FDemoAllHealthLossPathsTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, FName(TEXT("DemoHealthLossWorld")));
+    if (!TestNotNull(TEXT("World"), World)) { return false; }
+    FWorldContext& Context = GEngine->CreateNewWorldContext(EWorldType::Game);
+    Context.SetCurrentWorld(World);
+    World->InitializeActorsForPlay(FURL());
+    USessionRecordingSubsystem* Recorder = World->GetSubsystem<USessionRecordingSubsystem>();
+    if (TestNotNull(TEXT("Recorder"), Recorder))
+    {
+        const FString Root = FPaths::AutomationTransientDir() / TEXT("DemoHealthLoss") / FGuid::NewGuid().ToString();
+        Recorder->StartForTest(Root);
+        Recorder->RecordOrderAt(1., FDemoFacts{});
+        AActor* Owner = World->SpawnActor<AActor>();
+        UHealthComponent* Health = NewObject<UHealthComponent>(Owner);
+        Owner->AddInstanceComponent(Health);
+        Health->RegisterComponent();
+        Health->RestoreHealth(100.f, 100.f);
+        Health->ApplyDirectHealthLoss(10.f, TEXT("Freezing"));
+        FDamageSpec Spec;
+        Spec.Amount = 5.f;
+        Spec.AttackerSource = TEXT("Attack");
+        Health->TakeDamage(Spec);
+        Spec.StatusEffect = EStatusEffect::Burning;
+        Spec.StatusDuration = 2.f;
+        Spec.StatusTickDamage = 3.f;
+        Health->TakeDamage(Spec);
+        Health->TickComponent(1.f, LEVELTICK_All, nullptr);
+        Recorder->FinishAt(61.);
+        TArray<FString> Files;
+        IFileManager::Get().FindFiles(Files, *(Root / TEXT("*.jsonl")), true, false);
+        if (TestEqual(TEXT("One demo"), Files.Num(), 1))
+        {
+            FString Data;
+            FFileHelper::LoadFileToString(Data, *(Root / Files[0]));
+            TArray<FString> Lines;
+            Data.ParseIntoArrayLines(Lines);
+            int32 DamageEvents = 0;
+            for (const FString& Line : Lines) { DamageEvents += Line.Contains(TEXT("\"type\":\"damage\"")) ? 1 : 0; }
+            TestEqual(TEXT("Direct, two ordinary hits and one burning tick, exactly once each"), DamageEvents, 4);
+            TestTrue(TEXT("Freezing recorded"), Data.Contains(TEXT("\"who\":\"Freezing\"")));
+            TestTrue(TEXT("Burning recorded"), Data.Contains(TEXT("\"who\":\"Burning\"")));
         }
         IFileManager::Get().DeleteDirectory(*Root, false, true);
     }

@@ -27,6 +27,8 @@ public:
 	void RecordMode(EDemoMode Mode, bool bOn);
 	void RecordSectorRound(const FDemoRoundEvent& Event);
 	void RecordShotHit(const AActor* Shooter, const AActor* Victim, FName WeaponId, float Damage, float DistanceCm);
+	/** Arm only the synchronous hit context; the health component records the actual loss once. */
+	void RecordDamageContext(const AActor* Attacker, const AActor* Victim, const FString& Source, FName WeaponId = NAME_None);
 	void RecordDamage(const FString& AttackerSource, const AActor* Victim, float Damage, const FVector& DamageOrigin);
 	void RecordKillOrDown(const AActor* Victim, const FString& AttackerSource, bool bIsDown);
 	void RecordStealth(const AOperativeCharacter* Op, bool bEnabled);
