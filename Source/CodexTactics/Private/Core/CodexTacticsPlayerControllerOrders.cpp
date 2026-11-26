@@ -176,14 +176,22 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 		bWindowClickApproach = false;
 		return;
 	}
-	FVector Average = FVector::ZeroVector;
-	for (const AOperativeCharacter* Member : Group)
+	// G024b: an explicit window order does not use the lateral spread. That spread lands beside the pane and the navmesh
+	// walks the others around to a door. Each selected man files through this window from his own side.
+	const bool bWindowFile = bWindowClickApproach;
+	TArray<FVector> Spread;
+	if (!bWindowFile)
 	{
-		Average += Member->GetActorLocation();
+		FVector Average = FVector::ZeroVector;
+		for (const AOperativeCharacter* Member : Group)
+		{
+			Average += Member->GetActorLocation();
+		}
+		Average /= Group.Num();
+		const FVector CameraForward = PlayerCameraManager ? PlayerCameraManager->GetCameraRotation().Vector() : FVector::ForwardVector;
+		Spread = SquadFormation::ComputeGroupTargets(Destination, Average, CameraForward, Group.Num());
 	}
-	Average /= Group.Num();
-	const FVector CameraForward = PlayerCameraManager ? PlayerCameraManager->GetCameraRotation().Vector() : FVector::ForwardVector;
-	const TArray<FVector> Targets = SquadFormation::ComputeGroupTargets(Destination, Average, CameraForward, Group.Num());
+	const FWindowOrderTuning& WindowTuning = WindowOrderRules::Get();
 
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
@@ -200,10 +208,26 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 		}
 		Group[Index]->CancelQuickFire(); // ... and a quick fire burst (2026-10-19)
 		Group[Index]->CancelSuppressFire(TEXT("a move order")); // ... and suppressive fire (2026-10-26)
+		FVector Target = bWindowFile ? Destination : Spread[Index];
+		FVector Approach = WindowClickApproach;
+		if (bWindowFile)
+		{
+			const float FeetZ = static_cast<float>(Group[Index]->GetActorLocation().Z - Group[Index]->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+			const FVector Feet(Group[Index]->GetActorLocation().X, Group[Index]->GetActorLocation().Y, FeetZ);
+			FVector MemberApproach = WindowClickApproach;
+			FVector MemberDest = WindowClickLanding;
+			if (WindowOrderRules::FileSoloGroup(Feet, WindowClickApproach, WindowClickLanding, Index, WindowTuning.SoloGroupQueueSpacingCm,
+				MemberApproach, MemberDest))
+			{
+				Approach = MemberApproach;
+				Target = MemberDest;
+			}
+		}
 		if (bPlan)
 		{
-			const FVector Planned = Squad->PlanGroupMove(Group[Index], Targets[Index], Destination, bSprint,
-				Flow ? Flow->GetPauseOrderRadius() : 1200.f);
+			const FVector* WindowApproach = bWindowFile ? &Approach : nullptr;
+			const FVector Planned = Squad->PlanGroupMove(Group[Index], Target, Destination, bSprint,
+				Flow ? Flow->GetPauseOrderRadius() : 1200.f, WindowApproach);
 			if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
 			{
 				Feedback->SpawnWaypointMarker(Planned);
@@ -211,16 +235,15 @@ void ACodexTacticsPlayerController::OrderGroupMove(const FVector& Destination, b
 		}
 		else
 		{
-			if (Index == 0 && bWindowClickApproach
-				&& FVector::Dist2D(Targets[Index], WindowClickLanding) <= WindowOrderRules::Get().ApproachMatchCm)
+			if (bWindowFile)
 			{
-				Group[Index]->ArmWindowApproach(WindowClickApproach, WindowClickLanding);
+				Group[Index]->ArmWindowApproach(Approach, Target);
 			}
-			Group[Index]->OrderMoveTo(Targets[Index], bSprint);
+			Group[Index]->OrderMoveTo(Target, bSprint);
 			// Sprint 06-B: where each operative was sent (a fading ping; the new order replaces the old pings).
 			if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
 			{
-				Feedback->SpawnMovePing(Targets[Index], Index == 0);
+				Feedback->SpawnMovePing(Target, Index == 0);
 			}
 		}
 	}

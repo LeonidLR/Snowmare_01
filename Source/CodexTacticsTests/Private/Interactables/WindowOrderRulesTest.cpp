@@ -79,6 +79,7 @@ bool FWindowOrderFileTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("landing_past_cm"), FMath::IsNearlyEqual(File.LandingPastCm, Code.LandingPastCm));
 	TestTrue(TEXT("approach_match_cm"), FMath::IsNearlyEqual(File.ApproachMatchCm, Code.ApproachMatchCm));
 	TestTrue(TEXT("approach_arrive_cm"), FMath::IsNearlyEqual(File.ApproachArriveCm, Code.ApproachArriveCm));
+	TestTrue(TEXT("solo_group_queue_spacing_cm"), FMath::IsNearlyEqual(File.SoloGroupQueueSpacingCm, Code.SoloGroupQueueSpacingCm));
 	const FWindowOrderTuning Flipped = WindowOrderRules::Parse(TEXT("{\"formation_follow_broken_only\": 0}"));
 	TestFalse(TEXT("a 0 in the file switches it off"), Flipped.bFormationFollowBrokenOnly);
 	TestTrue(TEXT("missing keys keep the defaults"), Flipped.bSoloGroupCombatWindows);
@@ -143,6 +144,36 @@ bool FWindowOrderQueueTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("Z stays the landing"), FMath::IsNearlyEqual(First->Z, Landing.Z, 0.1f));
 	}
 	TestFalse(TEXT("a bad rank waits"), WindowOrderRules::QueueThroughWindow(Approach, Landing, Landing, -1, 150.f).IsSet());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWindowOrderSoloGroupTest, "CodexTactics.Interactables.WindowOrder.SoloGroupFilesThrough",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWindowOrderSoloGroupTest::RunTest(const FString& Parameters)
+{
+	const FVector Approach(80.f, 0.f, 10.f);
+	const FVector Landing(-120.f, 0.f, 10.f);
+	const FVector Outside(200.f, 40.f, 90.f);
+	FVector MemberApproach = FVector::ZeroVector;
+	FVector MemberDest = FVector::ZeroVector;
+	TestFalse(TEXT("a bad rank files nowhere"), WindowOrderRules::FileSoloGroup(Outside, Approach, Landing, -1, 150.f, MemberApproach, MemberDest));
+	TestTrue(TEXT("the leader files"), WindowOrderRules::FileSoloGroup(Outside, Approach, Landing, 0, 150.f, MemberApproach, MemberDest));
+	TestTrue(TEXT("the leader's approach stays on his side"), FVector::Dist2D(MemberApproach, Approach) < 1.f);
+	TestTrue(TEXT("the leader's destination is the landing"), FVector::Dist2D(MemberDest, Landing) < 1.f);
+	TestTrue(TEXT("Z is his feet"), FMath::IsNearlyEqual(MemberDest.Z, 90.f, 0.1f));
+	FVector SecondApproach = FVector::ZeroVector;
+	FVector SecondDest = FVector::ZeroVector;
+	TestTrue(TEXT("the second files"), WindowOrderRules::FileSoloGroup(Outside, Approach, Landing, 2, 150.f, SecondApproach, SecondDest));
+	const FVector Through = (Landing - Approach).GetSafeNormal2D();
+	TestTrue(TEXT("he is further along the same climb, not beside the window"), FVector::DotProduct(SecondDest - Landing, Through) > 290.f);
+	TestTrue(TEXT("and not shoved along the wall"), FMath::Abs(FVector::DotProduct(SecondDest - Landing, FVector(-Through.Y, Through.X, 0.f))) < 1.f);
+	const FVector Inside(-200.f, 0.f, 90.f);
+	FVector FarApproach = FVector::ZeroVector;
+	FVector FarDest = FVector::ZeroVector;
+	TestTrue(TEXT("a man already inside files"), WindowOrderRules::FileSoloGroup(Inside, Approach, Landing, 0, 150.f, FarApproach, FarDest));
+	TestTrue(TEXT("his approach is the far face"), FVector::Dist2D(FarApproach, Landing) < 1.f);
+	TestTrue(TEXT("his landing is the near face"), FVector::Dist2D(FarDest, Approach) < 1.f);
 	return true;
 }
 

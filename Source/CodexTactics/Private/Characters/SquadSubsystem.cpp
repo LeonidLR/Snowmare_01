@@ -1461,12 +1461,14 @@ FVector USquadSubsystem::PlanMove(AOperativeCharacter* Operative, const FVector&
 	return StorePlannedMove(Operative, Destination, bSprint, Radius, nullptr);
 }
 
-FVector USquadSubsystem::PlanGroupMove(AOperativeCharacter* Operative, const FVector& Destination, const FVector& GroupAnchor, bool bSprint, float Radius)
+FVector USquadSubsystem::PlanGroupMove(AOperativeCharacter* Operative, const FVector& Destination, const FVector& GroupAnchor, bool bSprint, float Radius,
+	const FVector* WindowApproach)
 {
-	return StorePlannedMove(Operative, Destination, bSprint, Radius, &GroupAnchor);
+	return StorePlannedMove(Operative, Destination, bSprint, Radius, &GroupAnchor, WindowApproach);
 }
 
-FVector USquadSubsystem::StorePlannedMove(AOperativeCharacter* Operative, const FVector& Destination, bool bSprint, float Radius, const FVector* GroupAnchor)
+FVector USquadSubsystem::StorePlannedMove(AOperativeCharacter* Operative, const FVector& Destination, bool bSprint, float Radius, const FVector* GroupAnchor,
+	const FVector* WindowApproach)
 {
 	if (!Operative)
 	{
@@ -1484,6 +1486,8 @@ FVector USquadSubsystem::StorePlannedMove(AOperativeCharacter* Operative, const 
 	Order.Destination = Planned;
 	Order.GroupFallback = GroupAnchor ? TOptional<FVector>(SquadFormation::ClampToRadius2D(PlanOrigin, *GroupAnchor, Radius)) : TOptional<FVector>();
 	Order.bSprint = bSprint;
+	Order.bWindowFile = WindowApproach != nullptr;
+	Order.WindowApproach = WindowApproach ? *WindowApproach : FVector::ZeroVector;
 	return Planned;
 }
 
@@ -1509,10 +1513,18 @@ void USquadSubsystem::ExecutePlannedOrders()
 		if (AOperativeCharacter* Operative = Entry.Key.Get())
 		{
 			const FPlannedOrder& Order = Entry.Value;
+			if (Order.bWindowFile)
+			{
+				Operative->ArmWindowApproach(Order.WindowApproach, Order.Destination);
+			}
 			const EOperativeOrderResult Result = Operative->OrderMoveTo(Order.Destination, Order.bSprint);
 			if (SquadOrderRules::ShouldRetryPlannedGroupMove(Result, Order.Destination, Order.GroupFallback))
 			{
 				UE_LOG(LogCodexTactics, Display, TEXT("[PauseOrders] %s: retrying unreachable group slot at the planned click"), *Operative->DisplayName.ToString());
+				if (Order.bWindowFile)
+				{
+					Operative->ArmWindowApproach(Order.WindowApproach, Order.GroupFallback.GetValue());
+				}
 				Operative->OrderMoveTo(Order.GroupFallback.GetValue(), Order.bSprint);
 			}
 		}

@@ -54,6 +54,7 @@ FWindowOrderTuning WindowOrderRules::Parse(const FString& JsonText)
 	ReadCm(Json, TEXT("landing_past_cm"), Tuning.LandingPastCm);
 	ReadCm(Json, TEXT("approach_match_cm"), Tuning.ApproachMatchCm);
 	ReadCm(Json, TEXT("approach_arrive_cm"), Tuning.ApproachArriveCm);
+	ReadCm(Json, TEXT("solo_group_queue_spacing_cm"), Tuning.SoloGroupQueueSpacingCm);
 	return Tuning;
 }
 
@@ -129,4 +130,28 @@ TOptional<FVector> WindowOrderRules::QueueThroughWindow(const FVector& Approach,
 	FVector Place = Landing + Through * (static_cast<float>(Rank + 1) * SpacingCm);
 	Place.Z = Landing.Z;
 	return Place;
+}
+
+bool WindowOrderRules::FileSoloGroup(const FVector& Feet, const FVector& Approach, const FVector& Landing, int32 Rank, float SpacingCm,
+	FVector& OutApproach, FVector& OutDestination)
+{
+	const FVector Climb = (Landing - Approach).GetSafeNormal2D();
+	if (Climb.IsNearlyZero() || Rank < 0 || SpacingCm < 0.f)
+	{
+		return false;
+	}
+	const FVector Mid = (Approach + Landing) * 0.5f;
+	const bool bFarSide = FVector::DotProduct(FVector(Feet.X - Mid.X, Feet.Y - Mid.Y, 0.f), Climb) > 0.f;
+	const FVector UseApproach = bFarSide ? (Mid * 2.f - Approach) : Approach;
+	const FVector UseLanding = bFarSide ? (Mid * 2.f - Landing) : Landing;
+	const FVector UseClimb = (UseLanding - UseApproach).GetSafeNormal2D();
+	if (UseClimb.IsNearlyZero())
+	{
+		return false;
+	}
+	OutApproach = UseApproach;
+	OutDestination = UseLanding + UseClimb * (static_cast<float>(Rank) * SpacingCm);
+	OutApproach.Z = Feet.Z;
+	OutDestination.Z = Feet.Z;
+	return true;
 }

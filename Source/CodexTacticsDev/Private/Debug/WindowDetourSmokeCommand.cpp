@@ -1,6 +1,7 @@
 // Dev-only repro of G024 (designer, X6 fight 2026-11-25): from outside, a climb-in order must go through THAT window.
 // The operative stands 6 m outside a ground-floor window of a sector building that has another opening nearby. One click on the
 // sill. FAIL if he enters any other opening before this window, or if he ends still outside.
+// G024b: the same window order with 3 operatives box-selected in Solo. FAIL if any of them enters another opening first.
 //   UnrealEditor.exe <uproject> /Game/Maps/Generated/L_Gen_Depot_1_X6 -game -nullrhi -nosound -LevelJson=L_Gen_Depot_1_X6.json
 //     -ExecCmds="CodexTactics.WindowDetourSmoke"
 // Godot reference: none (UE-only).
@@ -12,6 +13,7 @@
 #include "SmokeUtils.h"
 #include "AIController.h"
 #include "Characters/OperativeCharacter.h"
+#include "Combat/HealthComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Components/CapsuleComponent.h"
@@ -34,7 +36,7 @@ namespace WindowDetourSmoke
 	constexpr int32 SettleFrames = 60;
 	constexpr int32 OrderFrames = 60 * 45;
 	constexpr int32 HoldAfterCrossFrames = 60 * 2;
-	constexpr int32 MaxFrames = 60 * 90;
+	constexpr int32 MaxFrames = 60 * 180;
 	constexpr float OutsideCm = 600.f;
 	constexpr float OtherOpeningCm = 2000.f;
 	constexpr float EnteredCm = 160.f;
@@ -67,6 +69,17 @@ namespace WindowDetourSmoke
 		int32 CrossedFrame = -1;
 		TArray<FOpening> Others;
 		TArray<TPair<TWeakObjectPtr<AActor>, float>> Tried;
+		struct FMan
+		{
+			TWeakObjectPtr<AOperativeCharacter> Op;
+			FVector Feet = FVector::ZeroVector;
+			bool bCrossed = false;
+			int32 CrossedFrame = -1;
+			bool bEnteredOther = false;
+			FString Entered;
+		};
+		TArray<FMan> Men;
+		bool bGroupCase = false;
 		FDelegateHandle EndFrameHandle;
 	};
 
@@ -293,6 +306,51 @@ namespace WindowDetourSmoke
 		return false;
 	}
 
+	bool PlaceWing(UWorld& World, UNavigationSystemV1& Nav, USquadSubsystem& Squad)
+	{
+		TArray<AOperativeCharacter*> Living;
+		for (AOperativeCharacter* Member : Squad.GetMembers())
+		{
+			if (Member && Member->HealthComponent && Member->HealthComponent->IsAlive())
+			{
+				Living.Add(Member);
+			}
+		}
+		if (Living.Num() < 3)
+		{
+			return false;
+		}
+		const FVector Along(-Runner->Through.Y, Runner->Through.X, 0.f);
+		const float Yaw = static_cast<float>((-Runner->Through * Runner->StartSide).Rotation().Yaw);
+		const float Offsets[3] = { 0.f, 140.f, -140.f };
+		Runner->Men.Reset();
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			FVector Feet = Runner->OutsideFeet;
+			if (Index > 0)
+			{
+				FNavLocation Spot;
+				const FVector Probe = Runner->OutsideFeet + Along * Offsets[Index];
+				if (!ProjectFeet(Nav, Probe, Runner->OutsideFeet.Z, Spot) || HasCeiling(World, Spot.Location)
+					|| SideOf(Spot.Location, Runner->SillCenter, Runner->Through) != Runner->StartSide)
+				{
+					return false;
+				}
+				Feet = Spot.Location;
+			}
+			Put(*Living[Index], Feet, Yaw);
+			FRunner::FMan Man;
+			Man.Op = Living[Index];
+			Man.Feet = Feet;
+			Runner->Men.Add(Man);
+		}
+		Squad.SetLeader(Living[0]);
+		Squad.DisbandFormationToSoloBox({ Living[0], Living[1], Living[2] });
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: box-selected %d outside %s, solo %d, multi %d"), Runner->Men.Num(),
+			*GetNameSafe(Runner->Sill.Get()), Squad.IsSoloMode() ? 1 : 0, Squad.HasMultiSelection() ? 1 : 0);
+		return Squad.IsSoloMode() && Squad.HasMultiSelection() && Runner->Men.Num() == 3;
+	}
+
 	void Judge()
 	{
 		FString Entered;
@@ -359,14 +417,28 @@ namespace WindowDetourSmoke
 			}
 			return true;
 		case EStep::Place:
+			if (R.bGroupCase && Squad->GetMembers().Num() < 3)
+			{
+				Check(false, TEXT("three living operatives for the box selection"));
+				Finish();
+				return true;
+			}
 			if (TryPick(*World, *Nav, *Leader))
 			{
+				if (R.bGroupCase && !PlaceWing(*World, *Nav, *Squad))
+				{
+					R.Tried.Add({ R.Sill, R.StartSide });
+					R.Sill = nullptr;
+					return true;
+				}
 				Go(EStep::Settle);
 				return true;
 			}
 			if (R.StepFrame >= PlaceFrames)
 			{
-				Check(false, TEXT("a ground-floor window with another opening within 20 m and walkable ground 6 m outside"));
+				Check(false, R.bGroupCase
+					? TEXT("a ground-floor window with room for 3 operatives 6 m outside and another opening within 20 m")
+					: TEXT("a ground-floor window with another opening within 20 m and walkable ground 6 m outside"));
 				Finish();
 			}
 			return true;
@@ -374,7 +446,26 @@ namespace WindowDetourSmoke
 			if (R.StepFrame == 1 && R.Sill.IsValid())
 			{
 				const float Yaw = static_cast<float>((-R.Through * R.StartSide).Rotation().Yaw);
-				Put(*Leader, R.OutsideFeet, Yaw);
+				if (R.bGroupCase && R.Men.Num() == 3)
+				{
+					TArray<AOperativeCharacter*> Selected;
+					for (FRunner::FMan& Man : R.Men)
+					{
+						if (AOperativeCharacter* Op = Man.Op.Get())
+						{
+							Put(*Op, Man.Feet, Yaw);
+							Selected.Add(Op);
+						}
+					}
+					if (Selected.Num() == 3)
+					{
+						Squad->DisbandFormationToSoloBox(Selected);
+					}
+				}
+				else
+				{
+					Put(*Leader, R.OutsideFeet, Yaw);
+				}
 				float ClickYaw = 0.f;
 				FVector Confirmed;
 				if (!PC->FindWindowSillTarget(*R.Sill.Get(), *Leader, Confirmed, ClickYaw))
@@ -396,9 +487,19 @@ namespace WindowDetourSmoke
 				Click.TraceStart = Top + R.Through * (R.StartSide * OutsideCm) + FVector(0.f, 0.f, 600.f);
 				PC->HandlePlayerClick(Click);
 				CollectOthers(*World, *Leader);
-				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: click on %s, window order %d, %d other openings watched"),
-					*R.Sill->GetName(), Squad->IsWindowOrder() ? 1 : 0, R.Others.Num());
-				Check(Squad->IsWindowOrder(), TEXT("the click is a window order"));
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: click on %s, window order %d, multi %d, %d other openings watched"),
+					*R.Sill->GetName(), Squad->IsWindowOrder() ? 1 : 0, Squad->HasMultiSelection() ? 1 : 0, R.Others.Num());
+				Check(Squad->IsWindowOrder(), R.bGroupCase ? TEXT("the group click is a window order") : TEXT("the click is a window order"));
+				if (R.bGroupCase)
+				{
+					const bool bGroup = Squad->IsSoloMode() && Squad->HasMultiSelection() && Squad->GetSelectedGroup().Num() == 3;
+					Check(bGroup, TEXT("Solo box selection of 3 is the group that was ordered"));
+					if (!bGroup)
+					{
+						Finish();
+						return true;
+					}
+				}
 				if (!Squad->IsWindowOrder())
 				{
 					Finish();
@@ -409,6 +510,72 @@ namespace WindowDetourSmoke
 			return true;
 		case EStep::Order:
 		{
+			if (R.bGroupCase)
+			{
+				bool bAllHeld = R.Men.Num() == 3;
+				for (FRunner::FMan& Man : R.Men)
+				{
+					AOperativeCharacter* Op = Man.Op.Get();
+					if (!Op)
+					{
+						bAllHeld = false;
+						continue;
+					}
+					const FVector Pos = Op->GetActorLocation();
+					if (!Man.bCrossed && SideOf(Pos, R.SillCenter, R.Through) != R.StartSide && FVector::Dist2D(Pos, R.SillCenter) <= CrossedCm)
+					{
+						Man.bCrossed = true;
+						Man.CrossedFrame = R.StepFrame;
+						UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s crossed the ordered window at %.1f s, %.0f cm from it"), *Op->GetName(),
+							R.StepFrame / 60.f, FVector::Dist2D(Pos, R.SillCenter));
+					}
+					if (!Man.bCrossed && !Man.bEnteredOther)
+					{
+						for (const FOpening& Opening : R.Others)
+						{
+							if (SideOf(Pos, Opening.Center, Opening.Through) != Opening.StartSide && FVector::Dist2D(Pos, Opening.Center) <= EnteredCm)
+							{
+								Man.bEnteredOther = true;
+								Man.Entered = Opening.Name;
+								UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s entered %s at %.1f s before the ordered window"), *Op->GetName(),
+									*Opening.Name, R.StepFrame / 60.f);
+								break;
+							}
+						}
+					}
+					bAllHeld &= Man.bCrossed && R.StepFrame >= Man.CrossedFrame + HoldAfterCrossFrames;
+				}
+				if (R.StepFrame % 120 == 0 && R.Men.Num() > 0 && R.Men[0].Op.IsValid())
+				{
+					const FVector Pos = R.Men[0].Op->GetActorLocation();
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: group t=%.1f lead %s side %.0f dist %.0f"), R.StepFrame / 60.f, *Pos.ToCompactString(),
+						SideOf(Pos, R.SillCenter, R.Through), FVector::Dist2D(Pos, R.SillCenter));
+				}
+				if (!bAllHeld && R.StepFrame < OrderFrames)
+				{
+					return true;
+				}
+				int32 Entered = 0;
+				FString Names;
+				for (const FRunner::FMan& Man : R.Men)
+				{
+					const AOperativeCharacter* Op = Man.Op.Get();
+					const FString Who = Op ? Op->GetName() : TEXT("missing");
+					if (Man.bEnteredOther)
+					{
+						++Entered;
+						Names += TEXT(" ") + Who + TEXT(":") + Man.Entered;
+					}
+					const FVector Pos = Op ? Op->GetActorLocation() : FVector::ZeroVector;
+					const float EndSide = Op ? SideOf(Pos, R.SillCenter, R.Through) : R.StartSide;
+					Check(Man.bCrossed, FString::Printf(TEXT("%s crosses the ordered window (at %.1f s)"), *Who, Man.CrossedFrame / 60.f));
+					Check(Op && EndSide != R.StartSide, FString::Printf(TEXT("%s ends on the far side (side %.0f, start %.0f, dist %.0f)"), *Who, EndSide,
+						R.StartSide, Op ? FVector::Dist2D(Pos, R.SillCenter) : -1.f));
+				}
+				Check(Entered == 0, FString::Printf(TEXT("nobody enters another opening before the ordered window (%d:%s)"), Entered, *Names));
+				Finish();
+				return true;
+			}
 			const FVector Pos = Leader->GetActorLocation();
 			if (!R.bCrossed && SideOf(Pos, R.SillCenter, R.Through) != R.StartSide && FVector::Dist2D(Pos, R.SillCenter) <= CrossedCm)
 			{
@@ -443,6 +610,18 @@ namespace WindowDetourSmoke
 			Judge();
 			Check(EndSide != R.StartSide, FString::Printf(TEXT("he ends on the far side (side %.0f, start %.0f, dist %.0f)"), EndSide, R.StartSide,
 				FVector::Dist2D(Pos, R.SillCenter)));
+			if (R.Failures == 0)
+			{
+				R.bGroupCase = true;
+				R.bCrossed = false;
+				R.CrossedFrame = -1;
+				R.Others.Reset();
+				R.Sill = nullptr;
+				R.Men.Reset();
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: single operative passed, next is the box selection of 3"));
+				Go(EStep::Place);
+				return true;
+			}
 			Finish();
 			return true;
 		}
@@ -465,7 +644,7 @@ namespace WindowDetourSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.WindowDetourSmoke"),
-		TEXT("Dev smoke: G024 - from 6 m outside, a window climb-in goes through that window and ends inside."),
+		TEXT("Dev smoke: G024/G024b - from 6 m outside, a window climb-in goes through that window. Then a Solo box of 3."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 
