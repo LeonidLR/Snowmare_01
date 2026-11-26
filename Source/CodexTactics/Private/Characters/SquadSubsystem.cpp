@@ -130,6 +130,7 @@ void USquadSubsystem::UnregisterOperative(AOperativeCharacter* Operative)
 {
 	Members.Remove(Operative);
 	SelectedGroup.Remove(Operative); // a fallen member drops out of the selection too
+	StoodUpForSprint.Remove(Operative);
 	if (Operative && PendingLeader.Get() == Operative)
 	{
 		// Bug 2026-11-08: the member selected to lead from the next order fell - the selection returns to the formation's leader.
@@ -256,6 +257,7 @@ void USquadSubsystem::SwitchFormationLeader(AOperativeCharacter& NewLeaderRef)
 		LeaderFacingMemory.Add(OldLeader, { static_cast<float>(OldLeader->GetActorRotation().Yaw), Now }); // his own facing as the leader
 	}
 	Leader = NewLeader;
+	StoodUpForSprint.Remove(NewLeader); // a promoted leader is no longer a stood-up follower
 	// SquadControlSmoke "leader switched away and back" (2026-11-17): a parked follower faces where his leader faces (the idle facing of
 	// UpdateFollower); made the leader he kept that stale idle facing, and it won over his new-leader halt look (OperativeCharacterAim's
 	// idle-facing branch, and the formation sector look needs no idle facing). Neither man keeps a follower's parked facing across the switch:
@@ -625,12 +627,12 @@ void USquadSubsystem::SetFollowersHolding(bool bHold)
 		}
 		Follower.bParked = bHold;
 		Follower.RepathTimeRemaining = 0.f;
-		if (bHold)
-		{
-			StoodUpForSprint.Remove(Follower.Operative);
-		}
 	}
-	if (!bHold)
+	if (bHold)
+	{
+		StoodUpForSprint.Reset();
+	}
+	else
 	{
 		EnforceFormationStealthRule();
 	}
@@ -1091,6 +1093,7 @@ void USquadSubsystem::RestoreSoloForLoad(bool bSolo, bool bInTrapSolo)
 	bIsSoloMode = bSolo;
 	bTrapSolo = bSolo && bInTrapSolo;
 	FastRegroups.Reset(); // a load puts everyone where the save had him (2026-11-10)
+	StoodUpForSprint.Reset();
 	SetFollowersHolding(bSolo);
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	if (LeaderRef && HasMultiSelection())
@@ -1590,6 +1593,7 @@ void USquadSubsystem::ToggleGuard(AOperativeCharacter* Operative)
 	if (Operative->bGuarding)
 	{
 		Operative->StopOperative();
+		StoodUpForSprint.Remove(Operative);
 	}
 	RebuildFollowers(); // Godot assign_formation_slots skips guards
 	UFloatingTextSubsystem::SpawnAboveOperative(Operative, Operative->bGuarding ? TEXT("🛡️ GUARD: HELD") : TEXT("🏃 REGROUP"),

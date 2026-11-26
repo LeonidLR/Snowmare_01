@@ -250,7 +250,7 @@ namespace FormationRunStanceSmoke
 					FString::Printf(TEXT("single click -> follower %s walks (stance %d, sprinting %d, speed %.0f, distLeader %.0f)"),
 						*F->DisplayName.ToString(), static_cast<int32>(F->GetStance()), F->IsSprinting() ? 1 : 0, Speed2D, DistToLeader));
 			}
-			PC->CycleLeaderStance(); // C key (Standing -> Crouching on leader) -> stood-up followers follow leader back to crouch
+			PC->ApplyStance(EOperativeStance::Crouching); // C key -> Leader crouches -> stood-up followers follow leader back to crouch
 			R.Step = EStep::LeaderCrouchReturn;
 			R.StepSince = Now;
 			return;
@@ -259,6 +259,12 @@ namespace FormationRunStanceSmoke
 		{
 			if (T < 0.3)
 			{
+				return;
+			}
+			if (Followers.IsEmpty())
+			{
+				Check(false, TEXT("no followers left during LeaderCrouchReturn"));
+				Finish();
 				return;
 			}
 			Check(Leader->GetStance() == EOperativeStance::Crouching, TEXT("C key crouched leader"));
@@ -281,6 +287,12 @@ namespace FormationRunStanceSmoke
 		}
 		case EStep::ProneFollowerSprint:
 		{
+			if (Followers.IsEmpty())
+			{
+				Check(false, TEXT("no followers left during ProneFollowerSprint"));
+				Finish();
+				return;
+			}
 			const float Speed2D = static_cast<float>(Followers[0]->GetVelocity().Size2D());
 			const bool bUpAndRunning = Followers[0]->GetStance() == EOperativeStance::Standing && Followers[0]->IsSprinting()
 				&& Speed2D >= RunGate;
