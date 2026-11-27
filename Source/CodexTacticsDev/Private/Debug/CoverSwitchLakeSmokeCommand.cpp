@@ -29,10 +29,12 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Debug/SmokeUtils.h"
 #include "Engine/StaticMeshActor.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/HUD.h"
@@ -43,6 +45,7 @@
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tutorial/TutorialSubsystem.h"
+#include "UI/GameMessageSubsystem.h"
 #include "UnrealClient.h"
 
 namespace CoverSwitchLakeSmoke
@@ -75,6 +78,10 @@ namespace CoverSwitchLakeSmoke
 		float EntrySeenAt = -1.f;
 		int32 SwitchesBefore = 0;
 		TWeakObjectPtr<ACameraActor> Camera;
+		TWeakObjectPtr<AStaticMeshActor> LowA;
+		TWeakObjectPtr<AStaticMeshActor> LowB;
+		FHitResult LowHit;
+		FVector OldGroundGoal = FVector::ZeroVector;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -132,6 +139,38 @@ namespace CoverSwitchLakeSmoke
 	bool Settled(const AOperativeCharacter* Op)
 	{
 		return Op && Op->bInCover && !Op->bShimmying && !Op->IsMoving() && Op->GetVelocity().Size2D() < 5.f && Op->GetCoverEntryMeshOffset().Size() < 1.f;
+	}
+
+	AStaticMeshActor* SpawnOrderLowCover(UWorld* World, const FVector& Center, float ThicknessScale = 0.4f)
+	{
+		UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		const FTransform Transform(FRotator::ZeroRotator, Center, FVector(ThicknessScale, 6.f, 1.f));
+		AStaticMeshActor* Block = Cube ? World->SpawnActorDeferred<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Transform,
+			nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn) : nullptr;
+		if (Block)
+		{
+			Block->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+			Block->GetStaticMeshComponent()->SetStaticMesh(Cube);
+			Block->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+			Block->GetStaticMeshComponent()->SetCanEverAffectNavigation(true);
+			Block->FinishSpawning(Transform);
+		}
+		return Block;
+	}
+
+	FHitResult OrderLowFaceHit(UWorld* World, const AStaticMeshActor* Block)
+	{
+		FHitResult Hit;
+		const FVector Center = Block->GetActorLocation();
+		World->LineTraceSingleByChannel(Hit, Center + FVector(250.f, 0.f, 0.f), Center, ECC_Visibility);
+		return Hit;
+	}
+
+	void DoubleClickCover(ACodexTacticsPlayerController& PC, const FHitResult& Hit)
+	{
+		PC.bFreezeClickPreviewForTesting = true;
+		PC.HandlePlayerClick(Hit);
+		PC.HandlePlayerClick(Hit);
 	}
 
 	/** The nearest living enemy to At (2D) and its distance in cm; an empty name when there is none. */
@@ -395,7 +434,78 @@ namespace CoverSwitchLakeSmoke
 			return true;
 		}
 		case 6:
-			return State.StageTime < 0.5f ? true : Finish(State, true);
+		{
+			// Runtime fixtures in the open strip west of the rocks; no map assets are modified.
+			State.LowA = SpawnOrderLowCover(World, FVector(State.FaceX - 600.f, State.SouthMidY, State.GroundZ + 50.f), 3.f);
+			State.LowB = SpawnOrderLowCover(World, FVector(State.FaceX - 1300.f, State.SouthMidY, State.GroundZ + 50.f));
+			Check(State, State.LowA.IsValid() && State.LowB.IsValid(), TEXT("4: two runtime low covers for click replacement"));
+			if (!State.LowA.IsValid() || !State.LowB.IsValid()) { return Finish(State, false); }
+			Next(State, 7);
+			return true;
+		}
+		case 7:
+		{
+			if (State.StageTime < 2.f) { return true; } // let dynamic navigation incorporate the fixtures
+			FCoverSlot Slot;
+			const FHitResult Hit = OrderLowFaceHit(World, State.LowA.Get());
+			const bool bSlot = PC->FindCoverSlotForHit(Hit, Slot) && Slot.Height == ECoverHeight::LowCover;
+			Check(State, bSlot && Op->OrderTakeCover(Slot, false) == EOperativeOrderResult::Accepted, TEXT("4: setup low cover A"));
+			Next(State, 8);
+			return true;
+		}
+		case 8:
+		{
+			if (!Settled(Op) && State.StageTime < 15.f) { return true; }
+			Check(State, Settled(Op) && Op->GetCoverSlot().WallActor == State.LowA, TEXT("4: settled in low cover A before double-click"));
+			State.LowHit = OrderLowFaceHit(World, State.LowB.Get());
+			Check(State, State.LowHit.GetActor() == State.LowB.Get(), TEXT("4: click hits low cover B"));
+			DoubleClickCover(*PC, State.LowHit);
+			Check(State, Op->HasPendingCover() && Op->GetPendingCoverSlot().WallActor == State.LowB, TEXT("4: in cover -> double-click another low cover replaces the order"));
+			Next(State, 9);
+			return true;
+		}
+		case 9:
+		{
+			if ((!Settled(Op) || Op->GetCoverSlot().WallActor != State.LowB) && State.StageTime < 15.f) { return true; }
+			Check(State, Settled(Op) && Op->GetCoverSlot().WallActor == State.LowB, TEXT("4: arrived in low cover B after player double-click"));
+			State.GhostAt = Op->GetActorLocation();
+			State.OldGroundGoal = Op->GetActorLocation() + FVector(0.f, 1000.f, 0.f);
+			FHitResult Ground;
+			World->LineTraceSingleByChannel(Ground, State.OldGroundGoal + FVector(0.f, 0.f, 300.f), State.OldGroundGoal - FVector(0.f, 0.f, 300.f), ECC_Visibility);
+			PC->HandlePlayerClick(Ground);
+			Next(State, 10);
+			return true;
+		}
+		case 10:
+		{
+			if ((Op->GetVelocity().Size2D() < 50.f || FVector::Dist2D(Op->GetActorLocation(), State.GhostAt) < 300.f) && State.StageTime < 5.f) { return true; }
+			Check(State, Op->IsMoving() && !Op->bInCover && Op->GetVelocity().Size2D() >= 50.f, TEXT("5: ground click has left cover and is still walking"));
+			DoubleClickCover(*PC, State.LowHit);
+			Check(State, Op->HasPendingCover() && Op->GetPendingCoverSlot().WallActor == State.LowB
+				&& FVector::Dist2D(Op->GetLastMoveDestination(), State.OldGroundGoal) > 300.f,
+				TEXT("5: walking -> double-click the old cover replaces the ground destination (stale current slot is ignored)"));
+			Next(State, 11);
+			return true;
+		}
+		case 11:
+		{
+			if ((!Settled(Op) || Op->GetCoverSlot().WallActor != State.LowB) && State.StageTime < 15.f) { return true; }
+			Check(State, Settled(Op) && Op->GetCoverSlot().WallActor == State.LowB, TEXT("5: arrived in clicked low cover instead of the old ground point"));
+			// From B (west of thick A), A's east face has no usable reverse-face approach probe.
+			// This is the old silent return, verified through the real ghost and on-screen message feed.
+			const FHitResult FarHit = OrderLowFaceHit(World, State.LowA.Get());
+			FCoverSlot FarSlot;
+			const bool bFarSlot = PC->FindCoverSlotForHit(FarHit, FarSlot);
+			Check(State, FarHit.GetActor() == State.LowA.Get() && bFarSlot && FarSlot.Height == ECoverHeight::LowCover
+				&& !CoverTraceRules::ResolveLowCoverApproach(World, Op->GetActorLocation(), FarSlot), TEXT("6: thick low cover has an unavailable near-side approach"));
+			DoubleClickCover(*PC, FarHit);
+			const UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>();
+			Check(State, Messages && !Messages->GetHistory().IsEmpty()
+				&& Messages->GetHistory().Last().Text.ToString().Contains(TEXT("no usable approach"))
+				&& Op->bInCover && Op->GetCoverSlot().WallActor == State.LowB && !Op->HasPendingCover(),
+				TEXT("6: failed cover confirmation posts the approach refusal on screen and preserves current cover"));
+			return Finish(State, true);
+		}
 		default:
 			return Finish(State, false);
 		}
