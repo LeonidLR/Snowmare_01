@@ -573,3 +573,6 @@ Last update: 2026-09-29 by Claude, after commit `2ca14b0`.
 2026-11-11 Codex stealth 003: expanded male/female integration smokes, rendered game-camera evidence and 44 unit tests PASS; six Gemini gaps covered, late weapon materials fixed. Ready for designer testing in interim only.
 
 2026-11-11 Codex: 003 final report/handback finalized with source hashes 90a6bf64, 4d15a54f, 561a29ed and verified game-camera evidence. Doc routing level1/gpt-6-luna required primary corrections (date/stale queue); current queue 004,005,C5,C6.
+
+## 2026-11-27 ? Codex task148
+Training Ground fight chronicle, legacy/121 event playback, world-cm route/comment/zone sidecars, decoder with rotated-geometry passing facts, frozen X6 building numbers. Node7/7 + Python14/14, typecheck/build PASS. Drawn-route screenshot acceptance blocked by browser tool policy support; task report records evidence gap.

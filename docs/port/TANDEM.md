@@ -1486,3 +1486,6 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 2026-11-11 Codex stealth checkpoint: male/female/rendered smokes and 44 tests PASS, 3 game-camera frames copied to main Saved/Orchestrator/stealth (explicit task exception). No main assets/push. Female fixture uses existing optimized female body in memory because movement-map roster overrides all bodies male.
 
 2026-11-11 Codex: stealth 003 final verification report complete, designer notified to test interim L_MovementTest / STEALTH or7. Source remains interim-only. New designer priority via Claude: 004 hitch then005 ragdoll beforeC5/C6.
+
+## Task148 checkpoint ? 2026-11-27
+Codex lane148 delivered TG replay/annotations, demo_notes decoder and new X6 building index. No runtime/content edits beyond the authorized new index. Code checks pass; Lead must capture drawn-route screenshots in a supported browser. See task148 outbox report.

@@ -1,0 +1,50 @@
+{
+  "recording": "2026-11-26_L_Gen_Depot_1_X6_165115.jsonl",
+  "map": "L_Gen_Depot_1_X6",
+  "rules": {
+    "axes": "+X north, +Y east; cm",
+    "pass_distance_cm": 500,
+    "pass_along_wall_min_cm": "min(200, wall_length * .25)",
+    "cover_touch_cm": 75,
+    "sampling_cm": 25,
+    "open_ground": ">500cm from building footprint or cover; geometry proxy only, no LOS/height/weapon safety claim"
+  },
+  "annotations": [
+    {
+      "id": "validation-east-route",
+      "kind": "route",
+      "t": 836,
+      "author": "Codex validation",
+      "unit": "BP_Operative_C_12",
+      "label": "Validation only: east-wall route",
+      "round": 3,
+      "length_m": 22.0,
+      "buildings_passed": [
+        {
+          "building_id": "B_ruin",
+          "number": "45",
+          "side": "east",
+          "min_wall_distance_m": 1.5,
+          "from_m": 2.16,
+          "to_m": 19.88
+        }
+      ],
+      "covers_touched": [],
+      "open_ground_crossings": [],
+      "building_footprints_crossed": []
+    },
+    {
+      "id": "validation-comment",
+      "kind": "comment",
+      "t": 836,
+      "author": "Codex validation",
+      "unit": "BP_Operative_C_12",
+      "label": "Validation annotation, not designer instruction",
+      "round": 3,
+      "pin_cm": [
+        -4000,
+        3200
+      ]
+    }
+  ]
+}
