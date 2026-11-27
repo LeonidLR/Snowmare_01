@@ -42,16 +42,16 @@ Designer priority: recording + analysis of his fights; trainer runs NEXT week (m
 
 LIVE STATUS (Codex Lead takeover; designer explicitly requested 156 -> 155):
 1. Gate chain 135b -> 153 -> 154 is GREEN and pushed; Saved/Logs/gate-v10-{1,2,3}.exit each says EXIT 0.
-   Play copy contains 8af22865 (play/current 44bd2a72); its worker build was still running at takeover. Do not start another play build.
+   Play copy contains 8af22865 (play/current 44bd2a72); the takeover build process has ended. Confirm build result before declaring play ready.
 2. Gemini 144 -> 154b is running via agy_task.ps1; 144 START at 15:16, heartbeat at 15:46 local. The earlier authentication failure
    was resolved by the designer removing dead Antigravity Tools NRPT DNS rules. agy_task.ps1 probes proxy 8899 then direct Google access;
    this reviewed route fix is committed with this handover. Watch MERGE-READY / BLOCKER / LIMIT; do not duplicate the run.
 3. Designer request: after committing this STATE, launch 156 -> 155 sequentially through Scripts/Tools/codex_task.ps1 in the EXISTING lanes.
    156 resumes WIP 45dc6940 using Saved/Lead/codex_156_resume.md; incorporate origin/main (135b + 153) before verification.
    155 uses docs/port/codex/inbox/155-ramp-roof-first-try.md. Queue runner Saved/Lead/codex_156_155.ps1 stops on failed/limited 156.
-   The app Lead returns after launch to avoid concurrent active Codex work on the same usage. No main merge/push by executors.
-4. This handover commit remains local: automatic approval review rejected origin/main push as insufficiently explicit authorization.
-   Existing gameplay merges above are already on origin/main. Ask the designer before retrying the handover push.
+   Designer requested active Lead monitoring/reviews/merges. 156 worker build + Smart 424/424 PASS; under-fire smoke fixture repair and validation in progress. No main merge/push by executors.
+4. Handover 058e0900 was pushed after explicit designer approval. Designer renewed full Lead authorization until Sat 11:00: review + green merge_gate before push; commit STATE/HANDOFF/TASK_BOARD only outside gates; update play only with its editor closed. No force-push or protected designer files.
+5. Preliminary 144 review sent in AgentChat 1541/1542: cache same-wall window searches (avoid whole-world scans per formation update); assert real bones/pose for duck/blind fire; test normal calm return instead of calling EndCornerAim in the smoke. Await fixes and final MERGE-READY.
 QUEUE after these: 139 (MERGE-READY 69927b35; merge only after the designer's LadderActor_22 TopStandoff/TopExitStandoff 49->125 map fix) ->
 147 PMC fled -> 143 -> 146 -> 136 -> 137 -> 138 -> 140. 157 per-shot accuracy recording: ONLY if the designer says yes (asked, no answer yet).
 Designer analysed 2 fights in "Хроника боя" (CodexTactics-play/Saved/Demos/2026-11-27_*_085013 / _104238 .notes.json): keep the notes, the
