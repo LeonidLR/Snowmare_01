@@ -39,7 +39,7 @@ origin/main = Merge codex/148 (2026-11-27 ~03:00). Night 11-26/27 merged: claude
 121 full recording events + demo_tactics.py (Codex finished Gemini's branch; lead reverted an unasked worker_sync LFS change), 148 TG fight replay +
 notes + demo_notes.py + 68 building numbers (lead test fix: AllFilesParse skips *.buildings_index.json). Designer priority 11-27: recording + analysis.
 Codex runs HEADLESS now (codex exec --dangerously-bypass-approvals-and-sandbox, designer OK; prompts in Saved/Lead/codex_*_prompt_*.md).
-Codex 149 demos->trainer running (lane CodexTactics-149). 139 MERGE-READY 69927b35 but RoofLadderSmoke needs the designer's LadderActor_22 map fix
+Codex 149 demos->trainer MERGED 06:15 (dataset 17 rec / 65 fights, doctrine scoring, weekend scripts; G2 dead metrics + no G3 baseline block full weekend runs - see its report). 139 MERGE-READY 69927b35 but RoofLadderSmoke needs the designer's LadderActor_22 map fix
 (TopStandoff/TopExitStandoff 49->125) - merge after it. 135b: Antigravity WIP 8d70b27c (CoverIndoor + CornerSlot smokes FAIL) - Gemini API credits
 are exhausted (402), agy CLI needs a sign-in; queue 135b to Codex after 149. Queue: 149 -> 147 -> 135b -> 143 -> 146 -> 136 -> 137 -> 138 -> 140.
 Live queues (re-plan, supersedes the lines below): Codex 139 -> 121 -> 148 -> 149 -> 147; Gemini 135b -> 141 -> 144.
