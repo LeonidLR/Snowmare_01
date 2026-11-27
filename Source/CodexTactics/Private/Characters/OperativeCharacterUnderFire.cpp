@@ -4,8 +4,8 @@
 // for a clear line to the flash (a rear man of a column, a mate in the way), else prone. The squad's men and the hostile PMC fighters alike.
 
 #include "Characters/OperativeCharacter.h"
+#include "Tactics/CoverThreatRules.h"
 
-#include "AI/PmcCommanderRules.h"
 #include "AI/PmcSquadSubsystem.h"
 #include "Characters/OperativeCharacterInternal.h"
 #include "Characters/SquadSubsystem.h"
@@ -160,8 +160,14 @@ bool AOperativeCharacter::FindUnderFireCover(const FVector& Flash, FCoverSlot& O
 		{
 			continue;
 		}
+		// Evaluate the same approach face that OrderTakeCover will use, before accepting its protection.
+		if (IsPlayerTeam() && !CoverTraceRules::ResolveLowCoverApproach(World, GetActorLocation(), Slot))
+		{
+			continue;
+		}
 		const float Distance = static_cast<float>(FVector::Dist2D(Feet, Slot.WorldLocation));
-		if (Distance > Config.CoverSeekRadiusCm || PmcCommanderRules::CoverQualityAgainst(Slot.WorldLocation, Slot.WallNormal, Flash) < Config.CoverMinQuality)
+		if (Distance > Config.CoverSeekRadiusCm || !CoverThreatRules::BlocksLine(Slot, Flash)
+			|| CoverThreatRules::Quality(Slot, Flash) < Config.CoverMinQuality)
 		{
 			continue; // too far, or its wall does not stand between him and the flash
 		}
@@ -275,7 +281,7 @@ void AOperativeCharacter::DecideUnderFireManoeuvre(AOperativeCharacter& Shooter,
 	UnderFireRules::FManoeuvreOptions Options;
 	Options.bProne = Stance == EOperativeStance::Prone;
 	FCoverSlot CoverSlotFound;
-	if (Now >= UnderFireNextCoverSearch)
+	if (Now >= UnderFireNextCoverSearch && CoverThreatRules::MayTransition(Now, LastCoverOpenShotTransition))
 	{
 		Options.bCoverFound = FindUnderFireCover(Flash, CoverSlotFound);
 		UnderFireNextCoverSearch = Options.bCoverFound ? Now : Now + Config.CoverRetrySeconds;
@@ -318,7 +324,7 @@ void AOperativeCharacter::DecideUnderFireManoeuvre(AOperativeCharacter& Shooter,
 	switch (Choice)
 	{
 	case EUnderFireManoeuvre::TakeCover:
-		bDone = OrderTakeCover(CoverSlotFound, /*bSprint*/ true) == EOperativeOrderResult::Accepted;
+		bDone = OrderTakeCover(CoverSlotFound, /*bSprint*/ true, /*bPlayerOrder*/ false) == EOperativeOrderResult::Accepted;
 		UnderFireCoverMoves += bDone ? 1 : 0;
 		UnderFireNextCoverSearch = bDone ? Now : Now + Config.CoverRetrySeconds;
 		break;

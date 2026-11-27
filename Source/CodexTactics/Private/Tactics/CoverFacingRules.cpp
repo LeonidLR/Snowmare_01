@@ -1,4 +1,5 @@
 #include "Tactics/CoverFacingRules.h"
+#include "Tactics/CoverThreatRules.h"
 
 #include "Tactics/CoverRules.h"
 
@@ -173,7 +174,8 @@ namespace CoverFacingRules
 		{
 			return ECoverFireAt::CoverPose;
 		}
-		return bMayExpose ? ECoverFireAt::StepOut : ECoverFireAt::Refuse;
+		// Pose reach must not discard protection from the same threat.
+		return bMayExpose && !CoverThreatRules::BlocksLine(Slot, Target) ? ECoverFireAt::StepOut : ECoverFireAt::Refuse;
 	}
 
 	const TCHAR* CoverFireAtName(ECoverFireAt Decision)

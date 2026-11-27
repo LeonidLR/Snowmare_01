@@ -657,3 +657,11 @@ hounds -> out; blast with a hound 2 m off -> out; blast + a move ordered while d
 - Ordered suppression outside that reach is refused or cancelled while suppressed, with `NO LINE OUT OF THIS COVER`; suppression does not permit blind fire toward an arbitrary side target.
 - Quick fire uses the same decision for stepping out. Automatic fire is still an open follow-up (058b): its ordinary firing path must call this policy too.
 - Regression coverage: `SuppressionSmoke` stages 61-65 and `CoverFacingTest`; the ordered-fire checks do not establish automatic-fire coverage.
+
+### Cover/open-shot stability (Codex 156, 2026-11-27)
+
+`CoverThreatRules::BlocksLine` uses the slot side, wall face and the segment's crossing of exposed wall ends. UnderFire quality and open-shot escape use this same planar protection decision. A firing pose outside its reach refuses the shot while its wall protects; it cannot discard protection to get a shot. This is a planar wall decision, separate from muzzle-height visibility traces.
+
+Automatic cover/open-shot transitions share a three-second hold, measured on entry and open-shot exit (same-wall shimmies do not restart it). UnderFire reacquisition and open-shot return observe it too. Player `OrderTakeCover`/planned cover keeps its hold after arrival until leaving/replacing the order; automatic under-fire orders pass `bPlayerOrder=false`. Death, knockdown and explicit movement continue to use their normal cover exit paths.
+
+Regression: `CodexTactics.Tactics.Cover.Threat.BlockingAndPoseReach`, `CodexTactics.Tactics.Cover.Threat.TransitionHysteresis`, and `CodexTactics.UnderFireManoeuvreSmoke` on retained X6 (oblique enemy outside a narrowed pose arc; player cover held continuously >=5 s).

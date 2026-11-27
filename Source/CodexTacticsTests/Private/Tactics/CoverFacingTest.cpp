@@ -5,6 +5,7 @@
 #include "Misc/AutomationTest.h"
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverRules.h"
+#include "Tactics/CoverThreatRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -610,6 +611,42 @@ namespace CoverFacingTest
 	}
 }
 
+COVER_FACING_TEST(FCoverThreatConsistencyTest, "Threat.BlockingAndPoseReach")
+bool FCoverThreatConsistencyTest::RunTest(const FString& Parameters)
+{
+    FCoverSlot Slot = CoverFacingTest::MakeLowBox();
+    const FVector Threat(-1000.f, 1500.f, 900.f);
+    TestTrue(TEXT("oblique threat crosses the wall"), CoverThreatRules::BlocksLine(Slot, Threat));
+    TestTrue(TEXT("under-fire search accepts the same oblique threat"), CoverThreatRules::Quality(Slot, Threat) > 0.35f);
+    TestEqual(TEXT("unreachable pose holds that protection"), CoverFacingRules::DecideCoverFireAt(Slot, Threat, true, true, 60.f, true),
+        CoverFacingRules::ECoverFireAt::Refuse);
+    TestFalse(TEXT("own side has no wall in the line"), CoverThreatRules::BlocksLine(Slot, FVector(1000.f, 0.f, 0.f)));
+    TestFalse(TEXT("between slot and wall is still the same side"), CoverThreatRules::BlocksLine(Slot, FVector(-20.f, 0.f, 0.f)));
+    TestEqual(TEXT("same-side near threat cannot receive under-fire cover quality"), CoverThreatRules::Quality(Slot, FVector(-20.f, 0.f, 0.f)), 0.f);
+    FCoverSlot Reverse = Slot;
+    Reverse.WallNormal *= -1.f;
+    Reverse.WorldLocation = FVector(-90.f, 0.f, 0.f);
+    TestTrue(TEXT("reverse face uses the same sign convention"), CoverThreatRules::BlocksLine(Reverse, FVector(1000.f, 0.f, 0.f)));
+    TestFalse(TEXT("a line past the finite end is not blocked"), CoverThreatRules::BlocksLine(Slot, FVector(-50.f, 1500.f, 0.f)));
+    TestFalse(TEXT("wall plane is not an opposite side"), CoverThreatRules::BlocksLine(Slot, Slot.WallPoint));
+    Slot.WallNormal = FVector::ZeroVector;
+    TestFalse(TEXT("invalid normal never protects"), CoverThreatRules::BlocksLine(Slot, Threat));
+    return true;
+}
+
+COVER_FACING_TEST(FCoverOpenShotHysteresisTest, "Threat.TransitionHysteresis")
+bool FCoverOpenShotHysteresisTest::RunTest(const FString& Parameters)
+{
+    TestFalse(TEXT("no immediate exit after entry"), CoverThreatRules::MayOpenShot(false, 10.1, 10.0));
+    TestFalse(TEXT("no return just before three seconds"), CoverThreatRules::MayTransition(12.999, 10.0));
+    TestTrue(TEXT("transition permitted at three seconds"), CoverThreatRules::MayTransition(13.0, 10.0));
+    TestFalse(TEXT("clock reversal cannot bypass hold"), CoverThreatRules::MayTransition(9.0, 10.0));
+    TestFalse(TEXT("player cover remains held beyond cooldown"), CoverThreatRules::MayOpenShot(true, 100.0, 10.0));
+    TestTrue(TEXT("completed player order releases hold"), CoverThreatRules::MayOpenShot(false, 100.0, 10.0));
+    TestFalse(TEXT("reverse transition restarts the same cooldown"), CoverThreatRules::MayTransition(15.9, 13.0));
+    return true;
+}
+
 COVER_FACING_TEST(FCoverFireAtFrontOverLowCoverTest, "FireAt.FrontOverLowCover")
 bool FCoverFireAtFrontOverLowCoverTest::RunTest(const FString& Parameters)
 {
@@ -652,8 +689,8 @@ bool FCoverFireAtSideInTheOpenTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("(the corner-shot rule alone calls it a cover shot)"), CoverFacingRules::ShouldCornerShot(Low, Level, FCoverFacingConfig()));
 	TestEqual(TEXT("86 deg off into the wall, outside the frontal arc: he steps out and turns"), FireAt(Low, Level, true), ECoverFireAt::StepOut);
 	TestEqual(TEXT("... suppressed: refused"), FireAt(Low, Level, false), ECoverFireAt::Refuse);
-	TestEqual(TEXT("a zero arc: nothing over the top (7 deg off)"), CoverFacingRules::DecideCoverFireAt(Low, FVector(-800.f, 100.f, 0.f), true, true, 0.f, true),
-		ECoverFireAt::StepOut);
+	TestEqual(TEXT("a zero pose arc holds protection rather than stepping out"), CoverFacingRules::DecideCoverFireAt(Low, FVector(-800.f, 100.f, 0.f), true, true, 0.f, true),
+		ECoverFireAt::Refuse);
 	return true;
 }
 

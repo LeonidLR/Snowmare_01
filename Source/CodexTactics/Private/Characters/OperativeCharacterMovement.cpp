@@ -125,13 +125,16 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 			LeaveCover(TEXT("move order"));
 		}
 		bHasPendingCover = false;
+		bPlayerCoverOrderActive = false;
 		bRunCornerPeekPending = false; // any other order replaces a run-and-peek (#55)
 	}
 	else if (bToPendingSlot && bInCover && !bCoverMoveOrder && !CoverTraceRules::IsSameWall(CoverSlot, PendingCoverSlot))
 	{
 		// The pause's release of a planned walk to ANOTHER cover (2026-10-20, found with the cover switch): he leaves this wall and runs
 		// (before, he crossed to the other wall still "in cover" here: the cover pose slid along and the arrival played no enter clip).
+		const bool bPlayerCover = bPlayerCoverOrderActive;
 		LeaveCover(TEXT("another cover"));
+		bPlayerCoverOrderActive = bPlayerCover; // the planned cover order continues at its destination
 	}
 	// A player's own order (not a formation follow, not the deferred replay of a rise) puts a leftover torso back on the move.
 	// The scan pitch stays while a formation look is set: slot updates must not zero it.

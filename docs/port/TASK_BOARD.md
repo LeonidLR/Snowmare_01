@@ -78,6 +78,12 @@ Gemini: отмечайте свои строки 📝 → ✅ с веткой `g
 | 4 | Оборона R1: отход в бою только в укрытие в пределах ~6 м и не за зону; R2: перезарядка в бою только из укрытия и не вдвоём (разбор проигрышей 11-23). | ИИ врагов |
 | 5 | 6 лестниц X4 не проходит никто (095: no march seen) — раскладка / навмеш. | позже |
 
+## Done (2026-11-27, Codex fallback Lead)
+
+| Task | Result |
+|---|---|
+| 156 (019beb5e) | Cover/open-shot loop: shared wall protection, three-second transition hold, persistent player cover intent. Lead reviewed; merge gate EXIT0, build PASS, Smart485/485, all12 mapped gate smokes PASS; real-feet hold >=5s; designer JSON intact. |
+
 ## Сделано (2026-11-25 вечер, Lead v6)
 - origin/main 6dd83864: claude/designer-fixes-1125 (двойной клик низкое укрытие = укрытие, регдолл лёжа 0.15, край камеры 2 с), Grok G024 (окно со своей стороны), Gemini 125 (счётчики точности + еда не лечит тяжёлые раны), Gemini 130 (обыск тел, подсветка, редкий лут). Тесты снайпера под 45 / 3.5 с (5e63b18a).
 - origin/main 3a22de9c: Gemini 131 machine_dispatch.py (свободная машина + очередь, флаг Saved/Lead/MAIN_PC_FREE), Gemini 129 (бои по секторам в Training Ground).
