@@ -38,7 +38,7 @@ if (-not $Proc.WaitForExit($TimeoutMinutes * 60 * 1000)) {
 $Exit = $Proc.ExitCode
 Stop-Job $Beat -ErrorAction SilentlyContinue; Remove-Job $Beat -Force -ErrorAction SilentlyContinue
 if (Test-Path "$Log.stderr") { Get-Content "$Log.stderr" | Add-Content -Encoding utf8 $Log; Remove-Item "$Log.stderr" -ErrorAction SilentlyContinue }
-$Limit = Select-String -Path $Log -Pattern 'hit your usage limit' -Quiet
+$Limit = Select-String -Path $Log -Pattern '^ERROR: You.ve hit your usage limit' -Quiet  # anchored: the agent may print this script
 Write-Host "[codex_task] $Label exit $Exit$(if ($Limit) { ' - USAGE LIMIT' })"
 Send-AgentChat $Repo "codex" $Topic "$Label ENDED | headless codex exit $Exit$(if ($Limit) { ' - USAGE LIMIT, relaunch after reset' }) | last message Saved/Orchestrator/codex_runs/$(Split-Path $Last -Leaf)" -Status
 exit $Exit
