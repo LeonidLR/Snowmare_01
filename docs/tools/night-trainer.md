@@ -7,6 +7,30 @@
 
 ## 1. How it works
 
+Task 149b: `damage_dealt` is the canonical scoring and gate field. New arena documents use the attributed side measurement;
+legacy documents / saved canonical rows without it fall back to opponent HP lost (`opp_hp_lost`). An explicit zero wins
+over that proxy; invalid new measurements do not receive legacy credit. The proxy can include unattributed damage, so
+scores from old and new evidence need not be identical.
+
+Production entry points require a gate pass whose `identity.config_sha256` matches the semantic JSON config (sorted keys,
+compact UTF-8 serialization) and whose `identity.freeze_sha` matches checkout HEAD. `created_unix` must be within 24 hours.
+The CLI validates the effective saved `run.json` config on resume. Legacy unbound gate files are rejected. Prepare weekend
+inputs **before** checking the gate; a pass for `trainer_config.json` cannot authorize a different prepared config.
+The baseline supplied to `--check-gate` must carry the same identity; prepared weekend configs require 30 healthy rounds
+in every `gate_scenarios` entry. Crashed rounds and placement fallbacks cannot fill a missing scenario.
+
+`metric_campaign.py --config <prepared> --run-id <id> --freeze-sha <full-SHA> --rounds 2` runs a short real probe using full
+round limits (minimum 120 seconds). `--rounds 30 --stop-at <next-morning-08:00>` requests a freeze baseline; baseline starts
+and new waves are restricted to 16:30–08:00. It alternates roles and sectors, preserves raw jobs and canonical evidence,
+and tries up to three seed sets if placement falls back to another scenario. Inspect `evidence.json` for actual counts,
+`g3_sufficient`, and retained G2 failures. To use its canonical rows as `--gate-probe`, serialize `evidence.json.rounds`
+as a standalone JSON array; supply the whole document as `--gate-baseline`. No evolution or champion application occurs.
+
+For a dedicated scheduled baseline, the existing night loop supports `-WindowMode ab -QueueOnly -TrainerFrom 16:30
+-TrainerUntil 08:00 -Until 08:00`. It takes the normal worker lock, drains `Saved/Worker/ab_queue`, and exits to allow the
+normal guard to resume. Evening start times resolve to the day before a next-morning deadline. Existing default windows
+and ordinary loop behavior are preserved.
+
 - **Genome** = every numeric leaf of the weights JSON, addressed by JSON Pointer (`/utility/flank/weight`, `/skills/0/cooldown_s`).
   Strings / bools / null and the meta keys (`version`, `schema`, `seed`, `id`, keys starting with `_`) are never touched.
   Bounds / mutation step per gene come from the sidecar `pmc_commander.bounds.json` (`codex.trainer_bounds/1`), auto-generated
@@ -32,7 +56,8 @@
   field containing "shotgun"); the current tracks carry no weapon, so the exemption is inactive until the arena adds it. Missing /
   unreadable track or no shots = no penalty. Remove the `close_range` key to disable.
   **Draws / fights** (2026-11-06, after pmc-v2 learnt "don't fight"): a draw pays `draw_value` 0, survivors don't count in it, HP
-  loss half; a time-limit end with no damage either way costs `timeout_penalty`; `damage_dealt` (opponent HP lost / HP max) and
+  loss half; a time-limit end with no damage either way costs `timeout_penalty`; `damage_dealt` (attributed damage / HP max;
+  opponent HP lost only for legacy evidence without that field) and
   `kill_advantage` pay. **No contact** (fix/pmc-arena-stalemate 2026-11-10, the designer): a round whose result says `"contact": false`
   (no shot between the sides) and that the side did not win scores exactly `no_contact_score` (-3: no survivors / objective / duration
   credit) - and the arena no longer gives the defender a time-limit win unless he stands on the point alone at that moment. The commander

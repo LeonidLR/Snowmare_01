@@ -26,7 +26,7 @@ import sys
 from . import track_stats
 from .genome import load_json
 
-CANONICAL_SIDE_FIELDS = ("survivors", "squad_size", "hp_lost", "hp_max", "kills", "flanks_attempted",
+CANONICAL_SIDE_FIELDS = ("damage_dealt", "survivors", "squad_size", "hp_lost", "hp_max", "kills", "flanks_attempted",
                          "flanks_succeeded", "suppression_s", "ambushes", "retreats", "retreats_survived",
                          "heals", "friendly_fire", "stuck_events",
                          # task #53: the objective rounds' ambush stats
@@ -160,6 +160,7 @@ class ArenaAdapter:
             "weights_b": _weights_path(job["weights_b"], self.repo_root) if job.get("weights_b") else "None",
             "time_limit_s": job.get("time_limit_s") or self.cfg.get("time_limit_s", 300),
             "out": _rel(out_path, self.repo_root),
+            "scenario": job.get('scenario_requested', 'random'),
         }
         parts = [self.cfg.get("console_command", "CodexTactics.PmcArena")]
         parts += [str(t).format(**values) for t in self.cfg.get("arg_template", [])]
@@ -257,6 +258,8 @@ class ArenaAdapter:
                 value = _dig(side, fields.get(key, key))
                 if isinstance(value, (int, float)) and not isinstance(value, bool):
                     row[key] = float(value)
+                elif key == 'damage_dealt' and fields.get(key, key) in side:
+                    row[key] = None
             # highlight extras (optional in the arena result): watching material, not fitness
             opp = self._side(rnd, theirs)
             for key, src in (("opp_survivors", _dig(opp, fields.get("survivors", "survivors"))),
@@ -267,6 +270,11 @@ class ArenaAdapter:
                              ("round_index", _dig(rnd, rc.get("round_index_key", "index")))):
                 if isinstance(src, (int, float)) and not isinstance(src, bool):
                     row[key] = float(src) if key != "round_seed" else int(src)
+            # Legacy arena documents predate attributed damage. Keep the old HP-loss
+            # proxy only when the raw side does not contain the new measurement.
+            if _dig(side, fields.get('damage_dealt', 'damage_dealt')) is None and 'damage_dealt' not in side:
+                if 'opp_hp_lost' in row:
+                    row['damage_dealt'] = row['opp_hp_lost']
             # fix/pmc-arena-stalemate (2026-11-10): whether the sides fought at all (a shot between them); a round without
             # contact is a draw with no reward (fitness.no_contact_score). Older results without the key count as contact.
             contact = _dig(rnd, rc.get("contact_key", "contact"))

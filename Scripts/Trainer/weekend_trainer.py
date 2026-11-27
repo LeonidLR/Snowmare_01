@@ -21,6 +21,7 @@ from nighttrainer.fitness import aggregate
 from nighttrainer.genome import load_json, write_json
 from nighttrainer.runner import Guard, InstanceLock, JobRunner
 from nighttrainer.trainer import seed_for
+from nighttrainer.gate_identity import validate_pass, freeze_sha
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -122,8 +123,7 @@ def run(args):
     cfg, trainer_cfg = load_json(args.config), load_json(args.trainer_config)
     if not args.mock and args.trial is None and not args.plan_only:
         gate = ROOT / 'Saved/Trainer/gate_pass.json'
-        if not gate.exists() or not load_json(str(gate)).get('passed') or time.time() - gate.stat().st_mtime > 86400:
-            raise RuntimeError('A full night requires the existing trainer gate pass, fresh within 24h')
+        validate_pass(gate, trainer_cfg, freeze_sha(ROOT))
     run_dir = ROOT / 'Saved/Trainer' / args.run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     requested = {'schema': 'codex.weekend_run/1', 'mock': args.mock, 'trial': args.trial,

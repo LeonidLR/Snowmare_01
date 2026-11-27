@@ -22,7 +22,8 @@ param([string]$Repo = 'C:\Work\CodexTactics', [string]$Until = '07:45', [int]$Jo
       [ValidateSet('ab', 'trainer')][string]$WindowMode = 'ab',
       [string]$Py = 'C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe',
       [int]$HealthReserveMinutes = 45,
-      [switch]$SkipHealthCheck, [switch]$HealthCheckOnly, [switch]$DryRun)
+      [switch]$SkipHealthCheck, [switch]$HealthCheckOnly, [switch]$DryRun,
+      [switch]$QueueOnly) # one scheduled A/B queue window, then release the worker to the normal guard
 $ErrorActionPreference = 'Continue'
 Set-Location $Repo
 $root = Join-Path $Repo 'Saved\Worker\nightloop'; New-Item -ItemType Directory -Force $root | Out-Null
@@ -102,7 +103,12 @@ function Digest([string]$dir, [string]$label) {
 $seedBatch = Join-Path $Repo 'Scripts\Tools\worker_seed_batch.ps1'
 $k = 0
 Beat 'start'; L "night loop start pid $PID until $($deadline.ToString('s'))"
-function TrainerAt([string]$hhmm) { $t = [datetime]::ParseExact($hhmm, 'HH:mm', $null); return $deadline.Date.Add($t.TimeOfDay) }
+function TrainerAt([string]$hhmm) {
+    $t = [datetime]::ParseExact($hhmm, 'HH:mm', $null)
+    $at = $deadline.Date.Add($t.TimeOfDay)
+    if ($at -gt $deadline) { $at = $at.AddDays(-1) }
+    return $at
+}
 $script:TrainerDone = $false
 function RunAbWindow {
     # Designer 2026-11-21: the window runs the paired A/B queue (enemy AI session), not the trainer.
@@ -269,6 +275,11 @@ if ($HealthCheckOnly) {
     Beat "health-check-only $hStatus"
     if ($hStatus -eq 'ok' -or $hStatus -eq 'dry-run') { exit 0 }
     exit 1
+}
+if ($QueueOnly) {
+    if ($WindowMode -ne 'ab') { throw '-QueueOnly requires -WindowMode ab' }
+    MaybeTrainer
+    Beat 'queue-only ended'; exit 0
 }
 while ((Get-Date) -lt $deadline) {
     MaybeTrainer

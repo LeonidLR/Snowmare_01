@@ -44,6 +44,7 @@ def main():
         cfg['arena']['engine_args'] = [x for x in cfg['arena']['engine_args'] if not x.startswith('-LevelJson=')]
         cfg['evaluation']['matches'] = matches
         cfg['search']['mode'] = 'ga'
+        cfg['gate_scenarios'] = ['skirmish', 'chokepoint', 'street', 'roofs', 'blizzard', 'tactical']
         cfg['highlights']['auto_clips'] = False
     a.out.write_text(json.dumps(cfg, indent=2) + '\n', encoding='utf-8')
     print(json.dumps(cfg['fitness']['doctrine'], indent=2))

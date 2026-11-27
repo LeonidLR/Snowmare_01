@@ -10,6 +10,7 @@ All weights come from trainer_config.json "fitness".
 from __future__ import annotations
 
 from . import doctrine
+from .metrics import damage_dealt
 
 METRICS = ("kills", "flanks_attempted", "flanks_succeeded", "suppression_s", "ambushes", "retreats",
            "retreats_survived", "heals", "friendly_fire", "stuck_events", "close_shot_ratio", "close_hits_taken",
@@ -53,11 +54,12 @@ def round_score(r: dict, cfg: dict) -> float:
     # the time-limit penalty only hits a round where nobody hurt anybody; damage dealt and a kill
     # advantage pay, so a patient ambush that bleeds the enemy outscores both pure hiding and a frontal rush.
     engaged = (_num(r, "kills") + _num(r, "opp_kills") > 0.0 or _num(r, "hp_lost") > 0.0
-               or _num(r, "opp_hp_lost") > 0.0)
+               or (damage_dealt(r) or 0.0) > 0.0)
     if timed_out and not engaged:
         score += float(cfg.get("timeout_penalty", 0.0))
-    if "opp_hp_lost" in r:
-        score += float(cfg.get("damage_dealt", 0.0)) * min(1.0, _num(r, "opp_hp_lost") / hp_max)
+    damage = damage_dealt(r)
+    if damage is not None:
+        score += float(cfg.get("damage_dealt", 0.0)) * min(1.0, damage / hp_max)
     score += float(cfg.get("kill_advantage", 0.0)) * max(-3.0, min(3.0, _num(r, "kills") - _num(r, "opp_kills")))
     hp_factor = float(cfg.get("draw_hp_factor", 1.0)) if draw else 1.0
     score += float(cfg.get("hp_lost", -3.0)) * hp_factor * min(1.0, _num(r, "hp_lost") / hp_max)
