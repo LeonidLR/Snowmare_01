@@ -1,0 +1,138 @@
+5892:[2026.11.27-09.00.00:769][512]LogCodexTactics: Display: [Medic-Sapper] 👤 [SOLO MODE: ON] Each operative holds where you send him. [B] regroups.
+5913:[2026.11.27-09.00.02:261][601]LogCodexTactics: Display: [Cover] Medic-Sapper: left the cover (move order)
+5914:[2026.11.27-09.00.02:262][601]LogCodexTactics: Display: Medic-Sapper: move to (-7682, 16260) -> accepted
+5916:[2026.11.27-09.00.02:415][610]LogCodexTactics: Display: [Medic-Sapper] 🏃 Run to position!
+5917:[2026.11.27-09.00.02:416][610]LogCodexTactics: Display: Medic-Sapper: move to (-7682, 16269) sprint -> accepted
+5926:[2026.11.27-09.00.03:686][692]LogCodexTactics: Display: [Medic-Sapper] 🎯 Corner: click again to peek round it (double click: at a run).
+5928:[2026.11.27-09.00.03:853][702]LogCodexTactics: Display: Medic-Sapper: move to (-8731, 15352) sprint -> accepted
+5929:[2026.11.27-09.00.03:853][702]LogCodexTactics: Display: [Cover] Medic-Sapper: to the high cover at (-8731, 15352) at a sprint
+5930:[2026.11.27-09.00.03:853][702]LogCodexTactics: Display: [Cover] Medic-Sapper: run-and-peek - to the corner slot at (-8731, 15352), the peek round the end at (-8765, 15403) on arrival (at a sprint)
+5931:[2026.11.27-09.00.03:853][702]LogCodexTactics: Display: [Cover] run-and-peek click at (-8736, 15403, 53) on StaticMeshActor_1042 (single, double-click: at a sprint): Medic-Sapper runs to the left corner at (-8731, 15352) of the face looking (-0, -1) -> 0; alone
+5932:[2026.11.27-09.00.03:853][702]LogCodexTactics: Display: [Medic-Sapper] 🏃 To that corner - covering it.
+5941:[2026.11.27-09.00.04:754][761]LogCodexTactics: Display: Medic-Sapper: move to (-9150, 15253) -> accepted
+5944:[2026.11.27-09.00.04:906][770]LogCodexTactics: Display: [Medic-Sapper] 🏃 Run to position!
+5945:[2026.11.27-09.00.04:907][770]LogCodexTactics: Display: Medic-Sapper: move to (-9145, 15125) sprint -> accepted
+5973:[2026.11.27-09.00.06:702][880]LogCodexTactics: Display: Medic-Sapper: move to (-8270, 15830) -> accepted
+5978:[2026.11.27-09.00.06:864][889]LogCodexTactics: Display: [Medic-Sapper] 🏃 Run to position!
+5979:[2026.11.27-09.00.06:867][889]LogCodexTactics: Display: Medic-Sapper: move to (-8233, 15846) sprint -> accepted
+5999:[2026.11.27-09.00.08:556][995]LogCodexTactics: Medic-Sapper vaults over StaticMeshActor_1030 (95 cm)
+6000:[2026.11.27-09.00.08:556][995]LogCodexTactics: Display: [Stealth] lure WindowBreak at V(X=-8765.00, Y=15916.89, Z=5.00) (radius 15 m, by BP_Operative_C_20): 0 enemies investigate
+6001:[2026.11.27-09.00.08:557][995]LogCodexTactics: Display: [Window] Medic-Sapper breaks the window StaticMeshActor_1030 climbing through: noise 15 m, 0 enemies heard it
+6002:[2026.11.27-09.00.08:558][995]LogCodexTactics: Display: [Window] StaticMeshActor_1030 broken: 0 glass piece(s) hidden
+6005:[2026.11.27-09.00.08:576][996]LogCodexTactics: Display: [Vault] Medic-Sapper plays M_Neutral_Traversal_Hurdle_1_0_stand_F_V2_Lfoot_Rifle at x0.83 (vault 1.09 s)
+6089:[2026.11.27-09.00.15:478][438]LogCodexTactics: Display: Medic-Sapper: move to (-7499, 15868) -> accepted
+6091:[2026.11.27-09.00.15:639][446]LogCodexTactics: Display: [Medic-Sapper] 🏃 Run to position!
+6092:[2026.11.27-09.00.15:640][446]LogCodexTactics: Display: Medic-Sapper: move to (-7497, 15869) sprint -> accepted
+6152:[2026.11.27-09.00.21:517][814]LogCodexTactics: Display: [Formation] new leader Engineer looks 85 (facing -90; walk -, order -, as leader -, squad 85)
+6153:[2026.11.27-09.00.21:517][814]LogCodexTactics: Squad leader: Engineer
+6154:[2026.11.27-09.00.21:517][814]LogCodexTactics: Display: [SQUAD] 👤 Operative selected: Engineer
+6184:[2026.11.27-09.00.24:642][  3]LogCodexTactics: Display: [Formation] new leader Medic-Sapper looks 85 (facing 85; walk -, order -, as leader 85, squad 85)
+6185:[2026.11.27-09.00.24:642][  3]LogCodexTactics: Squad leader: Medic-Sapper
+6186:[2026.11.27-09.00.24:643][  3]LogCodexTactics: Display: [SQUAD] 👤 Operative selected: Medic-Sapper
+6196:[2026.11.27-09.00.26:132][100]LogCodexTactics: Display: [Formation] new leader Engineer looks -90 (facing -90; walk -, order -, as leader -90, squad 85)
+6197:[2026.11.27-09.00.26:132][100]LogCodexTactics: Squad leader: Engineer
+6198:[2026.11.27-09.00.26:132][100]LogCodexTactics: Display: [SQUAD] 👤 Operative selected: Engineer
+6227:[2026.11.27-09.00.28:372][243]LogCodexTactics: Display: [Cover] Engineer: left the cover (move order)
+6228:[2026.11.27-09.00.28:373][243]LogCodexTactics: Display: Engineer: move to (-7695, 16263) -> accepted
+6232:[2026.11.27-09.00.28:522][252]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+6233:[2026.11.27-09.00.28:524][252]LogCodexTactics: Display: Engineer: move to (-7687, 16267) sprint -> accepted
+6240:[2026.11.27-09.00.29:053][285]LogCodexTactics: Display: [Formation] new leader Medic-Sapper looks 85 (facing 67; walk -, order -, as leader 85, squad -11)
+6241:[2026.11.27-09.00.29:054][285]LogCodexTactics: Squad leader: Medic-Sapper
+6242:[2026.11.27-09.00.29:054][285]LogCodexTactics: Display: [SQUAD] 👤 Operative selected: Medic-Sapper
+6244:[2026.11.27-09.00.29:411][307]LogCodexTactics: Display: Medic-Sapper: move to (-6849, 16595) -> accepted
+6254:[2026.11.27-09.00.30:698][387]LogCodexTactics: Display: [RpgChoice] Commander (team 0): back to the m16 (a rifle target, no rocket target)
+6261:[2026.11.27-09.00.31:566][440]LogCodexTactics: Display: [Formation] new leader Engineer looks 87 (facing 87; walk 87, order 137, as leader -3, squad -99)
+6262:[2026.11.27-09.00.31:566][440]LogCodexTactics: Squad leader: Engineer
+6263:[2026.11.27-09.00.31:566][440]LogCodexTactics: Display: [SQUAD] 👤 Operative selected: Engineer
+6271:[2026.11.27-09.00.33:949][592]LogCodexTactics: Display: [RpgChoice] Commander (team 0): draws the rpg7 for BP_Operative_C_21 (38 m): suppress the group, score 0.70 (cluster 2, group 3 threat, cover 0, heavy 0, rockets 2)
+6279:[2026.11.27-09.00.35:047][659]LogCodexTactics: Display: Engineer: move to (-7459, 15758) -> accepted
+6280:[2026.11.27-09.00.35:048][659]LogCodexTactics: Display: Medic-Sapper: move to (-7304, 15880) -> accepted
+6283:[2026.11.27-09.00.35:294][674]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+6284:[2026.11.27-09.00.35:296][674]LogCodexTactics: Display: Engineer: move to (-7484, 15738) sprint -> accepted
+6285:[2026.11.27-09.00.35:296][674]LogCodexTactics: Display: Medic-Sapper: move to (-7320, 15848) sprint -> accepted
+6287:[2026.11.27-09.00.35:385][679]LogCodexTactics: Display: [Cover] Commander: left the cover (critically wounded)
+6288:[2026.11.27-09.00.35:385][679]LogCodexTactics: Warning: Commander: mesh 26 cm / 0.0 deg off its place on the capsule (untracked) - put back
+6289:[2026.11.27-09.00.35:385][679]LogCodexTactics: Display: Commander: stance STANDING -> PRONE
+6290:[2026.11.27-09.00.35:385][679]LogCodexTactics: Display: [CriticalWound] Commander goes down (HP 25 / 140 < 20 %): crawling only until healed
+6291:[2026.11.27-09.00.35:385][679]LogCodexTactics: Display: [Commander] 🩸 Commander is critically wounded and goes down! He can only crawl - heal him.
+6292:[2026.11.27-09.00.35:464][684]LogCodexTactics: Display: Engineer: move to (-7453, 15709) -> accepted
+6293:[2026.11.27-09.00.35:465][684]LogCodexTactics: Display: Medic-Sapper: move to (-7296, 15828) -> accepted
+6295:[2026.11.27-09.00.36:086][723]LogCodexTactics: Display: Engineer: move to (-7469, 15703) -> accepted
+6296:[2026.11.27-09.00.36:087][723]LogCodexTactics: Display: Medic-Sapper: move to (-7304, 15812) -> accepted
+6299:[2026.11.27-09.00.36:274][734]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+6300:[2026.11.27-09.00.36:275][734]LogCodexTactics: Display: Engineer: move to (-7435, 15671) sprint -> accepted
+6301:[2026.11.27-09.00.36:275][734]LogCodexTactics: Display: Medic-Sapper: move to (-7273, 15783) sprint -> accepted
+6307:[2026.11.27-09.00.37:750][822]LogCodexTactics: Display: [RpgChoice] Commander (team 0): back to the m16 (no rocket target)
+6310:[2026.11.27-09.00.37:961][834]LogCodexTactics: Display: Medic-Sapper: stance STANDING -> PRONE
+6311:[2026.11.27-09.00.37:961][834]LogCodexTactics: Display: [CriticalWound] Medic-Sapper goes down (HP 14 / 120 < 20 %): crawling only until healed
+6312:[2026.11.27-09.00.37:961][834]LogCodexTactics: Display: [Medic-Sapper] 🩸 Medic-Sapper is critically wounded and goes down! He can only crawl - heal him.
+6317:[2026.11.27-09.00.40:278][970]LogCodexTactics: Display: [SQUAD] 👤 Operative selected: Engineer
+6321:[2026.11.27-09.00.41:524][ 44]LogCodexTactics: Display: Engineer: move to (-7215, 15908) (near side first, windows closed) -> accepted
+6326:[2026.11.27-09.00.41:703][ 53]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+6327:[2026.11.27-09.00.41:704][ 53]LogCodexTactics: Display: Engineer: move to (-7215, 15908) sprint (near side first, windows closed) -> accepted
+6334:[2026.11.27-09.00.42:659][109]LogCodexTactics: Display: Engineer: move to (-7545, 16177) -> accepted
+6336:[2026.11.27-09.00.42:821][117]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+6337:[2026.11.27-09.00.42:821][117]LogCodexTactics: Display: Engineer: move to (-7545, 16177) sprint -> accepted
+6355:[2026.11.27-09.00.48:073][444]LogCodexTactics: Display: [Health] BP_Operative_C_22 died (source 'Medic-Sapper', max HP 150) at V(X=-5970.29, Y=18599.84, Z=60.65)
+6357:[2026.11.27-09.00.48:074][444]LogCodexTactics: Display: Operator Moreau killed in action (EOperativeRole::Engineer, 3 squad members alive)
+6391:[2026.11.27-09.00.50:787][669]LogCodexTactics: Display: [RpgChoice] Commander (team 0): keeps the m16 for BP_Operative_C_21 (27 m): suppress the group, score 0.70 < 0.50, veto the line is blocked short of the target (cluster 1, group 2, cover 0)
+6396:[2026.11.27-09.00.50:950][678]LogCodexTactics: Display: Medic-Sapper (corpse): overlay MID_M_Silhouette_0 taken off CharacterMesh0
+6397:[2026.11.27-09.00.50:950][678]LogCodexTactics: Display: Medic-Sapper (corpse): overlay MID_M_Silhouette_0 taken off WeaponMesh
+6398:[2026.11.27-09.00.50:950][678]LogCodexTactics: Display: Medic-Sapper (corpse): overlay MID_M_Silhouette_0 taken off WeaponSkeletalMesh
+6399:[2026.11.27-09.00.50:950][678]LogCodexTactics: Display: Medic-Sapper killed in action (EOperativeRole::MedicSapper, 2 squad members alive)
+6400:[2026.11.27-09.00.50:951][678]LogCodexTactics: Display: Medic-Sapper's squad remains: 8 item stacks, box V(X=127.07, Y=62.08, Z=38.19) at V(X=-7271.03, Y=16098.88, Z=34.39) (capsule at V(X=-7254.75, Y=16102.79, Z=42.15))
+6401:[2026.11.27-09.00.50:952][678]LogCodexTactics: Display: [CriticalWound] Medic-Sapper healed (HP 0 / 120): may stand again
+6431:[2026.11.27-09.00.53:341][828]LogCodexTactics: Display: [RpgChoice] Commander (team 0): draws the rpg7 for BP_Operative_C_21 (28 m): suppress the group, score 0.70 (cluster 2, group 2 threat, cover 0, heavy 0, rockets 2)
+6433:[2026.11.27-09.00.53:945][865]LogCodexTactics: Display: [RPG] Commander: rocket at BP_Operative_C_21 (28 m, off, chance 0.70)
+6445:[2026.11.27-09.00.54:056][871]LogCodexTactics: Display: [Commander] 🔄 Mag empty! Cover the sector!
+6457:[2026.11.27-09.00.54:452][896]LogCodexTactics: Display: [Corpse] Medic-Sapper (PMC team 0): the body is frozen where he fell
+6471:[2026.11.27-09.00.56:383][ 30]LogCodexTactics: Display: [RpgChoice] Commander (team 0): back to the m16 (a rifle target, no rocket target)
+6619:[2026.11.27-09.01.07:827][816]LogCodexTactics: Display: [RpgChoice] Commander (team 0): keeps the m16 for BP_Operative_C_21 (29 m): suppress the group, score 0.70 < 0.50, veto the line is blocked short of the target (cluster 2, group 2, cover 0)
+6621:[2026.11.27-09.01.08:088][836]LogCodexTactics: Display: [RpgChoice] Commander (team 0): draws the rpg7 for BP_Operative_C_21 (29 m): suppress the group, score 0.70 (cluster 2, group 2 threat, cover 0, heavy 0, rockets 1)
+6622:[2026.11.27-09.01.08:103][837]LogCodexTactics: Display: [RpgChoice] Commander (team 0): back to the m16 (a rifle target, no rocket target)
+6644:[2026.11.27-09.01.09:036][905]LogCodexTactics: Display: [Engineer] 🔄 Changing mags, hold them off!
+6749:[2026.11.27-09.01.16:132][383]LogCodexTactics: Display: Engineer: move to (-7612, 16964) -> accepted
+6751:[2026.11.27-09.01.16:310][394]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+6752:[2026.11.27-09.01.16:311][394]LogCodexTactics: Display: Engineer: move to (-7611, 16961) sprint -> accepted
+6765:[2026.11.27-09.01.17:998][499]LogCodexTactics: Display: Engineer: move to (-7215, 16928) (near side first, windows closed) -> accepted
+6768:[2026.11.27-09.01.18:203][511]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+6769:[2026.11.27-09.01.18:204][511]LogCodexTactics: Display: Engineer: move to (-7215, 16928) sprint (near side first, windows closed) -> accepted
+6770:[2026.11.27-09.01.18:563][529]LogCodexTactics: Engineer vaults over StaticMeshActor_1026 (95 cm)
+6771:[2026.11.27-09.01.18:563][529]LogCodexTactics: Display: [Stealth] lure WindowBreak at V(X=-7365.00, Y=16928.53, Z=5.00) (radius 15 m, by BP_Operative_C_19): 0 enemies investigate
+6772:[2026.11.27-09.01.18:564][529]LogCodexTactics: Display: [Window] Engineer breaks the window StaticMeshActor_1026 climbing through: noise 15 m, 0 enemies heard it
+6773:[2026.11.27-09.01.18:566][529]LogCodexTactics: Display: [Window] StaticMeshActor_1026 broken: 0 glass piece(s) hidden
+6776:[2026.11.27-09.01.18:584][530]LogCodexTactics: Display: [Vault] Engineer plays M_Neutral_Traversal_Hurdle_1_0_stand_F_V2_Lfoot_Rifle at x1.09 (vault 0.83 s)
+6780:[2026.11.27-09.01.19:115][560]LogCodexTactics: Display: [RpgChoice] Commander (team 0): keeps the m16 for BP_Operative_C_21 (29 m): suppress the group, score 0.70 < 0.50, veto the line is blocked short of the target (cluster 2, group 2, cover 0)
+6787:[2026.11.27-09.01.19:392][574]LogCodexTactics: Display: [RpgChoice] Commander (team 0): draws the rpg7 for BP_Operative_C_23 (28 m): in cover, score 0.80 (cluster 2, group 2 threat, cover 1, heavy 0, rockets 1)
+6790:[2026.11.27-09.01.19:412][575]LogCodexTactics: Display: [RpgChoice] Commander (team 0): back to the m16 (a rifle target, no rocket target)
+6794:[2026.11.27-09.01.19:578][583]LogCodexTactics: Display: Engineer: move to (-6838, 17889) -> accepted
+6796:[2026.11.27-09.01.19:753][593]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+6797:[2026.11.27-09.01.19:754][593]LogCodexTactics: Display: Engineer: move to (-6813, 17968) sprint -> accepted
+6835:[2026.11.27-09.01.22:671][762]LogCodexTactics: Display: [RpgChoice] Commander (team 0): draws the rpg7 for BP_Operative_C_23 (28 m): in cover, score 0.80 (cluster 1, group 2 threat, cover 1, heavy 0, rockets 1)
+6836:[2026.11.27-09.01.22:686][763]LogCodexTactics: Display: [RpgChoice] Commander (team 0): back to the m16 (a rifle target, no rocket target)
+6849:[2026.11.27-09.01.25:938][990]LogCodexTactics: Display: [RpgChoice] Commander (team 0): draws the rpg7 for BP_Operative_C_21 (24 m): suppress the group, score 0.70 (cluster 1, group 2 threat, cover 0, heavy 0, rockets 1)
+6850:[2026.11.27-09.01.25:953][991]LogCodexTactics: Display: [RpgChoice] Commander (team 0): back to the m16 (a rifle target, no rocket target)
+6851:[2026.11.27-09.01.26:272][ 12]LogCodexTactics: Display: [Commander] 🔄 Mag empty! Cover the sector!
+6863:[2026.11.27-09.01.29:751][258]LogCodexTactics: Display: [Engineer] 🔄 Reloading! Cover me!
+6864:[2026.11.27-09.01.29:767][259]LogCodexTactics: Display: [Sidearm] Engineer: shotgun empty, enemy 7.3 m away -> pistol (draw 0.35 s)
+6872:[2026.11.27-09.01.30:252][291]LogCodexTactics: Display: [RpgChoice] Commander (team 0): keeps the m16 for BP_Operative_C_23 (24 m): none, score 0.00 < 0.50, veto none (cluster 1, group 1, cover 0)
+6875:[2026.11.27-09.01.31:483][374]LogCodexTactics: Display: Engineer: move to (-6372, 17923) -> accepted
+6876:[2026.11.27-09.01.31:794][395]LogCodexTactics: Display: [RpgChoice] Commander (team 0): draws the rpg7 for BP_Operative_C_23 (26 m): in cover, score 0.80 (cluster 1, group 1 threat, cover 1, heavy 0, rockets 1)
+6887:[2026.11.27-09.01.32:171][420]LogCodexTactics: Display: [RpgChoice] Commander (team 0): back to the m16 (a rifle target, no rocket target)
+6903:[2026.11.27-09.01.34:319][566]LogCodexTactics: Display: [Engineer] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+6906:[2026.11.27-09.01.34:500][578]LogCodexTactics: Display: [Cover] Engineer: double-click on another cover - not in cover -> the ordinary cover order
+6907:[2026.11.27-09.01.34:500][578]LogCodexTactics: Display: Engineer: move to (-6333, 17826) -> accepted
+6908:[2026.11.27-09.01.34:500][578]LogCodexTactics: Display: [Cover] Engineer: to the low cover at (-6333, 17826) at a sprint
+6909:[2026.11.27-09.01.34:501][578]LogCodexTactics: Display: [Engineer] 🏃 Take cover!
+6914:[2026.11.27-09.01.35:407][641]LogCodexTactics: Display: [RpgChoice] Commander (team 0): draws the rpg7 for BP_Operative_C_23 (25 m): in cover, score 0.80 (cluster 1, group 2 threat, cover 1, heavy 0, rockets 1)
+6915:[2026.11.27-09.01.35:560][652]LogCodexTactics: Display: Engineer: stance STANDING -> CROUCHED
+6916:[2026.11.27-09.01.35:560][652]LogCodexTactics: Display: [Cover] Engineer: entered the low cover at (-6333, 17826), facing right, corners L 1 R 1
+6917:[2026.11.27-09.01.35:560][652]LogCodexTactics: Display: [Engineer] 🧱 Behind cover!
+6918:[2026.11.27-09.01.35:561][652]LogCodexTactics: Display: [Cover] Engineer: runs into the cover (116 cm out, speed 91, clip lead 98, glide 49)
+6919:[2026.11.27-09.01.35:571][653]LogCodexTactics: Display: [CoverSet] Engineer: cover at V(X=-6288.00, Y=17826.03, Z=90.00) judged outdoor -> set 'm4'
+6920:[2026.11.27-09.01.35:573][653]LogCodexTactics: Display: [RpgChoice] Commander (team 0): aims the rocket at BP_Operative_C_21: suppress the group, score 0.70
+6921:[2026.11.27-09.01.35:778][667]LogCodexTactics: Display: [Sidearm] Engineer: back to shotgun (no target)
+6922:[2026.11.27-09.01.35:778][667]LogCodexTactics: Display: [Engineer] 🔄 Mag empty! Cover the sector!
+6923:[2026.11.27-09.01.35:961][681]LogCodexTactics: Display: [Cover] Engineer: settled in the cover after 0.41 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+6924:[2026.11.27-09.01.36:010][685]LogCodexTactics: Display: [RPG] Commander: rocket at BP_Operative_C_21 (24 m, on target, chance 0.70)
+6929:[2026.11.27-09.01.36:216][699]LogCodexTactics: Display: Operator Roux killed in action (EOperativeRole::Engineer, 2 squad members alive)
