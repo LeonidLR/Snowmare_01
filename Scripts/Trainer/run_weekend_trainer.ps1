@@ -13,10 +13,6 @@ $Repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 if ($RunId -notmatch '^[A-Za-z0-9_-]+$') { throw 'RunId must be a simple folder name' }
 $Gate = Join-Path $Repo 'Saved/Trainer/gate_pass.json'
 if (-not (Test-Path -LiteralPath $Gate)) { throw 'Run night_trainer.py --check-gate first (existing trainer gate requirement)' }
-$GateDoc = Get-Content -LiteralPath $Gate -Raw -Encoding UTF8 | ConvertFrom-Json
-if ($GateDoc.passed -ne $true -or ((Get-Date) - (Get-Item -LiteralPath $Gate).LastWriteTime).TotalHours -gt 24) {
-    throw 'Training gate is blocked or older than 24h; refresh before the weekend run'
-}
 $Prepared = Join-Path $Repo "Saved/Trainer/$RunId-input/trainer_config.json"
 Push-Location $Repo
 try {
@@ -25,6 +21,8 @@ try {
         & $Py Scripts/Trainer/prepare_demo_trainer.py $Dataset --champion $Champion --weekend Scripts/Trainer/weekend_trainer.json --out $Prepared
         if ($LASTEXITCODE -ne 0) { throw 'Demo trainer preparation failed' }
     }
+    & $Py Scripts/Trainer/nighttrainer/gate_identity.py --gate $Gate --config $Prepared --repo $Repo
+    if ($LASTEXITCODE -ne 0) { throw 'Gate does not match prepared config / freeze; refresh before training' }
     & $Py Scripts/Trainer/night_trainer.py --config $Prepared --run-id "$RunId-learn" --hours $TrainingHours --parallel 1 --yield-to-editor
     if ($LASTEXITCODE -ne 0) { throw 'Training failed; no evaluation launched' }
     $Candidate = Join-Path $Repo "Saved/Trainer/$RunId-learn/champion_weights.json"

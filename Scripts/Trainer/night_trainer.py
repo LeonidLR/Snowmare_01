@@ -19,6 +19,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import subprocess
 import sys
 import time
 
@@ -28,6 +29,7 @@ sys.path.insert(0, HERE)
 from nighttrainer.runner import InstanceLock  # noqa: E402
 from nighttrainer.trainer import Trainer  # noqa: E402
 from nighttrainer.gate import evaluate_training_gate  # noqa: E402
+from nighttrainer.gate_identity import identity, freeze_sha, validate_pass  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
 
@@ -118,6 +120,29 @@ def _check_gate(args, cfg) -> int:
     gate_res = evaluate_training_gate(
         cfg, baseline_data=baseline_data, sweep_data=sweep_data, probe_path=args.gate_probe,
     )
+    try:
+        sha = freeze_sha(args.repo_root)
+    except (OSError, subprocess.SubprocessError):
+        sha = None
+    gate_res['identity'] = identity(cfg, sha)
+    gate_res['created_unix'] = time.time()
+    # G3 must describe this freeze and cover every configured scenario. Summaries
+    # from another build, or an unnamed subset, cannot authorize a night.
+    expected = cfg.get('gate_scenarios') or []
+    issues = []
+    if not sha or not baseline_data or baseline_data.get('identity') != gate_res['identity']:
+        issues.append('Baseline config hash / freeze SHA does not match current gate')
+    if expected:
+        from collections import Counter
+        counts = Counter(r.get('scenario') for r in (baseline_data or {}).get('rounds', []) if not r.get('crashed'))
+        for scenario in expected:
+            if counts[scenario] < 30:
+                issues.append(f'Baseline scenario {scenario} has {counts[scenario]} healthy rounds; needs >=30')
+    if issues:
+        gate_res['checks']['G3_baseline_sufficiency']['passed'] = False
+        gate_res['checks']['G3_baseline_sufficiency']['issues'].extend(issues)
+        gate_res['reasons'].extend('[G3 Baseline] ' + issue for issue in issues)
+        gate_res['passed'] = False
 
     trainer_saved = os.path.join(args.repo_root, "Saved", "Trainer")
     os.makedirs(trainer_saved, exist_ok=True)
@@ -164,6 +189,11 @@ def _run(args, cfg, run_id) -> int:
     trainer = Trainer(cfg, run_id, args.repo_root, mock=args.mock, deadline=deadline_from(args),
                       max_generations=args.max_generations, parallel=args.parallel,
                       yield_to_editor=args.yield_to_editor, poll_s=args.poll_s)
+    if not trainer.mock and not (args.check or args.make_highlights):
+        # Resume uses run.json's frozen config, even when the supplied config or
+        # --mock flag differs. Bind the gate to what will actually execute.
+        validate_pass(os.path.join(args.repo_root, 'Saved/Trainer/gate_pass.json'),
+                      trainer.cfg, freeze_sha(args.repo_root))
     if args.check:
         summary = trainer.check(args.check, args.check_jobs, clips=not args.no_clips)
         print(f"check flow: {summary}; report: {os.path.join(trainer.run_dir, 'report.html')}")

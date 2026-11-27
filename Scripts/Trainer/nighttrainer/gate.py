@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .adapter import ArenaAdapter
+from .metrics import damage_dealt
 
 
 def extract_used_metrics(config: dict) -> Set[str]:
@@ -119,6 +120,8 @@ def get_metric_value_from_round(rnd: dict, metric: str, side: str = "A") -> Any:
     """
     if not isinstance(rnd, dict):
         return None
+    if metric == 'damage_dealt' and ('damage_dealt' in rnd or 'opp_hp_lost' in rnd):
+        return damage_dealt(rnd)
     if metric.startswith('behaviour.'):
         key = metric.split('.', 1)[1]
         if 'behaviour_observed' in rnd and key not in rnd['behaviour_observed']:
@@ -269,6 +272,8 @@ def check_baseline_sufficiency(baseline_data: Optional[dict], min_rounds_per_sce
     counts: Dict[str, int] = {}
     if rounds:
         for r in rounds:
+            if r.get('crashed'):
+                continue
             scen = r.get("scenario") or "default"
             counts[scen] = counts.get(scen, 0) + 1
     else:
