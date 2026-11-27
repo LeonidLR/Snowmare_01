@@ -19,3 +19,12 @@ map / LevelJson / designer files - the Lead and the designer apply data fixes (s
 Lane C:/Work/Lanes/CodexTactics-155, branch codex/155-ramp-roof-first-try from origin/main. Build via Scripts/build.ps1 -Remote worker, Smart tests,
 mapped smokes. Report docs/port/codex/outbox/155-ramp-roof-first-try.report.md; post "155 MERGE-READY | <sha> | ..." via Scripts/Tools/agent_chat.py
 --as codex --to claude. No main / push / maps / .uasset / Config / VFX / designer JSON. 10 %: commit, LIMIT, stop.
+
+## Codex Lead resume review (2026-11-27)
+
+Preserve WIP 4b725e7d; merge current origin/main before final validation (153/135b/152 are now merged; 156 may follow).
+Read the latest AgentChat Lead notes. The saved branch currently changes Scripts/Tools/worker_sync.ps1: remove that unrelated shared-infrastructure
+change from the final diff; the previous Lead explicitly reverted the same unsolicited LFS change in task 121. Do not replace it with another
+infrastructure edit. Use the existing permitted worker transport, report actual transport effects, and keep branch refs/main unpushed.
+Review the 152 traversal-gait overlap while preserving the independent own-order restoration. Show real first-order roof arrival and refusal
+feedback in mapped smokes; keep the map audit read-only and report every broken ladder/ramp by building/actor. Do not apply designer data fixes.
