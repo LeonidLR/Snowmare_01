@@ -6,8 +6,6 @@
 #include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
 
-#include "CodexTactics.h"
-
 #include "Characters/AimOffsetRules.h"
 #include "Characters/FacingRules.h"
 #include "Characters/FireArcRules.h"
