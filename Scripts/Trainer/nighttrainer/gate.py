@@ -26,6 +26,8 @@ def extract_used_metrics(config: dict) -> Set[str]:
 
     # Fitness bonuses and penalties
     fitness = config.get("fitness") or {}
+    for term in (fitness.get('doctrine') or {}).get('terms', []):
+        metrics.add(term['metric'])
     for block_name in ("bonuses", "penalties"):
         block = fitness.get(block_name) or {}
         for k in block.keys():
@@ -117,6 +119,11 @@ def get_metric_value_from_round(rnd: dict, metric: str, side: str = "A") -> Any:
     """
     if not isinstance(rnd, dict):
         return None
+    if metric.startswith('behaviour.'):
+        key = metric.split('.', 1)[1]
+        if 'behaviour_observed' in rnd and key not in rnd['behaviour_observed']:
+            return None
+        return get_metric_value_from_round(rnd, key, side)
 
     # 1. Direct key on canonical row (objective_win derived by adapter, damage_dealt, kills, etc.)
     if metric in rnd and not metric.startswith("_"):

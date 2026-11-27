@@ -9,6 +9,8 @@ All weights come from trainer_config.json "fitness".
 """
 from __future__ import annotations
 
+from . import doctrine
+
 METRICS = ("kills", "flanks_attempted", "flanks_succeeded", "suppression_s", "ambushes", "retreats",
            "retreats_survived", "heals", "friendly_fire", "stuck_events", "close_shot_ratio", "close_hits_taken",
            # task #53 (objective rounds): bonuses via fitness.bonuses (damage_from_concealment, first_strike,
@@ -72,6 +74,8 @@ def round_score(r: dict, cfg: dict) -> float:
     cr = cfg.get("close_range")
     if cr and "close_shot_ratio" in r:  # no track / no shots = no penalty
         score += float(cr.get("weight", -4.0)) * min(1.0, max(0.0, _num(r, "close_shot_ratio")))
+    if cfg.get('doctrine'):
+        score += doctrine.evaluate(r, cfg['doctrine'])['bonus']
     return score
 
 

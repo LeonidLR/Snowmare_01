@@ -67,7 +67,8 @@ class Trainer:
         if mock_in_process is None:
             mock_in_process = bool(c.get("mock", {}).get("in_process", False))
         mock_cfg = dict(c.get("mock", {}), reference_weights=self.baseline_path) if self.mock else None
-        self.adapter = ArenaAdapter(c["arena"], self.repo_root, mock_cfg, c.get("fitness", {}).get("close_range"))
+        adapter_cfg = dict(c['arena'], require_loaded_weights=False) if self.mock else c['arena']
+        self.adapter = ArenaAdapter(adapter_cfg, self.repo_root, mock_cfg, c.get("fitness", {}).get("close_range"))
         self.runner = JobRunner(self.adapter, c["arena"], self.parallel, self.mock and mock_in_process, mock_cfg,
                                 self.log)
         self.status = {}
@@ -379,7 +380,7 @@ class Trainer:
             rounds = _lookup_rounds(match, default_rounds, opp)
             for _ in range(int(match.get("jobs", 1))):
                 plan.append({"opponent": opp, "weights_b": champion_path if opp == "champion" else None,
-                             "map": match.get("map"), "rounds": rounds})
+                             "map": match.get("map"), "rounds": rounds, 'engine_args': match.get('engine_args', [])})
         return plan
 
     def _archive_in_path(self, gen_dir: str) -> str:
@@ -448,6 +449,7 @@ class Trainer:
                          "rounds": rounds,
                          "seed": seed_for(self.run_seed, gen, stream, index),
                          "map": match.get("map") or self.cfg["arena"].get("map"),
+                         'engine_args': match.get('engine_args', []),
                          "time_limit_s": self.cfg["arena"].get("time_limit_s", 300)})
         return jobs
 
