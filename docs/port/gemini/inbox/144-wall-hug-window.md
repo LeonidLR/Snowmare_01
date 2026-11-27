@@ -12,5 +12,16 @@ Wanted:
 4. Same for PMC (weapons and tactics are for all sides) if it reuses the same component - report if not.
 - Pure rules (window interval on the wall-hug path, crouch span, window slot pick) -> unit tests. Smoke on X6 (that building, street x1_10 side):
   wall hug -> order along the wall past 2 windows -> crouched under both; order to a window slot -> enemy outside -> fires through it.
+ADDED by the designer 2026-11-27 (same task, same rules as the wall-edge corner peek that works today):
+5. WINDOW EDGE = A CORNER: an operative STANDING next to a window opening (beside the frame, in the wall plane) takes the window edge like a
+   wall corner: the corner peek / lean-out round the frame (CornerAim / PeekSightRules, OperativeCharacterCornerAim.cpp) and fires out of the
+   window from the side, back behind the wall when not firing. Left and right frame edges, standing and crouched where the sill allows.
+6. BLIND FIRE UNDER THE SILL: crouched under a window he can blind-fire - stays down, raises the arm / weapon over the sill and sprays
+   (the low-cover blind fire that today works only on roof parapets / low covers: IsCoverShotBlind, ECoverFireMode::BlindFire,
+   OperativeCharacterFireGate.cpp, G023 parapet fire in OperativeCharacterCover.cpp ~727). Windows are not low-cover slots today, which is
+   probably why it never triggers there - make the under-window slot a low-cover-like slot with the sill as its top.
+Smoke steps for 5 and 6 (full smoke names; extend WindowCoverFireSmoke or the 144 smoke): standing beside a window -> peeks round the frame and
+hits a target outside; under the window in BlindFire mode -> shots leave over the sill while he stays crouched.
+- Run headless via Scripts/Tools/agy_task.ps1 (lane C:/Work/Lanes/CodexTactics-144); post "144 MERGE-READY | <sha> | ..." via agent_chat.py --as gemini.
 - Branch gemini/144-wall-hug-window from origin/main; build via machine_dispatch.py; report docs/port/gemini/outbox/144-wall-hug-window.report.md;
-  FINISH `144 FINISH | ...`. Queue: after 141.
+  FINISH `144 FINISH | ...`. Queue (Lead 2026-11-27): Gemini 135b -> 154 -> 144.
