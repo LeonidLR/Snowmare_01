@@ -34,32 +34,30 @@ executor as usual. The Claude Lead updates the STATE block below after every mer
   `pro` subagent, the Lead reviews every diff.
 - Spend little: react only to FINISH / blockers / the designer.
 
-## STATE (updated by the Claude Lead - 2026-11-27 ~03:00)
-origin/main = Merge codex/148 (2026-11-27 ~03:00). Night 11-26/27 merged: claude/firstaid-cover, Gemini 145 look lock, Gemini 150 formation run stance,
-121 full recording events + demo_tactics.py (Codex finished Gemini's branch; lead reverted an unasked worker_sync LFS change), 148 TG fight replay +
-notes + demo_notes.py + 68 building numbers (lead test fix: AllFilesParse skips *.buildings_index.json). Designer priority 11-27: recording + analysis.
-Codex runs HEADLESS now (codex exec --dangerously-bypass-approvals-and-sandbox, designer OK; prompts in Saved/Lead/codex_*_prompt_*.md).
-Codex 149 demos->trainer MERGED 06:15 (dataset 17 rec / 65 fights, doctrine scoring, weekend scripts; G2 dead metrics + no G3 baseline block full weekend runs - see its report). 139 MERGE-READY 69927b35 but RoofLadderSmoke needs the designer's LadderActor_22 map fix
-(TopStandoff/TopExitStandoff 49->125) - merge after it. 135b: Antigravity WIP 8d70b27c (CoverIndoor + CornerSlot smokes FAIL) - Gemini API credits
-are exhausted (402), agy CLI needs a sign-in; queue 135b to Codex after 149. Queue: 149 -> 147 -> 135b -> 143 -> 146 -> 136 -> 137 -> 138 -> 140.
-Live queues (re-plan, supersedes the lines below): Codex 139 -> 121 -> 148 -> 149 -> 147; Gemini 135b -> 141 -> 144.
-Designer away tonight (Saved/Lead/MAIN_PC_FREE set - delete when he is back). Merged today: G023 + Codex 134 (4851b3aa), Gemini 135 (10963d3a), Codex 142 TG Main/Play switch (549b0868),
-lanes auto-cleanup (8605d41d), claude/ux-1126 = selected-only vision cones (Shift+O), inventory closes on item pick, Take ALL closes loot (82c06f7b).
-Play copy = a12dea10 built (has 135; NOT yet ux-1126 - update when its editor is closed).
-Codex queue: 139 roof ladder no path (WIP 29de97cd) -> 147 PMC fled = tactical defeat (designer plays sectors) -> 143 threat arrows ->
-146 critical self recovery -> 136 breach click + door peek reveal (layout only, inner-room enemies hidden; works in big buildings, not small) ->
-137 corpse search distance -> 138 fence queue vs new orders (buffered traversal) -> 140 control groups (Ctrl+1..4 / F1..F4) -> G022 medkit -> smoke grenade.
-Gemini queue: 145 look direction lock (FINISH 04bdf1b9; part B arrival turn after a RAMP roof climb + roof pitch-down check pending, then
-MERGE-READY) -> 135b left corner body ~1 m off + body ignores Shift look right (measure bones, not capsule) -> 141 straight-line moves
-(cover order runs around a fence first; Alt+click strict straight, Ctrl+click ground in pause = waypoint) -> 144 wall-hug windows -> 121
-(paused at fbad5357) -> G027 -> G021 -> 105b -> 118.
-Known flaky: FormationStairSmoke S04 leg (83 s budget) failed once then passed (gate 82c06f7b) - give it to Codex if it repeats.
-Designer decisions today: smoke grenade cloud 60 s + 15 s fade, squad throws smoke on retreat + on order; control groups max 4 (F1-F4);
-straight moves 1+2, waypoints only in tactical pause; Shift+click = world direction lock (variant B, keep it); FocalRig pilot after the
-weekend demo check (memory focalrig-pilot); HTN plugin rejected; stay on Unreal (Godot back-port ~4-6 months).
-API credit: ~7.5 USD left under the 100 USD hard cap (Saved/Orchestrator/api_spend.jsonl); designer 11-26: agents may use it for one
-Sonnet review of their own diff per L3 task (api_task.py, changed files only). Monthly code audit (Fable, separate $ budget) - talk with
-the designer on 11-28; plan: Codex runs Scripts/Tools/weekly_audit.ps1 first, Fable only on 8-10 hot systems.
+## STATE (updated by the Codex Lead - 2026-11-27, after gate-v10 completion) - HANDOVER: Claude weekly limit 98 %, resets 2026-11-28 11:00
+Designer 2026-11-27 15:10: "when close to 1 % of tokens - Codex is the new Lead"; 15:20 ACTIVATED ("Да, Codex лид"): Codex leads
+until Claude's reset (Sat 2026-11-28 11:00 local), then hands back (post a short STATE here + chat line).
+origin/main 8af22865 (pushed). Gate-v10-1/2/3 all EXIT 0: 135b (50334424), 153 (f17b3f35), 154 (8af22865); builds, Smart tests and mapped worker smokes passed; designer files intact. Earlier today merged: 149b trainer metrics, 151 per-round demo marks + TG->Play X6 sync, 152 run order kept after traversals.
+Designer priority: recording + analysis of his fights; trainer runs NEXT week (memory trainer-next-week-2026-11-27; 149b worker baseline task disabled).
+
+LIVE STATUS (Codex Lead takeover; designer explicitly requested 156 -> 155):
+1. Gate chain 135b -> 153 -> 154 is GREEN and pushed; Saved/Logs/gate-v10-{1,2,3}.exit each says EXIT 0.
+   Play copy contains 8af22865 (play/current 44bd2a72); its worker build was still running at takeover. Do not start another play build.
+2. Gemini 144 -> 154b is running via agy_task.ps1; 144 START at 15:16, heartbeat at 15:46 local. The earlier authentication failure
+   was resolved by the designer removing dead Antigravity Tools NRPT DNS rules. agy_task.ps1 probes proxy 8899 then direct Google access;
+   this reviewed route fix is committed with this handover. Watch MERGE-READY / BLOCKER / LIMIT; do not duplicate the run.
+3. Designer request: after committing this STATE, launch 156 -> 155 sequentially through Scripts/Tools/codex_task.ps1 in the EXISTING lanes.
+   156 resumes WIP 45dc6940 using Saved/Lead/codex_156_resume.md; incorporate origin/main (135b + 153) before verification.
+   155 uses docs/port/codex/inbox/155-ramp-roof-first-try.md. Queue runner Saved/Lead/codex_156_155.ps1 stops on failed/limited 156.
+   The app Lead returns after launch to avoid concurrent active Codex work on the same usage. No main merge/push by executors.
+4. This handover commit remains local: automatic approval review rejected origin/main push as insufficiently explicit authorization.
+   Existing gameplay merges above are already on origin/main. Ask the designer before retrying the handover push.
+QUEUE after these: 139 (MERGE-READY 69927b35; merge only after the designer's LadderActor_22 TopStandoff/TopExitStandoff 49->125 map fix) ->
+147 PMC fled -> 143 -> 146 -> 136 -> 137 -> 138 -> 140. 157 per-shot accuracy recording: ONLY if the designer says yes (asked, no answer yet).
+Designer analysed 2 fights in "Хроника боя" (CodexTactics-play/Saved/Demos/2026-11-27_*_085013 / _104238 .notes.json): keep the notes, the
+trainer work next week turns them into rules / plays (5 annotated fights first, then A/B).
+Lead review lessons today: Codex once changed shared infra unasked (worker_sync LFS, reverted); agents' self-reported BLOCKERs were often fine
+(121, 148) - always look at the diff + gate yourself; agy needs prompts as a FILE pointer (PS 5.1 breaks long args).
 
 ## Re-plan 2026-11-26 evening (designer: Gemini unreliable, rely on Codex)
 Codex: 139 (finishing) -> 121 full recording (Gemini WIP fbad5357; needed before the designer's fights 11-27) -> 147 PMC fled = win ->
