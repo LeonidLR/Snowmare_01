@@ -104,6 +104,7 @@ namespace WallHugWindowSmoke
 		float BlindMaxHeadZ = -FLT_MAX;
 		float BlindMaxHandZ = -FLT_MAX;
 		float BlindMaxMuzzleZ = -FLT_MAX;
+		bool bBlindPoseSampled = false;
 	};
 
 	void SamplePose(AOperativeCharacter& Op, FVector& OutHead, FVector& OutPelvis, FVector& OutHand)
@@ -601,6 +602,7 @@ namespace WallHugWindowSmoke
 			State.BlindMaxHeadZ = -FLT_MAX;
 			State.BlindMaxHandZ = -FLT_MAX;
 			State.BlindMaxMuzzleZ = -FLT_MAX;
+			State.bBlindPoseSampled = false;
 			Leader->bTacticalCeaseFire = false;
 			Pmc->RefreshSight();
 			Next(State, EStage::UnderSillBlindFire);
@@ -615,15 +617,19 @@ namespace WallHugWindowSmoke
 				return Finish(State, false);
 			}
 			Pmc->RefreshSight();
-			FVector Head, Pelvis, Hand;
-			SamplePose(*Leader, Head, Pelvis, Hand);
-			const float MuzzleZ = static_cast<float>(Leader->GetWeaponMuzzleLocation().Z);
-			State.BlindMaxHeadZ = FMath::Max(State.BlindMaxHeadZ, static_cast<float>(Head.Z));
-			State.BlindMaxHandZ = FMath::Max(State.BlindMaxHandZ, static_cast<float>(Hand.Z));
-			State.BlindMaxMuzzleZ = FMath::Max(State.BlindMaxMuzzleZ, MuzzleZ);
+			if (Leader->bIsBlindFiring)
+			{
+				FVector Head, Pelvis, Hand;
+				SamplePose(*Leader, Head, Pelvis, Hand);
+				const float MuzzleZ = static_cast<float>(Leader->GetWeaponMuzzleLocation().Z);
+				State.BlindMaxHeadZ = FMath::Max(State.BlindMaxHeadZ, static_cast<float>(Head.Z));
+				State.BlindMaxHandZ = FMath::Max(State.BlindMaxHandZ, static_cast<float>(Hand.Z));
+				State.BlindMaxMuzzleZ = FMath::Max(State.BlindMaxMuzzleZ, MuzzleZ);
+				State.bBlindPoseSampled = true;
+			}
 			const bool bStayedCrouched = Leader->GetStance() == EOperativeStance::Crouching && !Leader->IsCornerAimActive();
-			const bool bHeadHidden = State.BlindMaxHeadZ <= State.StandHeadZBefore - 15.f;
-			const bool bWeaponRaised = FMath::Max(State.BlindMaxHandZ, State.BlindMaxMuzzleZ) > State.BlindMaxHeadZ;
+			const bool bHeadHidden = State.bBlindPoseSampled && State.BlindMaxHeadZ <= State.StandHeadZBefore - 20.f;
+			const bool bWeaponRaised = State.bBlindPoseSampled && FMath::Max(State.BlindMaxHandZ, State.BlindMaxMuzzleZ) > State.BlindMaxHeadZ;
 			const bool bOriginOverSill = Leader->GetCoverFireOrigin().Z > State.Setup.Box2.Max.Z;
 			if (Leader->GetCoverBlindShots() > State.BlindShotsBefore && Target->HealthComponent->GetCurrentHealth() < State.BlindHpBefore - 1.f)
 			{
@@ -642,11 +648,11 @@ namespace WallHugWindowSmoke
 		}
 		case EStage::PmcReuse:
 		{
-			AOperativeCharacter* PmcFighter = Pmc->SpawnFighter(2, State.Setup.SlotWin2.WorldLocation, FRotator::ZeroRotator, 244, 0);
+			AOperativeCharacter* PmcFighter = Pmc->SpawnFighter(2, State.Setup.SlotWin2.WorldLocation + FVector(0.f, 0.f, 95.f), FRotator::ZeroRotator, 244, 0);
 			Check(State, PmcFighter != nullptr, TEXT("spawned PMC fighter for reuse check"));
 			if (PmcFighter)
 			{
-				PmcFighter->EnterCover(State.Setup.SlotWin2);
+				EnterSlot(*PmcFighter, State.Setup.SlotWin2);
 				Check(State, PmcFighter->IsWindowCoverConfirmed() && PmcFighter->CanFireFromCover(),
 					TEXT("PMC fighter reuses AOperativeCharacter window cover component"));
 				Pmc->DestroyTeam(2);
