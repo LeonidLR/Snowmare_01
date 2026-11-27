@@ -1497,3 +1497,8 @@ Codex lane148 delivered TG replay/annotations, demo_notes decoder and new X6 bui
 - 121 direct-loss completeness checkpoint (2026-11-27): health recording now observes actual common health decreases (normal/direct/cold/burning/bleeding) exactly once, removing actor callback duplication. Known TakeHit attackers arm a synchronous context; critical down is recorded across the same paths. Added C++ AllHealthLossPaths coverage; final worker checks pending.
 
 **121 BLOCKER (2026-11-27): real PIE acceptance evidence still needed.** C++8de50957: worker build PASS410.31s; Smart848/848 PASS including HitAttribution/AllHealthLossPaths; all16 mapped smokes PASS first try; Python20/20 PASS including actual null-target schema and round-end ties. Recording facts/tagger finished and reviewed, but no real new PIE fight showing all3 core tactics was captured in this headless run. Synthetic fixture is not acceptance evidence. See `docs/port/codex/outbox/121-recording-tactics.report.md`. Stop here; Lead owns the next task.
+
+
+## Task149 checkpoint - 2026-11-27
+
+Codex lane `codex/149-demos-to-trainer`: dataset from 17 recordings (65 fights/tails, 48 completed), tested opt-in PMC doctrine proxies, dedicated weekend learning + 204 paired rounds/arm on X6 sector spawn/objective boxes, morning metrics/examples. Fixed absolute arena weight paths after a short trial exposed silent default-weight fallback; weekend adapter requires both loaded flags. No C++, asset/config edits, shared worker-loop changes, scheduling or champion application. Report: `docs/port/codex/outbox/149-demos-to-trainer.report.md`. Lead owns review/merge, a fresh full-night gate and scheduling outside the existing short A/B queue window.

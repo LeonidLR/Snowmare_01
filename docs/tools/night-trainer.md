@@ -196,3 +196,50 @@ python Scripts/Tools/scenario_regression.py --scenario crossroads --seeds 20
 # Nightly regression sweep:
 python Scripts/Tools/scenario_regression.py --night --seeds 100 --out-md Saved/Reports/night-regression.md
 ```
+
+
+## Designer demos -> weekend trainer (task 149)
+
+`Scripts/Tools/demo_dataset.py <Saved/Demos> --out Saved/Trainer/demo_dataset` writes deterministic JSON and a
+Markdown table. Each explicit round is independent; unfinished tails and legacy sessions keep unknown outcomes.
+Notes (`<recording>.notes.json`, optionally `--notes-dir`) remain `should_have` intent. Supply `--map`, `--map-name`
+and `--index` to decode their geometry through `demo_notes.py`; an absent map leaves raw intent with a warning.
+The frozen 17-recording input is `docs/port/codex/outbox/149-demos-to-trainer.dataset.json`.
+
+Option (a) is opt-in: `prepare_demo_trainer.py` selects doctrine proxies supported by non-lab, non-truncated fights.
+It does not learn causal win effects. Contact-to-cover supports the retreat-survival proxy; cover-overwatch supports
+suppress-then-move. Missing measurements earn no credit, and the total additional reward is at most one point.
+The adapter preserves measured behaviour keys separately from legacy zero defaults. The gate includes proxy metrics.
+High ground, scan coverage and stealth flanks are not inferred from unrelated arena counters.
+
+Prepare and launch on an isolated, synced worker checkout (the designer must be away for main-PC use). The supplied
+approved champion is read only. Baseline weights, generated bounds, sector level copies and all results go to Saved/.
+A full night requires the existing fresh training gate pass; the wrapper refuses a missing or stale pass.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File Scripts/Trainer/run_weekend_trainer.ps1 `
+  -Dataset docs/port/codex/outbox/149-demos-to-trainer.dataset.json `
+  -Champion Content/Data/AI/pmc_commander.json -RunId weekend-20261127 `
+  -TrainingHours 2 -EvaluationHours 10
+```
+
+Use the actual Lead-approved champion path when it differs from the game's current weights. Learning uses the existing
+GA on six X6 sector spawn/objective boxes, with the doctrine profile frozen in its config. The subsequent held-out A/B
+uses 204 fixed pairs (34 per sector), one independently replayable round per job, two processes per pair. Both arms play
+side A against the same frozen initial champion on side B; baseline is champion vs itself. The input hashes and plan are
+immutable on resume. These are PMC arena fights on X6 sector geometry, not interactive player sector rounds: inclusion
+boxes constrain spawns/objectives; they do not create new movement boundary walls. No Content JSON is modified.
+
+`Saved/Trainer/<RunId>-ab/morning.md` and `.json` show wins, draws, attacker captures, kills and coverage, paired discordant
+wins, plus three example rounds with paths/seeds/tracks. Identical candidate/champion hashes identify A/A calibration.
+STOP/PAUSE and the existing locks work in both phases. A timeout/crash halts paired evaluation and marks it incomplete;
+inspect it before starting a new run. A time-budget interruption with healthy cached jobs resumes under the same ID.
+The configured count is a target, not a throughput promise: an incomplete night is reported as incomplete, never 204.
+The shared worker night loop is unchanged: Lead must schedule this dedicated entry point in a sufficient night window;
+the existing two-hour A/B queue window cannot be assumed to fit learning plus 408 evaluation rounds.
+
+For a short calibration use `weekend_trainer.py --trainer-config <prepared.json> --champion <approved.json>
+--candidate <candidate.json> --run-id <new-id> --trial 3 --hours 0.25`. `--mock` explicitly labels synthetic validation.
+The arena adapter now uses absolute weight paths because the loader otherwise checks the engine working directory;
+use a checkout path without spaces, commas or quotes. Weekend configs require both engine weight-load flags to be true.
+The scripts never call `apply_champion.ps1`; applying a champion still requires the Lead's OK.

@@ -1,0 +1,14 @@
+{
+  "schema": "codex.weekend_trainer/1",
+  "seed": 20261127,
+  "rounds_per_arm": 204,
+  "parallel": 2,
+  "sectors": [1, 2, 3, 4, 5, 6],
+  "map": "/Game/Maps/Generated/L_Gen_Depot_1_X6",
+  "level": "Content/Data/LevelJson/L_Gen_Depot_1_X6.json",
+  "sector_definitions": "Content/Data/LevelJson/L_Gen_Depot_1_X6.sectors.json",
+  "time_limit_s": 120,
+  "timeout_s": 600,
+  "scenario": "random",
+  "note": "204 paired seeds/arm, 34 in each X6 sector. Spawn/objective inclusion box only; Sector=0 disables interactive sector rounds. Frozen approved champion is opponent for both arms. No automatic application."
+}

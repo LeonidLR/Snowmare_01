@@ -1,0 +1,3476 @@
+{
+  "schema": "codex.demo_dataset/1",
+  "sources": [
+    {
+      "recording": "2026-11-24_L_Gen_Depot_1_X6_152229.jsonl",
+      "sha256": "2d44a4c9e3d56b4d5ff49b6da2052fdff60973a588e188ab48598299ce5680a9",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-24_L_Gen_Depot_1_X6_152658.jsonl",
+      "sha256": "eeb23ff1c5b1276ef835ee225ef438ff2016bba8e8d485f74b57e92d8bf5c78f",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-24_L_Gen_Depot_1_X6_153145.jsonl",
+      "sha256": "fc13a8e071dc530170742dea467ae1ddff9ed36381449d5276f90df1371af861",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_094811.jsonl",
+      "sha256": "73296467c97a35be09a5e866eae80f79ad273955756475d4d276e9f61d96afea",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_100842.jsonl",
+      "sha256": "25f2015b8b0c08907519d1b112c5f8da36aa32fdfd3db64cedd3f7ee1e6c94bc",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_120010.jsonl",
+      "sha256": "7610c96566127fa2a55e8747b90af26467454859745e8e74c3008c2093b15faf",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_120852.jsonl",
+      "sha256": "af8c74e0935ae74815179a1438ddcf37da35af18eae69e597de45848a6f34260",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_145536.jsonl",
+      "sha256": "5c21822887329f4153ac4e70c7bf959f1ce476896ccba4c3a5df520617916a4e",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_153205.jsonl",
+      "sha256": "3b7bb783ac1a09bc4ea4ac43dfed105a6b12d14753979c59a8973a023e61684e",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_170128.jsonl",
+      "sha256": "452f58f3a182c9948d168eb5c308576740218188abf130cd7273489431791744",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-25_L_Gen_StoryShowcase_Kit_093131.jsonl",
+      "sha256": "a6a74614ec52a2ba2a2e40c00e4afc1eb2b11d28cef5ce55f0014069c6a3ba96",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_091942.jsonl",
+      "sha256": "7ff33977e53db94e652138a49a6f1fb9900f37832bcaf84d3e5306fa5eb17fd3",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_112917.jsonl",
+      "sha256": "0c6fe749897776af15196c0ff69d585b3e5dcc6ff89ef61817deacad2132fb44",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_143736.jsonl",
+      "sha256": "ec922e1ad6f6cdf3f3583d76732a236130ed5b3ddda033f3c2e24f5bf9e856d0",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_145729.jsonl",
+      "sha256": "6d8e7d94de0110a39b9e9bb5a371cec8f7becfacc239a49863f59e2ed5bcf04e",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_154423.jsonl",
+      "sha256": "9e20314981dd16061af740e50beb0130df1c5569c2d9bad361765b7fbae8526a",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    },
+    {
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_165115.jsonl",
+      "sha256": "66937e085ef024c203ef7c5f6914552f5219fa0fe1bd51b741384f9c79a73459",
+      "notes_sha256": null,
+      "notes_geometry_warning": null,
+      "unassigned_notes": []
+    }
+  ],
+  "errors": [],
+  "fights": [
+    {
+      "id": "2026-11-24_L_Gen_Depot_1_X6_152229:1",
+      "recording": "2026-11-24_L_Gen_Depot_1_X6_152229.jsonl",
+      "round": "legacy",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": null,
+      "seed": null,
+      "start_s": 0.0,
+      "end_s": 155.30854389816523,
+      "duration_s": 155.30854389816523,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "footer": 1,
+        "header": 1,
+        "mode": 1,
+        "order": 50,
+        "snap": 118
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 1.0400689989328384,
+          "t_end": 7.031444698572159,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "legacy"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-24_L_Gen_Depot_1_X6_152658:1",
+      "recording": "2026-11-24_L_Gen_Depot_1_X6_152658.jsonl",
+      "round": "legacy",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": null,
+      "seed": null,
+      "start_s": 0.0,
+      "end_s": 64.148517601192,
+      "duration_s": 64.148517601192,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "footer": 1,
+        "header": 1,
+        "mode": 1,
+        "order": 25,
+        "snap": 62
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 4.046769499778748,
+          "t_end": 9.050303298979998,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "legacy"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-24_L_Gen_Depot_1_X6_153145:1",
+      "recording": "2026-11-24_L_Gen_Depot_1_X6_153145.jsonl",
+      "round": "legacy",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": null,
+      "seed": null,
+      "start_s": 0.0,
+      "end_s": 71.54781740158796,
+      "duration_s": 71.54781740158796,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "footer": 1,
+        "header": 1,
+        "mode": 1,
+        "order": 21,
+        "snap": 43
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 11.348846197128296,
+          "t_end": 17.345293298363686,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "legacy"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_094811:1",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_094811.jsonl",
+      "round": "1",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 6093,
+      "start_s": 3.2786902971565723,
+      "end_s": 355.98818879947066,
+      "duration_s": 352.7094985023141,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "mode": 8,
+        "order": 89,
+        "round_start": 1,
+        "snap": 290
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 62.05502939224243,
+          "t_end": 68.04562449455261,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "1"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 124.04247289523482,
+          "t_end": 130.04036989435554,
+          "actor": "BP_Operative_C_0",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "1"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 124.04247289523482,
+          "t_end": 130.04036989435554,
+          "actor": "BP_Operative_C_1",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "1"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 124.04247289523482,
+          "t_end": 130.04036989435554,
+          "actor": "BP_Operative_C_2",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "1"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 146.05013579502702,
+          "t_end": 209.05372816030285,
+          "actor": "BP_Operative_C_1",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "1"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_100842:1",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_100842.jsonl",
+      "round": "1",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 2,
+      "seed": 25296,
+      "start_s": 3.8360815085470676,
+      "end_s": 90.86297420784831,
+      "duration_s": 87.02689361572266,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "mode": 1,
+        "order": 42,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 87
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 7.048422507941723,
+          "t_end": 12.070479106158018,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "1"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_100842:2",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_100842.jsonl",
+      "round": "2",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 2,
+      "seed": 25296,
+      "start_s": 98.9684691093862,
+      "end_s": 287.6398224942386,
+      "duration_s": 188.67135620117188,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 1,
+      "event_counts": {
+        "mode": 1,
+        "order": 76,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 189
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 99.09114440903068,
+          "t_end": 105.05838811025023,
+          "actor": "squad",
+          "detail": "relative sector -90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "2"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_100842:3",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_100842.jsonl",
+      "round": "3",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 2,
+      "seed": 25296,
+      "start_s": 295.7216467000544,
+      "end_s": 761.7375948987901,
+      "duration_s": 466.0159481987357,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "mode": 2,
+        "order": 128,
+        "round_start": 1,
+        "snap": 412
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 323.0399026982486,
+          "t_end": 328.0627405978739,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "3"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 333.0755153000355,
+          "t_end": 339.04880759865046,
+          "actor": "BP_Operative_C_12",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "3"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 333.0755153000355,
+          "t_end": 346.0598476007581,
+          "actor": "BP_Operative_C_14",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "3"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 354.6433984003961,
+          "t_end": 422.0495425090194,
+          "actor": "BP_Operative_C_14",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "3"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 361.0543737001717,
+          "t_end": 465.0603963062167,
+          "actor": "BP_Operative_C_12",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "3"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_120010:1",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_120010.jsonl",
+      "round": "1",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 3,
+      "seed": 729,
+      "start_s": 3.026792585849762,
+      "end_s": 360.3753864020109,
+      "duration_s": 357.34859381616116,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "mode": 2,
+        "order": 90,
+        "round_start": 1,
+        "snap": 271
+      },
+      "tactics": [
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 3.2131328880786896,
+          "t_end": 15.057513184845448,
+          "actor": "BP_Operative_C_0",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "1"
+        },
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 8.043770983815193,
+          "t_end": 13.056560583412647,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "1"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_120852:1",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_120852.jsonl",
+      "round": "1",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 3,
+      "seed": 8893,
+      "start_s": 3.2142789103090763,
+      "end_s": 93.85740750655532,
+      "duration_s": 90.64312744140625,
+      "outcome": "defeat",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 1,
+      "kills_pmc": 3,
+      "event_counts": {
+        "mode": 1,
+        "order": 26,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 90
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 4.076301611959934,
+          "t_end": 10.066918309777975,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "1"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 59.0608986094594,
+          "t_end": 65.08561380952597,
+          "actor": "BP_Operative_C_2",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "1"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 69.69258480891585,
+          "t_end": 79.06374920904636,
+          "actor": "BP_Operative_C_2",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "1"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_120852:2",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_120852.jsonl",
+      "round": "2",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 3,
+      "seed": 8893,
+      "start_s": 101.93868540599942,
+      "end_s": 103.007353708148,
+      "duration_s": 1.068668246269226,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 1
+      },
+      "tactics": [],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_120852:3",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_120852.jsonl",
+      "round": "3",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 3,
+      "seed": 8893,
+      "start_s": 111.10036071017385,
+      "end_s": 121.59898011013865,
+      "duration_s": 10.498619079589844,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "order": 2,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 11
+      },
+      "tactics": [],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_120852:4",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_120852.jsonl",
+      "round": "4",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 3,
+      "seed": 8893,
+      "start_s": 129.67484441027045,
+      "end_s": 193.56656671315432,
+      "duration_s": 63.8917236328125,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 1,
+      "event_counts": {
+        "mode": 1,
+        "order": 22,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 64
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 135.05864481255412,
+          "t_end": 140.08190101385117,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 136.04519751295447,
+          "t_end": 141.07945431396365,
+          "actor": "BP_Operative_C_18",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 136.04519751295447,
+          "t_end": 142.07039771601558,
+          "actor": "BP_Operative_C_19",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_120852:5",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_120852.jsonl",
+      "round": "5",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 3,
+      "seed": 8893,
+      "start_s": 201.6327464133501,
+      "end_s": 254.64896872639656,
+      "duration_s": 53.0162239074707,
+      "outcome": "defeat",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 2,
+      "kills_pmc": 3,
+      "event_counts": {
+        "order": 24,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 53
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 213.06501642614603,
+          "t_end": 218.0742266252637,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "5"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_120852:6",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_120852.jsonl",
+      "round": "6",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 3,
+      "seed": 8893,
+      "start_s": 262.7241302281618,
+      "end_s": 681.8393900468946,
+      "duration_s": 419.1152648925781,
+      "outcome": "defeat",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 2,
+      "kills_pmc": 3,
+      "event_counts": {
+        "mode": 4,
+        "order": 147,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 419
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 264.071457028389,
+          "t_end": 269.0757781304419,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "6"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 410.3268621303141,
+          "t_end": 416.0671411342919,
+          "actor": "BP_Operative_C_30",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "6"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 410.3268621303141,
+          "t_end": 416.0671411342919,
+          "actor": "BP_Operative_C_32",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "6"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_120852:7",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_120852.jsonl",
+      "round": "7",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 3,
+      "seed": 8893,
+      "start_s": 689.9124865494668,
+      "end_s": 756.3029919676483,
+      "duration_s": 66.3905029296875,
+      "outcome": "defeat",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 1,
+      "kills_pmc": 3,
+      "event_counts": {
+        "order": 18,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 67
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 692.05994444713,
+          "t_end": 697.0783343464136,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "7"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_120852:8",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_120852.jsonl",
+      "round": "8",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 3,
+      "seed": 8893,
+      "start_s": 764.3695071674883,
+      "end_s": 794.7831663005054,
+      "duration_s": 30.413659133017063,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "mode": 1,
+        "order": 8,
+        "round_start": 1,
+        "snap": 26
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 771.0681122653186,
+          "t_end": 777.0688970647752,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "8"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_145536:1",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_145536.jsonl",
+      "round": "1",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 4,
+      "seed": 8734,
+      "start_s": 3.6578555032610893,
+      "end_s": 238.19495067745447,
+      "duration_s": 234.53709411621094,
+      "outcome": "defeat",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 2,
+      "kills_pmc": 3,
+      "event_counts": {
+        "mode": 2,
+        "order": 70,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 235
+      },
+      "tactics": [
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 6.072407696396112,
+          "t_end": 16.058881491422653,
+          "actor": "BP_Operative_C_1",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "1"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 6.072407696396112,
+          "t_end": 17.097454391419888,
+          "actor": "BP_Operative_C_0",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "1"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 6.072407696396112,
+          "t_end": 17.097454391419888,
+          "actor": "BP_Operative_C_2",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "1"
+        },
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 55.06718348711729,
+          "t_end": 61.0688271895051,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "1"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_145536:2",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_145536.jsonl",
+      "round": "2",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 4,
+      "seed": 8734,
+      "start_s": 246.27937088161707,
+      "end_s": 554.0947311148047,
+      "duration_s": 307.81536865234375,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 2,
+      "event_counts": {
+        "mode": 2,
+        "order": 115,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 308
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 280.06638638302684,
+          "t_end": 286.0745150819421,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "2"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 372.06244108080864,
+          "t_end": 380.0846395790577,
+          "actor": "BP_Operative_C_6",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "2"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 372.06244108080864,
+          "t_end": 381.07379838079214,
+          "actor": "BP_Operative_C_7",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "2"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 372.06244108080864,
+          "t_end": 381.07379838079214,
+          "actor": "BP_Operative_C_8",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "2"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_145536:3",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_145536.jsonl",
+      "round": "3",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 4,
+      "seed": 8734,
+      "start_s": 562.1673832163215,
+      "end_s": 763.4278703182936,
+      "duration_s": 201.26048278808594,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 2,
+      "event_counts": {
+        "mode": 4,
+        "order": 54,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 201
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 573.0529138110578,
+          "t_end": 578.0811026133597,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "3"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 723.0756967142224,
+          "t_end": 733.0738018080592,
+          "actor": "BP_Operative_C_14",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "3"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 723.0756967142224,
+          "t_end": 735.0540135093033,
+          "actor": "BP_Operative_C_12",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "3"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_145536:4",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_145536.jsonl",
+      "round": "4",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 4,
+      "seed": 8734,
+      "start_s": 771.5154944173992,
+      "end_s": 816.9033709168434,
+      "duration_s": 45.387874603271484,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "mode": 1,
+        "order": 28,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 45
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 781.0578486174345,
+          "t_end": 786.0697003155947,
+          "actor": "squad",
+          "detail": "relative sector -90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "4"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_145536:5",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_145536.jsonl",
+      "round": "5",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 4,
+      "seed": 8734,
+      "start_s": 824.9847101159394,
+      "end_s": 1057.9498302936554,
+      "duration_s": 232.96511840820312,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "mode": 2,
+        "order": 64,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 233
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 833.0678390152752,
+          "t_end": 838.0734644159675,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "5"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 844.0648317150772,
+          "t_end": 857.0648038163781,
+          "actor": "BP_Operative_C_25",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "5"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 973.0843537934124,
+          "t_end": 973.0843537934124,
+          "actor": "BP_Operative_C_26",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "5"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_145536:6",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_145536.jsonl",
+      "round": "6",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 4,
+      "seed": 8734,
+      "start_s": 1066.112954698503,
+      "end_s": 1307.0877343006432,
+      "duration_s": 240.9747796021402,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "order": 12,
+        "round_start": 1,
+        "snap": 39
+      },
+      "tactics": [],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_153205:1",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_153205.jsonl",
+      "round": "1",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 5,
+      "seed": 10195,
+      "start_s": 2.436720795929432,
+      "end_s": 507.44278095662594,
+      "duration_s": 505.0060729980469,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 2,
+      "event_counts": {
+        "mode": 1,
+        "order": 175,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 505
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 18.02086279168725,
+          "t_end": 23.04358959197998,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "1"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 84.0285477899015,
+          "t_end": 86.03182939067483,
+          "actor": "BP_Operative_C_0",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "1"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 84.0285477899015,
+          "t_end": 97.03124050050974,
+          "actor": "BP_Operative_C_2",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "1"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 424.53727355599403,
+          "t_end": 424.72384225577116,
+          "actor": "BP_Operative_C_2",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "1"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_153205:2",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_153205.jsonl",
+      "round": "2",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 5,
+      "seed": 10195,
+      "start_s": 515.4879173561931,
+      "end_s": 1115.499770756811,
+      "duration_s": 600.0118408203125,
+      "outcome": "draw",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 2,
+      "kills_pmc": 1,
+      "event_counts": {
+        "mode": 4,
+        "order": 214,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 600
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 556.0287754572928,
+          "t_end": 561.0294858589768,
+          "actor": "squad",
+          "detail": "relative sector -90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "2"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 615.0296266563237,
+          "t_end": 617.0371324568987,
+          "actor": "BP_Operative_C_7",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "2"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 615.0296266563237,
+          "t_end": 617.0371324568987,
+          "actor": "BP_Operative_C_8",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "2"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 615.0296266563237,
+          "t_end": 618.0263816565275,
+          "actor": "BP_Operative_C_6",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "2"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_153205:3",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_153205.jsonl",
+      "round": "3",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 5,
+      "seed": 10195,
+      "start_s": 1123.5520659573376,
+      "end_s": 1639.5771867166118,
+      "duration_s": 516.025146484375,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 1,
+      "event_counts": {
+        "mode": 7,
+        "order": 218,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 516
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 1150.031194858253,
+          "t_end": 1156.0272520557046,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "3"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1434.887388026233,
+          "t_end": 1446.0204942206697,
+          "actor": "BP_Operative_C_14",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "3"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 1450.0340200195865,
+          "t_end": 1452.031017823036,
+          "actor": "BP_Operative_C_14",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "3"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 1575.0250934193687,
+          "t_end": 1599.0208261179582,
+          "actor": "BP_Operative_C_12",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "3"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 1575.0250934193687,
+          "t_end": 1638.031404917951,
+          "actor": "BP_Operative_C_14",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "3"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_153205:4",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_153205.jsonl",
+      "round": "4",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 5,
+      "seed": 10195,
+      "start_s": 1647.6510254124955,
+      "end_s": 1777.7125425952331,
+      "duration_s": 130.0615234375,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "mode": 1,
+        "order": 38,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 130
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 1688.03034281161,
+          "t_end": 1694.0246983113543,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1706.031670102741,
+          "t_end": 1707.0272263008014,
+          "actor": "BP_Operative_C_18",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1706.031670102741,
+          "t_end": 1708.0291415992037,
+          "actor": "BP_Operative_C_19",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1706.031670102741,
+          "t_end": 1708.0291415992037,
+          "actor": "BP_Operative_C_20",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_153205:5",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_153205.jsonl",
+      "round": "5",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 5,
+      "seed": 10195,
+      "start_s": 1785.767670305337,
+      "end_s": 2399.8526903018355,
+      "duration_s": 614.0850199964984,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "mode": 2,
+        "order": 178,
+        "round_start": 1,
+        "snap": 534
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 1795.028767106946,
+          "t_end": 1800.0299314054505,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "5"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_170128:1",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_170128.jsonl",
+      "round": "1",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 6,
+      "seed": 26424,
+      "start_s": 2.0918575078248978,
+      "end_s": 3.062748808413744,
+      "duration_s": 0.9708912968635559,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "order": 1,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 1
+      },
+      "tactics": [],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_170128:2",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_170128.jsonl",
+      "round": "2",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 6,
+      "seed": 26424,
+      "start_s": 11.111899103969336,
+      "end_s": 203.3384555131197,
+      "duration_s": 192.2265625,
+      "outcome": "defeat",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 2,
+      "kills_pmc": 3,
+      "event_counts": {
+        "mode": 1,
+        "order": 63,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 192
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 12.027606409043074,
+          "t_end": 17.030413307249546,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "2"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 122.02102061361074,
+          "t_end": 122.02102061361074,
+          "actor": "BP_Operative_C_6",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "2"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_170128:3",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_170128.jsonl",
+      "round": "3",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 6,
+      "seed": 26424,
+      "start_s": 211.38401161134243,
+      "end_s": 424.74295250698924,
+      "duration_s": 213.35894775390625,
+      "outcome": "defeat",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 1,
+      "kills_pmc": 3,
+      "event_counts": {
+        "mode": 1,
+        "order": 86,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 213
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 218.02751381322742,
+          "t_end": 223.03439481183887,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "3"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 253.03502441197634,
+          "t_end": 264.02547150850296,
+          "actor": "BP_Operative_C_12",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "3"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 253.03502441197634,
+          "t_end": 264.02547150850296,
+          "actor": "BP_Operative_C_13",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "3"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 342.02318120375276,
+          "t_end": 342.02318120375276,
+          "actor": "BP_Operative_C_12",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "3"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_170128:4",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_170128.jsonl",
+      "round": "4",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 6,
+      "seed": 26424,
+      "start_s": 432.7970082089305,
+      "end_s": 694.2486885040998,
+      "duration_s": 261.4516906738281,
+      "outcome": "defeat",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 0,
+      "kills_pmc": 3,
+      "event_counts": {
+        "mode": 1,
+        "order": 75,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 262
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 478.02349400892854,
+          "t_end": 483.0287420079112,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 490.0280929096043,
+          "t_end": 491.03353240713477,
+          "actor": "BP_Operative_C_19",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_170128:5",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_170128.jsonl",
+      "round": "5",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 6,
+      "seed": 26424,
+      "start_s": 702.3050530031323,
+      "end_s": 800.115436103195,
+      "duration_s": 97.81038665771484,
+      "outcome": "defeat",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 1,
+      "kills_pmc": 3,
+      "event_counts": {
+        "mode": 2,
+        "order": 24,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 98
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 709.0311976075172,
+          "t_end": 715.0283661074936,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "5"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_Depot_1_X6_170128:6",
+      "recording": "2026-11-25_L_Gen_Depot_1_X6_170128.jsonl",
+      "round": "6",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 6,
+      "seed": 26424,
+      "start_s": 808.1665293052793,
+      "end_s": 934.9100301004946,
+      "duration_s": 126.74350079521537,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "mode": 2,
+        "order": 42,
+        "round_start": 1,
+        "snap": 86
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 815.0241710059345,
+          "t_end": 820.0250652059913,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "6"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 821.0298278033733,
+          "t_end": 831.0243887044489,
+          "actor": "BP_Operative_C_30",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "6"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-25_L_Gen_StoryShowcase_Kit_093131:1",
+      "recording": "2026-11-25_L_Gen_StoryShowcase_Kit_093131.jsonl",
+      "round": "legacy",
+      "map": "L_Gen_StoryShowcase_Kit",
+      "sector": null,
+      "seed": null,
+      "start_s": 0.0,
+      "end_s": 305.2335855998099,
+      "duration_s": 305.2335855998099,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": true,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "footer": 1,
+        "header": 1,
+        "order": 83,
+        "snap": 208
+      },
+      "tactics": [
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1.0645015016198158,
+          "t_end": 9.049205504357815,
+          "actor": "BP_Operative_C_0",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "legacy"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1.0645015016198158,
+          "t_end": 12.05313790217042,
+          "actor": "BP_Operative_C_2",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "legacy"
+        },
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 15.058375403285027,
+          "t_end": 21.050857301801443,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "legacy"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 41.05162129923701,
+          "t_end": 160.87939620390534,
+          "actor": "BP_Operative_C_1",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "legacy"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_091942:1",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_091942.jsonl",
+      "round": "1",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 30521,
+      "start_s": 2.2396523989737034,
+      "end_s": 3.0559638999402523,
+      "duration_s": 0.8163114786148071,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 1
+      },
+      "tactics": [],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_091942:2",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_091942.jsonl",
+      "round": "2",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 30521,
+      "start_s": 11.116008196026087,
+      "end_s": 611.1279542893171,
+      "duration_s": 600.011962890625,
+      "outcome": "draw",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 2,
+      "kills_pmc": 1,
+      "event_counts": {
+        "mode": 3,
+        "order": 167,
+        "pmc_relocated": 3,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 600
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 28.035868994891644,
+          "t_end": 34.031132493168116,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "2"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 102.03603348881006,
+          "t_end": 112.02687748894095,
+          "actor": "BP_Operative_C_6",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "2"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 102.03603348881006,
+          "t_end": 112.02687748894095,
+          "actor": "BP_Operative_C_7",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "2"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 191.12315858528018,
+          "t_end": 202.02748328447342,
+          "actor": "BP_Operative_C_8",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "2"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 513.0272871889174,
+          "t_end": 513.8737383894622,
+          "actor": "BP_Operative_C_6",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "2"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_091942:3",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_091942.jsonl",
+      "round": "3",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 30521,
+      "start_s": 619.1774515882134,
+      "end_s": 1147.1037459895015,
+      "duration_s": 527.92626953125,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "mode": 2,
+        "order": 195,
+        "pmc_relocated": 3,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 528
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 626.0347909890115,
+          "t_end": 632.0304251872003,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "3"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 711.0355069898069,
+          "t_end": 715.0307490900159,
+          "actor": "BP_Operative_C_12",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "3"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_091942:4",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_091942.jsonl",
+      "round": "4",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 30521,
+      "start_s": 1155.1530268900096,
+      "end_s": 1720.2256990931928,
+      "duration_s": 565.0726928710938,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "mode": 4,
+        "order": 190,
+        "pmc_relocated": 3,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 565
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 1156.0344357900321,
+          "t_end": 1161.0390622876585,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1167.745692487806,
+          "t_end": 1170.035987086594,
+          "actor": "BP_Operative_C_18",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1167.745692487806,
+          "t_end": 1170.035987086594,
+          "actor": "BP_Operative_C_19",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1167.745692487806,
+          "t_end": 1170.035987086594,
+          "actor": "BP_Operative_C_20",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_091942:5",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_091942.jsonl",
+      "round": "5",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 30521,
+      "start_s": 1728.2714819908142,
+      "end_s": 2049.407459899783,
+      "duration_s": 321.1359779089689,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "mode": 1,
+        "order": 57,
+        "round_start": 1,
+        "snap": 138
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 1730.0243304930627,
+          "t_end": 1735.0350601933897,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "5"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1776.33934629336,
+          "t_end": 1781.0328127928078,
+          "actor": "BP_Operative_C_24",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "5"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1776.33934629336,
+          "t_end": 1781.0328127928078,
+          "actor": "BP_Operative_C_25",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "5"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1776.33934629336,
+          "t_end": 1790.0343984924257,
+          "actor": "BP_Operative_C_26",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "5"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 1789.2553857937455,
+          "t_end": 1825.024683792144,
+          "actor": "BP_Operative_C_25",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "5"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_112917:1",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_112917.jsonl",
+      "round": "1",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 2,
+      "seed": 16544,
+      "start_s": 1.9859274066984653,
+      "end_s": 566.6367018148303,
+      "duration_s": 564.6507568359375,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 1,
+      "event_counts": {
+        "mode": 1,
+        "order": 172,
+        "pmc_relocated": 2,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 565
+      },
+      "tactics": [
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 164.02525821700692,
+          "t_end": 558.9110161140561,
+          "actor": "BP_Operative_C_0",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "1"
+        },
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 224.02752131596208,
+          "t_end": 229.03102861717343,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "1"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 310.005373314023,
+          "t_end": 311.08463041484356,
+          "actor": "BP_Operative_C_2",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "1"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_112917:2",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_112917.jsonl",
+      "round": "2",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 2,
+      "seed": 16544,
+      "start_s": 574.6946717128158,
+      "end_s": 652.8447445109487,
+      "duration_s": 78.15007019042969,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 2,
+      "event_counts": {
+        "order": 21,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 78
+      },
+      "tactics": [
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 595.0226503126323,
+          "t_end": 597.0361269153655,
+          "actor": "BP_Operative_C_7",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "2"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 595.0226503126323,
+          "t_end": 597.0361269153655,
+          "actor": "BP_Operative_C_8",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "2"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 624.0233016088605,
+          "t_end": 626.0272808112204,
+          "actor": "BP_Operative_C_8",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "2"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_112917:3",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_112917.jsonl",
+      "round": "3",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 2,
+      "seed": 16544,
+      "start_s": 660.8867947086692,
+      "end_s": 931.6092306114733,
+      "duration_s": 270.7224426269531,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 2,
+      "event_counts": {
+        "mode": 1,
+        "order": 71,
+        "pmc_relocated": 1,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 271
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 707.0241475105286,
+          "t_end": 712.03810711205,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "3"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 755.0217833071947,
+          "t_end": 757.8068679049611,
+          "actor": "BP_Operative_C_13",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "3"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 755.0217833071947,
+          "t_end": 761.9372763074934,
+          "actor": "BP_Operative_C_14",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "3"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 755.0217833071947,
+          "t_end": 931.0275628119707,
+          "actor": "BP_Operative_C_12",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "3"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_112917:4",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_112917.jsonl",
+      "round": "4",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 2,
+      "seed": 16544,
+      "start_s": 939.6529997102916,
+      "end_s": 1316.288461111486,
+      "duration_s": 376.6354675292969,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 2,
+      "event_counts": {
+        "mode": 3,
+        "order": 98,
+        "pmc_relocated": 2,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 377
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 943.02067361027,
+          "t_end": 948.0215146094561,
+          "actor": "squad",
+          "detail": "relative sector -90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 962.034479111433,
+          "t_end": 962.034479111433,
+          "actor": "BP_Operative_C_18",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 962.034479111433,
+          "t_end": 963.0199326090515,
+          "actor": "BP_Operative_C_19",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 962.034479111433,
+          "t_end": 963.0199326090515,
+          "actor": "BP_Operative_C_20",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 1283.032235905528,
+          "t_end": 1316.0301575101912,
+          "actor": "BP_Operative_C_20",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "4"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_112917:5",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_112917.jsonl",
+      "round": "5",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 2,
+      "seed": 16544,
+      "start_s": 1324.3354733102024,
+      "end_s": 1752.884962607175,
+      "duration_s": 428.54949951171875,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 2,
+      "event_counts": {
+        "mode": 1,
+        "order": 102,
+        "pmc_relocated": 2,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 428
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 1342.0319237113,
+          "t_end": 1348.0227148085833,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "5"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 1736.0205378048122,
+          "t_end": 1752.0248625054955,
+          "actor": "BP_Operative_C_24",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "5"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_112917:6",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_112917.jsonl",
+      "round": "6",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 2,
+      "seed": 16544,
+      "start_s": 1760.9401979073882,
+      "end_s": 1913.2341428995132,
+      "duration_s": 152.29394499212503,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "round_start": 1,
+        "snap": 8
+      },
+      "tactics": [],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_143736:1",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_143736.jsonl",
+      "round": "1",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 3,
+      "seed": 30158,
+      "start_s": 2.065548397600651,
+      "end_s": 584.9121718965471,
+      "duration_s": 582.8466234989464,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "order": 1,
+        "pmc_relocated": 3,
+        "round_start": 1,
+        "snap": 457
+      },
+      "tactics": [],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_145729:1",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_145729.jsonl",
+      "round": "1",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 21549,
+      "start_s": 2.0385503992438316,
+      "end_s": 7.59655350074172,
+      "duration_s": 5.558002948760986,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 5
+      },
+      "tactics": [],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_145729:2",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_145729.jsonl",
+      "round": "2",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 21549,
+      "start_s": 15.647722098976374,
+      "end_s": 307.98776898905635,
+      "duration_s": 292.3400573730469,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "mode": 2,
+        "order": 107,
+        "pmc_relocated": 2,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 292
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 52.03092809021473,
+          "t_end": 57.037131790071726,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "2"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 107.07483049109578,
+          "t_end": 107.07483049109578,
+          "actor": "BP_Operative_C_7",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "2"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 107.07483049109578,
+          "t_end": 117.03111669048667,
+          "actor": "BP_Operative_C_6",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "2"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 107.07483049109578,
+          "t_end": 118.0206766910851,
+          "actor": "BP_Operative_C_8",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "2"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 119.0283817909658,
+          "t_end": 120.03057989105582,
+          "actor": "BP_Operative_C_8",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "2"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_145729:3",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_145729.jsonl",
+      "round": "3",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 21549,
+      "start_s": 316.03338868916035,
+      "end_s": 916.0368745885789,
+      "duration_s": 600.0034790039062,
+      "outcome": "draw",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 2,
+      "kills_pmc": 0,
+      "event_counts": {
+        "mode": 2,
+        "order": 34,
+        "pmc_relocated": 3,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 601
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 757.0209631882608,
+          "t_end": 762.029533687979,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "3"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_145729:4",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_145729.jsonl",
+      "round": "4",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 21549,
+      "start_s": 924.0826244875789,
+      "end_s": 1286.4050186872482,
+      "duration_s": 362.3223876953125,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 1,
+      "event_counts": {
+        "mode": 5,
+        "order": 76,
+        "pmc_relocated": 2,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 362
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 998.0238463878632,
+          "t_end": 1003.0323894880712,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1016.0541497915983,
+          "t_end": 1016.0541497915983,
+          "actor": "BP_Operative_C_18",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1016.0541497915983,
+          "t_end": 1019.0245825909078,
+          "actor": "BP_Operative_C_19",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1016.0541497915983,
+          "t_end": 1019.0245825909078,
+          "actor": "BP_Operative_C_20",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_145729:5",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_145729.jsonl",
+      "round": "5",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 21549,
+      "start_s": 1294.471469886601,
+      "end_s": 1751.8116216994822,
+      "duration_s": 457.34015181288123,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "mode": 2,
+        "order": 62,
+        "pmc_relocated": 1,
+        "round_start": 1,
+        "snap": 364
+      },
+      "tactics": [
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1309.0868227928877,
+          "t_end": 1312.0377725921571,
+          "actor": "BP_Operative_C_24",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "5"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1309.0868227928877,
+          "t_end": 1313.0276378914714,
+          "actor": "BP_Operative_C_25",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "5"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1309.0868227928877,
+          "t_end": 1313.0276378914714,
+          "actor": "BP_Operative_C_26",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "5"
+        },
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 1377.0319588966668,
+          "t_end": 1383.0217837952077,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "5"
+        },
+        {
+          "tag": "prone_then_crawl_to_cover",
+          "t_start": 1514.030477900058,
+          "t_end": 1517.0253634005785,
+          "actor": "BP_Operative_C_26",
+          "detail": "prone movement into cover",
+          "evidence": "recorded",
+          "round_id": "5"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_154423:1",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_154423.jsonl",
+      "round": "1",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 20814,
+      "start_s": 2.1157577969133854,
+      "end_s": 258.29062089324,
+      "duration_s": 256.17486572265625,
+      "outcome": "defeat",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 1,
+      "kills_pmc": 3,
+      "event_counts": {
+        "mode": 2,
+        "order": 59,
+        "pmc_relocated": 2,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 256
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 29.028334092348814,
+          "t_end": 35.01797439157963,
+          "actor": "squad",
+          "detail": "relative sector -90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "1"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_154423:2",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_154423.jsonl",
+      "round": "2",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 20814,
+      "start_s": 266.3420739918947,
+      "end_s": 866.3714377768338,
+      "duration_s": 600.0293579101562,
+      "outcome": "draw",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 2,
+      "kills_pmc": 1,
+      "event_counts": {
+        "mode": 1,
+        "order": 150,
+        "pmc_relocated": 3,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 600
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 268.02259689196944,
+          "t_end": 273.0255940929055,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "2"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 273.0255940929055,
+          "t_end": 280.0255217924714,
+          "actor": "BP_Operative_C_7",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "2"
+        },
+        {
+          "tag": "prone_then_crawl_to_cover",
+          "t_start": 489.027726598084,
+          "t_end": 496.03084959462285,
+          "actor": "BP_Operative_C_8",
+          "detail": "prone movement into cover",
+          "evidence": "recorded",
+          "round_id": "2"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_154423:3",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_154423.jsonl",
+      "round": "3",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 20814,
+      "start_s": 874.4894450716674,
+      "end_s": 1472.7832248657942,
+      "duration_s": 598.2937622070312,
+      "outcome": "defeat",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 2,
+      "kills_pmc": 3,
+      "event_counts": {
+        "mode": 9,
+        "order": 242,
+        "pmc_relocated": 1,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 598
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 902.0203850716352,
+          "t_end": 908.0199798718095,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "3"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 906.46226926893,
+          "t_end": 914.0193138681352,
+          "actor": "BP_Operative_C_12",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "3"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 906.46226926893,
+          "t_end": 920.0220350660384,
+          "actor": "BP_Operative_C_13",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "3"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 1184.0214143656194,
+          "t_end": 1225.0231084637344,
+          "actor": "BP_Operative_C_14",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "3"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_154423:4",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_154423.jsonl",
+      "round": "4",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 20814,
+      "start_s": 1480.8284613639116,
+      "end_s": 1616.1138469539583,
+      "duration_s": 135.28538513183594,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 1,
+      "event_counts": {
+        "order": 52,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 136
+      },
+      "tactics": [
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1543.7619250640273,
+          "t_end": 1550.0180972628295,
+          "actor": "BP_Operative_C_18",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1543.7619250640273,
+          "t_end": 1550.0180972628295,
+          "actor": "BP_Operative_C_19",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1543.7619250640273,
+          "t_end": 1558.0277194529772,
+          "actor": "BP_Operative_C_20",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 1555.0274743586779,
+          "t_end": 1557.4301492534578,
+          "actor": "BP_Operative_C_18",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "4"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 1555.0274743586779,
+          "t_end": 1557.4301492534578,
+          "actor": "BP_Operative_C_19",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "4"
+        },
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 1600.026603847742,
+          "t_end": 1606.0263484492898,
+          "actor": "squad",
+          "detail": "relative sector +90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "4"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_154423:5",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_154423.jsonl",
+      "round": "5",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 20814,
+      "start_s": 1624.1647636517882,
+      "end_s": 1843.988153256476,
+      "duration_s": 219.82339477539062,
+      "outcome": "defeat",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 0,
+      "kills_pmc": 3,
+      "event_counts": {
+        "order": 73,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 219
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 1641.0319333560765,
+          "t_end": 1647.025861658156,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "5"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_154423:6",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_154423.jsonl",
+      "round": "6",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 20814,
+      "start_s": 1852.0405175574124,
+      "end_s": 2249.5753078609705,
+      "duration_s": 397.5347900390625,
+      "outcome": "defeat",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 1,
+      "kills_pmc": 3,
+      "event_counts": {
+        "mode": 1,
+        "order": 159,
+        "pmc_relocated": 1,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 398
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 1856.021687157452,
+          "t_end": 1861.0225709564984,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "6"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 2075.024942461401,
+          "t_end": 2164.019826158881,
+          "actor": "BP_Operative_C_32",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "6"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_154423:7",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_154423.jsonl",
+      "round": "7",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 20814,
+      "start_s": 2257.621295556426,
+      "end_s": 2270.544143356383,
+      "duration_s": 12.922847747802734,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "mode": 1,
+        "order": 6,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 13
+      },
+      "tactics": [],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_154423:8",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_154423.jsonl",
+      "round": "8",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 20814,
+      "start_s": 2278.599455151707,
+      "end_s": 2669.5429317578673,
+      "duration_s": 390.9434814453125,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 1,
+      "event_counts": {
+        "order": 115,
+        "pmc_relocated": 2,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 391
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 2279.026604451239,
+          "t_end": 2284.03055755049,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "8"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 2391.018980253488,
+          "t_end": 2400.0310190543532,
+          "actor": "BP_Operative_C_42",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "8"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 2391.018980253488,
+          "t_end": 2400.0310190543532,
+          "actor": "BP_Operative_C_44",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "8"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 2497.026084858924,
+          "t_end": 2669.026378057897,
+          "actor": "BP_Operative_C_43",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "8"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 2652.0304697602987,
+          "t_end": 2653.0195780582726,
+          "actor": "BP_Operative_C_44",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "8"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_154423:9",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_154423.jsonl",
+      "round": "9",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 1,
+      "seed": 20814,
+      "start_s": 2677.599020957947,
+      "end_s": 3747.707297898829,
+      "duration_s": 1070.1082769408822,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "round_start": 1,
+        "snap": 6
+      },
+      "tactics": [],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_165115:1",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_165115.jsonl",
+      "round": "1",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 5,
+      "seed": 21806,
+      "start_s": 2.129207096993923,
+      "end_s": 602.1324105039239,
+      "duration_s": 600.003173828125,
+      "outcome": "draw",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 0,
+      "kills_pmc": 0,
+      "event_counts": {
+        "pmc_relocated": 1,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 600
+      },
+      "tactics": [],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_165115:2",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_165115.jsonl",
+      "round": "2",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 5,
+      "seed": 21806,
+      "start_s": 610.1767771020532,
+      "end_s": 731.7414481043816,
+      "duration_s": 121.5646743774414,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "pmc_relocated": 1,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 121
+      },
+      "tactics": [],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_165115:3",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_165115.jsonl",
+      "round": "3",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 5,
+      "seed": 21806,
+      "start_s": 739.7888425029814,
+      "end_s": 1339.7988339960575,
+      "duration_s": 600.010009765625,
+      "outcome": "draw",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 2,
+      "kills_pmc": 0,
+      "event_counts": {
+        "mode": 3,
+        "order": 104,
+        "pmc_relocated": 2,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 600
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 754.0307828038931,
+          "t_end": 760.0231809057295,
+          "actor": "squad",
+          "detail": "relative sector -90 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "3"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 836.053364302963,
+          "t_end": 840.0265836045146,
+          "actor": "BP_Operative_C_12",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "3"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 905.0286709032953,
+          "t_end": 1231.0215714983642,
+          "actor": "BP_Operative_C_12",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "3"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 905.0286709032953,
+          "t_end": 1231.0215714983642,
+          "actor": "BP_Operative_C_13",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "3"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 905.0286709032953,
+          "t_end": 1231.0215714983642,
+          "actor": "BP_Operative_C_14",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "3"
+        },
+        {
+          "tag": "prone_then_crawl_to_cover",
+          "t_start": 973.024734005332,
+          "t_end": 982.0199008062482,
+          "actor": "BP_Operative_C_12",
+          "detail": "prone movement into cover",
+          "evidence": "recorded",
+          "round_id": "3"
+        },
+        {
+          "tag": "first_in_cover_overwatch",
+          "t_start": 1053.1245689056814,
+          "t_end": 1053.1245689056814,
+          "actor": "BP_Operative_C_13",
+          "detail": "fired from cover while ally executed cover order",
+          "evidence": "recorded",
+          "round_id": "3"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_165115:4",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_165115.jsonl",
+      "round": "4",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 5,
+      "seed": 21806,
+      "start_s": 1347.855144996196,
+      "end_s": 1803.6914758123457,
+      "duration_s": 455.8363342285156,
+      "outcome": "victory",
+      "completed": true,
+      "lab": false,
+      "truncated": false,
+      "kills_player": 3,
+      "kills_pmc": 0,
+      "event_counts": {
+        "mode": 5,
+        "order": 123,
+        "pmc_relocated": 1,
+        "round_end": 1,
+        "round_start": 1,
+        "snap": 456
+      },
+      "tactics": [
+        {
+          "tag": "unwatched_flank_seconds",
+          "t_start": 1367.0257351957262,
+          "t_end": 1373.021455898881,
+          "actor": "squad",
+          "detail": "relative sector +180 deg unwatched continuously",
+          "evidence": "recorded",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1404.0535778030753,
+          "t_end": 1409.030260194093,
+          "actor": "BP_Operative_C_18",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1404.0535778030753,
+          "t_end": 1409.030260194093,
+          "actor": "BP_Operative_C_19",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "fallback_to_cover_after_contact",
+          "t_start": 1404.0535778030753,
+          "t_end": 1409.030260194093,
+          "actor": "BP_Operative_C_20",
+          "detail": "cover transition after contact",
+          "evidence": "snapshot transition",
+          "round_id": "4"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 1478.0233441069722,
+          "t_end": 1558.0223607085645,
+          "actor": "BP_Operative_C_18",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "4"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 1478.0233441069722,
+          "t_end": 1558.0223607085645,
+          "actor": "BP_Operative_C_19",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "4"
+        },
+        {
+          "tag": "high_ground",
+          "t_start": 1478.0233441069722,
+          "t_end": 1558.0223607085645,
+          "actor": "BP_Operative_C_20",
+          "detail": "one storey above nearest enemy while engaging",
+          "evidence": "snapshot geometry",
+          "round_id": "4"
+        }
+      ],
+      "kill_events": [],
+      "notes": []
+    },
+    {
+      "id": "2026-11-26_L_Gen_Depot_1_X6_165115:5",
+      "recording": "2026-11-26_L_Gen_Depot_1_X6_165115.jsonl",
+      "round": "5",
+      "map": "L_Gen_Depot_1_X6",
+      "sector": 5,
+      "seed": 21806,
+      "start_s": 1811.7408272139728,
+      "end_s": 1900.8825323991477,
+      "duration_s": 89.14170518517494,
+      "outcome": "unknown",
+      "completed": false,
+      "lab": false,
+      "truncated": false,
+      "kills_player": null,
+      "kills_pmc": null,
+      "event_counts": {
+        "round_start": 1,
+        "snap": 3
+      },
+      "tactics": [],
+      "kill_events": [],
+      "notes": []
+    }
+  ],
+  "summary": [
+    {
+      "tag": "fallback_to_cover_after_contact",
+      "detections": 72,
+      "fights": 34,
+      "recordings": 13,
+      "completed_eligible": 27,
+      "wins": 17,
+      "losses": 6,
+      "draws": 4,
+      "win_rate": 0.6296296296296297
+    },
+    {
+      "tag": "high_ground",
+      "detections": 18,
+      "fights": 13,
+      "recordings": 8,
+      "completed_eligible": 10,
+      "wins": 6,
+      "losses": 2,
+      "draws": 2,
+      "win_rate": 0.6
+    },
+    {
+      "tag": "distract_and_flank",
+      "detections": 0,
+      "fights": 0,
+      "recordings": 0,
+      "completed_eligible": 0,
+      "wins": 0,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": null
+    },
+    {
+      "tag": "prone_then_crawl_to_cover",
+      "detections": 3,
+      "fights": 3,
+      "recordings": 3,
+      "completed_eligible": 2,
+      "wins": 0,
+      "losses": 0,
+      "draws": 2,
+      "win_rate": 0.0
+    },
+    {
+      "tag": "first_in_cover_overwatch",
+      "detections": 17,
+      "fights": 15,
+      "recordings": 10,
+      "completed_eligible": 13,
+      "wins": 8,
+      "losses": 3,
+      "draws": 2,
+      "win_rate": 0.6153846153846154
+    },
+    {
+      "tag": "flank_into_rear",
+      "detections": 0,
+      "fights": 0,
+      "recordings": 0,
+      "completed_eligible": 0,
+      "wins": 0,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": null
+    },
+    {
+      "tag": "approach_unseen",
+      "detections": 0,
+      "fights": 0,
+      "recordings": 0,
+      "completed_eligible": 0,
+      "wins": 0,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": null
+    },
+    {
+      "tag": "lure_then_snipe",
+      "detections": 0,
+      "fights": 0,
+      "recordings": 0,
+      "completed_eligible": 0,
+      "wins": 0,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": null
+    },
+    {
+      "tag": "unwatched_flank_seconds",
+      "detections": 51,
+      "fights": 51,
+      "recordings": 16,
+      "completed_eligible": 39,
+      "wins": 21,
+      "losses": 13,
+      "draws": 5,
+      "win_rate": 0.5384615384615384
+    },
+    {
+      "tag": "scan_pitch_range",
+      "detections": 0,
+      "fights": 0,
+      "recordings": 0,
+      "completed_eligible": 0,
+      "wins": 0,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": null
+    }
+  ]
+}

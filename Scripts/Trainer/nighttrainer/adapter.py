@@ -2,8 +2,8 @@
 
 Everything is driven by trainer_config.json "arena" so most changes are config-only:
   - arg_template: the console-command arguments ({map} {rounds} {seed} {weights_a} {opponent} {weights_b}
-    {time_limit_s} {out}); paths are passed PROJECT-RELATIVE with forward slashes (no spaces: -ExecCmds splits on
-    spaces, commas separate commands), the arena resolves them against FPaths::ProjectDir().
+    {time_limit_s} {out}); weights use absolute paths because LoadWeightsFile checks the engine working directory
+    before Content/Data/AI. Outputs stay project-relative. No spaces: -ExecCmds splits on spaces and commas.
   - result: schema id, key names and the field map from the arena's per-side keys to the canonical names below.
 
 Canonical round (candidate's point of view), consumed by fitness.py:
@@ -62,6 +62,14 @@ def _rel(path: str, root: str) -> str:
     except ValueError:  # another drive
         rel = path
     return rel.replace("\\", "/")
+
+
+def _weights_path(path: str, root: str) -> str:
+    """Do not silently evaluate code defaults when the engine cwd differs from the project."""
+    value = os.path.abspath(path if os.path.isabs(path) else os.path.join(root, path)).replace('\\', '/')
+    if any(c.isspace() or c in ',\"' for c in value):
+        raise ValueError('Arena weights need a checkout path without spaces, commas or quotes')
+    return value
 
 
 def _dig(obj, dotted: str):
@@ -147,9 +155,9 @@ class ArenaAdapter:
             "map": job.get("map") or self.cfg.get("map", ""),
             "rounds": job["rounds"],
             "seed": job["seed"],
-            "weights_a": _rel(job["weights_a"], self.repo_root),
+            "weights_a": _weights_path(job["weights_a"], self.repo_root),
             "opponent": names.get(job["opponent"], job["opponent"]),
-            "weights_b": _rel(job["weights_b"], self.repo_root) if job.get("weights_b") else "None",
+            "weights_b": _weights_path(job["weights_b"], self.repo_root) if job.get("weights_b") else "None",
             "time_limit_s": job.get("time_limit_s") or self.cfg.get("time_limit_s", 300),
             "out": _rel(out_path, self.repo_root),
         }
@@ -178,7 +186,7 @@ class ArenaAdapter:
                               "Engine", "Binaries", "Win64", "UnrealEditor-Cmd.exe")
         uproject = os.path.join(self.repo_root, self.cfg.get("uproject", "CodexTactics.uproject"))
         map_name = job.get("map") or self.cfg.get("map", "")
-        return ([engine, uproject] + ([map_name] if map_name else []) + engine_args
+        return ([engine, uproject] + ([map_name] if map_name else []) + engine_args + list(job.get('engine_args', []))
                 + [f"-ExecCmds={exec_cmds}", f"-abslog={log_path}"])
 
     def record_command(self, job: dict, out_path: str, log_path: str, clip_name: str, seconds: float) -> list:
@@ -199,6 +207,8 @@ class ArenaAdapter:
         """The result JSON: the requested Out path, else the newest <output_dir>/*.json written after start."""
         if os.path.exists(out_path):
             return out_path
+        if self.cfg.get('require_requested_output'):
+            return None  # parallel jobs must never adopt another job's output
         pattern = os.path.join(self.repo_root, self.cfg.get("output_dir", "Saved/Arena"), "*.json")
         fresh = [p for p in glob.glob(pattern) if os.path.getmtime(p) >= started_at - 1.0]
         return max(fresh, key=os.path.getmtime) if fresh else None
@@ -209,6 +219,10 @@ class ArenaAdapter:
 
     def parse_doc(self, doc: dict, expected_rounds: int | None = None, result_dir: str | None = None) -> list:
         rc = self.result_cfg
+        if self.cfg.get('require_loaded_weights'):
+            weights = doc.get('weights', {})
+            if not all(weights.get(side, {}).get('loaded') is True for side in ('A', 'B')):
+                raise ArenaResultError('arena did not confirm both requested weight files were loaded')
         schema = rc.get("schema", "codex.pmc_arena/1")
         if schema and doc.get("schema") != schema and rc.get("strict_schema", True):
             raise ArenaResultError(f"unexpected schema {doc.get('schema')!r} (want {schema!r})")
@@ -277,6 +291,9 @@ class ArenaAdapter:
             if raw_behaviour is None:
                 raw_behaviour = _dig(side, "behaviour")
             row["behaviour"] = parse_behaviour(raw_behaviour)
+            metrics = raw_behaviour.get('metrics', raw_behaviour) if isinstance(raw_behaviour, dict) else {}
+            row['behaviour_observed'] = [key for key, *_ in BEHAVIOUR_METRICS
+                                         if _metric_value(metrics.get(key)) is not None]
             track = _dig(rnd, rc.get("track_key", "track"))
             if track and result_dir:
                 row["track"] = track if os.path.isabs(track) else os.path.normpath(os.path.join(result_dir, track))
