@@ -3104,6 +3104,20 @@ private:
 	WindowCoverRules::EWindowIntervalPlace WindowCoverLastPlace = WindowCoverRules::EWindowIntervalPlace::Outside;
 	FVector WindowCoverSegment = FVector(FLT_MAX);
 	TWeakObjectPtr<UPrimitiveComponent> WindowCoverWall;
+	/** 144: Cached same-wall/floor window sills to avoid rescanning world actors every 5 cm during shimmy. */
+	TArray<TWeakObjectPtr<AActor>> CachedWindowWallSills;
+	FVector CachedWindowWallSillsAt = FVector(FLT_MAX);
+	TWeakObjectPtr<UPrimitiveComponent> CachedWindowWallComp;
+	int32 CachedWindowWallFloor = INDEX_NONE;
+	double CachedWindowWallTime = -1000.0;
+	/** 144: Cached crouch spans for wall-slide formation walk (invalidated on wall/floor/distance/time). */
+	TArray<WindowCoverRules::FWindowCrouchSpan> CachedWallSlideSpans;
+	FVector CachedWallSlideOrigin = FVector(FLT_MAX);
+	FVector CachedWallSlideNormal = FVector::ZeroVector;
+	FVector CachedWallSlideAlongAxis = FVector::RightVector;
+	FVector CachedWallSlideAt = FVector(FLT_MAX);
+	float CachedWallSlideFeetZ = 0.f;
+	double CachedWallSlideTime = -1000.0;
 	FCoverSlot PendingCoverSlot;
 	bool bHasPendingCover = false;
 	/** Set while OrderTakeCover / OrderShimmyTo issue their move: the move does not leave the cover. */

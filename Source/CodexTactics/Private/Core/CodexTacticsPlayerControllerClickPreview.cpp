@@ -234,7 +234,7 @@ bool ACodexTacticsPlayerController::ResolveClickCoverSlot(AOperativeCharacter& L
 		if (CoverTraceRules::IsSameWall(Own, Slot))
 		{
 			FCoverSlot Shimmy;
-			OutSlot = CoverTraceRules::FindShimmySlot(GetWorld(), Own, bSideSlot ? Slot.WallPoint : FVector(Hit.ImpactPoint), Shimmy) ? Shimmy : Slot;
+			OutSlot = CoverTraceRules::FindShimmySlot(GetWorld(), Own, (bSideSlot || bWindowCover) ? Slot.WallPoint : FVector(Hit.ImpactPoint), Shimmy) ? Shimmy : Slot;
 			bOutConfirm = true; // commit directly; redispatching a click can merely arm another preview
 			return true;
 		}

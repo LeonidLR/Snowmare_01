@@ -212,6 +212,11 @@ void AOperativeCharacter::ClearWindowCover()
 	WindowCoverLastPlace = WindowCoverRules::EWindowIntervalPlace::Outside;
 	WindowCoverSegment = FVector(FLT_MAX);
 	WindowCoverWall.Reset();
+	CachedWindowWallSills.Reset();
+	CachedWindowWallSillsAt = FVector(FLT_MAX);
+	CachedWindowWallComp.Reset();
+	CachedWindowWallFloor = INDEX_NONE;
+	CachedWindowWallTime = -1000.0;
 }
 
 void AOperativeCharacter::ApplyWindowCoverStance()
@@ -264,6 +269,8 @@ void AOperativeCharacter::UpdateWallSlideWindowCrouch(const FVector& WallOrigin,
 	const bool bLocked = Stance == EOperativeStance::Prone || (ColdSurvival && ColdSurvival->IsFrostbitten()) || bCarrying || bInCover;
 	if (!bActive || !World || bLocked)
 	{
+		CachedWallSlideSpans.Reset();
+		CachedWallSlideAt = FVector(FLT_MAX);
 		if (bWallSlideWindowCrouch)
 		{
 			bWallSlideWindowCrouch = false;
@@ -283,48 +290,64 @@ void AOperativeCharacter::UpdateWallSlideWindowCrouch(const FVector& WallOrigin,
 	}
 	const FVector Here = GetActorLocation();
 	const float FeetZ = SlotFeetZ(*this);
-	TArray<WindowCoverRules::FWindowCrouchSpan> Spans;
-	static const FName SillTag(TEXT("window_sill"));
-	const float Limit = WindowBreakage::FaceMarginCm + WindowBreakage::OpeningPadCm;
-	for (TActorIterator<AActor> It(World); It; ++It)
+	const double Now = World->GetTimeSeconds();
+	const bool bCacheValid = CachedWallSlideAt.X < 1.0e30f
+		&& FVector::DistSquared2D(Here, CachedWallSlideAt) <= FMath::Square(1500.f)
+		&& CachedWallSlideNormal.Equals(Normal, 0.05f)
+		&& WindowCoverRules::OnSameWallPlane(WallOrigin, CachedWallSlideOrigin, Normal, 25.f)
+		&& FMath::Abs(FeetZ - CachedWallSlideFeetZ) <= 80.f
+		&& (Now - CachedWallSlideTime) <= 2.0;
+	if (!bCacheValid)
 	{
-		AActor* Sill = *It;
-		if (!Sill->ActorHasTag(SillTag))
+		CachedWallSlideSpans.Reset();
+		CachedWallSlideOrigin = WallOrigin;
+		CachedWallSlideNormal = Normal;
+		CachedWallSlideAlongAxis = AlongAxis;
+		CachedWallSlideAt = Here;
+		CachedWallSlideFeetZ = FeetZ;
+		CachedWallSlideTime = Now;
+		static const FName SillTag(TEXT("window_sill"));
+		const float Limit = WindowBreakage::FaceMarginCm + WindowBreakage::OpeningPadCm;
+		for (TActorIterator<AActor> It(World); It; ++It)
 		{
-			continue;
+			AActor* Sill = *It;
+			if (!Sill->ActorHasTag(SillTag))
+			{
+				continue;
+			}
+			const FBox SillBox = Sill->GetComponentsBoundingBox(true);
+			if (!SillBox.IsValid)
+			{
+				continue;
+			}
+			const FVector Center = SillBox.GetCenter();
+			if (FVector::Dist2D(Center, Here) > 2500.f
+				|| !WindowCoverRules::SharesFloor(INDEX_NONE, INDEX_NONE, FeetZ + 90.f, Center.Z)
+				|| !WindowCoverRules::OnSameWallPlane(Center, WallOrigin, Normal, Limit))
+			{
+				continue;
+			}
+			const FBox Opening = WindowBreakage::MakeOpeningBox(SillBox);
+			float MinAlong = TNumericLimits<float>::Max();
+			float MaxAlong = TNumericLimits<float>::Lowest();
+			const FVector Corners[] = {
+				FVector(Opening.Min.X, Opening.Min.Y, Center.Z),
+				FVector(Opening.Max.X, Opening.Min.Y, Center.Z),
+				FVector(Opening.Min.X, Opening.Max.Y, Center.Z),
+				FVector(Opening.Max.X, Opening.Max.Y, Center.Z)
+			};
+			for (const FVector& Corner : Corners)
+			{
+				const float Along = static_cast<float>(FVector::DotProduct(Corner - WallOrigin, AlongAxis));
+				MinAlong = FMath::Min(MinAlong, Along);
+				MaxAlong = FMath::Max(MaxAlong, Along);
+			}
+			CachedWallSlideSpans.Add(WindowCoverRules::CrouchSpanForOpening(MinAlong, MaxAlong, WindowCoverRules::ShimmyCrouchMarginCm,
+				static_cast<float>(SillBox.Max.Z) - FeetZ, static_cast<float>(Opening.Max.Z) - FeetZ));
 		}
-		const FBox SillBox = Sill->GetComponentsBoundingBox(true);
-		if (!SillBox.IsValid)
-		{
-			continue;
-		}
-		const FVector Center = SillBox.GetCenter();
-		if (FVector::Dist2D(Center, Here) > 2500.f
-			|| !WindowCoverRules::SharesFloor(INDEX_NONE, INDEX_NONE, FeetZ + 90.f, Center.Z)
-			|| !WindowCoverRules::OnSameWallPlane(Center, WallOrigin, Normal, Limit))
-		{
-			continue;
-		}
-		const FBox Opening = WindowBreakage::MakeOpeningBox(SillBox);
-		float MinAlong = TNumericLimits<float>::Max();
-		float MaxAlong = TNumericLimits<float>::Lowest();
-		const FVector Corners[] = {
-			FVector(Opening.Min.X, Opening.Min.Y, Center.Z),
-			FVector(Opening.Max.X, Opening.Min.Y, Center.Z),
-			FVector(Opening.Min.X, Opening.Max.Y, Center.Z),
-			FVector(Opening.Max.X, Opening.Max.Y, Center.Z)
-		};
-		for (const FVector& Corner : Corners)
-		{
-			const float Along = static_cast<float>(FVector::DotProduct(Corner - WallOrigin, AlongAxis));
-			MinAlong = FMath::Min(MinAlong, Along);
-			MaxAlong = FMath::Max(MaxAlong, Along);
-		}
-		Spans.Add(WindowCoverRules::CrouchSpanForOpening(MinAlong, MaxAlong, WindowCoverRules::ShimmyCrouchMarginCm,
-			static_cast<float>(SillBox.Max.Z) - FeetZ, static_cast<float>(Opening.Max.Z) - FeetZ));
 	}
-	const float HereAlong = static_cast<float>(FVector::DotProduct(Here - WallOrigin, AlongAxis));
-	const bool bWant = WindowCoverRules::WantsPathCrouch(HereAlong, Spans);
+	const float HereAlong = static_cast<float>(FVector::DotProduct(Here - CachedWallSlideOrigin, CachedWallSlideAlongAxis));
+	const bool bWant = WindowCoverRules::WantsPathCrouch(HereAlong, CachedWallSlideSpans);
 	if (bWant)
 	{
 		if (Stance != EOperativeStance::Crouching)
@@ -451,10 +474,55 @@ void AOperativeCharacter::RefreshWindowCover(bool bForce)
 	TArray<FBox> EdgeBoxes;
 	const float EdgeReachCm = GetCoverFacingConfig().AutoCornerSnapCm;
 
-	for (TActorIterator<AActor> It(World); It; ++It)
+	const double Now = World->GetTimeSeconds();
+	const bool bRescanSills = bForce || bLostSill || bWallChanged || bFloorChanged
+		|| CachedWindowWallComp.Get() != CoverSlot.WallComponent.Get()
+		|| CachedWindowWallFloor != SlotFloor
+		|| CachedWindowWallSillsAt.X > 1.0e30f
+		|| FVector::DistSquared2D(Here, CachedWindowWallSillsAt) > FMath::Square(1500.f)
+		|| (Now - CachedWindowWallTime) > 2.0;
+	if (bRescanSills)
 	{
-		AActor* Sill = *It;
-		if (!Sill->ActorHasTag(SillTag))
+		CachedWindowWallSills.Reset();
+		CachedWindowWallSillsAt = Here;
+		CachedWindowWallComp = CoverSlot.WallComponent;
+		CachedWindowWallFloor = SlotFloor;
+		CachedWindowWallTime = Now;
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			AActor* Sill = *It;
+			if (!Sill->ActorHasTag(SillTag))
+			{
+				continue;
+			}
+			const FBox SillBox = Sill->GetComponentsBoundingBox(true);
+			if (!SillBox.IsValid)
+			{
+				continue;
+			}
+			const FVector Center = SillBox.GetCenter();
+			if (FVector::Dist2D(Center, Here) > 3000.f)
+			{
+				continue;
+			}
+			FString SillBuilding;
+			const int32 SillFloor = FloorOf(Sill, nullptr, SillBuilding);
+			if (!WindowCoverRules::SharesFloor(SlotFloor, SillFloor, CoverSlot.WallPoint.Z, Center.Z))
+			{
+				continue;
+			}
+			if (!SlotBuilding.IsEmpty() && !SillBuilding.IsEmpty() && SlotBuilding != SillBuilding)
+			{
+				continue;
+			}
+			CachedWindowWallSills.Add(Sill);
+		}
+	}
+
+	for (const TWeakObjectPtr<AActor>& WeakSill : CachedWindowWallSills)
+	{
+		AActor* Sill = WeakSill.Get();
+		if (!Sill)
 		{
 			continue;
 		}
@@ -466,14 +534,6 @@ void AOperativeCharacter::RefreshWindowCover(bool bForce)
 		const FVector Center = SillBox.GetCenter();
 		FString SillBuilding;
 		const int32 SillFloor = FloorOf(Sill, nullptr, SillBuilding);
-		if (!WindowCoverRules::SharesFloor(SlotFloor, SillFloor, CoverSlot.WallPoint.Z, Center.Z))
-		{
-			continue;
-		}
-		if (!SlotBuilding.IsEmpty() && !SillBuilding.IsEmpty() && SlotBuilding != SillBuilding)
-		{
-			continue;
-		}
 		float Limit = WindowBreakage::FaceMarginCm + WindowBreakage::OpeningPadCm;
 		if (const UPrimitiveComponent* Wall = CoverSlot.WallComponent.Get())
 		{

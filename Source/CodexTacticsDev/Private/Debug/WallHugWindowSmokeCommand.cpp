@@ -88,12 +88,36 @@ namespace WallHugWindowSmoke
 		bool bStoodBetween = false;
 		bool bCrouchedWin2 = false;
 		bool bShimmyStarted = false;
+		float StandHeadZBefore = 0.f;
+		float MinHeadZWin1 = FLT_MAX;
+		float MaxHeadZBetween = -FLT_MAX;
+		float MinHeadZWin2 = FLT_MAX;
 		int32 PasShotsBefore = 0;
 		bool bSawEdgeCornerAim = false;
 		float EdgeTargetHpBefore = 0.f;
+		FVector EdgeTuckedHead = FVector::ZeroVector;
+		float EdgeMaxPeekReach = 0.f;
+		bool bEdgeReturnedPose = false;
+		float EdgeReturnWaitTime = -1.f;
 		int32 BlindShotsBefore = 0;
 		float BlindHpBefore = 0.f;
+		float BlindMaxHeadZ = -FLT_MAX;
+		float BlindMaxHandZ = -FLT_MAX;
+		float BlindMaxMuzzleZ = -FLT_MAX;
 	};
+
+	void SamplePose(AOperativeCharacter& Op, FVector& OutHead, FVector& OutPelvis, FVector& OutHand)
+	{
+		if (USkeletalMeshComponent* Mesh = Op.GetMesh())
+		{
+			Mesh->RefreshBoneTransforms();
+			OutHead = Mesh->GetBoneLocation(TEXT("head"));
+			OutPelvis = Mesh->GetBoneLocation(TEXT("pelvis"));
+			OutHand = Mesh->GetBoneLocation(TEXT("hand_r"));
+			return;
+		}
+		OutHead = OutPelvis = OutHand = Op.GetActorLocation();
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -360,6 +384,9 @@ namespace WallHugWindowSmoke
 			Check(State, EnterSlot(*Leader, State.Setup.SlotBefore1), TEXT("leader entered cover on solid wall before window 1"));
 			Check(State, Leader->GetStance() == EOperativeStance::Standing && !Leader->IsWindowCoverConfirmed(),
 				TEXT("starts standing on solid wall before window 1"));
+			FVector InitHead, InitPelvis, InitHand;
+			SamplePose(*Leader, InitHead, InitPelvis, InitHand);
+			State.StandHeadZBefore = static_cast<float>(InitHead.Z);
 			const EOperativeOrderResult ShimmyResult = Leader->OrderShimmyTo(State.Setup.SlotAfter2);
 			Check(State, ShimmyResult == EOperativeOrderResult::Accepted, TEXT("shimmy order past 2 windows accepted"));
 			State.bShimmyStarted = ShimmyResult == EOperativeOrderResult::Accepted;
@@ -374,24 +401,35 @@ namespace WallHugWindowSmoke
 				return Finish(State, false);
 			}
 			const FVector Here = Leader->GetActorLocation();
+			FVector Head, Pelvis, Hand;
+			SamplePose(*Leader, Head, Pelvis, Hand);
 			if (FVector::Dist2D(Here, State.Setup.SlotWin1.WorldLocation) <= 55.f && Leader->GetStance() == EOperativeStance::Crouching)
 			{
 				State.bCrouchedWin1 = true;
+				State.MinHeadZWin1 = FMath::Min(State.MinHeadZWin1, static_cast<float>(Head.Z));
 			}
 			if (FVector::Dist2D(Here, State.Setup.SlotBetween.WorldLocation) <= 55.f && Leader->GetStance() == EOperativeStance::Standing)
 			{
 				State.bStoodBetween = true;
+				State.MaxHeadZBetween = FMath::Max(State.MaxHeadZBetween, static_cast<float>(Head.Z));
 			}
 			if (FVector::Dist2D(Here, State.Setup.SlotWin2.WorldLocation) <= 55.f && Leader->GetStance() == EOperativeStance::Crouching)
 			{
 				State.bCrouchedWin2 = true;
+				State.MinHeadZWin2 = FMath::Min(State.MinHeadZWin2, static_cast<float>(Head.Z));
 			}
 			if (!Leader->bShimmying && State.StageTime > 0.5f)
 			{
-				Check(State, State.bCrouchedWin1, TEXT("crouched while shimmying under window 1"));
-				Check(State, State.bStoodBetween, TEXT("stood up in solid wall gap between windows"));
-				Check(State, State.bCrouchedWin2, TEXT("crouched while shimmying under window 2"));
-				Check(State, Leader->GetStance() == EOperativeStance::Standing, TEXT("stood back up after window 2"));
+				Check(State, State.bCrouchedWin1 && State.MinHeadZWin1 <= State.StandHeadZBefore - 15.f,
+					FString::Printf(TEXT("crouched while shimmying under window 1 (head Z %.0f vs stand %.0f, sill %.0f)"),
+						State.MinHeadZWin1, State.StandHeadZBefore, State.Setup.Box1.Max.Z));
+				Check(State, State.bStoodBetween && State.MaxHeadZBetween >= State.MinHeadZWin1 + 15.f,
+					FString::Printf(TEXT("stood up in solid wall gap between windows (head Z %.0f)"), State.MaxHeadZBetween));
+				Check(State, State.bCrouchedWin2 && State.MinHeadZWin2 <= State.MaxHeadZBetween - 15.f,
+					FString::Printf(TEXT("crouched while shimmying under window 2 (head Z %.0f, sill %.0f)"),
+						State.MinHeadZWin2, State.Setup.Box2.Max.Z));
+				Check(State, Leader->GetStance() == EOperativeStance::Standing && Head.Z >= State.MinHeadZWin2 + 15.f,
+					FString::Printf(TEXT("stood back up after window 2 (head Z %.0f)"), Head.Z));
 
 				// Step 2 & 3: take window 1 slot (click-as-cover check + slot entry) and test PAS -> DEF -> AGG fire modes.
 				const FVector C1 = State.Setup.Box1.GetCenter();
@@ -471,6 +509,12 @@ namespace WallHugWindowSmoke
 				Check(State, Leader->GetStance() == EOperativeStance::Standing && !Leader->IsWindowCoverConfirmed()
 					&& Leader->HasAnyExposedCoverEdge() && Leader->bAtCoverCorner,
 					TEXT("standing beside window frame exposes window edge corner"));
+				FVector TuckedHead, TuckedPelvis, TuckedHand;
+				SamplePose(*Leader, TuckedHead, TuckedPelvis, TuckedHand);
+				State.EdgeTuckedHead = TuckedHead;
+				State.EdgeMaxPeekReach = 0.f;
+				State.bEdgeReturnedPose = false;
+				State.EdgeReturnWaitTime = -1.f;
 				Leader->bTacticalCeaseFire = false;
 				State.bSawEdgeCornerAim = false;
 				Next(State, EStage::WindowEdgeCorner);
@@ -489,16 +533,17 @@ namespace WallHugWindowSmoke
 			if (Leader->IsCornerAimActive() && Leader->IsPeekingRoundCorner())
 			{
 				State.bSawEdgeCornerAim = true;
+				FVector PeekHead, PeekPelvis, PeekHand;
+				SamplePose(*Leader, PeekHead, PeekPelvis, PeekHand);
+				State.EdgeMaxPeekReach = FMath::Max(State.EdgeMaxPeekReach, static_cast<float>(FVector::Dist2D(PeekHead, State.EdgeTuckedHead)));
 			}
 			if (State.bSawEdgeCornerAim && Target->HealthComponent->GetCurrentHealth() < State.EdgeTargetHpBefore - 1.f)
 			{
-				Check(State, true, FString::Printf(TEXT("window edge corner peek hits target outside (HP %.0f -> %.0f)"),
-					State.EdgeTargetHpBefore, Target->HealthComponent->GetCurrentHealth()));
-				// Clear enemy so he steps back behind the wall when not firing.
+				Check(State, State.EdgeMaxPeekReach >= 5.f, FString::Printf(TEXT("window edge corner peek leans head out (shift %.1f cm) and hits target outside (HP %.0f -> %.0f)"),
+					State.EdgeMaxPeekReach, State.EdgeTargetHpBefore, Target->HealthComponent->GetCurrentHealth()));
+				// Clear enemy so he steps back behind the wall via the normal calm return path (no forced EndCornerAim).
 				Pmc->DestroyTeam(1);
 				Leader->bTacticalCeaseFire = true;
-				Leader->bIgnoreCoverThreatForTesting = true;
-				Leader->EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("target cleared"));
 				Next(State, EStage::WindowEdgeReturn);
 			}
 			return true;
@@ -510,13 +555,27 @@ namespace WallHugWindowSmoke
 			{
 				return Finish(State, false);
 			}
-			if (State.StageTime < 0.3f || ((Leader->IsCornerAimActive() || Leader->bIsCornerLeaning) && State.StageTime < 6.f))
+			if (!Leader->IsCornerAimActive() && !Leader->bIsCornerLeaning)
+			{
+				if (State.EdgeReturnWaitTime < 0.f)
+				{
+					State.EdgeReturnWaitTime = State.StageTime;
+				}
+				if (State.StageTime - State.EdgeReturnWaitTime < 0.4f)
+				{
+					return true;
+				}
+			}
+			else if (State.StageTime < 9.f)
 			{
 				return true;
 			}
-			Check(State, !Leader->IsCornerAimActive() && !Leader->bIsCornerLeaning,
-				TEXT("back behind the solid wall when not firing"));
-			Leader->bIgnoreCoverThreatForTesting = false;
+			FVector ReturnHead, ReturnPelvis, ReturnHand;
+			SamplePose(*Leader, ReturnHead, ReturnPelvis, ReturnHand);
+			const float ReturnDist = static_cast<float>(FVector::Dist2D(ReturnHead, State.EdgeTuckedHead));
+			Check(State, !Leader->IsCornerAimActive() && !Leader->bIsCornerLeaning && ReturnDist < FMath::Max(State.EdgeMaxPeekReach, 12.f),
+				FString::Printf(TEXT("calmly returns behind the solid wall when not firing (%.1f s, head offset %.1f cm vs peek %.1f cm)"),
+					State.StageTime, ReturnDist, State.EdgeMaxPeekReach));
 
 			// Step 6: Under-sill BlindFire at window 2 (keep manual BlindFire mode active; silent squadmate spots target outside).
 			Squad->SetAutonomousSquadCombat(false);
@@ -539,6 +598,9 @@ namespace WallHugWindowSmoke
 			}
 			State.BlindShotsBefore = Leader->GetCoverBlindShots();
 			State.BlindHpBefore = PmcStartHp;
+			State.BlindMaxHeadZ = -FLT_MAX;
+			State.BlindMaxHandZ = -FLT_MAX;
+			State.BlindMaxMuzzleZ = -FLT_MAX;
 			Leader->bTacticalCeaseFire = false;
 			Pmc->RefreshSight();
 			Next(State, EStage::UnderSillBlindFire);
@@ -553,13 +615,25 @@ namespace WallHugWindowSmoke
 				return Finish(State, false);
 			}
 			Pmc->RefreshSight();
+			FVector Head, Pelvis, Hand;
+			SamplePose(*Leader, Head, Pelvis, Hand);
+			const float MuzzleZ = static_cast<float>(Leader->GetWeaponMuzzleLocation().Z);
+			State.BlindMaxHeadZ = FMath::Max(State.BlindMaxHeadZ, static_cast<float>(Head.Z));
+			State.BlindMaxHandZ = FMath::Max(State.BlindMaxHandZ, static_cast<float>(Hand.Z));
+			State.BlindMaxMuzzleZ = FMath::Max(State.BlindMaxMuzzleZ, MuzzleZ);
 			const bool bStayedCrouched = Leader->GetStance() == EOperativeStance::Crouching && !Leader->IsCornerAimActive();
+			const bool bHeadHidden = State.BlindMaxHeadZ <= State.StandHeadZBefore - 15.f;
+			const bool bWeaponRaised = FMath::Max(State.BlindMaxHandZ, State.BlindMaxMuzzleZ) > State.BlindMaxHeadZ;
 			const bool bOriginOverSill = Leader->GetCoverFireOrigin().Z > State.Setup.Box2.Max.Z;
 			if (Leader->GetCoverBlindShots() > State.BlindShotsBefore && Target->HealthComponent->GetCurrentHealth() < State.BlindHpBefore - 1.f)
 			{
-				Check(State, bStayedCrouched, TEXT("stays crouched without corner-aiming in BlindFire mode"));
-				Check(State, bOriginOverSill, FString::Printf(TEXT("blind fire leaves over sill (origin Z %.0f > sill %.0f) and hits target (HP %.0f -> %.0f)"),
-					Leader->GetCoverFireOrigin().Z, State.Setup.Box2.Max.Z, State.BlindHpBefore, Target->HealthComponent->GetCurrentHealth()));
+				Check(State, bStayedCrouched && bHeadHidden,
+					FString::Printf(TEXT("stays crouched with head hidden in BlindFire mode (head Z %.0f vs stand %.0f, sill %.0f)"),
+						State.BlindMaxHeadZ, State.StandHeadZBefore, State.Setup.Box2.Max.Z));
+				Check(State, bOriginOverSill && bWeaponRaised,
+					FString::Printf(TEXT("blind fire raises weapon over sill (origin Z %.0f > sill %.0f, hand Z %.0f, muzzle Z %.0f > head Z %.0f) and hits target (HP %.0f -> %.0f)"),
+						Leader->GetCoverFireOrigin().Z, State.Setup.Box2.Max.Z, State.BlindMaxHandZ, State.BlindMaxMuzzleZ, State.BlindMaxHeadZ,
+						State.BlindHpBefore, Target->HealthComponent->GetCurrentHealth()));
 				Leader->bTacticalCeaseFire = true;
 				Pmc->DestroyTeam(1);
 				Next(State, EStage::PmcReuse);
