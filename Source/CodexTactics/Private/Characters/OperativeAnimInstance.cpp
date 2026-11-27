@@ -539,6 +539,11 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 	if (bInCover && bUseNativeCoverClips && !bIsProne && !bIsReloading)
 	{
 		const bool bBlindShot = Shooter && Shooter->bIsBlindFiring;
+		if (bBlindShot && IsPlayingStanceTransition())
+		{
+			++FireClipsSkippedForStance;
+			return;
+		}
 		if (!bCoverInFirePose && CoverOverTopPhase != ECoverOverTopPhase::Idle)
 		{
 			// A shot can arrive during either switch or while Aim/2 is lowering. Let the layer finish the transition first.

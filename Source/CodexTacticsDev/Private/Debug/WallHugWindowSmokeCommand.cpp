@@ -14,6 +14,7 @@
 #if !UE_BUILD_SHIPPING
 
 #include "AI/PmcSquadSubsystem.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -100,6 +101,7 @@ namespace WallHugWindowSmoke
 		FVector EdgeTuckedHead = FVector::ZeroVector;
 		FVector EdgeMaxPeekHead = FVector::ZeroVector;
 		float EdgeMaxPeekReach = 0.f;
+		float EdgeMaxPeekAlong = -FLT_MAX;
 		bool bEdgeReturnedPose = false;
 		float EdgeReturnWaitTime = -1.f;
 		int32 BlindShotsBefore = 0;
@@ -108,6 +110,8 @@ namespace WallHugWindowSmoke
 		float BlindMaxHandZ = -FLT_MAX;
 		float BlindMaxMuzzleZ = -FLT_MAX;
 		bool bBlindPoseSampled = false;
+		bool bBlindSettledCrouch = false;
+		float BlindCheckAt = -1.f;
 	};
 
 	void SamplePose(AOperativeCharacter& Op, FVector& OutHead, FVector& OutPelvis, FVector& OutHand)
@@ -405,20 +409,21 @@ namespace WallHugWindowSmoke
 				return Finish(State, false);
 			}
 			const FVector Here = Leader->GetActorLocation();
+			const FVector Along = (State.Setup.SlotAfter2.WallPoint - State.Setup.SlotBefore1.WallPoint).GetSafeNormal2D();
 			FVector Head, Pelvis, Hand;
 			SamplePose(*Leader, Head, Pelvis, Hand);
-			if (FVector::Dist2D(Here, State.Setup.SlotWin1.WorldLocation) <= 35.f && Leader->GetStance() == EOperativeStance::Crouching)
+			if (FMath::Abs(FVector::DotProduct(Here - State.Setup.Box1.GetCenter(), Along)) <= 35.f && Leader->GetStance() == EOperativeStance::Crouching)
 			{
 				State.bCrouchedWin1 = true;
 				State.MinHeadZWin1 = FMath::Min(State.MinHeadZWin1, static_cast<float>(Head.Z));
 				State.MaxHeadZWin1 = FMath::Max(State.MaxHeadZWin1, static_cast<float>(Head.Z));
 			}
-			if (FVector::Dist2D(Here, State.Setup.SlotBetween.WorldLocation) <= 55.f && Leader->GetStance() == EOperativeStance::Standing)
+			if (FMath::Abs(FVector::DotProduct(Here - State.Setup.SlotBetween.WallPoint, Along)) <= 55.f && Leader->GetStance() == EOperativeStance::Standing)
 			{
 				State.bStoodBetween = true;
 				State.MaxHeadZBetween = FMath::Max(State.MaxHeadZBetween, static_cast<float>(Head.Z));
 			}
-			if (FVector::Dist2D(Here, State.Setup.SlotWin2.WorldLocation) <= 35.f && Leader->GetStance() == EOperativeStance::Crouching)
+			if (FMath::Abs(FVector::DotProduct(Here - State.Setup.Box2.GetCenter(), Along)) <= 35.f && Leader->GetStance() == EOperativeStance::Crouching)
 			{
 				State.bCrouchedWin2 = true;
 				State.MinHeadZWin2 = FMath::Min(State.MinHeadZWin2, static_cast<float>(Head.Z));
@@ -519,6 +524,7 @@ namespace WallHugWindowSmoke
 				SamplePose(*Leader, TuckedHead, TuckedPelvis, TuckedHand);
 				State.EdgeTuckedHead = TuckedHead;
 				State.EdgeMaxPeekReach = 0.f;
+				State.EdgeMaxPeekAlong = -FLT_MAX;
 				State.bEdgeReturnedPose = false;
 				State.EdgeReturnWaitTime = -1.f;
 				Leader->bTacticalCeaseFire = false;
@@ -541,6 +547,9 @@ namespace WallHugWindowSmoke
 				State.bSawEdgeCornerAim = true;
 				FVector PeekHead, PeekPelvis, PeekHand;
 				SamplePose(*Leader, PeekHead, PeekPelvis, PeekHand);
+				const FVector TowardWindow = (State.Setup.SlotWin1.WallPoint - State.Setup.SlotFrameEdge1.WallPoint).GetSafeNormal2D();
+				const float PeekAlong = static_cast<float>(FVector::DotProduct(PeekHead - State.Setup.SlotFrameEdge1.WallPoint, TowardWindow));
+				State.EdgeMaxPeekAlong = FMath::Max(State.EdgeMaxPeekAlong, PeekAlong);
 				const float Reach = static_cast<float>(FVector::Dist2D(PeekHead, State.EdgeTuckedHead));
 				if (Reach > State.EdgeMaxPeekReach)
 				{
@@ -583,11 +592,17 @@ namespace WallHugWindowSmoke
 			}
 			FVector ReturnHead, ReturnPelvis, ReturnHand;
 			SamplePose(*Leader, ReturnHead, ReturnPelvis, ReturnHand);
-			const float ReturnDist = static_cast<float>(FVector::Dist2D(ReturnHead, State.EdgeTuckedHead));
+			const FVector TowardWindow = (State.Setup.SlotWin1.WallPoint - State.Setup.SlotFrameEdge1.WallPoint).GetSafeNormal2D();
+			const float HalfWin1 = static_cast<float>(FMath::Abs(FVector::DotProduct(State.Setup.Box1.GetExtent(), TowardWindow)));
+			const float FrameEdgeAlong = static_cast<float>(FVector::DotProduct(State.Setup.Box1.GetCenter() - State.Setup.SlotFrameEdge1.WallPoint, TowardWindow))
+				- HalfWin1 - WindowBreakage::OpeningPadCm;
+			const float ReturnAlong = static_cast<float>(FVector::DotProduct(ReturnHead - State.Setup.SlotFrameEdge1.WallPoint, TowardWindow));
 			const float RetractedFromPeek = static_cast<float>(FVector::Dist2D(ReturnHead, State.EdgeMaxPeekHead));
-			Check(State, !Leader->IsCornerAimActive() && !Leader->bIsCornerLeaning && RetractedFromPeek >= 5.f && ReturnDist < State.EdgeMaxPeekReach,
-				FString::Printf(TEXT("calmly returns behind the solid wall when not firing (%.1f s, retracted %.1f cm from peek, head offset %.1f cm vs peek %.1f cm)"),
-					State.StageTime, RetractedFromPeek, ReturnDist, State.EdgeMaxPeekReach));
+			const float RetractedAlong = State.EdgeMaxPeekAlong - ReturnAlong;
+			Check(State, !Leader->IsCornerAimActive() && !Leader->bIsCornerLeaning
+				&& RetractedFromPeek >= 15.f && RetractedAlong >= 15.f && ReturnAlong <= FrameEdgeAlong,
+				FString::Printf(TEXT("calmly returns behind the solid wall when not firing (%.1f s, retracted %.1f cm from peek, along %.1f cm <= frame edge %.1f cm, peek along %.1f cm)"),
+					State.StageTime, RetractedFromPeek, ReturnAlong, FrameEdgeAlong, State.EdgeMaxPeekAlong));
 
 			// Step 6: Under-sill BlindFire at window 2 (keep manual BlindFire mode active; silent squadmate spots target outside).
 			Squad->SetAutonomousSquadCombat(false);
@@ -600,30 +615,51 @@ namespace WallHugWindowSmoke
 			}
 			EnterSlot(*Leader, State.Setup.SlotWin2);
 			Leader->SetCoverFireMode(ECoverFireMode::BlindFire);
+			Leader->bTacticalCeaseFire = true;
 			Check(State, Leader->IsWindowCoverConfirmed() && Leader->IsCoverShotBlind() && Leader->GetStance() == EOperativeStance::Crouching,
 				TEXT("under window 2 in BlindFire mode crouched"));
-			AOperativeCharacter* Target2 = SpawnTargetPmc(*Pmc, State.Setup.EnemySpot2, 1);
-			State.Target = Target2;
-			if (!Target2)
-			{
-				return Finish(State, false);
-			}
+			State.Target.Reset();
 			State.BlindShotsBefore = Leader->GetCoverBlindShots();
 			State.BlindHpBefore = PmcStartHp;
 			State.BlindMaxHeadZ = -FLT_MAX;
 			State.BlindMaxHandZ = -FLT_MAX;
 			State.BlindMaxMuzzleZ = -FLT_MAX;
 			State.bBlindPoseSampled = false;
-			Leader->bTacticalCeaseFire = false;
-			Pmc->RefreshSight();
+			State.bBlindSettledCrouch = false;
+			State.BlindCheckAt = -1.f;
 			Next(State, EStage::UnderSillBlindFire);
 			return true;
 		}
 		case EStage::UnderSillBlindFire:
 		{
 			AOperativeCharacter* Leader = State.Leader.Get();
+			if (!Leader)
+			{
+				return Finish(State, false);
+			}
+			if (!State.bBlindSettledCrouch)
+			{
+				FVector Head, Pelvis, Hand;
+				SamplePose(*Leader, Head, Pelvis, Hand);
+				UOperativeAnimInstance* Anim = Leader->GetMesh() ? Cast<UOperativeAnimInstance>(Leader->GetMesh()->GetAnimInstance()) : nullptr;
+				if (State.StageTime < 0.2f || Head.Z > State.Setup.Box2.Max.Z + 12.f || (Anim && Anim->IsPlayingStanceTransition()))
+				{
+					return true;
+				}
+				State.bBlindSettledCrouch = true;
+				AOperativeCharacter* Target2 = SpawnTargetPmc(*Pmc, State.Setup.EnemySpot2, 1);
+				State.Target = Target2;
+				if (!Target2)
+				{
+					return Finish(State, false);
+				}
+				State.BlindShotsBefore = Leader->GetCoverBlindShots();
+				Leader->bTacticalCeaseFire = false;
+				Pmc->RefreshSight();
+				return true;
+			}
 			AOperativeCharacter* Target = State.Target.Get();
-			if (!Leader || !Target || !Target->HealthComponent)
+			if (!Target || !Target->HealthComponent)
 			{
 				return Finish(State, false);
 			}
@@ -638,13 +674,21 @@ namespace WallHugWindowSmoke
 				State.BlindMaxMuzzleZ = FMath::Max(State.BlindMaxMuzzleZ, MuzzleZ);
 				State.bBlindPoseSampled = true;
 			}
-			const bool bStayedCrouched = Leader->GetStance() == EOperativeStance::Crouching && !Leader->IsCornerAimActive();
-			const bool bHeadHidden = State.bBlindPoseSampled && State.BlindMaxHeadZ <= State.Setup.Box2.Max.Z + 12.f && State.BlindMaxHeadZ <= State.StandHeadZBefore - 20.f;
-			const bool bWeaponRaised = State.bBlindPoseSampled && FMath::Max(State.BlindMaxHandZ, State.BlindMaxMuzzleZ) > State.Setup.Box2.Max.Z
-				&& FMath::Max(State.BlindMaxHandZ, State.BlindMaxMuzzleZ) > State.BlindMaxHeadZ;
-			const bool bOriginOverSill = Leader->GetCoverFireOrigin().Z > State.Setup.Box2.Max.Z;
 			if (Leader->GetCoverBlindShots() > State.BlindShotsBefore && Target->HealthComponent->GetCurrentHealth() < State.BlindHpBefore - 1.f)
 			{
+				if (State.BlindCheckAt < 0.f)
+				{
+					State.BlindCheckAt = State.StageTime + 0.25f;
+				}
+				if (State.StageTime < State.BlindCheckAt)
+				{
+					return true;
+				}
+				const bool bStayedCrouched = Leader->GetStance() == EOperativeStance::Crouching && !Leader->IsCornerAimActive();
+				const bool bHeadHidden = State.bBlindPoseSampled && State.BlindMaxHeadZ <= State.Setup.Box2.Max.Z + 12.f && State.BlindMaxHeadZ <= State.StandHeadZBefore - 20.f;
+				const bool bWeaponRaised = State.bBlindPoseSampled && FMath::Max(State.BlindMaxHandZ, State.BlindMaxMuzzleZ) > State.Setup.Box2.Max.Z
+					&& FMath::Max(State.BlindMaxHandZ, State.BlindMaxMuzzleZ) > State.BlindMaxHeadZ;
+				const bool bOriginOverSill = Leader->GetCoverFireOrigin().Z > State.Setup.Box2.Max.Z;
 				Check(State, bStayedCrouched && bHeadHidden,
 					FString::Printf(TEXT("stays crouched with head hidden in BlindFire mode (head Z %.0f vs stand %.0f, sill %.0f)"),
 						State.BlindMaxHeadZ, State.StandHeadZBefore, State.Setup.Box2.Max.Z));
