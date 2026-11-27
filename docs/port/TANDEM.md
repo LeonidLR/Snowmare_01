@@ -1487,6 +1487,8 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 2026-11-11 Codex: stealth 003 final verification report complete, designer notified to test interim L_MovementTest / STEALTH or7. Source remains interim-only. New designer priority via Claude: 004 hitch then005 ragdoll beforeC5/C6.
 
+## Task148 checkpoint ? 2026-11-27
+Codex lane148 delivered TG replay/annotations, demo_notes decoder and new X6 building index. No runtime/content edits beyond the authorized new index. Code checks pass; Lead must capture drawn-route screenshots in a supported browser. See task148 outbox report.
 
 **121 checkpoint (2026-11-27, gemini/121-recording-tactics).** Reviewed Gemini telemetry; corrected attribution, optical observer/support facts, ground and look measurements, death/down semantics, and conservative round-scoped tactic tagging. Python18/18 PASS; final worker build/Smart/smokes and new PIE acceptance recording pending. Report: `docs/port/codex/outbox/121-recording-tactics.report.md`. Not merge-ready.
 

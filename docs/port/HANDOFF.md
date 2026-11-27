@@ -756,6 +756,7 @@ Newest first, one table row per commit (`| Commit | What |`). Append your row at
 - 2026-11-16: AgentChat standalone desktop app `58b045a8` (Edge app mode, hidden server, icon/shortcut); evidence [Tools/AgentChat/README.md](../../Tools/AgentChat/README.md), no dedicated report in that commit.
 - 2026-11-16: Gemini CLI runner `f0a65516` ([CLI_RULES.md](gemini/CLI_RULES.md)); fallback/FINISH rules `46f3e8e3`, token/cost ledger `9995dde8`, job arguments `3111fc6e`, quote/newline and HTTP 402 handling `2b99cd57`; usage-test merge `4d069017` is covered above. No separate runner report was added in those direct commits.
 
+**Task148 (2026-11-27):** TG fight replay/notes + decoder + stable building index implemented; Node7/7, Python14/14, typecheck/build pass. Screenshot acceptance blocked by Windows browser URL-policy support; see `docs/port/codex/outbox/148-fight-replay-annotate.report.md` and `docs/systems/fight-replay.md`. No UE changes.
 - 121 offline edge correction (2026-11-27): round_end sorts after same-timestamp kills, preserving the final kill and completed flank; Python19/19 PASS. Final runtime/PIE validation remains pending (task121 report).
 
 - 121 direct-loss completeness checkpoint (2026-11-27): health recording now observes actual common health decreases (normal/direct/cold/burning/bleeding) exactly once, removing actor callback duplication. Known TakeHit attackers arm a synchronous context; critical down is recorded across the same paths. Added C++ AllHealthLossPaths coverage; final worker checks pending.

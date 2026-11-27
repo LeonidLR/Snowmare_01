@@ -574,6 +574,8 @@ Last update: 2026-09-29 by Claude, after commit `2ca14b0`.
 
 2026-11-11 Codex: 003 final report/handback finalized with source hashes 90a6bf64, 4d15a54f, 561a29ed and verified game-camera evidence. Doc routing level1/gpt-6-luna required primary corrections (date/stale queue); current queue 004,005,C5,C6.
 
+## 2026-11-27 ? Codex task148
+Training Ground fight chronicle, legacy/121 event playback, world-cm route/comment/zone sidecars, decoder with rotated-geometry passing facts, frozen X6 building numbers. Node7/7 + Python14/14, typecheck/build PASS. Drawn-route screenshot acceptance blocked by browser tool policy support; task report records evidence gap.
 
 **121 checkpoint (2026-11-27, gemini/121-recording-tactics).** Reviewed Gemini telemetry; corrected attribution, optical observer/support facts, ground and look measurements, death/down semantics, and conservative round-scoped tactic tagging. Python18/18 PASS; final worker build/Smart/smokes and new PIE acceptance recording pending. Report: `docs/port/codex/outbox/121-recording-tactics.report.md`. Not merge-ready.
 

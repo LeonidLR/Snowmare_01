@@ -12,10 +12,12 @@ import { LevelGenDepartment } from './departments/LevelGenDepartment';
 import { ProjectHealthDepartment } from './departments/ProjectHealthDepartment';
 import { AiTrainingDepartment } from './departments/AiTrainingDepartment';
 import { confirmLeave } from './utils/unsavedGuard';
+import { ReplayDepartment } from './replay/ReplayDepartment';
 
-type DepartmentId = 'waves' | 'movement' | 'combat' | 'levelgen' | 'ai-training' | 'health';
+type DepartmentId = 'waves' | 'movement' | 'combat' | 'levelgen' | 'ai-training' | 'health' | 'replay';
 
 const DEPARTMENTS: { id: DepartmentId; name: string; icon: React.ReactNode; hint: string }[] = [
+  { id: 'replay', name: 'Хроника боя', icon: <Crosshair size={15} />, hint: 'Replay recordings and draw designer routes' },
   { id: 'waves', name: 'Волны', icon: <Swords size={15} />, hint: 'Волны, оружие, скрытность, бот боя (Unreal)' },
   { id: 'movement', name: 'Перемещение', icon: <Footprints size={15} />, hint: 'Построения, сектора взгляда, бот и обучение' },
   { id: 'combat', name: 'Боевая лаборатория', icon: <Crosshair size={15} />, hint: 'L_FormationLabCombat: давление врагов, засады, пресеты, боты по маршруту и отчёт' },
@@ -61,6 +63,7 @@ export const TrainingGround: React.FC = () => {
       {department === 'levelgen' && <LevelGenDepartment />}
       {department === 'ai-training' && <AiTrainingDepartment />}
       {department === 'health' && <ProjectHealthDepartment />}
+      {department === 'replay' && <ReplayDepartment />}
     </div>
   );
 };

@@ -1,0 +1,100 @@
+{
+  "schema": "codex.demo_notes/1",
+  "coordinates": "UE_cm_X_north_Y_east",
+  "recording": "2026-11-26_L_Gen_Depot_1_X6_165115.jsonl",
+  "map": "L_Gen_Depot_1_X6",
+  "annotations": [
+    {
+      "id": "validation-east-route",
+      "kind": "route",
+      "t": 836,
+      "author": "Codex validation",
+      "unit": "BP_Operative_C_12",
+      "label": "Validation only: east-wall route",
+      "color": "#facc15",
+      "points": [
+        [
+          -4000,
+          3200
+        ],
+        [
+          -3928,
+          3200
+        ],
+        [
+          -3832,
+          3200
+        ],
+        [
+          -3712,
+          3200
+        ],
+        [
+          -3568,
+          3200
+        ],
+        [
+          -3400,
+          3200
+        ],
+        [
+          -3186,
+          3200
+        ],
+        [
+          -2925,
+          3200
+        ],
+        [
+          -2651,
+          3200
+        ],
+        [
+          -2398,
+          3200
+        ],
+        [
+          -2200,
+          3200
+        ],
+        [
+          -2062,
+          3200
+        ],
+        [
+          -1963,
+          3200
+        ],
+        [
+          -1893,
+          3200
+        ],
+        [
+          -1842,
+          3200
+        ],
+        [
+          -1800,
+          3200
+        ]
+      ],
+      "round": 3
+    },
+    {
+      "id": "validation-comment",
+      "kind": "comment",
+      "t": 836,
+      "author": "Codex validation",
+      "unit": "BP_Operative_C_12",
+      "label": "Validation annotation, not designer instruction",
+      "color": "#facc15",
+      "points": [
+        [
+          -4000,
+          3200
+        ]
+      ],
+      "round": 3
+    }
+  ]
+}

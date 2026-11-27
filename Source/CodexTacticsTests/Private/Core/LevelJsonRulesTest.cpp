@@ -81,7 +81,8 @@ bool FLevelJsonFilesParseTest::RunTest(const FString&)
 	TestTrue(TEXT("Level files present"), Files.Num() >= 13);
 	for (const FString& File : Files)
 	{
-		if (FPaths::GetBaseFilename(File) == TEXT("stage_template"))
+		// Codex 148: <map>.buildings_index.json = the replay's stable building numbers, not a level file.
+		if (FPaths::GetBaseFilename(File) == TEXT("stage_template") || File.EndsWith(TEXT(".buildings_index.json")))
 		{
 			continue;
 		}
