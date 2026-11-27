@@ -442,6 +442,7 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 		{
 			VaultResumeTarget = InDestination;
 			bVaultResume = true;
+			bVaultResumeOwnOrder = !bFormationMove;
 			LastMoveDestination = InDestination;
 			bHasMoveOrder = true;
 		}

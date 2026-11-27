@@ -22,6 +22,13 @@
 #include "Interactables/WindowBreakage.h"
 #include "Interactables/WindowOrderRules.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "HAL/IConsoleManager.h"
+
+namespace OperativeVault155
+{
+	TAutoConsoleVariable<int32> PreserveOwnOrder(TEXT("Codex.Debug.VaultResumeOwnOrder155"), 1,
+		TEXT("155 A/B: preserve own move identity after a vault / step-off (default 1; 0 replays the prior selection-stop defect)."));
+}
 
 float AOperativeCharacter::GetVaultSpeed() const
 {
@@ -158,6 +165,7 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 	}
 
 	// Go: remember where the walk was heading, fly the arc with the collision off.
+	bVaultResumeOwnOrder = HasOwnMoveOrder();
 	bVaultResume = false;
 	if (const AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController()))
 	{
@@ -230,6 +238,7 @@ bool AOperativeCharacter::UpdateObstacleStepOff(float DeltaTime)
 	}
 	ObstacleTopTime = 0.f;
 	bVaultResume = bHasMoveOrder;
+	bVaultResumeOwnOrder = HasOwnMoveOrder();
 	VaultResumeTarget = LastMoveDestination;
 	bVaultRecrossing = false;
 	if (AController* OwnerController = GetController())
@@ -288,6 +297,12 @@ void AOperativeCharacter::UpdateVault(float DeltaTime)
 	{
 		ApplyMovementParams();
 		RequestMove(VaultResumeTarget);
+		if (OperativeVault155::PreserveOwnOrder.GetValueOnGameThread() != 0)
+		{
+			bOwnMoveOrder = bVaultResumeOwnOrder && bHasMoveOrder;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Vault] %s: resumed %s, saved own %d, own now %d"), *DisplayName.ToString(),
+			*VaultResumeTarget.ToCompactString(), bVaultResumeOwnOrder ? 1 : 0, HasOwnMoveOrder() ? 1 : 0);
 	}
 	else
 	{
@@ -299,5 +314,6 @@ void AOperativeCharacter::UpdateVault(float DeltaTime)
 		bHasMoveOrder = false;
 	}
 	bVaultResume = false;
+	bVaultResumeOwnOrder = false;
 	bVaultRecrossing = false;
 }

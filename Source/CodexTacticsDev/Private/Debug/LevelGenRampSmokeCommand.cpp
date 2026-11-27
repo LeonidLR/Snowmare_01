@@ -831,6 +831,8 @@ namespace LevelGenRampSmoke
 		{
 			if (State.bDesigner155 && !State.bDesignerSwitched && State.PhaseTime >= 10.f)
 			{
+				Check(State, State.Ordered.IsValid() && State.Ordered->HasOwnMoveOrder(),
+					TEXT("155: original roof order still owns movement after traversal, before selection switch"));
 				for (AOperativeCharacter* Member : Squad->GetMembers())
 				{
 					if (Member != State.Ordered.Get()) { Squad->SetLeader(Member); break; }

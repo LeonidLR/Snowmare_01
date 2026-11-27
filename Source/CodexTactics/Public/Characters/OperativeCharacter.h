@@ -2731,6 +2731,8 @@ private:
 	FVector VaultLanding = FVector::ZeroVector;
 	FVector VaultResumeTarget = FVector::ZeroVector;
 	bool bVaultResume = false;
+	/** A traversal resume keeps the player's own-order identity across StopMovement's completion callback. */
+	bool bVaultResumeOwnOrder = false;
 	/** This arc crosses back over the obstacle the previous vault of the same walk crossed (VaultRules::IsRecrossing; the ping-pong guard). */
 	bool bVaultRecrossing = false;
 	/** The previous TryVault: its obstacle, direction, goal, start time and whether its walk went on after the landing. */
