@@ -26,6 +26,7 @@
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/UnderFireRules.h"
+#include "Combat/WaveSubsystem.h"
 #include "Tactics/CoverThreatRules.h"
 #include "Tactics/CoverFacingRules.h"
 #include "Components/StaticMeshComponent.h"
@@ -232,6 +233,14 @@ namespace UnderFireManoeuvreSmoke
 			Shooter->bTacticalCeaseFire = true; // his rounds are the smoke's
 			State.Shooter = Shooter;
 			SmokeUtils::StartWaveFight(Flow);
+			// X6's empty scripted wave can complete before PMC contact joins it. Keep the
+			// wave alive independently, as in the other runtime combat arenas.
+			AEnemyCharacter* Keeper = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::FrostHound,
+				At(State, -6000.f, 0.f, 100.f));
+			Check(State, Keeper != nullptr, TEXT("a parked wave enemy keeps the runtime arena in combat"));
+			if (!Keeper) { return Finish(State, false); }
+			SmokeUtils::ParkEnemyFarAway(Keeper);
+			Keeper->SetActorTickEnabled(false);
 			if (Squad->IsSoloMode())
 			{
 				Squad->ExitSoloMode();
