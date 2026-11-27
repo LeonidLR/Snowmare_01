@@ -161,7 +161,7 @@ void Audit(UWorld* World)
 				}
 			}
 		}
-		if (FMath::Abs(Top.Z - Expected) > 60.f)
+		if (FMath::Abs(Top.Z - Expected) > 25.f)
 		{
 			Issue += TEXT("top misses claimed floor: correct Height/rungs or ramp endpoint; ");
 		}
@@ -207,8 +207,14 @@ void Audit(UWorld* World)
 				break;
 			}
 		}
+		FString Fix = It->IsClimbable() ? FString() : TEXT("decoration / no enabled climb; ");
+		if (FMath::Abs(It->GetTopWorldZ() - Expected) > 25.f)
+		{
+			Fix += FString::Printf(TEXT("Height %.1f -> %.1f (%d rungs at pitch %.1f); "), It->Height,
+				Expected - It->GetFloorZ(), FMath::RoundToInt((Expected - It->GetFloorZ()) / It->Pitch), It->Pitch);
+		}
 		Row(**It, It->GetName() + TEXT(" ") + Id, TEXT("ladder"), It->GetBottomLinkWorld(), It->GetTopLinkWorld(), It->GetTopExitWorld(),
-			Expected, It->GetNavLink(), It->IsClimbable() ? FString() : TEXT("decoration / no enabled climb; "));
+			Expected, It->GetNavLink(), Fix);
 	}
 	// Enumerate the PLACED sloped slabs, including untagged legacy ramps; axis-aligned bounds would lose their top/foot heights.
 	for (TActorIterator<AActor> It(World); It; ++It)
