@@ -19,11 +19,31 @@ $PromptPath = (Resolve-Path $PromptFile).Path
 $Agy = Join-Path $env:LOCALAPPDATA "agy\bin\agy.exe"
 if (-not (Test-Path $Agy)) { $Agy = (Get-Command agy -ErrorAction Stop).Source }
 
-if (-not (Get-NetTCPConnection -State Listen -LocalPort $ProxyPort -ErrorAction SilentlyContinue)) {
-    throw "PROXY-DOWN: nothing listens on 127.0.0.1:$ProxyPort - start C:\Users\Zephyrus15Duo\Tools\iphone-proxy\iphone_proxy.py (Startup shortcut 'iphone-proxy')"
+# University network: Google only through the phone proxy. Home network: the proxy has no upstream (no hotspot) -> go direct.
+# Pick the route that actually reaches Google now (2026-11-27, designer at home: "Bad Gateway" through the proxy).
+function Test-GoogleRoute([string]$ProxyUrl) {
+    try {
+        $req = [System.Net.WebRequest]::Create("https://www.googleapis.com/discovery/v1/apis")
+        $req.Timeout = 8000
+        $req.Proxy = if ($ProxyUrl) { New-Object System.Net.WebProxy($ProxyUrl) } else { $null }
+        $resp = $req.GetResponse(); $resp.Close(); return $true
+    } catch [System.Net.WebException] {
+        # a 4xx from Google = reachable; a 502 / 504 is the proxy itself failing upstream
+        $r = $_.Exception.Response
+        return [bool]($r -and [int]$r.StatusCode -lt 500)
+    } catch { return $false }
 }
 $Proxy = "http://127.0.0.1:$ProxyPort"
-$env:AG_LS_PROXY = $Proxy; $env:HTTPS_PROXY = $Proxy; $env:HTTP_PROXY = $Proxy
+$ProxyUp = [bool](Get-NetTCPConnection -State Listen -LocalPort $ProxyPort -ErrorAction SilentlyContinue)
+if ($ProxyUp -and (Test-GoogleRoute $Proxy)) {
+    $env:AG_LS_PROXY = $Proxy; $env:HTTPS_PROXY = $Proxy; $env:HTTP_PROXY = $Proxy
+    Write-Host "[agy_task] network: phone proxy $Proxy"
+} elseif (Test-GoogleRoute "") {
+    $env:AG_LS_PROXY = ""; $env:HTTPS_PROXY = ""; $env:HTTP_PROXY = ""
+    Write-Host "[agy_task] network: direct (proxy $ProxyPort has no upstream)"
+} else {
+    throw "NO-NETWORK: Google is reachable neither through $Proxy nor directly (university: start iphone_proxy.py; check Antigravity Tools DNS rules)"
+}
 $env:NO_PROXY = "localhost,127.0.0.1"
 $env:CODEX_AGENT = "gemini"  # the pre-push guard keeps gemini/* off main
 

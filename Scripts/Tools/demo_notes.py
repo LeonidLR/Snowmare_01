@@ -18,6 +18,7 @@ DEFAULT_MAP = ROOT / 'Content/Data/LevelJson/L_Gen_Depot_1_X6.json'
 PASS_DISTANCE_CM = 500
 COVER_TOUCH_CM = 75
 SAMPLE_CM = 25
+TAG_ORDER = ('хорошо', 'ошибка', 'как надо', 'баг', 'прочее')
 
 
 def load_json(path):
@@ -150,6 +151,7 @@ def decode(notes, layout, index):
     for annotation in notes['annotations']:
         a = {k: annotation[k] for k in ('id', 'kind', 't', 'author', 'unit', 'label')}
         a['round'] = annotation.get('round')
+        a['tag'] = annotation.get('tag')
         points = annotation['points']
         if annotation['kind'] in ('route', 'polyline', 'arrow'):
             samples = sample_route(points)
@@ -196,27 +198,50 @@ def decode(notes, layout, index):
         elif points:
             a['pin_cm'] = points[0]
         result['annotations'].append(a)
+    grouped = {}
+    for item in result['annotations']:
+        key = item.get('tag') or 'untagged'
+        grouped.setdefault(key, []).append(item['id'])
+    ordered_keys = [t for t in TAG_ORDER if t in grouped] + sorted(k for k in grouped if k not in TAG_ORDER and k != 'untagged')
+    if 'untagged' in grouped:
+        ordered_keys.append('untagged')
+    result['by_tag'] = {k: {'count': len(grouped[k]), 'ids': grouped[k]} for k in ordered_keys}
     return result
 
 
 def markdown(report):
     lines = [f"# Replay notes: {report['recording']}", '', 'Designer intent, decoded from drawings. Distances are geometric; open ground is a 5 m proximity proxy, not line of sight.', '']
+    grouped = {}
     for a in report['annotations']:
-        timestamp = f"{int(a['t'] // 60):02}:{int(a['t'] % 60):02}"
-        prefix = f"t={timestamp} R{a.get('round') or '—'} {a['unit'] or 'Unassigned'} ({a['author']})"
-        lines.append(f"- {prefix}: {a['kind']} — {a['label'] or '(no label)'}")
-        if 'length_m' in a:
-            lines.append(f"  Length {a['length_m']} m.")
-            for b in a['buildings_passed']:
-                lines.append(f"  Passes building {b['number'] or b['building_id']} on its {b['side'].upper()} side, {b['min_wall_distance_m']} m off the wall (route {b['from_m']}–{b['to_m']} m).")
-            for c in a['covers_touched']:
-                lines.append(f"  Touches {c['kind']} {c['id']} at {c['pos_cm']} (route {c['first_at_m']} m).")
-            for span in a.get('open_ground_crossings', []):
-                lines.append(f"  Open-ground proxy crossing: route {span['from_m']}–{span['to_m']} m.")
-            if a.get('building_footprints_crossed'):
-                lines.append('  Intersects building footprint(s): ' + ', '.join(a['building_footprints_crossed']) + '; floor/path clearance unknown.')
-        for b in a.get('buildings_at_centre', []):
-            lines.append(f"  Zone centre {'on roof of' if b['roof'] else 'over footprint of (roof unconfirmed)'} building {b['number'] or b['id']}.")
+        grouped.setdefault(a.get('tag') or 'untagged', []).append(a)
+    ordered_keys = [t for t in TAG_ORDER if t in grouped] + sorted(k for k in grouped if k not in TAG_ORDER and k != 'untagged')
+    if 'untagged' in grouped:
+        ordered_keys.append('untagged')
+    if not ordered_keys:
+        lines.append('(no annotations)')
+        return '\n'.join(lines) + '\n'
+    for tag_key in ordered_keys:
+        items = grouped[tag_key]
+        lines.append(f"## {tag_key} ({len(items)})")
+        lines.append('')
+        for a in items:
+            timestamp = f"{int(a['t'] // 60):02}:{int(a['t'] % 60):02}"
+            tag_part = f" [{a['tag']}]" if a.get('tag') else ''
+            prefix = f"t={timestamp} R{a.get('round') or '—'} {a['unit'] or 'Unassigned'} ({a['author']}){tag_part}"
+            lines.append(f"- {prefix}: {a['kind']} — {a['label'] or '(no label)'}")
+            if 'length_m' in a:
+                lines.append(f"  Length {a['length_m']} m.")
+                for b in a['buildings_passed']:
+                    lines.append(f"  Passes building {b['number'] or b['building_id']} on its {b['side'].upper()} side, {b['min_wall_distance_m']} m off the wall (route {b['from_m']}–{b['to_m']} m).")
+                for c in a['covers_touched']:
+                    lines.append(f"  Touches {c['kind']} {c['id']} at {c['pos_cm']} (route {c['first_at_m']} m).")
+                for span in a.get('open_ground_crossings', []):
+                    lines.append(f"  Open-ground proxy crossing: route {span['from_m']}–{span['to_m']} m.")
+                if a.get('building_footprints_crossed'):
+                    lines.append('  Intersects building footprint(s): ' + ', '.join(a['building_footprints_crossed']) + '; floor/path clearance unknown.')
+            for b in a.get('buildings_at_centre', []):
+                lines.append(f"  Zone centre {'on roof of' if b['roof'] else 'over footprint of (roof unconfirmed)'} building {b['number'] or b['id']}.")
+        lines.append('')
     return '\n'.join(lines) + '\n'
 
 

@@ -29,10 +29,13 @@ The index is excluded from the ordinary level picker. No in-game roof label was 
 
 ## Notes
 
-- Comment: click the map, or **Pin to time only**. Choose a unit optionally.
+- Comment: click the map, or **Pin to time only**. Label clears automatically after placing a note; one click places one note.
+- **Who**: displays operative role names from the recording (`Командир`, `Инженер`, `Медик-сапёр`, `Новобранец`; IDs stay in JSON). Defaults to the operative selected in the replay (`sel`) or clicked on the map in `select` mode.
+- **Tag**: `хорошо`, `ошибка`, `как надо`, `баг`, `прочее` (saved as optional `tag`; legacy files without `tag` load normally).
 - Route: drag a freehand route; Catmull-Rom smoothing is sampled to world-cm points before saving.
 - Polyline: click vertices, then **Finish polyline**. Arrow/zone: drag. Zone points are centre and radius endpoint.
-- Select: click a drawing or its list entry, then edit metadata with **Apply edits**. Drag white handles to edit geometry (up to ~25 handles shown for a sampled route).
+- Select & move: click a drawing or its list entry, then edit metadata with **Apply edits**. Drag any shape (`comment` pin, `arrow`, `zone`, `route`, `polyline`) as a whole to move it, or drag white handles to reshape (up to ~25 handles shown for a sampled route). Round is stored per note; colour stays free for the designer.
+- **Remove duplicates**: merges duplicate notes matching kind, text, time within 2 s, and same or absent point (keeping the pointed entry).
 - Delete / Undo support 50 recent edits. **Save notes** explicitly persists; department/recording switches and browser close warn about unsaved edits.
 - Notes list entries jump to their pinned time. Drawings remain visible at other times, with timestamp labels, for comparison.
 
@@ -40,10 +43,10 @@ The index is excluded from the ordinary level picker. No in-game roof label was 
 `coordinates: UE_cm_X_north_Y_east`, and `annotations[]`:
 
 ```json
-{"id":"uuid","kind":"route","t":836,"round":3,"author":"Designer","unit":"BP_Operative_C_12","label":"East wall","color":"#facc15","points":[[-4000,3200],[-1800,3200]]}
+{"id":"uuid","kind":"route","t":836,"round":3,"author":"Designer","unit":"BP_Operative_C_12","label":"East wall","color":"#facc15","tag":"как надо","points":[[-4000,3200],[-1800,3200]]}
 ```
 
-Kinds: `comment`, `route`, `polyline`, `arrow`, `zone`. Optional `height_cm` explicitly identifies annotation height above ground.
+Kinds: `comment`, `route`, `polyline`, `arrow`, `zone`. Optional `tag` (`хорошо` / `ошибка` / `как надо` / `баг` / `прочее`) and `height_cm` (explicit height above ground).
 Points may contain a third world-Z coordinate. Roof decoding requires explicit height evidence; labels and XY alone are insufficient.
 The API validates notes and recording identity, accepts same-origin JSON writes, rejects path traversal/escaping links, caps requests at 4 MB, and atomically replaces notes.
 It never opens a recording for writing. Multibyte UTF-8 survives split request chunks.
@@ -56,7 +59,7 @@ python Scripts/Tools/demo_notes.py <recording-stem>.notes.json
 python -m unittest discover -s Scripts/Tools -p test_demo_notes.py -v
 ```
 
-Writes `<stem>.md` and `<stem>.json` (default stem `<name>.notes.decoded`). The default X6 config resolves its geometry reference.
+Writes `<stem>.md` and `<stem>.json` (default stem `<name>.notes.decoded`). Prints each annotation's `tag` and groups output by tag (`by_tag` in JSON, `## <tag>` sections in Markdown). The default X6 config resolves its geometry reference.
 For a direct layout input, pass the index explicitly. Decoder rules:
 
 - 25 cm maximum sampling step, including sparse polyline segments; length uses saved/displayed samples.
