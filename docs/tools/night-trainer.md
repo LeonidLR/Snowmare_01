@@ -243,3 +243,11 @@ For a short calibration use `weekend_trainer.py --trainer-config <prepared.json>
 The arena adapter now uses absolute weight paths because the loader otherwise checks the engine working directory;
 use a checkout path without spaces, commas or quotes. Weekend configs require both engine weight-load flags to be true.
 The scripts never call `apply_champion.ps1`; applying a champion still requires the Lead's OK.
+
+Task149 calibration limits: three saved real A/A pairs confirm weight loading and varying retreat-survival /
+suppress-then-move proxies, not improvement or a live night gate pass. Full nights remain blocked pending G2 liveness
+and a G3 freeze baseline (>=30 rounds per scenario). Several original reward/descriptor fields are zero; the gate also
+looks for `damage_dealt` while fitness consumes `opp_hp_lost`. Captures have reporting coverage but no positive example
+in the short trial. Validate the actual prepared config against current sweep/probe/baseline evidence before launch;
+the wrapper's pass-file check verifies status/age, not config or freeze identity. See the task149 report and its saved
+metric diagnostics for exact usable signals and proposed gate follow-ups. No shared night-loop changes were made.

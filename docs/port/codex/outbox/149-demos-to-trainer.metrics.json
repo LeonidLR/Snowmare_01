@@ -1,0 +1,229 @@
+{
+  "note": "Offline diagnostics of the six saved A/A rounds (only three independent seeds); no new engine or gate probe. No sweep or freeze baseline supplied. Not a night gate pass.",
+  "gate": {
+    "passed": false,
+    "metrics_evaluated": [
+      "ambush_success",
+      "ambushes",
+      "behaviour.suppress_then_move",
+      "damage_dealt",
+      "damage_from_concealment",
+      "first_strike",
+      "flanks_completed",
+      "flanks_succeeded",
+      "friendly_fire",
+      "heals",
+      "hp_lost",
+      "kills",
+      "moves",
+      "objective_win",
+      "retreats_survived",
+      "strikes_unobserved",
+      "stuck_events",
+      "suppression_s",
+      "survivors",
+      "time_in_contact_s"
+    ],
+    "checks": {
+      "G1_smoke_health": {
+        "passed": false,
+        "issues": [
+          "No smoke sweep result data provided or found (sweep-result.json)"
+        ]
+      },
+      "G2_metric_liveness": {
+        "passed": false,
+        "issues": [
+          "Metric 'ambush_success' is zero across all 6 probe rounds (dead metric)",
+          "Metric 'damage_dealt' is None/missing in all 6 probe rounds",
+          "Metric 'damage_from_concealment' is zero across all 6 probe rounds (dead metric)",
+          "Metric 'flanks_completed' is zero across all 6 probe rounds (dead metric)",
+          "Metric 'flanks_succeeded' is zero across all 6 probe rounds (dead metric)",
+          "Metric 'heals' is zero across all 6 probe rounds (dead metric)",
+          "Metric 'objective_win' is zero across all 6 probe rounds (dead metric)",
+          "Metric 'strikes_unobserved' is zero across all 6 probe rounds (dead metric)"
+        ]
+      },
+      "G3_baseline_sufficiency": {
+        "passed": false,
+        "issues": [
+          "No baseline data exists for the current freeze commit"
+        ]
+      }
+    },
+    "reasons": [
+      "[G1 Smokes] No smoke sweep result data provided or found (sweep-result.json)",
+      "[G2 Liveness] Metric 'ambush_success' is zero across all 6 probe rounds (dead metric)",
+      "[G2 Liveness] Metric 'damage_dealt' is None/missing in all 6 probe rounds",
+      "[G2 Liveness] Metric 'damage_from_concealment' is zero across all 6 probe rounds (dead metric)",
+      "[G2 Liveness] Metric 'flanks_completed' is zero across all 6 probe rounds (dead metric)",
+      "[G2 Liveness] Metric 'flanks_succeeded' is zero across all 6 probe rounds (dead metric)",
+      "[G2 Liveness] Metric 'heals' is zero across all 6 probe rounds (dead metric)",
+      "[G2 Liveness] Metric 'objective_win' is zero across all 6 probe rounds (dead metric)",
+      "[G2 Liveness] Metric 'strikes_unobserved' is zero across all 6 probe rounds (dead metric)",
+      "[G3 Baseline] No baseline data exists for the current freeze commit"
+    ]
+  },
+  "metrics": {
+    "ambush_success": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "ambushes": [
+      0.0,
+      0.0,
+      3.0,
+      3.0,
+      0.0,
+      0.0
+    ],
+    "behaviour.suppress_then_move": [
+      1.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "damage_dealt": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "damage_from_concealment": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "first_strike": [
+      0.0,
+      0.0,
+      1.0,
+      1.0,
+      0.0,
+      0.0
+    ],
+    "flanks_completed": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "flanks_succeeded": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "friendly_fire": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "heals": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "hp_lost": [
+      292.0,
+      292.0,
+      0.0,
+      0.0,
+      352.0,
+      352.0
+    ],
+    "kills": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      1.0
+    ],
+    "moves": [
+      4.0,
+      4.0,
+      0.0,
+      0.0,
+      6.0,
+      6.0
+    ],
+    "objective_win": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "retreats_survived": [
+      1.0,
+      1.0,
+      0.0,
+      0.0,
+      1.0,
+      1.0
+    ],
+    "strikes_unobserved": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "stuck_events": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "suppression_s": [
+      11.5,
+      11.5,
+      9.0,
+      9.0,
+      1.7000000476837158,
+      1.7000000476837158
+    ],
+    "survivors": [
+      2.0,
+      2.0,
+      3.0,
+      3.0,
+      1.0,
+      1.0
+    ],
+    "time_in_contact_s": [
+      14.800000190734863,
+      14.800000190734863,
+      2.799999952316284,
+      2.799999952316284,
+      11.300000190734863,
+      11.300000190734863
+    ]
+  }
+}
