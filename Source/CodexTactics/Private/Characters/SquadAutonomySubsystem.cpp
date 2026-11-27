@@ -851,21 +851,24 @@ void USquadAutonomySubsystem::DecideInCover(AOperativeCharacter& Operative, cons
 		}
 	}
 
-	FCoverStanceSituation StanceSituation;
-	StanceSituation.Height = bWindow ? ECoverHeight::LowCover : Operative.CurrentCoverHeight;
-	StanceSituation.bSniperLaserOnMe = bLaser;
-	StanceSituation.HealthFraction = Health;
-	StanceSituation.SuppressionPressure = Suppression;
-	StanceSituation.bEnemyElevated = bElevatedEnemy;
-	StanceSituation.bWantsAimedFire = Decision == ECoverFireDecision::CornerPeek || Decision == ECoverFireDecision::OpenShot;
-	const EOperativeStance Wanted = SniperRules::AutonomyStance(CoverDecisionRules::ToStance(CoverDecisionRules::DecideStance(Config, StanceSituation)),
-		Operative.IsSniperWeaponEquipped());
-	if (Operative.GetStance() != EOperativeStance::Prone && Operative.GetStance() != Wanted)
+	if (!bWindow)
 	{
-		Operative.SetStance(Wanted);
-		++Stats.CoverStanceChanges;
-		Stats.CoverCrouchForLaser += bLaser && Wanted == EOperativeStance::Crouching ? 1 : 0;
-		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s %s at the wall%s"), *Operative.DisplayName.ToString(),
-			Wanted == EOperativeStance::Crouching ? TEXT("crouches") : TEXT("stands"), bLaser ? TEXT(" (sniper laser)") : TEXT(""));
+		FCoverStanceSituation StanceSituation;
+		StanceSituation.Height = Operative.CurrentCoverHeight;
+		StanceSituation.bSniperLaserOnMe = bLaser;
+		StanceSituation.HealthFraction = Health;
+		StanceSituation.SuppressionPressure = Suppression;
+		StanceSituation.bEnemyElevated = bElevatedEnemy;
+		StanceSituation.bWantsAimedFire = Decision == ECoverFireDecision::CornerPeek || Decision == ECoverFireDecision::OpenShot;
+		const EOperativeStance Wanted = SniperRules::AutonomyStance(CoverDecisionRules::ToStance(CoverDecisionRules::DecideStance(Config, StanceSituation)),
+			Operative.IsSniperWeaponEquipped());
+		if (Operative.GetStance() != EOperativeStance::Prone && Operative.GetStance() != Wanted)
+		{
+			Operative.SetStance(Wanted);
+			++Stats.CoverStanceChanges;
+			Stats.CoverCrouchForLaser += bLaser && Wanted == EOperativeStance::Crouching ? 1 : 0;
+			UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s %s at the wall%s"), *Operative.DisplayName.ToString(),
+				Wanted == EOperativeStance::Crouching ? TEXT("crouches") : TEXT("stands"), bLaser ? TEXT(" (sniper laser)") : TEXT(""));
+		}
 	}
 }

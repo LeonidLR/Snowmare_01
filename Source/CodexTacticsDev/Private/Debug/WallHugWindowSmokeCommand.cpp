@@ -374,18 +374,15 @@ namespace WallHugWindowSmoke
 				return Finish(State, false);
 			}
 			const FVector Here = Leader->GetActorLocation();
-			const FVector C1 = State.Setup.Box1.GetCenter();
-			const FVector C2 = State.Setup.Box2.GetCenter();
-			const FVector Mid = (C1 + C2) * 0.5f;
-			if (FVector::Dist2D(Here, C1) <= 85.f && Leader->GetStance() == EOperativeStance::Crouching)
+			if (FVector::Dist2D(Here, State.Setup.SlotWin1.WorldLocation) <= 55.f && Leader->GetStance() == EOperativeStance::Crouching)
 			{
 				State.bCrouchedWin1 = true;
 			}
-			if (FVector::Dist2D(Here, Mid) <= 75.f && Leader->GetStance() == EOperativeStance::Standing)
+			if (FVector::Dist2D(Here, State.Setup.SlotBetween.WorldLocation) <= 55.f && Leader->GetStance() == EOperativeStance::Standing)
 			{
 				State.bStoodBetween = true;
 			}
-			if (FVector::Dist2D(Here, C2) <= 85.f && Leader->GetStance() == EOperativeStance::Crouching)
+			if (FVector::Dist2D(Here, State.Setup.SlotWin2.WorldLocation) <= 55.f && Leader->GetStance() == EOperativeStance::Crouching)
 			{
 				State.bCrouchedWin2 = true;
 			}
@@ -397,6 +394,7 @@ namespace WallHugWindowSmoke
 				Check(State, Leader->GetStance() == EOperativeStance::Standing, TEXT("stood back up after window 2"));
 
 				// Step 2 & 3: take window 1 slot (click-as-cover check + slot entry) and test PAS -> DEF -> AGG fire modes.
+				const FVector C1 = State.Setup.Box1.GetCenter();
 				FHitResult WinHit(State.Setup.Sill1.Get(), nullptr, C1, State.Setup.HugNormal);
 				WinHit.bBlockingHit = true;
 				WinHit.TraceStart = C1 + State.Setup.HugNormal * 120.f;

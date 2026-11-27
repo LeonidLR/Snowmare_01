@@ -200,13 +200,13 @@ void AOperativeCharacter::UpdateCornerAim(float DeltaTime)
 		EndCornerAim(ECornerAimDecision::DuckForSafety, TEXT("suppressed: head down"));
 		return;
 	}
-	if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && !IsCornerHoldSpot() && !IsManualCornerPeekSpot())
+	if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && !IsWindowCoverConfirmed() && !IsCornerHoldSpot() && !IsManualCornerPeekSpot())
 	{
 		EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("no longer at the exposed edge"));
 		return;
 	}
 	// The hold outside a fight lasts while a threat is known (or he fired lately): then back to hugging the wall.
-	if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && !WantsCornerHold() && GetWorld()
+	if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && !IsWindowCoverConfirmed() && !WantsCornerHold() && GetWorld()
 		&& GetWorld()->GetTimeSeconds() - CoverLastShotTime > CoverEngageHoldSeconds)
 	{
 		EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("no fight, no threat known"));
