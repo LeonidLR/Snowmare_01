@@ -345,6 +345,7 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	UpdateCriticalWound(); // the critical wound: down and crawling only until healed (CriticalWoundRules, OperativeCharacterStance.cpp)
 	UpdateStealthMode();
+	RefreshOrderSprint(); // recover within the same order when a temporary sprint restriction ends
 	UpdateCorpseFall(DeltaTime); // fix/corpse-falls-to-ground: a body killed off the ground lands before it lies still
 	UpdatePlaceholderPose(1.f - FMath::Exp(-StanceBlendSpeed * DeltaTime));
 	UpdateProneDive(DeltaTime);

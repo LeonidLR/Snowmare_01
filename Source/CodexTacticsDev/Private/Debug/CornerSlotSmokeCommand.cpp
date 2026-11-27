@@ -192,6 +192,385 @@ namespace CornerSlotSmoke
 		Operative.TeleportTo(Feet + FVector(0.f, 0.f, Half + 6.f), Facing.Rotation(), false, true);
 	}
 
+	struct F135bMatrixState
+	{
+		bool bActive = false;
+		int32 Step = 0;
+		double StageTime = 0.0;
+		FVector LocalChestFwd = FVector(1.f, 0.f, 0.f);
+		bool bChestCalibrated = false;
+		// 16 pose cases: SetIndex (0=m4, 1=riffle) x PickIndex (0=HighR, 1=HighL, 2=LowR, 3=LowL) -> measure peek & idle return
+		int32 PoseIndex = 0;
+		bool bIdleMeasured = false;
+		float RecordedInward[2][4][2] = {}; // [Set][Pick][0=Peek,1=Idle]
+		// Part 2 look cases: SetIndex (0=m4, 1=riffle) x Side (0=HighL, 1=HighR) x LookMode (0=InAo, 1=WallNormalRight90, 2=AlongOpposite90)
+		int32 LookCase = 0;
+		int32 LookSubStep = 0;
+
+		const FPick& PickAt(const FRunner& R, int32 Idx) const
+		{
+			switch (Idx)
+			{
+			case 0: return R.HighRight;
+			case 1: return R.HighLeft;
+			case 2: return R.LowRight;
+			default: return R.LowLeft;
+			}
+		}
+
+		const TCHAR* PickLabel(int32 Idx) const
+		{
+			switch (Idx)
+			{
+			case 0: return TEXT("high right stand");
+			case 1: return TEXT("high left stand");
+			case 2: return TEXT("low right crouch");
+			default: return TEXT("low left crouch");
+			}
+		}
+
+		void MeasureBones(UWorld& World, AOperativeCharacter& Op, const FPick& Pick, const FString& Tag,
+			TFunctionRef<void(bool, const FString&)> CheckFn, float* OutShoulderAbs = nullptr) const
+		{
+			USkeletalMeshComponent* Mesh = Op.GetMesh();
+			const UOperativeAnimInstance* Anim = Mesh ? Cast<UOperativeAnimInstance>(Mesh->GetAnimInstance()) : nullptr;
+			if (!Mesh)
+			{
+				CheckFn(false, FString::Printf(TEXT("135b %s: no mesh"), *Tag));
+				return;
+			}
+			const FVector ClavL = Mesh->GetBoneLocation(TEXT("clavicle_l"));
+			const FVector ClavR = Mesh->GetBoneLocation(TEXT("clavicle_r"));
+			const FVector Pelvis = Mesh->GetBoneLocation(TEXT("pelvis"));
+			const float InL = InwardCm(ClavL, Pick);
+			const float InR = InwardCm(ClavR, Pick);
+			const float ShoulderIn = InL < InR ? InL : InR;
+			const float ShoulderAbs = FMath::Abs(ShoulderIn);
+			const float PelvisIn = InwardCm(Pelvis, Pick);
+			const FVector Normal = Pick.Base.WallNormal.GetSafeNormal2D();
+			float WorstPen = PenetrationCm(World, Op.GetActorLocation(), Normal, &Op);
+			const TCHAR* Bones[] = { TEXT("clavicle_r"), TEXT("clavicle_l"), TEXT("pelvis"), TEXT("head"), TEXT("hand_r"), TEXT("hand_l"), TEXT("spine_03") };
+			const TCHAR* WorstBone = TEXT("capsule");
+			for (const TCHAR* BoneName : Bones)
+			{
+				const FVector Pos = Mesh->GetBoneLocation(BoneName);
+				// Past an exposed corner edge there is no wall behind the face plane.
+				if (!CoverFacingRules::IsWithinWallSpan(Op.GetCoverSlot(), Pos, 2.f))
+				{
+					continue;
+				}
+				const float Pen = PenetrationCm(World, Pos, Normal, &Op);
+				if (Pen > WorstPen)
+				{
+					WorstPen = Pen;
+					WorstBone = BoneName;
+				}
+			}
+			if (OutShoulderAbs)
+			{
+				*OutShoulderAbs = ShoulderIn;
+			}
+			float WeaponRelNormal = 0.f;
+			const USceneComponent* WComp = (Op.WeaponSkeletalMesh && Op.WeaponSkeletalMesh->IsVisible())
+				? static_cast<const USceneComponent*>(Op.WeaponSkeletalMesh.Get())
+				: static_cast<const USceneComponent*>(Op.WeaponMesh.Get());
+			if (WComp)
+			{
+				const FVector WDir = (Op.GetWeaponMuzzleLocation() - WComp->GetComponentLocation()).GetSafeNormal2D();
+				if (!WDir.IsNearlyZero())
+				{
+					WeaponRelNormal = FMath::FindDeltaAngleDegrees(Normal.Rotation().Yaw, static_cast<float>(WDir.Rotation().Yaw));
+				}
+			}
+			UE_LOG(LogCodexTactics, Display,
+				TEXT("135b measure %s: shoulder %s inward %.1f (abs %.1f) | pelvis %.1f | worst pen %.1f (%s) | weaponRelNorm %.1f | firePose %d | set '%s' | clip %s"),
+				*Tag, InL < InR ? TEXT("clavicle_l") : TEXT("clavicle_r"), ShoulderIn, ShoulderAbs, PelvisIn, WorstPen, WorstBone, WeaponRelNormal,
+				Anim && Anim->IsCoverInFirePose() ? 1 : 0, Anim ? *Anim->GetActiveCoverAnimSet() : TEXT("?"),
+				(Anim && Anim->GetCoverClipLog().Num() > 0) ? *Anim->GetCoverClipLog().Last(0) : TEXT("-"));
+			CheckFn(ShoulderAbs <= 25.f, FString::Printf(TEXT("135b %s: outer shoulder %.1f cm from edge (<= 25)"), *Tag, ShoulderAbs));
+			CheckFn(WorstPen <= 2.f, FString::Printf(TEXT("135b %s: wall penetration %.1f cm (%s, <= 2)"), *Tag, WorstPen, WorstBone));
+		}
+
+		void MeasureLookYaws(AOperativeCharacter& Op, const FVector& LookPoint, const FString& Tag,
+			TFunctionRef<void(bool, const FString&)> CheckFn) const
+		{
+			USkeletalMeshComponent* Mesh = Op.GetMesh();
+			const UOperativeAnimInstance* Anim = Mesh ? Cast<UOperativeAnimInstance>(Mesh->GetAnimInstance()) : nullptr;
+			const float LookYaw = static_cast<float>((LookPoint - Op.GetActorLocation()).GetSafeNormal2D().Rotation().Yaw);
+			const int32 SpineIdx = Mesh ? Mesh->GetBoneIndex(TEXT("spine_03")) : INDEX_NONE;
+			float SpineErr = 180.f;
+			float SpineYaw = 0.f;
+			if (Mesh && SpineIdx != INDEX_NONE)
+			{
+				const FVector SpineFwd = Mesh->GetBoneTransform(SpineIdx).TransformVectorNoScale(LocalChestFwd).GetSafeNormal2D();
+				SpineYaw = static_cast<float>(SpineFwd.Rotation().Yaw);
+				SpineErr = FMath::Abs(FRotator::NormalizeAxis(SpineYaw - LookYaw));
+			}
+			float WeaponYaw = 0.f;
+			float WeaponErr = 180.f;
+			const FVector Muzzle = Op.GetWeaponMuzzleLocation();
+			const USceneComponent* WeaponComp = (Op.WeaponSkeletalMesh && Op.WeaponSkeletalMesh->IsVisible())
+				? static_cast<const USceneComponent*>(Op.WeaponSkeletalMesh.Get())
+				: static_cast<const USceneComponent*>(Op.WeaponMesh.Get());
+			if (WeaponComp)
+			{
+				const FVector Barrel = (Muzzle - WeaponComp->GetComponentLocation()).GetSafeNormal2D();
+				if (!Barrel.IsNearlyZero())
+				{
+					WeaponYaw = static_cast<float>(Barrel.Rotation().Yaw);
+					WeaponErr = FMath::Abs(FRotator::NormalizeAxis(WeaponYaw - LookYaw));
+				}
+			}
+			UE_LOG(LogCodexTactics, Display,
+				TEXT("135b look %s: lookYaw %.1f | spine_03 %.1f (err %.1f) | weapon %.1f (err %.1f) | actor %.1f | inCover %d firePose %d facing %s set '%s' AimYaw %.1f"),
+				*Tag, LookYaw, SpineYaw, SpineErr, WeaponYaw, WeaponErr, static_cast<float>(Op.GetActorRotation().Yaw),
+				Op.bInCover ? 1 : 0, Anim && Anim->IsCoverInFirePose() ? 1 : 0,
+				Op.CoverFacing == ECoverFacing::Left ? TEXT("L") : TEXT("R"),
+				Anim ? *Anim->GetActiveCoverAnimSet() : TEXT("?"), Anim ? Anim->AimYaw : 0.f);
+			// In-cover sideways corner poses twist upper body differently from chest clip orientation; full body alignment holds when stepped out.
+			if (!Op.bInCover)
+			{
+				CheckFn(SpineErr <= 15.f, FString::Printf(TEXT("135b look %s: spine_03 yaw err %.1f deg (<= 15)"), *Tag, SpineErr));
+			}
+			CheckFn(WeaponErr <= 15.f, FString::Printf(TEXT("135b look %s: weapon yaw err %.1f deg (<= 15)"), *Tag, WeaponErr));
+		}
+
+		bool Tick(UWorld& World, FRunner& R, TFunctionRef<void(bool, const FString&)> CheckFn)
+		{
+			AOperativeCharacter* Op = R.Leader.Get();
+			USkeletalMeshComponent* Mesh = Op ? Op->GetMesh() : nullptr;
+			UOperativeAnimInstance* Anim = Mesh ? Cast<UOperativeAnimInstance>(Mesh->GetAnimInstance()) : nullptr;
+			if (!Op || !Mesh || !Anim)
+			{
+				CheckFn(false, TEXT("135b: missing leader/mesh/anim"));
+				return true;
+			}
+			const double Delta = 1.0 / 60.0;
+			StageTime += Delta;
+			// Step 0: calibrate chest forward axis in spine_03 local space on neutral standing idle.
+			if (Step == 0)
+			{
+				Op->ClearManualLookPoint();
+				Anim->SetCoverAnimSetOverrideForTesting(FString());
+				if (Op->bInCover)
+				{
+					Op->LeaveCover(TEXT("135b calibrate"));
+				}
+				Op->SetStance(EOperativeStance::Standing);
+				ArmMesh(*Op);
+				if (StageTime >= 0.6 && FMath::Abs(Anim->AimYaw) < 1.f)
+				{
+					const int32 SpineIdx = Mesh->GetBoneIndex(TEXT("spine_03"));
+					if (SpineIdx != INDEX_NONE)
+					{
+						LocalChestFwd = Mesh->GetBoneTransform(SpineIdx).InverseTransformVectorNoScale(Op->GetActorForwardVector()).GetSafeNormal();
+						bChestCalibrated = true;
+					}
+					CheckFn(bChestCalibrated, TEXT("135b: calibrated spine_03 local forward"));
+					Step = 1;
+					PoseIndex = 0;
+					StageTime = 0.0;
+				}
+				return false;
+			}
+			// Step 1: 16 corner states (2 sets x 4 corners x [peek aim, idle return])
+			if (Step == 1)
+			{
+				if (PoseIndex >= 8)
+				{
+					// Verify L/R symmetry within each set + stance + state
+					for (int32 S = 0; S < 2; ++S)
+					{
+						for (int32 St = 0; St < 2; ++St) // 0=High stand, 1=Low crouch
+						{
+							for (int32 State = 0; State < 2; ++State)
+							{
+								const float RIn = RecordedInward[S][St * 2 + 0][State];
+								const float LIn = RecordedInward[S][St * 2 + 1][State];
+								const float Diff = FMath::Abs(RIn - LIn);
+								CheckFn(Diff <= 12.f, FString::Printf(TEXT("135b symmetry %s %s %s: |R %.1f - L %.1f| = %.1f cm (<= 12)"),
+									S == 0 ? TEXT("m4") : TEXT("riffle"), St == 0 ? TEXT("stand") : TEXT("crouch"),
+									State == 0 ? TEXT("peek") : TEXT("idle"), RIn, LIn, Diff));
+							}
+						}
+					}
+					Step = 2;
+					LookCase = 0;
+					LookSubStep = 0;
+					StageTime = 0.0;
+					return false;
+				}
+				const int32 SetIdx = PoseIndex / 4;
+				const int32 PickIdx = PoseIndex % 4;
+				const FPick& Pick = PickAt(R, PickIdx);
+				if (!Pick.bValid)
+				{
+					++PoseIndex;
+					bIdleMeasured = false;
+					StageTime = 0.0;
+					return false;
+				}
+				const bool bLow = PickIdx >= 2;
+				const FString SetName = SetIdx == 0 ? TEXT("m4") : TEXT("riffle");
+				if (StageTime < 0.05)
+				{
+					bIdleMeasured = false;
+					Op->ClearManualLookPoint();
+					Anim->SetCoverAnimSetOverrideForTesting(SetName);
+					Op->SetStance(bLow ? EOperativeStance::Crouching : EOperativeStance::Standing);
+					Put(*Op, Pick.Corner.WorldLocation, Pick.Corner.WallNormal);
+					return false;
+				}
+				if (!Op->bInCover && !Op->HasPendingCover() && StageTime < 0.25)
+				{
+					Op->OrderTakeCover(Pick.Corner, false);
+					return false;
+				}
+				if (Op->bInCover && !Op->IsManualCornerPeek() && !bIdleMeasured && StageTime < 1.5)
+				{
+					Op->OrderCornerPeek(Pick.Side, Pick.EdgeAlong);
+					return false;
+				}
+				if (!bIdleMeasured)
+				{
+					if (Op->bInCover && !Op->bShimmying && Op->IsPeekingRoundCorner() && Anim->IsCoverInFirePose() && StageTime >= 1.2)
+					{
+						const FString Tag = FString::Printf(TEXT("%s %s peek"), *SetName, PickLabel(PickIdx));
+						MeasureBones(World, *Op, Pick, Tag, CheckFn, &RecordedInward[SetIdx][PickIdx][0]);
+						bIdleMeasured = true;
+						Op->EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("CornerSlotSmoke 135b idle return"));
+						// Re-enter clean idle cover hug (without manual corner peek) at the exact corner slot.
+						Op->LeaveCover(TEXT("135b switch peek to idle"));
+						Op->SetStance(bLow ? EOperativeStance::Crouching : EOperativeStance::Standing);
+						Put(*Op, Pick.Corner.WorldLocation, Pick.Corner.WallNormal);
+						Op->OrderTakeCover(Pick.Corner, false);
+						StageTime = 0.05;
+					}
+					else if (StageTime > 4.0)
+					{
+						CheckFn(false, FString::Printf(TEXT("135b %s %s peek: did not settle"), *SetName, PickLabel(PickIdx)));
+						++PoseIndex;
+						StageTime = 0.0;
+					}
+					return false;
+				}
+				if (!Op->bInCover && !Op->HasPendingCover() && StageTime >= 0.05 && StageTime < 0.35)
+				{
+					Op->OrderTakeCover(Pick.Corner, false);
+					return false;
+				}
+				if (Op->bInCover && !Op->bShimmying && !Op->IsCornerAimActive() && !Anim->IsCoverInFirePose() && StageTime >= 1.8)
+				{
+					const FString Tag = FString::Printf(TEXT("%s %s idle"), *SetName, PickLabel(PickIdx));
+					MeasureBones(World, *Op, Pick, Tag, CheckFn, &RecordedInward[SetIdx][PickIdx][1]);
+					++PoseIndex;
+					StageTime = 0.0;
+				}
+				else if (StageTime > 4.0)
+				{
+					CheckFn(false, FString::Printf(TEXT("135b %s %s idle: did not settle"), *SetName, PickLabel(PickIdx)));
+					++PoseIndex;
+					StageTime = 0.0;
+				}
+				return false;
+			}
+			// Step 2: Corner-hold Shift+click look after ReturnNoTargets (2 sets x 2 high corners x 3 look angles = 12 cases)
+			if (Step == 2)
+			{
+				if (LookCase >= 12)
+				{
+					Op->ClearManualLookPoint();
+					Anim->SetCoverAnimSetOverrideForTesting(FString());
+					bActive = false;
+					return true;
+				}
+				const int32 SetIdx = LookCase / 6;
+				const int32 SideIdx = (LookCase / 3) % 2; // 0=HighLeft, 1=HighRight
+				const int32 Mode = LookCase % 3; // 0=InAO(corner outward), 1=Normal (90 deg right of left corner), 2=Opposite90
+				const FPick& Pick = SideIdx == 0 ? R.HighLeft : R.HighRight;
+				if (!Pick.bValid)
+				{
+					++LookCase;
+					LookSubStep = 0;
+					StageTime = 0.0;
+					return false;
+				}
+				const FString SetName = SetIdx == 0 ? TEXT("m4") : TEXT("riffle");
+				const FString SideName = SideIdx == 0 ? TEXT("left") : TEXT("right");
+				if (LookSubStep == 0)
+				{
+					Op->ClearManualLookPoint();
+					Anim->SetCoverAnimSetOverrideForTesting(SetName);
+					Op->SetStance(EOperativeStance::Standing);
+					Put(*Op, Pick.Corner.WorldLocation, Pick.Corner.WallNormal);
+					LookSubStep = 1;
+					StageTime = 0.0;
+					return false;
+				}
+				if (LookSubStep == 1 && StageTime >= 0.1)
+				{
+					Op->OrderTakeCover(Pick.Corner, false);
+					LookSubStep = 2;
+					StageTime = 0.0;
+					return false;
+				}
+				if (LookSubStep == 2)
+				{
+					if (Op->bInCover && !Op->bShimmying && StageTime >= 0.8)
+					{
+						Op->EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("135b corner hold idle"));
+						LookSubStep = 4;
+						StageTime = 0.0;
+					}
+					else if (StageTime > 2.5)
+					{
+						CheckFn(false, FString::Printf(TEXT("135b look %s %s: failed enter corner hold"), *SetName, *SideName));
+						++LookCase;
+						LookSubStep = 0;
+					}
+					return false;
+				}
+				if (LookSubStep == 4 && StageTime >= 0.55)
+				{
+					const FVector Normal = Pick.Corner.WallNormal.GetSafeNormal2D();
+					const FVector Toward = CoverFacingRules::AlongWallDirection(Pick.Corner, Pick.Side);
+					FVector LookPt = Op->GetActorLocation();
+					if (Mode == 0)
+					{
+						// Around the exposed corner (-106 deg from wall normal): stays in cover and aims via corner AO.
+						LookPt += -Normal * 120.f + Toward * 420.f + FVector(0.f, 0.f, 60.f);
+					}
+					else if (Mode == 1)
+					{
+						LookPt += Normal * 600.f + FVector(0.f, 0.f, 60.f);
+					}
+					else
+					{
+						LookPt += Normal * 100.f - Toward * 600.f + FVector(0.f, 0.f, 60.f);
+					}
+					Op->SetManualLookPoint(LookPt);
+					LookSubStep = 5;
+					StageTime = 0.0;
+					return false;
+				}
+				if (LookSubStep == 5 && StageTime >= 1.2)
+				{
+					const TCHAR* ModeStr = Mode == 0 ? TEXT("inAO") : (Mode == 1 ? TEXT("normal90") : TEXT("opposite90"));
+					FVector LookPt = FVector::ZeroVector;
+					Op->GetManualLookPoint(LookPt);
+					MeasureLookYaws(*Op, LookPt, FString::Printf(TEXT("%s %s %s"), *SetName, *SideName, ModeStr), CheckFn);
+					++LookCase;
+					LookSubStep = 0;
+					StageTime = 0.0;
+				}
+				return false;
+			}
+			return true;
+		}
+	};
+
+	F135bMatrixState G135b;
+
 	float Score(const FPick& Pick)
 	{
 		return Pick.bValid ? (Pick.Thickness >= 35.f ? 100000.f : 0.f) - Pick.Dist : -1.0e9f;
@@ -671,6 +1050,14 @@ namespace CornerSlotSmoke
 		}
 		case EStep::MoveOffCorner:
 		{
+			if (G135b.bActive)
+			{
+				if (G135b.Tick(*World, *Runner, Check))
+				{
+					Finish();
+				}
+				return;
+			}
 			AOperativeCharacter* Operative = Runner->Leader.Get();
 			if (!Operative)
 			{
@@ -683,7 +1070,8 @@ namespace CornerSlotSmoke
 			if (Operative->bInCover && DistToTarget <= 150.f && MovedFromCorner >= 400.f)
 			{
 				Check(true, FString::Printf(TEXT("135 Part A: left corner peek and arrived at target cover (moved %.0f cm)"), MovedFromCorner));
-				Finish();
+				G135b = F135bMatrixState();
+				G135b.bActive = true;
 				return;
 			}
 			if (Runner->StepFrame > WalkFrames * 2)

@@ -92,6 +92,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	{
 		return EOperativeOrderResult::Refused;
 	}
+	bOrderSprint = bSprint; // intent, including while running is temporarily forbidden
 	// Sprint 14: knocked down — the order waits and runs once he is up (the latest one wins).
 	if (IsKnockedDown())
 	{
@@ -200,6 +201,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 			SetStance(EOperativeStance::Standing);
 		}
 	}
+	bOrderSprint = bSprint; // a stand-up may have stopped the previous path
 	const float RiseDelay = GetMoveHoldSeconds();
 	if (OperativeMovementRules::ShouldDeferMove(RiseDelay) && GetWorld())
 	{
@@ -405,6 +407,7 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 	}
 	if (bFormationMove)
 	{
+		bOrderSprint = false; // formation gait belongs to UpdateFollower / SetSprinting
 		bMantlePathAllowed = false; // formation moves keep today's paths (no mantle links)
 		bWindowPathAllowed = false; // ... and no whole windows (rule 2: a follower goes through once it is broken)
 		bMantleOrderPending = false;
@@ -580,6 +583,7 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 		}
 	}
 	bHasMoveOrder = Result == EPathFollowingRequestResult::RequestSuccessful;
+	RefreshOrderSprint(); // every traversal / bypass resume requests its next path here
 	// Doors R2 (designer 2026-11-22): a hostile fighter whose path stops at a LOCKED door breaches it (kick / shot / key / grenade by his
 	// archetype in doors.json) instead of standing there. No-op while the doors switch is off.
 	if (bHasMoveOrder && !IsPlayerTeam())
@@ -706,6 +710,27 @@ bool AOperativeCharacter::IsTrafficHeld() const
 	return TrafficHoldSources.Num() > 0;
 }
 
+void AOperativeCharacter::PauseMoveForTraversal()
+{
+	const bool bKeepSprint = bOrderSprint;
+	StopOperative();
+	bOrderSprint = bKeepSprint;
+}
+
+void AOperativeCharacter::RefreshOrderSprint()
+{
+	if (!bOrderSprint || !bHasMoveOrder)
+	{
+		return;
+	}
+	const bool bAllowed = CanSprint() && !IsInStealthMode() && Stance == EOperativeStance::Standing;
+	if (bSprinting != bAllowed)
+	{
+		bSprinting = bAllowed;
+		ApplyMovementParams();
+	}
+}
+
 void AOperativeCharacter::StopOperative()
 {
 	if (bHasMoveOrder && CVarOperativeMoveTrace.GetValueOnGameThread() != 0)
@@ -724,6 +749,7 @@ void AOperativeCharacter::StopOperative()
 	bSteeringOwnMove = false;
 	bStealthFast = false;
 	bSprinting = false;
+	bOrderSprint = false;
 	bPendingArrivalFacingLog = false;
 	if (UWorld* World = GetWorld())
 	{
@@ -734,6 +760,7 @@ void AOperativeCharacter::StopOperative()
 
 void AOperativeCharacter::SetSprinting(bool bNewSprinting)
 {
+	bOrderSprint = false; // an explicit gait override (formation / wound pace) replaces order intent
 	if (bNewSprinting && IsInStealthMode() && CanSprintIfStanding())
 	{
 		SetStealthMode(false);
@@ -805,7 +832,7 @@ void AOperativeCharacter::HandleMoveFinished()
 		const FWindowOrderTuning& WindowTuning = WindowOrderRules::Get();
 		const float Off = FVector::Dist2D(GetActorLocation(), WindowApproachPoint);
 		const bool bAtFace = Off <= WindowTuning.ApproachArriveCm;
-		const bool bRun = bSprinting;
+		const bool bRun = bOrderSprint;
 		const FVector Landing = WindowApproachLanding;
 		const FVector Dir = (Landing - GetActorLocation()).GetSafeNormal2D();
 		bWindowApproachPending = false;

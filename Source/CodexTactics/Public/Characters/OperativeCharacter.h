@@ -280,6 +280,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")
 	void StopOperative();
 
+	/** Ends only the current path while a traversal retains the order and its gait. */
+	void PauseMoveForTraversal();
+
 	/** Stops, drops the sprint and turns to face Location (public since 2026-11-04: the order catalog's Hold faces a remembered threat). */
 	void StopAndFace(const FVector& Location);
 
@@ -471,6 +474,8 @@ public:
 	bool HasManualLookPoint() const { return bHasManualLookPoint; }
 	float GetManualLookYawDeg() const { return ManualLookYawDeg; }
 	float GetManualLookPitchDeg() const { return ManualLookPitchDeg; }
+	/** Corner look AO (135b): true when LookPoint lies within the active corner aim-offset reach; false means step out of wall hug to turn. */
+	bool CanReachCornerLookInCover(const FVector& LookPoint, float* OutOffDeg = nullptr) const;
 	/** CoverIndoor aim offset: a Shift-click look while the corner peek is up. A new plain peek or leaving the corner turns it off. */
 	bool WantsCornerLookPose() const;
 	bool GetManualLookPoint(FVector& OutPoint) const;
@@ -2227,6 +2232,30 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float CornerLeanExtraPackRCm = 11.f;
 
+	/** Target inward margin from exposed corner edge to outer clavicle in corner peek fire-ready pose, cm (135b). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
+	float CornerEdgeTargetPeekInwardCm = -19.f;
+	/** Target inward margin from exposed corner edge to outer clavicle in idle / ReturnNoTargets corner hug, cm (135b). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
+	float CornerEdgeTargetIdleInwardCm = 14.f;
+	/** Bounds on along-wall mesh shift applied for clavicle corner alignment, cm (135b). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
+	float CornerEdgeAlignMinShiftCm = -65.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
+	float CornerEdgeAlignMaxShiftCm = 140.f;
+	/** Clearance kept from opposite corner edge when clamping along-wall shift, cm (135b). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CornerEdgeAlignOppositeMarginCm = 30.f;
+	/** Interpolation speed for corner idle edge alignment offset, 1/s (135b). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0.1"))
+	float CornerEdgeAlignInterpSpeed = 12.f;
+
+	/** Corner look side-aim cone off the wall normal (in-cover AO range; outside steps out of cover), deg (135b). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0", ClampMax = "180"))
+	float CornerLookMinSideYawDeg = 85.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0", ClampMax = "180"))
+	float CornerLookMaxSideYawDeg = 145.f;
+
 	/**
 	 * Wall clearance (user report 2026-10-11: the body / rifle sank into the wall - during a cover entry the old run pose,
 	 * held on the turned mesh, blends with the enter clip and swings a hand through the wall): while in cover the closest
@@ -3279,6 +3308,8 @@ private:
 	 * a teleport / a new wall normal while the push was on left up to ~1.2 m of it on the mesh for good (the body beside its capsule).
 	 */
 	FVector CoverWallPushAppliedLocal = FVector::ZeroVector;
+	/** 135b: closed-loop corner edge alignment for idle/return corner poses, actor-local so GetCoverEntryMeshOffset stays 0 when not peeking. */
+	FVector CoverCornerAlignAppliedLocal = FVector::ZeroVector;
 	/**
 	 * Low cover: share of the fire stance's sideways root step that is cancelled on the mesh (1 = over the top, where he stands; 0 = the corner
 	 * peek, where the step is the lean out past the wall's end - 2026-10-20). Eased by UpdateCoverEntryBlend over CoverLeanBlendSeconds.
@@ -3445,6 +3476,10 @@ private:
 	EOperativeStance Stance = EOperativeStance::Standing;
 	float ColdSpeedMultiplier = 1.f;
 	bool bSprinting = false;
+	/** Requested gait survives path completion / traversal; only applied while an own path is active. */
+	bool bOrderSprint = false;
+	void RefreshOrderSprint();
+	friend class FOperativeOrderGaitTest;
 	bool bHasMoveOrder = false;
 	/** The running move is an order of his own (OrderMoveTo), not a formation move (HasOwnMoveOrder). */
 	bool bOwnMoveOrder = false;

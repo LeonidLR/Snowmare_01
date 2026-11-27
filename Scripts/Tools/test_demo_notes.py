@@ -102,6 +102,35 @@ class DemoNotesTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             decode(notes, {}, {})
 
+    def test_tag_printed_and_grouped_with_legacy_fallback(self):
+        notes = {
+            'schema': 'codex.demo_notes/1',
+            'coordinates': 'UE_cm_X_north_Y_east',
+            'recording': 'real.jsonl',
+            'map': 'map',
+            'annotations': [
+                {'id': 'n1', 'kind': 'comment', 't': 10, 'author': 'Designer', 'unit': 'BP_Operative_C_0', 'label': 'Old untagged', 'points': [[0, 0]]},
+                {'id': 'n2', 'kind': 'comment', 't': 20, 'author': 'Designer', 'unit': 'BP_Operative_C_1', 'label': 'Stuck on stair', 'tag': 'баг', 'points': [[100, 100]]},
+                {'id': 'n3', 'kind': 'comment', 't': 30, 'author': 'Designer', 'unit': 'BP_Operative_C_2', 'label': 'Good flank', 'tag': 'хорошо', 'points': [[200, 200]]},
+                {'id': 'n4', 'kind': 'comment', 't': 40, 'author': 'Designer', 'unit': 'BP_Operative_C_2', 'label': 'Second bug', 'tag': 'баг', 'points': [[300, 300]]},
+            ],
+        }
+        report = decode(notes, {'buildings': []}, {})
+        self.assertEqual([a['tag'] for a in report['annotations']], [None, 'баг', 'хорошо', 'баг'])
+        self.assertEqual(report['by_tag'], {
+            'хорошо': {'count': 1, 'ids': ['n3']},
+            'баг': {'count': 2, 'ids': ['n2', 'n4']},
+            'untagged': {'count': 1, 'ids': ['n1']},
+        })
+        md = markdown(report)
+        self.assertIn('## хорошо (1)', md)
+        self.assertIn('## баг (2)', md)
+        self.assertIn('## untagged (1)', md)
+        self.assertIn('[баг]', md)
+        self.assertIn('[хорошо]', md)
+        self.assertLess(md.index('## хорошо (1)'), md.index('## баг (2)'))
+        self.assertLess(md.index('## баг (2)'), md.index('## untagged (1)'))
+
 
 if __name__ == '__main__':
     unittest.main()

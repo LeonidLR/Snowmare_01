@@ -68,7 +68,7 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 		StealthMeshes.Reset();
 		StealthMaterialCounts.Reset();
 		StealthOriginalMaterials.Reset();
-		SetSprinting(false);
+		bSprinting = false; // stealth suspends the current order's run intent
 		bStealthFast = false;
 		ClearStealthManualLookTarget();
 		ClearStealthAutoLookTarget();

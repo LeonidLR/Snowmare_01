@@ -39,6 +39,15 @@ enum class EClickPreviewAction : uint8
 	CancelAndPass,
 };
 
+/** A confirmed cover ghost must issue an order or explain why it cannot. */
+enum class ECoverPreviewCommit : uint8
+{
+	Order,
+	AlreadyThere,
+	InvalidTarget,
+	NoApproach,
+};
+
 /** The facts of one left click for DecideClick. */
 struct FClickPreviewClickFacts
 {
@@ -85,6 +94,8 @@ struct FClickPreviewStructure
 
 namespace ClickPreviewRules
 {
+	/** Movement / leaving cover never blocks replacement; only a settled same-wall slot is already occupied by this operative. */
+	CODEXTACTICS_API ECoverPreviewCommit DecideCoverCommit(bool bValidTarget, bool bApproachAvailable, bool bInCover, bool bSameWall, float AlongCm);
 	/** A hit surface whose normal's |Z| reaches this faces up (a floor, a top), not a wall. */
 	inline constexpr float FloorNormalZ = 0.7f;
 	/** Two pieces whose bounds come this close touch (a corner's two walls, a lintel over an opening, a sill), cm. */

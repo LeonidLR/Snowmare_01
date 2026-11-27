@@ -1056,12 +1056,17 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 		CoverFacing = ManualCornerPeekSide; // the ordered corner, whatever the threat side (until another order)
 	}
 	// A Shift-click look at this peek picks the hand from the look versus the wall normal. It does not walk him to the
-	// other edge (bManualCornerPeek still blocks the snap below).
+	// other edge (bManualCornerPeek still blocks the snap below). Beyond corner AO reach, step out of the wall hug so the actor turns.
 	if (WantsCornerLookPose())
 	{
 		FVector Look = FVector::ZeroVector;
 		if (GetManualLookPoint(Look))
 		{
+			if (!CanReachCornerLookInCover(Look))
+			{
+				LeaveCover(TEXT("corner look beyond aim offset reach"));
+				return;
+			}
 			const float Signed = CoverLookAoRules::SignedYawFromNormal(CoverSlot.WallNormal, Look - GetActorLocation());
 			CoverFacing = CoverLookAoRules::SideFromLook(Signed, CoverFacing, Config.CornerLookSideHysteresisDeg);
 		}
