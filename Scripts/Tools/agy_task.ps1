@@ -36,13 +36,20 @@ $Pointer = "Your complete task is in the file $($PromptPath -replace '\\', '/').
 $AgyArgs = @("--dangerously-skip-permissions", "--model", $Model, "-p=$Pointer")
 if ($TimeoutMinutes -gt 0) { $AgyArgs += @("--print-timeout", "$($TimeoutMinutes)m") }
 
+. (Join-Path $PSScriptRoot "agent_run_common.ps1")
+$Topic = "gemini-$Label"
 Write-Host "[agy_task] $Label in $Lane, model $Model, log $Log"
-Push-Location $Lane
-try {
-    $ErrorActionPreference = "Continue"  # agy writes progress to stderr; PowerShell 5.1 would turn it into a terminating error
-    & $Agy @AgyArgs 2>&1 | ForEach-Object { "$_" } | Out-File -Encoding utf8 $Log
-    $Exit = $LASTEXITCODE
-} finally { Pop-Location }
+Send-AgentChat $Repo "gemini" $Topic "$Label START | headless agy run ($Model) in $(Split-Path $Lane -Leaf), started by the Lead"
+$ErrFile = "$Log.stderr"
+$Proc = Start-Process -FilePath $Agy -ArgumentList ($AgyArgs | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) `
+    -WorkingDirectory $Lane -NoNewWindow -PassThru -RedirectStandardOutput $Log -RedirectStandardError $ErrFile
+$null = $Proc.Handle  # cache the handle, else ExitCode stays empty for Start-Process -PassThru
+$Beat = Start-AgentHeartbeat $Repo "gemini" $Topic $Label $Proc.Id
+$Proc.WaitForExit()
+$Exit = $Proc.ExitCode
+Stop-Job $Beat -ErrorAction SilentlyContinue; Remove-Job $Beat -Force -ErrorAction SilentlyContinue
+if (Test-Path $ErrFile) { Get-Content $ErrFile | Add-Content -Encoding utf8 $Log; Remove-Item $ErrFile -ErrorAction SilentlyContinue }
 $Fatal = Select-String -Path $Log -Pattern 'sign in|Please sign in|quota|RESOURCE_EXHAUSTED|proxyconnect|token exchange failed' -Quiet
 Write-Host "[agy_task] $Label exit $Exit$(if ($Fatal) { ' - AUTH/QUOTA/PROXY problem, see log' })"
+Send-AgentChat $Repo "gemini" $Topic "$Label ENDED | headless agy run exit $Exit$(if ($Fatal) { ' - AUTH/QUOTA/PROXY problem' }) | log Saved/Orchestrator/agy_runs/$(Split-Path $Log -Leaf)" -Status
 exit $Exit

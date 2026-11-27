@@ -14,6 +14,11 @@ Who: **Lead (Claude)** routes, reviews diffs by hand, merges, builds, pushes. **
 6. Build only when `Source/` or `*.uproject` changed.
 7. Economy: keep chat lines short; stop at 10 % of your limit, commit, report, wait.
 8. Never touch the designer's uncommitted main files (X6), maps, `.uasset`, Config, VFX unless the task says so.
+9. Headless runs (designer 2026-11-27: app windows closed, the Lead starts agents itself, full access): Codex via
+   `Scripts/Tools/codex_task.ps1 -Lane <lane> -PromptFile <task.md> -Label <id>`, Gemini via the Antigravity CLI
+   `Scripts/Tools/agy_task.ps1 ...` (phone proxy 127.0.0.1:8899, auto-started). The wrappers post `<id> START`, a heartbeat
+   status every 30 min and `<id> ENDED`, so the chat task board shows the run in progress. The task text lives in
+   `docs/port/<agent>/inbox/<id>-<slug>.md` (the board only lists inbox tasks); logs in `Saved/Orchestrator/{codex,agy}_runs/`.
 
 ## Roles (user decision 2026-10-01 — replaces the 2026-09-28 architect / implementer split)
 
