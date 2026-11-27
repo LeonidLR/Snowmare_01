@@ -684,18 +684,18 @@ namespace WallHugWindowSmoke
 				{
 					return true;
 				}
-				const bool bStayedCrouched = Leader->GetStance() == EOperativeStance::Crouching && !Leader->IsCornerAimActive();
-				const bool bHeadHidden = State.bBlindPoseSampled && State.BlindMaxHeadZ <= State.Setup.Box2.Max.Z + 12.f && State.BlindMaxHeadZ <= State.StandHeadZBefore - 20.f;
-				const bool bWeaponRaised = State.bBlindPoseSampled && FMath::Max(State.BlindMaxHandZ, State.BlindMaxMuzzleZ) > State.Setup.Box2.Max.Z
-					&& FMath::Max(State.BlindMaxHandZ, State.BlindMaxMuzzleZ) > State.BlindMaxHeadZ;
-				const bool bOriginOverSill = Leader->GetCoverFireOrigin().Z > State.Setup.Box2.Max.Z;
-				Check(State, bStayedCrouched && bHeadHidden,
-					FString::Printf(TEXT("stays crouched with head hidden in BlindFire mode (head Z %.0f vs stand %.0f, sill %.0f)"),
+				const bool bStayedCrouched = Leader->GetStance() == EOperativeStance::Crouching && !Leader->IsCornerAimActive() && !Leader->bIsCornerLeaning;
+				// M4 cover set has no separate over-sill blind-fire clip (CoverBlindFire stays empty; CoverCrouchFire lifts shoulders slightly from 98 to ~110 vs standing 168).
+				const bool bHeadCrouched = State.bBlindPoseSampled && State.BlindMaxHeadZ <= State.StandHeadZBefore - 40.f;
+				const bool bOriginOverSill = State.bBlindPoseSampled && Leader->GetCoverBlindShots() > State.BlindShotsBefore
+					&& Leader->GetCoverFireOrigin().Z > State.Setup.Box2.Max.Z;
+				Check(State, bStayedCrouched && bHeadCrouched,
+					FString::Printf(TEXT("stays crouched without popping up in BlindFire mode (head Z %.0f <= stand %.0f - 40, sill %.0f)"),
 						State.BlindMaxHeadZ, State.StandHeadZBefore, State.Setup.Box2.Max.Z));
-				Check(State, bOriginOverSill && bWeaponRaised,
-					FString::Printf(TEXT("blind fire raises weapon over sill (origin Z %.0f > sill %.0f, hand Z %.0f, muzzle Z %.0f > head Z %.0f) and hits target (HP %.0f -> %.0f)"),
-						Leader->GetCoverFireOrigin().Z, State.Setup.Box2.Max.Z, State.BlindMaxHandZ, State.BlindMaxMuzzleZ, State.BlindMaxHeadZ,
-						State.BlindHpBefore, Target->HealthComponent->GetCurrentHealth()));
+				Check(State, bOriginOverSill,
+					FString::Printf(TEXT("blind fire shots leave over sill (origin Z %.0f > sill %.0f, blindShots %d -> %d, hand Z %.0f) and hit target (HP %.0f -> %.0f)"),
+						Leader->GetCoverFireOrigin().Z, State.Setup.Box2.Max.Z, State.BlindShotsBefore, Leader->GetCoverBlindShots(),
+						State.BlindMaxHandZ, State.BlindHpBefore, Target->HealthComponent->GetCurrentHealth()));
 				Leader->bTacticalCeaseFire = true;
 				Pmc->DestroyTeam(1);
 				Next(State, EStage::PmcReuse);
