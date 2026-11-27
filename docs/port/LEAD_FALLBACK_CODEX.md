@@ -34,8 +34,14 @@ executor as usual. The Claude Lead updates the STATE block below after every mer
   `pro` subagent, the Lead reviews every diff.
 - Spend little: react only to FINISH / blockers / the designer.
 
-## STATE (updated by the Claude Lead - 2026-11-26 ~17:40)
-origin/main 6f2a80a7 (+ docs). 17:35 claude/firstaid-cover (24771d72); 20:30 Gemini 145 look direction lock (b70b0338 + delta 6f2a80a7); 23:00 Gemini 150 formation run stands crouched/prone followers up (8d4e5f09, lead removed an unasked frostbite sprint ban dd7df49f).
+## STATE (updated by the Claude Lead - 2026-11-27 ~03:00)
+origin/main = Merge codex/148 (2026-11-27 ~03:00). Night 11-26/27 merged: claude/firstaid-cover, Gemini 145 look lock, Gemini 150 formation run stance,
+121 full recording events + demo_tactics.py (Codex finished Gemini's branch; lead reverted an unasked worker_sync LFS change), 148 TG fight replay +
+notes + demo_notes.py + 68 building numbers (lead test fix: AllFilesParse skips *.buildings_index.json). Designer priority 11-27: recording + analysis.
+Codex runs HEADLESS now (codex exec --dangerously-bypass-approvals-and-sandbox, designer OK; prompts in Saved/Lead/codex_*_prompt_*.md).
+Codex 149 demos->trainer running (lane CodexTactics-149). 139 MERGE-READY 69927b35 but RoofLadderSmoke needs the designer's LadderActor_22 map fix
+(TopStandoff/TopExitStandoff 49->125) - merge after it. 135b: Antigravity WIP 8d70b27c (CoverIndoor + CornerSlot smokes FAIL) - Gemini API credits
+are exhausted (402), agy CLI needs a sign-in; queue 135b to Codex after 149. Queue: 149 -> 147 -> 135b -> 143 -> 146 -> 136 -> 137 -> 138 -> 140.
 Live queues (re-plan, supersedes the lines below): Codex 139 -> 121 -> 148 -> 149 -> 147; Gemini 135b -> 141 -> 144.
 Designer away tonight (Saved/Lead/MAIN_PC_FREE set - delete when he is back). Merged today: G023 + Codex 134 (4851b3aa), Gemini 135 (10963d3a), Codex 142 TG Main/Play switch (549b0868),
 lanes auto-cleanup (8605d41d), claude/ux-1126 = selected-only vision cones (Shift+O), inventory closes on item pick, Take ALL closes loot (82c06f7b).
