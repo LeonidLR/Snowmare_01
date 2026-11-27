@@ -37,12 +37,12 @@ executor as usual. The Claude Lead updates the STATE block below after every mer
 ## STATE (updated by the Codex Lead - 2026-11-27, after green 156 merge gate) - HANDOVER: Claude weekly limit 98 %, resets 2026-11-28 11:00
 Designer 2026-11-27 15:10: "when close to 1 % of tokens - Codex is the new Lead"; 15:20 ACTIVATED ("Да, Codex лид"): Codex leads
 until Claude's reset (Sat 2026-11-28 11:00 local), then hands back (post a short STATE here + chat line).
-Validated gameplay merge 019beb5e (156, ready for publish with this metadata). Gate-v10-1/2/3 all EXIT 0: 135b (50334424), 153 (f17b3f35), 154 (8af22865); builds, Smart tests and mapped worker smokes passed; designer files intact. Earlier today merged: 149b trainer metrics, 151 per-round demo marks + TG->Play X6 sync, 152 run order kept after traversals.
+origin/main 839268f6 (pushed), validated gameplay merge019beb5e (156). Gate-v10-1/2/3 all EXIT 0: 135b (50334424), 153 (f17b3f35), 154 (8af22865); builds, Smart tests and mapped worker smokes passed; designer files intact. Earlier today merged: 149b trainer metrics, 151 per-round demo marks + TG->Play X6 sync, 152 run order kept after traversals.
 Designer priority: recording + analysis of his fights; trainer runs NEXT week (memory trainer-next-week-2026-11-27; 149b worker baseline task disabled).
 
 LIVE STATUS (Codex Lead takeover; designer explicitly requested 156 -> 155):
 1. Gate chain 135b -> 153 -> 154 is GREEN and pushed; Saved/Logs/gate-v10-{1,2,3}.exit each says EXIT 0.
-   Play copy contains 8af22865 (play/current 44bd2a72); the takeover build process has ended. Confirm build result before declaring play ready.
+   Play copy1372f029 now contains origin/main839268f6; post156 worker build is running (Saved/Logs/play-after-156.{log,exit}).
 2. Gemini 144 -> 154b is running via agy_task.ps1; 144 START at 15:16, heartbeat at 15:46 local. The earlier authentication failure
    was resolved by the designer removing dead Antigravity Tools NRPT DNS rules. agy_task.ps1 probes proxy 8899 then direct Google access;
    this reviewed route fix is committed with this handover. Watch MERGE-READY / BLOCKER / LIMIT; do not duplicate the run.
@@ -50,9 +50,9 @@ LIVE STATUS (Codex Lead takeover; designer explicitly requested 156 -> 155):
    Lead reviewed runtime/units/smokes and added real-feet hold assertions: max XY drift0.0 cm, protecting-side depth53.0 cm during >=5 s.
    Worker build PASS; Smart485/485 PASS; all12 gate-selected worker smokes PASS first try; designer JSON verified intact1/1.
    Earlier executor RoofFight retry and local preload crash remain disclosed in the report. No runtime changes after gate.
-   Update play with this push only when its editor is closed; worker build required because Source changed. Prior play44bd2a72 build exit0 confirmed.
+   Play was merged cleanly with its editor closed; play1372f029 post156 worker build started17:30 local. Set editor_status to play only after build exit0 (runner does this).
 4. Queue156 ->155 advanced automatically: 155 START17:04 local, preserved4b725e7d, merged origin/main058e0900, removed unrelated worker_sync.ps1 diff.
-   155 waits for its worker build; both existing worker roots were busy at17:25. Do not duplicate a run or create another lane/root.
+   155 reused existing worker-slot1 after machine_dispatch reported it free17:28; cancelled only its own waiting main-root job. Build/ref870acc85 pending. No new lane/root.
    Inbox155 includes Lead resume review; require real roof arrival, visible refusal, complete read-only ladder/ramp audit and own-order A/B.
 5. Designer renewed full Lead authorization until Sat11:00: own review + green merge_gate before push; commit STATE/HANDOFF/TASK_BOARD only outside gates;
    update play only with its editor closed. No force-push, push without green gate, or protected designer files. Gameplay forks go to the designer.
