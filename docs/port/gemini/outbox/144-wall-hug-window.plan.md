@@ -1,0 +1,23 @@
+# 144: Wall Hug Along a Wall with Windows — Plan
+
+- **Branch / Worktree**: `gemini/144-wall-hug-window` (`C:\Work\Lanes\CodexTactics-144`)
+- **Base**: `origin/main` (`17c15000`)
+
+## Steps & Files
+1. **Pure window cover / shimmy / window-edge-corner / blind-fire rules** (`Source/CodexTactics/Public/Tactics/WindowCoverRules.h`, `Source/CodexTactics/Private/Tactics/WindowCoverRules.cpp`):
+   - Add pure interval helpers for walking/shimmying along a hugged wall past windows: `FWindowCrouchSpan`, `CrouchSpanForOpening` (opening width + margin), `IsInCrouchSpan`, `WantsShimmyCrouch`, `SillHeightAboveFeetCm`.
+   - Add pure window-edge-corner rules: `FWindowEdgeCorner` / `FindWindowEdgeCorner` (left and right window frame edges in the wall plane, standing and crouched where sill height allows, without breaking `CoverTraceRules::IsSameWall` across windows).
+   - Add pure under-window blind-fire / over-sill fire-origin & arc rules (`WindowArcAllowsShot`, `SillTopCm` low-cover-like representation).
+2. **Cover slot & trace at a window** (`Source/CodexTactics/Private/Tactics/CoverTraceRules.cpp`):
+   - Prevent chest/head traces that shoot through a window opening from hijacking a window cover slot onto an interior wall behind the sill (keep the window wall's knee/sill hit).
+3. **Operative window cover, shimmy duck, window-edge corner peek, blind fire & autonomy** (`Source/CodexTactics/Public/Characters/OperativeCharacter.h`, `Source/CodexTactics/Private/Characters/OperativeCharacterWindowCover.cpp`, `Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp`, `Source/CodexTactics/Private/Characters/OperativeCharacterCornerAim.cpp`, `Source/CodexTactics/Private/Characters/OperativeCharacterCombat.cpp`, `Source/CodexTactics/Private/Characters/OperativeCharacterFireGate.cpp`, `Source/CodexTactics/Private/Characters/OperativeAnimInstance.cpp`, `Source/CodexTactics/Private/Characters/SquadAutonomySubsystem.cpp`, `Source/CodexTactics/Private/Characters/SquadSubsystemFormation.cpp`, `Source/CodexTactics/Private/Characters/SquadSubsystemFormationSlide.cpp`):
+   - Update `RefreshWindowCover` / `ApplyWindowCoverStance` so shimmying along a hugged wall (and formation wall slide / wall-order walk) crouches under each window span (+ margin) and stands up after it.
+   - Make a confirmed under-window slot behave as a low-cover-like slot with the sill as its top (`OverTopFirePoint` using sill top, crouched under sill, pops up / aims over sill, stays down and raises weapon for `ECoverFireMode::BlindFire` / suppression, `IsCoverFireReady()` false when blind-firing, `CoverBlindFire` anim fallback when set omits it).
+   - Wire `SquadAutonomySubsystem::DecideInCover` and `OperativeCharacterCombat` / `IsWindowCoverShot` so an operative under a window with an enemy in the window's arc fires per fire mode (AGG / DEF / PAS) and PMC (`UPmcSquadSubsystem` reuses `AOperativeCharacter`) shares the exact same rules.
+   - Expose left/right window frame edges as corner peek / `CornerAim` / `CornerHold` spots (standing and crouched where sill allows), firing out of the window from the side (and breaking intact glass if shot passes through the opening) and tucking back behind the wall when not firing.
+4. **Controller window-cover click vs climb** (`Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerCover.cpp`, `Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerOrders.cpp`, `Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerClickPreview.cpp`):
+   - When the operative is hugging/in-cover on a wall (or Alt+cover is ordered) and the player clicks a window on that wall-hug side (inside or outside), resolve it to the window cover / shimmy / wall-hug slot (or window-frame corner peek) instead of climbing through.
+5. **Unit tests & X6 smoke** (`Source/CodexTacticsTests/Private/Tactics/WindowCoverRulesTest.cpp`, `Source/CodexTacticsDev/Private/Debug/WindowCoverFireSmokeCommand.cpp`, `Scripts/test_map.json`):
+   - Add unit tests for window crouch span, shimmy crouch/stand, window slot pick, window-edge corner (left/right, standing/crouched sill check), and under-sill blind-fire rules.
+   - Extend `WindowCoverFireSmoke` (and/or add X6 wall-hug-window smoke on `L_Gen_Depot_1_X6` street `x1_10` side) covering: wall hug -> order along wall past 2 windows (crouched under both, standing after); order to window slot -> enemy outside -> fires through it (AGG/DEF/PAS + PMC check); standing beside a window -> peeks round the frame and hits target outside; under window in `BlindFire` mode -> shots leave over the sill while staying crouched.
+6. **Build, tests, smokes, Jev audit, Opus/Sonnet review, gate & report** (`docs/port/gemini/outbox/144-wall-hug-window.report.md`).
