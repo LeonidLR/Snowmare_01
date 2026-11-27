@@ -108,6 +108,45 @@ namespace WindowCoverRules
 		bool bLeader = false;
 	};
 
+	/** Cached constants for 144 window shimmy, edge corner peek, and under-sill blind fire. */
+	inline constexpr float ShimmyCrouchMarginCm = 40.f;
+	inline constexpr float CrouchPeekMaxSillCm = 85.f;
+	inline constexpr float StandPeekMinTopCm = 130.f;
+	inline constexpr float StandPeekMaxSillCm = 165.f;
+	inline constexpr float CrouchHeadClearanceCm = 95.f;
+	inline constexpr float StandingHeadReachCm = 175.f;
+	inline constexpr float DefaultSillTopCm = 95.f;
+	inline constexpr float WindowFrameEdgeToleranceCm = 5.f;
+
+	/** Along-wall crouch interval for one window opening (opening width + margin on each side). */
+	struct FWindowCrouchSpan
+	{
+		float MinAlongCm = 0.f;
+		float MaxAlongCm = 0.f;
+		float SillBottomCm = 0.f;
+		float OpeningTopCm = 0.f;
+	};
+
+	/** Opening geometry relative to a wall-hugging operative for window-frame edge detection. */
+	struct FWindowEdgeOpening
+	{
+		float AlongMinCm = 0.f;
+		float AlongMaxCm = 0.f;
+		float SillTopCm = 0.f;
+		float OpeningTopCm = 0.f;
+	};
+
+	/** Exposed window-frame corner edges adjacent to a standing (or low-sill crouched) operative. */
+	struct FWindowEdgeCorner
+	{
+		bool bLeftExposed = false;
+		bool bRightExposed = false;
+		float LeftDistanceCm = 0.f;
+		float RightDistanceCm = 0.f;
+		int32 LeftOpeningIndex = INDEX_NONE;
+		int32 RightOpeningIndex = INDEX_NONE;
+	};
+
 	/** The cached window of one operative. Not part of FCoverSlot (that struct is copied and saved). */
 	struct FWindowCoverBinding
 	{
@@ -117,13 +156,29 @@ namespace WindowCoverRules
 		FVector SideNormal = FVector::ForwardVector;
 		FVector AlongAxis = FVector::RightVector;
 		FVector IntervalOrigin = FVector::ZeroVector;
+		FVector SpanOrigin = FVector::ZeroVector;
 		float AlongMinCm = 0.f;
 		float AlongMaxCm = 0.f;
+		float SillTopCm = 0.f;
 		FBox Opening;
 		bool bConfirmed = false;
 		bool bInsideInterval = false;
 		bool bHasInterval = false;
 		int32 GlassRounds = 0;
+		/** Adjacent window frame edges (window edge = a corner for peek / CornerAim). */
+		bool bLeftEdgeExposed = false;
+		bool bRightEdgeExposed = false;
+		float LeftEdgeDistanceCm = 0.f;
+		float RightEdgeDistanceCm = 0.f;
+		TWeakObjectPtr<AActor> LeftEdgeSill;
+		TWeakObjectPtr<AActor> RightEdgeSill;
+		FBox LeftEdgeOpening;
+		FBox RightEdgeOpening;
+		EWindowGlassState LeftEdgeGlass = EWindowGlassState::Missing;
+		EWindowGlassState RightEdgeGlass = EWindowGlassState::Missing;
+		int32 LeftEdgeGlassRounds = 0;
+		int32 RightEdgeGlassRounds = 0;
+		TArray<FWindowCrouchSpan> WallSpans;
 		/** Sampled when the sill is bound. A glazed pane ignores visibility, so the shot line cannot see it. */
 		EWindowGlassState Glass = EWindowGlassState::Missing;
 		EWindowCoverReject Reject = EWindowCoverReject::SolidWall;
@@ -153,6 +208,35 @@ namespace WindowCoverRules
 
 	/** Crouch only once he has stopped in the opening, off the corner. */
 	CODEXTACTICS_API bool WantsCrouch(bool bConfirmed, bool bShimmying, bool bAtCorner, bool bStopped);
+
+	/** Builds a crouch span along the wall for a window opening (+ MarginCm on each side). */
+	CODEXTACTICS_API FWindowCrouchSpan CrouchSpanForOpening(float AlongMinCm, float AlongMaxCm, float MarginCm = ShimmyCrouchMarginCm,
+		float SillBottomAboveFeetCm = DefaultSillTopCm, float OpeningTopAboveFeetCm = 230.f);
+
+	/** True when an opening overlaps standing head height (above crouched head, below standing top). */
+	CODEXTACTICS_API bool OpeningOverlapsStandingHead(float SillBottomAboveFeetCm, float OpeningTopAboveFeetCm);
+
+	/** True when AlongCm lies inside Span. */
+	CODEXTACTICS_API bool IsInCrouchSpan(float AlongCm, const FWindowCrouchSpan& Span);
+
+	/** True when walking/shimmying at AlongCm along a wall with window Spans requires crouching. */
+	CODEXTACTICS_API bool WantsPathCrouch(float AlongCm, TConstArrayView<FWindowCrouchSpan> Spans);
+
+	/** Returns SillTopCm when positive, else DefaultSillTopCm. */
+	CODEXTACTICS_API float EffectiveSillTopCm(float SillTopCm);
+
+	/** True when TargetLocation lies within the window's outward frontal arc (centred into -WallNormal). */
+	CODEXTACTICS_API bool IsInWindowArc(const FVector& WallNormal, const FVector& SlotLocation, const FVector& TargetLocation, float ArcDeg);
+
+	/** True when an operative in the given stance can peek/fire round a window's frame edge. */
+	CODEXTACTICS_API bool IsWindowEdgePeekAllowed(bool bCrouched, float SillAboveFeetCm, float OpeningTopAboveFeetCm);
+
+	/** Finds nearest exposed left/right window-frame edges beside a solid-wall operative within MaxReachCm. */
+	CODEXTACTICS_API FWindowEdgeCorner FindWindowEdgeCorner(float OperativeAlongCm, bool bCrouched,
+		TConstArrayView<FWindowEdgeOpening> Openings, float MaxReachCm = 200.f);
+
+	/** True when clicking a window should select its cover/shimmy slot on the operative's side instead of climbing through. */
+	CODEXTACTICS_API bool CanClickWindowAsCover(bool bInCoverOnSameWall, bool bAltCoverModifier, bool bSameWallSide);
 
 	/** Outward: the aim is on the slot normal's side. Inward: the aim goes through the wall. */
 	CODEXTACTICS_API EWindowCoverTurn TurnForAim(const FVector& From, const FVector& Aim, const FVector& SlotNormal);

@@ -208,9 +208,9 @@ namespace CoverTraceRules
 		{
 			return false;
 		}
-		if (!bChestHit)
+		if (!bChestHit || (bKneeHit && Knee.Distance + 25.f < Chest.Distance))
 		{
-			Chest = Knee; // the low obstacle's surface
+			Chest = Knee; // the low obstacle or sill below a window opening (chest trace passed through to a far wall)
 		}
 		FVector Normal = FVector(Chest.ImpactNormal.X, Chest.ImpactNormal.Y, 0.f);
 		if (FMath::Abs(Chest.ImpactNormal.Z) > Config.MaxWallNormalZ || !Normal.Normalize())

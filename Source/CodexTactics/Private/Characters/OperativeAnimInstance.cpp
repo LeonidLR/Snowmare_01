@@ -546,6 +546,21 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 			return;
 		}
 		UAnimSequenceBase* Clip = bBlindShot ? PickCoverClip(CoverBlindFire) : nullptr;
+		if (bBlindShot && !Clip && !ActiveCoverAnimSet.IsEmpty())
+		{
+			if (const FCoverSetAssets* NativeBlind = NativeCoverArrays.Find(TEXT("CoverBlindFire")))
+			{
+				const int32 BlindIdx = CoverFacingRules::ClipIndex(CoverFacing);
+				if (NativeBlind->Assets.IsValidIndex(BlindIdx) && NativeBlind->Assets[BlindIdx])
+				{
+					Clip = Cast<UAnimSequenceBase>(NativeBlind->Assets[BlindIdx].Get());
+				}
+				else if (NativeBlind->Assets.IsValidIndex(1 - BlindIdx) && NativeBlind->Assets[1 - BlindIdx])
+				{
+					Clip = Cast<UAnimSequenceBase>(NativeBlind->Assets[1 - BlindIdx].Get());
+				}
+			}
+		}
 		if (!Clip)
 		{
 			Clip = PickCoverClip(bIsCrouching ? CoverCrouchFire : CoverStandFire);

@@ -23,7 +23,9 @@
 #include "Quests/QuestChain.h"
 #include "Tactics/CoverDecisionRules.h"
 #include "Tactics/CoverFacingRules.h"
+#include "Tactics/CoverRules.h"
 #include "Tactics/CoverTraceRules.h"
+#include "Tactics/WindowCoverRules.h"
 #include "NavigationSystem.h"
 
 namespace SquadAutonomy
@@ -814,16 +816,20 @@ void USquadAutonomySubsystem::DecideInCover(AOperativeCharacter& Operative, cons
 	// The facing (the side along the wall towards the threat) is the operative's own (AOperativeCharacter::UpdateCoverFacing,
 	// user design rule 2026-10-06); Commander Mode only decides the fire mode and the stance.
 
+	const bool bWindow = Operative.IsWindowCoverConfirmed();
 	FCoverFireSituation Fire;
-	Fire.Height = Operative.CurrentCoverHeight;
-	Fire.bEdgeExposed = Operative.CurrentCoverHeight == ECoverHeight::LowCover || Slot.HasExposedEdge();
+	Fire.Height = bWindow ? ECoverHeight::LowCover : Operative.CurrentCoverHeight;
+	Fire.bEdgeExposed = Operative.CurrentCoverHeight == ECoverHeight::LowCover || bWindow || Operative.HasAnyExposedCoverEdge();
 	Fire.bSniperLaserOnMe = bLaser;
 	Fire.HealthFraction = Health;
 	Fire.SuppressionPressure = Suppression;
 	Fire.RecentIncomingDamage = Operative.RecentIncomingDamage;
 	Fire.DistanceToEnemyCm = Nearest ? NearestCm : 100000.f;
-	// User decision 2026-10-06: the corner peek / blind shot only at an enemy behind the wall or around the corner.
-	Fire.bEnemyInFrontOfCover = Nearest && !CoverFacingRules::ShouldCornerShot(Slot, Nearest->Location, Operative.GetCoverFacingConfig());
+	// User decision 2026-10-06: the corner peek / blind shot only at an enemy behind the wall or around the corner (or in the window's arc).
+	const bool bInWindowArc = bWindow && Nearest && WindowCoverRules::IsInWindowArc(Slot.WallNormal, Slot.WorldLocation, Nearest->Location,
+		CoverRules::GetConfig().FrontalArcDeg);
+	Fire.bEnemyInFrontOfCover = Nearest && !bInWindowArc
+		&& !CoverFacingRules::ShouldCornerShot(Operative.GetEffectiveCoverSlotForCorner(), Nearest->Location, Operative.GetCoverFacingConfig());
 	const ECoverFireDecision Decision = Nearest ? CoverDecisionRules::DecideFire(Config, Fire) : ECoverFireDecision::Hold;
 	const bool bHold = Decision == ECoverFireDecision::Hold;
 	if (Operative.bCoverHoldFire != bHold || (!bHold && Operative.CoverFireMode != CoverDecisionRules::ToFireMode(Decision)))
@@ -846,7 +852,7 @@ void USquadAutonomySubsystem::DecideInCover(AOperativeCharacter& Operative, cons
 	}
 
 	FCoverStanceSituation StanceSituation;
-	StanceSituation.Height = Operative.CurrentCoverHeight;
+	StanceSituation.Height = bWindow ? ECoverHeight::LowCover : Operative.CurrentCoverHeight;
 	StanceSituation.bSniperLaserOnMe = bLaser;
 	StanceSituation.HealthFraction = Health;
 	StanceSituation.SuppressionPressure = Suppression;

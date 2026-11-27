@@ -277,7 +277,8 @@ void AOperativeCharacter::TrySnapToCoverCorner()
 		return; // a low cover is fired over the top anywhere: no walk to its end
 	}
 	float Shift = 0.f;
-	if (!CoverFacingRules::ShouldSnapToCorner(CoverSlot, CoverFacing, Shift, GetCoverFacingConfig(), Stance == EOperativeStance::Crouching))
+	const FCoverSlot EffectiveSlot = GetEffectiveCoverSlotForCorner();
+	if (!CoverFacingRules::ShouldSnapToCorner(EffectiveSlot, CoverFacing, Shift, GetCoverFacingConfig(), Stance == EOperativeStance::Crouching))
 	{
 		return;
 	}
@@ -301,12 +302,13 @@ bool AOperativeCharacter::IsCornerShotTarget(const FVector& TargetLocation) cons
 	// or past the edge, within the twist limit + the aim cone. The sticky "everything beyond the edge, at any depth" rule
 	// of the horde fix is gone: in CoverBug_02 (58 s) it kept a flank rush in front of the wall as corner targets, so he
 	// shot hounds at his side from the corner pose without turning to them.
+	const FCoverSlot EffectiveSlot = GetEffectiveCoverSlotForCorner();
 	if (IsCornerHoldSpot())
 	{
-		return CoverFacingRules::IsCornerHoldTarget(CoverSlot, CoverFacing, GetCoverFireOrigin(), TargetLocation, GetCornerAimOutwardDeg(),
+		return CoverFacingRules::IsCornerHoldTarget(EffectiveSlot, CoverFacing, GetCoverFireOrigin(), TargetLocation, GetCornerAimOutwardDeg(),
 			GetCornerHoldReachDeg());
 	}
-	return CoverFacingRules::ShouldCornerShot(CoverSlot, TargetLocation, GetCoverFacingConfig());
+	return CoverFacingRules::ShouldCornerShot(EffectiveSlot, TargetLocation, GetCoverFacingConfig());
 }
 
 CoverFacingRules::ECoverFireAt AOperativeCharacter::DecideCoverFireAtPoint(const FVector& TargetLocation, bool bMayExpose) const
@@ -319,9 +321,10 @@ CoverFacingRules::ECoverFireAt AOperativeCharacter::DecideCoverFireAtPoint(const
 	{
 		return CoverFacingRules::ECoverFireAt::CoverPose; // through the opening, both faces: he does not step off the wall
 	}
-	// Over the top: the same condition as GetCoverFireOrigin (a low cover, not the manual low-cover corner peek that fires round its end).
-	const bool bOverTheTop = CurrentCoverHeight != ECoverHeight::HighCover && !(bCornerAimActive && IsManualCornerPeekSpot());
-	return CoverFacingRules::DecideCoverFireAt(CoverSlot, TargetLocation, IsCornerShotTarget(TargetLocation), bOverTheTop,
+	// Over the top: the same condition as GetCoverFireOrigin (a low cover or confirmed window, not the manual low-cover corner peek that fires round its end).
+	const bool bOverTheTop = (CurrentCoverHeight != ECoverHeight::HighCover || IsWindowCoverConfirmed())
+		&& !(bCornerAimActive && IsManualCornerPeekSpot());
+	return CoverFacingRules::DecideCoverFireAt(GetEffectiveCoverSlotForCorner(), TargetLocation, IsCornerShotTarget(TargetLocation), bOverTheTop,
 		CoverRules::GetConfig().FrontalArcDeg, bMayExpose);
 }
 
@@ -339,13 +342,13 @@ bool AOperativeCharacter::IsCornerHoldSpot() const
 	{
 		return true; // 135: a Shift-click look across the normal keeps the corner hold alive
 	}
-	return bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing);
+	return bAtCoverCorner && IsExposedCoverEdge(CoverFacing);
 }
 
 bool AOperativeCharacter::IsManualCornerPeekSpot() const
 {
 	const bool bOrderedEdge = bManualCornerPeek && bInCover && !bShimmying && !bCoverSnapPending
-		&& CurrentCoverHeight != ECoverHeight::None && CoverSlot.IsEdgeExposed(ManualCornerPeekSide);
+		&& CurrentCoverHeight != ECoverHeight::None && IsExposedCoverEdge(ManualCornerPeekSide);
 	if (!bOrderedEdge)
 	{
 		return false;
@@ -381,7 +384,7 @@ EOperativeOrderResult AOperativeCharacter::OrderCornerPeek(ECoverFacing Side, fl
 	const float Stand = CoverFacingRules::CornerPeekStandAlong(Side, EdgeAlongCm, StandOff);
 	const float BodyAlong = CoverTraceRules::AlongWallDistanceFrom(CoverSlot, CoverSlot.WorldLocation, GetActorLocation());
 	// Rev 5d (user bug 2026-10-14): at / near the clicked corner the aim starts in place; turn-based anywhere at that corner.
-	const bool bAtThatCorner = CoverFacingRules::IsAtCorner(CoverSlot, Side, Config);
+	const bool bAtThatCorner = CoverFacingRules::IsAtCorner(GetEffectiveCoverSlotForCorner(), Side, Config);
 	const UTurnBasedCombatSubsystem* TurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
 	const CoverFacingRules::ECornerPeekOrder Order = CoverFacingRules::DecideCornerPeekOrder(Stand, BodyAlong, bShimmying, bAtThatCorner,
 		TurnBased && TurnBased->IsActive(), Config);
@@ -520,12 +523,13 @@ bool AOperativeCharacter::GetOwnCornerPeek(FVector& OutSlot, FVector& OutEdgeOnF
 	if (bManualCornerPeek && bInCover && CoverSlot.IsValid())
 	{
 		const bool bRight = ManualCornerPeekSide == ECoverFacing::Right;
-		if (!(bRight ? CoverSlot.bRightEdgeExposed : CoverSlot.bLeftEdgeExposed))
+		const float EdgeDist = GetExposedCoverEdgeDistanceCm(ManualCornerPeekSide);
+		if (EdgeDist < 0.f)
 		{
 			return false;
 		}
 		OutSlot = CoverSlot.WorldLocation;
-		OutEdgeOnFace = CoverSlot.WallPoint + CoverSlot.RightTangent() * (bRight ? CoverSlot.RightEdgeDistanceCm : -CoverSlot.LeftEdgeDistanceCm);
+		OutEdgeOnFace = CoverSlot.WallPoint + CoverSlot.RightTangent() * (bRight ? EdgeDist : -EdgeDist);
 		OutFaceNormal = CoverSlot.WallNormal;
 		return true;
 	}
@@ -862,7 +866,7 @@ bool AOperativeCharacter::IsAtPeekableCorner() const
 	{
 		return true;
 	}
-	return bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing);
+	return bAtCoverCorner && IsExposedCoverEdge(CoverFacing);
 }
 
 bool AOperativeCharacter::WantsCornerLookPose() const
@@ -892,10 +896,13 @@ EPeekSightPose AOperativeCharacter::GetPeekSightPose() const
 	{
 		return EPeekSightPose::None;
 	}
-	const bool bOverTopParapet = !IsInStealthMode() && !IsCoverShotBlind() && CurrentCoverHeight == ECoverHeight::LowCover
-		&& CoverSlot.WallTopCm > 0.f && CoverSlot.WallTopCm <= 105.f && Stance != EOperativeStance::Prone
+	const bool bWindow = IsWindowCoverConfirmed();
+	const ECoverHeight EffectiveHeight = bWindow ? ECoverHeight::LowCover : CurrentCoverHeight;
+	const float TopCm = bWindow ? GetWindowCoverSillTopCm() : CoverSlot.WallTopCm;
+	const bool bOverTopParapet = !IsInStealthMode() && !IsCoverShotBlind() && EffectiveHeight == ECoverHeight::LowCover
+		&& TopCm > 0.f && TopCm <= 105.f && Stance != EOperativeStance::Prone
 		&& !IsManualCornerPeekSpot() && !IsCornerHoldSpot();
-	return PeekSightRules::DecidePose(CurrentCoverHeight, Stance, bCornerAimActive || bOverTopParapet, IsManualCornerPeekSpot() || IsCornerHoldSpot());
+	return PeekSightRules::DecidePose(EffectiveHeight, Stance, bCornerAimActive || bOverTopParapet, IsManualCornerPeekSpot() || IsCornerHoldSpot());
 }
 
 bool AOperativeCharacter::GetPeekSight(FVector& OutEye, FVector& OutDirection) const
@@ -912,14 +919,15 @@ bool AOperativeCharacter::GetPeekSight(FVector& OutEye, FVector& OutDirection) c
 		// The eyes leaned out past the corner edge as far as the corner shot's muzzle (CornerFireOriginFor), the aim of the corner stance;
 		// 2026-10-20: and out in front of the wall's face line where the clip's head is (CornerLeanDepthCm, measured on the head bone).
 		OutEye = PeekSightRules::CornerLeanEyePoint(PeekSightConfig,
-			CoverRules::CornerLeanPoint(CoverSlot, CoverFacing, Feet + FVector(0.f, 0.f, EyeCm), CoverRules::GetConfig().CornerPeekOffsetCm), CoverSlot.WallNormal);
+			CoverRules::CornerLeanPoint(GetEffectiveCoverSlotForCorner(), CoverFacing, Feet + FVector(0.f, 0.f, EyeCm), CoverRules::GetConfig().CornerPeekOffsetCm), CoverSlot.WallNormal);
 		OutDirection = OperativePeekSight::ConeDirection(*this, OutEye,
 			CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg), GetAppliedAimYaw());
 		return true;
 	}
-	// Over the top of a low wall: the head above its top, looking across it. A Shift-click look turns this cone too; with no look the aim stays across the wall.
-	const float EffectiveEyeCm = (CoverSlot.WallTopCm > 0.f && CoverSlot.WallTopCm <= 105.f) ? FMath::Max(EyeCm, 140.f) : EyeCm;
-	OutEye = PeekSightRules::OverTopEyePoint(PeekSightConfig, Feet, CoverSlot.WallNormal, EffectiveEyeCm, CoverSlot.WallTopCm);
+	// Over the top of a low wall or window sill: the head above its top, looking across it. A Shift-click look turns this cone too; with no look the aim stays across the wall.
+	const float TopCm = IsWindowCoverConfirmed() ? GetWindowCoverSillTopCm() : CoverSlot.WallTopCm;
+	const float EffectiveEyeCm = (TopCm > 0.f && TopCm <= 105.f) ? FMath::Max(EyeCm, 140.f) : EyeCm;
+	OutEye = PeekSightRules::OverTopEyePoint(PeekSightConfig, Feet, CoverSlot.WallNormal, EffectiveEyeCm, TopCm);
 	OutDirection = OperativePeekSight::ConeDirection(*this, OutEye, (-CoverSlot.WallNormal).GetSafeNormal2D(), 0.f);
 	return true;
 }

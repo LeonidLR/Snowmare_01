@@ -1903,7 +1903,23 @@ public:
 
 	int32 GetWindowCoverGlassRounds() const { return WindowCover.GlassRounds; }
 
-	/** The aim from the muzzle passes through the bound opening. */
+	/** 144: Sill top height above the slot's feet (cm) when under a confirmed window. */
+	float GetWindowCoverSillTopCm() const;
+
+	/** 144: Cover slot with any adjacent window-frame edge merged in (for corner aim/hold, without mutating CoverSlot.IsSameWall). */
+	FCoverSlot GetEffectiveCoverSlotForCorner() const;
+
+	bool HasAnyExposedCoverEdge() const;
+	bool IsExposedCoverEdge(ECoverFacing Facing) const;
+	float GetExposedCoverEdgeDistanceCm(ECoverFacing Facing) const;
+
+	/** 144: Returns true if the current cover shot crosses a confirmed window or adjacent frame-edge window opening. */
+	bool GetActiveWindowForShot(const FVector& AimAt, WindowCoverRules::FWindowCoverBinding& OutBinding) const;
+
+	/** 144: Updates crouch state when sliding along a wall in the formation wall layout past windows. */
+	void UpdateWallSlideWindowCrouch(const FVector& WallOrigin, const FVector& WallNormal, bool bActive);
+
+	/** The aim from the cover fire origin passes through the bound opening (or adjacent frame-edge window). */
 	bool IsWindowCoverShot(const FVector& AimAt) const;
 
 	/** The current shimmy goes towards the facing side (forward clip), else backwards. */
@@ -3056,6 +3072,8 @@ private:
 	/** G016: this operative's window, dropped on leave. Not copied with the slot and not moved when the leader changes. */
 	WindowCoverRules::FWindowCoverBinding WindowCover;
 	bool bWindowCoverForcedCrouch = false;
+	bool bWallSlideWindowCrouch = false;
+	EOperativeStance WindowCoverLastEdgeStance = EOperativeStance::Standing;
 	FVector WindowCoverSearchedAt = FVector(FLT_MAX);
 	WindowCoverRules::EWindowIntervalPlace WindowCoverLastPlace = WindowCoverRules::EWindowIntervalPlace::Outside;
 	FVector WindowCoverSegment = FVector(FLT_MAX);

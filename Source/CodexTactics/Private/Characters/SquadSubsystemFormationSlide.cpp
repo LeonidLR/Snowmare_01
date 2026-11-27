@@ -366,6 +366,9 @@ void USquadSubsystem::UpdateFormationSlide(AOperativeCharacter& LeaderRef, float
 		return;
 	}
 	Sectors.Formation = EFormationKind::Wall;
+	const FVector SlideWallOrigin(Sectors.SlideWall.A.X, Sectors.SlideWall.A.Y, SquadSubsystemSlideLocal::SlideFeetZ(LeaderRef));
+	const FVector SlideWallNormal(FormationMath::Forward(Sectors.WallNormalYaw), 0.f);
+	LeaderRef.UpdateWallSlideWindowCrouch(SlideWallOrigin, SlideWallNormal, true);
 	// Bug 2026-10-27: the members ahead of the leader keep clear of his way along the wall (else the crowd avoidance stops him at a lead man
 	// parked short of his place, and the places stop with him).
 	const FVector2D K0 = Sectors.SlideStartSlots.IsEmpty() ? LeaderPos : Sectors.SlideStartSlots[0].Position;
@@ -388,6 +391,14 @@ void USquadSubsystem::EndFormationSlide(AOperativeCharacter& LeaderRef, bool bAr
 		return;
 	}
 	Sectors.bSlide = false;
+	LeaderRef.UpdateWallSlideWindowCrouch(FVector::ZeroVector, FVector::ForwardVector, false);
+	for (const FFollowerState& Follower : Followers)
+	{
+		if (AOperativeCharacter* Member = Follower.Operative.Get())
+		{
+			Member->UpdateWallSlideWindowCrouch(FVector::ZeroVector, FVector::ForwardVector, false);
+		}
+	}
 	const bool bStack = Sectors.bSlideStack;
 	Sectors.bSlideStack = false;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall slide over after %.1f s (%.0f cm off its end): %s"), Sectors.SlideSeconds,

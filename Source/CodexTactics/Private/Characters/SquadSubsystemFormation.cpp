@@ -1301,7 +1301,13 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 		FrameLooks.Add(Follower.Operative, ClearFormationLook(Operative, Role.GetValue(), /*bLeader*/ false, Look));
 	}
 	// G026: crouch when he himself is in the slot. The approach look (Along / rear) stays until everyone arrives; it no longer holds the stance.
-	if (Sectors.bWallOrder && Sectors.bWallOrderCrouch && !Sectors.bSlide && !bRouted && Distance <= WallSettleCm && !bMoving)
+	if (Sectors.bWallOrder && Sectors.bSlide)
+	{
+		const FVector SlideWallOrigin(Sectors.SlideWall.A.X, Sectors.SlideWall.A.Y, SquadSubsystemFormationLocal::FormationFeetZ(Operative));
+		const FVector SlideWallNormal(FormationMath::Forward(Sectors.WallNormalYaw), 0.f);
+		Operative.UpdateWallSlideWindowCrouch(SlideWallOrigin, SlideWallNormal, true);
+	}
+	else if (Sectors.bWallOrder && Sectors.bWallOrderCrouch && !Sectors.bSlide && !bRouted && Distance <= WallSettleCm && !bMoving)
 	{
 		SettleFormationWallPose(Operative);
 	}
@@ -1749,6 +1755,17 @@ void USquadSubsystem::EndFormationWallOrder(const TCHAR* Why)
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] wall order over after %.1f s: %s"), Sectors.WallOrderSeconds, Why);
 	EndFormationCornerPeek(Why);
+	if (AOperativeCharacter* OrderLeader = Sectors.WallOrderLeader.Get())
+	{
+		OrderLeader->UpdateWallSlideWindowCrouch(FVector::ZeroVector, FVector::ForwardVector, false);
+	}
+	for (const FFollowerState& Follower : Followers)
+	{
+		if (AOperativeCharacter* Member = Follower.Operative.Get())
+		{
+			Member->UpdateWallSlideWindowCrouch(FVector::ZeroVector, FVector::ForwardVector, false);
+		}
+	}
 	Sectors.bWallOrder = false;
 	ResetFormationWallRoute();
 	Sectors.bWallOrderCrouch = true;

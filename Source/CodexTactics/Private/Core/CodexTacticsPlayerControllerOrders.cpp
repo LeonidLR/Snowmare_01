@@ -564,11 +564,31 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			UE_LOG(LogCodexTactics, Display, TEXT("Click on a stair flight: up to the hidden storey's landing at %s"), *StairFeet.ToCompactString());
 		}
 	}
+	AActor* WindowCoverSill = nullptr;
+	FVector WindowCoverNormal;
+	bool bWindowFormationSlide = false;
+	const bool bWindowAsCover = !GetActiveTurnBased()
+		&& ControllerWindowCover::ShouldTakeWindowClickAsCover(GetWorld(), Squad, Leader, Hit, IsSquadWideModifierDown(),
+			WindowCoverSill, WindowCoverNormal, bWindowFormationSlide);
+	if (bWindowAsCover && bWindowFormationSlide && WindowCoverSill)
+	{
+		const FBox SillBox = WindowCoverSill->GetComponentsBoundingBox(true);
+		const FVector SillCenter = SillBox.GetCenter();
+		const float Half = static_cast<float>(FMath::Abs(FVector::DotProduct(SillBox.GetExtent(), WindowCoverNormal)));
+		const FVector SlidePoint(SillCenter.X + WindowCoverNormal.X * (Half + 45.f), SillCenter.Y + WindowCoverNormal.Y * (Half + 45.f),
+			Leader->GetActorLocation().Z - Leader->GetSimpleCollisionHalfHeight());
+		const FVector TraceStart = Hit.TraceStart;
+		Hit = FHitResult();
+		Hit.bBlockingHit = true;
+		Hit.ImpactPoint = Hit.Location = SlidePoint;
+		Hit.ImpactNormal = Hit.Normal = FVector::UpVector;
+		Hit.TraceStart = TraceStart;
+	}
 	FVector WindowFeet;
 	float WindowYaw = 0.f;
 	FVector WindowApproach = FVector::ZeroVector;
 	bool bWindowApproachOnNav = false;
-	if (AActor* Sill = GetActiveTurnBased() ? nullptr : WindowBreakage::FindWindowSillAt(*GetWorld(), Hit); Sill
+	if (AActor* Sill = (GetActiveTurnBased() || bWindowAsCover) ? nullptr : WindowBreakage::FindWindowSillAt(*GetWorld(), Hit); Sill
 		&& FindWindowSillTarget(*Sill, *Leader, WindowFeet, WindowYaw, &WindowApproach, &bWindowApproachOnNav))
 	{
 		UpdateWindowHover(nullptr, nullptr);

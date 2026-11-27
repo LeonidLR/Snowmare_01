@@ -8,6 +8,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/Actor.h"
 #include "Interactables/WindowBreakage.h"
+#include "Tactics/CoverRules.h"
 
 namespace WindowCoverRules
 {
@@ -216,6 +217,104 @@ namespace WindowCoverRules
 	bool WantsCrouch(bool bConfirmed, bool bShimmying, bool bAtCorner, bool bStopped)
 	{
 		return bConfirmed && bStopped && !bShimmying && !bAtCorner;
+	}
+
+	FWindowCrouchSpan CrouchSpanForOpening(float AlongMinCm, float AlongMaxCm, float MarginCm,
+		float SillBottomAboveFeetCm, float OpeningTopAboveFeetCm)
+	{
+		const float MinA = FMath::Min(AlongMinCm, AlongMaxCm);
+		const float MaxA = FMath::Max(AlongMinCm, AlongMaxCm);
+		const float Pad = FMath::Max(MarginCm, 0.f);
+		return FWindowCrouchSpan{ MinA - Pad, MaxA + Pad, SillBottomAboveFeetCm, OpeningTopAboveFeetCm };
+	}
+
+	bool OpeningOverlapsStandingHead(float SillBottomAboveFeetCm, float OpeningTopAboveFeetCm)
+	{
+		return SillBottomAboveFeetCm < StandingHeadReachCm && OpeningTopAboveFeetCm > CrouchHeadClearanceCm;
+	}
+
+	bool IsInCrouchSpan(float AlongCm, const FWindowCrouchSpan& Span)
+	{
+		return AlongCm >= Span.MinAlongCm && AlongCm <= Span.MaxAlongCm;
+	}
+
+	bool WantsPathCrouch(float AlongCm, TConstArrayView<FWindowCrouchSpan> Spans)
+	{
+		for (const FWindowCrouchSpan& Span : Spans)
+		{
+			if (OpeningOverlapsStandingHead(Span.SillBottomCm, Span.OpeningTopCm) && IsInCrouchSpan(AlongCm, Span))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	float EffectiveSillTopCm(float SillTopCm)
+	{
+		return SillTopCm > 0.f ? SillTopCm : DefaultSillTopCm;
+	}
+
+	bool IsInWindowArc(const FVector& WallNormal, const FVector& SlotLocation, const FVector& TargetLocation, float ArcDeg)
+	{
+		return CoverRules::IsInFrontalArc(WallNormal, SlotLocation, TargetLocation, ArcDeg);
+	}
+
+	bool IsWindowEdgePeekAllowed(bool bCrouched, float SillAboveFeetCm, float OpeningTopAboveFeetCm)
+	{
+		if (bCrouched)
+		{
+			return OpeningTopAboveFeetCm >= CrouchHeadClearanceCm && SillAboveFeetCm <= CrouchPeekMaxSillCm;
+		}
+		return OpeningTopAboveFeetCm >= StandPeekMinTopCm && SillAboveFeetCm <= StandPeekMaxSillCm;
+	}
+
+	FWindowEdgeCorner FindWindowEdgeCorner(float OperativeAlongCm, bool bCrouched,
+		TConstArrayView<FWindowEdgeOpening> Openings, float MaxReachCm)
+	{
+		FWindowEdgeCorner Out;
+		if (MaxReachCm <= 0.f)
+		{
+			return Out;
+		}
+		for (int32 Index = 0; Index < Openings.Num(); ++Index)
+		{
+			const FWindowEdgeOpening& Op = Openings[Index];
+			if (!IsWindowEdgePeekAllowed(bCrouched, Op.SillTopCm, Op.OpeningTopCm))
+			{
+				continue;
+			}
+			const float MinA = FMath::Min(Op.AlongMinCm, Op.AlongMaxCm);
+			const float MaxA = FMath::Max(Op.AlongMinCm, Op.AlongMaxCm);
+			// Operative on the left solid wall: the window's left frame (MinA) is to his Right (+RightTangent).
+			if (OperativeAlongCm <= MinA + WindowFrameEdgeToleranceCm)
+			{
+				const float Dist = FMath::Max(0.f, MinA - OperativeAlongCm);
+				if (Dist <= MaxReachCm && (!Out.bRightExposed || Dist < Out.RightDistanceCm))
+				{
+					Out.bRightExposed = true;
+					Out.RightDistanceCm = Dist;
+					Out.RightOpeningIndex = Index;
+				}
+			}
+			// Operative on the right solid wall: the window's right frame (MaxA) is to his Left (-RightTangent).
+			if (OperativeAlongCm >= MaxA - WindowFrameEdgeToleranceCm)
+			{
+				const float Dist = FMath::Max(0.f, OperativeAlongCm - MaxA);
+				if (Dist <= MaxReachCm && (!Out.bLeftExposed || Dist < Out.LeftDistanceCm))
+				{
+					Out.bLeftExposed = true;
+					Out.LeftDistanceCm = Dist;
+					Out.LeftOpeningIndex = Index;
+				}
+			}
+		}
+		return Out;
+	}
+
+	bool CanClickWindowAsCover(bool bInCoverOnSameWall, bool bAltCoverModifier, bool bSameWallSide)
+	{
+		return bAltCoverModifier || (bInCoverOnSameWall && bSameWallSide);
 	}
 
 	EWindowCoverTurn TurnForAim(const FVector& From, const FVector& Aim, const FVector& SlotNormal)
