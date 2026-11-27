@@ -46,6 +46,7 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
+#include "Tactics/CoverTraceRules.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
@@ -113,6 +114,8 @@ namespace LevelGenRampSmoke
 		FString Only;
 		bool bStrictNav = false;
 		bool bRoofEdge = false;
+		bool bDesigner155 = false;
+		bool bDesignerSwitched = false;
 		bool bTrace = false;
 		float TraceClock = 0.f;
 		/** Own-order bit last sample, so a trace run can name the moment it drops. */
@@ -498,6 +501,10 @@ namespace LevelGenRampSmoke
 							}
 						}
 					}
+					if (State.bDesigner155)
+					{
+						Leg.Goal = FVector(-9111.f, -11096.f, 900.f); // recorded FIRST roof order, t876.0885
+					}
 					Leg.Limit = 60.f + Rise / 10.f;
 					State.Legs.Add(Leg);
 				}
@@ -681,6 +688,24 @@ namespace LevelGenRampSmoke
 		Squad->SetFollowersHolding(true);
 		Squad->SetSelectedGroup(TArray<AOperativeCharacter*>{ Squad->GetLeader() }, false);
 		State.Ordered = PlaceSquad(World, *Squad, Stair, State.GroundZ + Stair.LevelFrom * LevelHeightCm);
+		if (State.bDesigner155)
+		{
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (Member->bInCover) { Member->LeaveCover(TEXT("155 staging")); }
+				Member->StopOperative();
+				const float X = Member->SquadRole == EOperativeRole::Commander ? -7398.f
+					: Member->SquadRole == EOperativeRole::Engineer ? -7587.f : -7487.f;
+				Member->TeleportTo(FVector(X, -12825.f, 12.f + Member->GetSimpleCollisionHalfHeight()), FRotator(0.f,-90.f,0.f), false, true);
+				FCoverSlot Cover;
+				if (CoverTraceRules::FindCoverSlotAt(World, FVector(X,-12780.f,90.f), FVector(0.f,1.f,0.f), Cover))
+				{
+					Member->EnterCover(Cover);
+				}
+				if (Member->SquadRole == EOperativeRole::Commander) { State.Ordered = Member; }
+			}
+			State.bDesignerSwitched = false;
+		}
 		State.PhaseTime = 0.f;
 		State.DoneFor = 0.f;
 		State.OrderedUpFor = 0.f;
@@ -794,7 +819,7 @@ namespace LevelGenRampSmoke
 			}
 			else
 			{
-				Click(World, Leg.Goal, Leg.Kind == ELegKind::Group);
+				Click(World, Leg.Goal, State.bDesigner155 || Leg.Kind == ELegKind::Group);
 			}
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: leg %d / %d - %s %s: %s (selected, %d in the selection) clicked to %s"), State.Leg + 1, State.Legs.Num(),
 				*State.Stairs[Leg.Stair].Id, KindName(Leg.Kind), *Ordered->DisplayName.ToString(), Squad->GetSelectedGroup().Num(), *Leg.Goal.ToCompactString());
@@ -804,6 +829,15 @@ namespace LevelGenRampSmoke
 		}
 		case EPhase::Run:
 		{
+			if (State.bDesigner155 && !State.bDesignerSwitched && State.PhaseTime >= 10.f)
+			{
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					if (Member != State.Ordered.Get()) { Squad->SetLeader(Member); break; }
+				}
+				State.bDesignerSwitched = true;
+			}
+
 			const FLeg& Leg = State.Legs[State.Leg];
 			const FStair& Stair = State.Stairs[Leg.Stair];
 			const float StartZ = State.GroundZ + Stair.LevelFrom * LevelHeightCm;
@@ -910,7 +944,13 @@ namespace LevelGenRampSmoke
 			}
 			State->bStrictNav |= Arg == TEXT("strictnav");
 			State->bRoofEdge |= Arg == TEXT("roofedge");
+			State->bDesigner155 |= Arg == TEXT("designer155");
 			State->bTrace |= Arg == TEXT("trace");
+		}
+		if (State->bDesigner155)
+		{
+			State->Only = TEXT("B_x1_10_t7_store_stair_0");
+			State->LegFilter = { TEXT("solo") };
 		}
 		if (IConsoleVariable* Pressure = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.Enabled")))
 		{

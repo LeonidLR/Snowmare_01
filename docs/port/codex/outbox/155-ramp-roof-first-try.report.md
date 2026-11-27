@@ -15,3 +15,7 @@ Verification tools: `CodexTactics.LevelGenRampSmoke` reused on `/Game/Maps/Gener
 139 merge note: its HasNoWayUp guard overlaps RequestMove. Reconcile the guards when merging; retain139's authored standing capsule allowance for legacy ground goals. Worker sync's implicit LFS upload was removed here as in139, because this task explicitly forbids pushes.
 
 Initial validation attempts: worker compile found missing NavigationSystem.h (fixed); an early local Smart invocation before lane binaries were available matched zero tests and is not acceptance evidence. Final results will replace this checkpoint below.
+
+## Corrected round-4 reproduction
+
+The recording's round4 starts at t825.9511. Commander18 orders t875.9157 / t876.0885 target(-9107,-11116,900) / (-9111,-11096,900), from crouched cover at(-7398,-12825,feet10). He stops at(-7763,-11531,feet251) by t886 and stays there until t899. A selection switch happens around that stop. The later roof order t907.9543 / t908.1247 to(-7574,-11468,900) reaches the roof by t920. Building **B_x1_10_t7_store**, stair **B_x1_10_t7_store_stair_0**, not the earlier round3 ground-cover excerpt. The `designer155` variant now stages recorded squad positions/cover, sends the original first roof destination once (double-click sprint), selects another operative at+10s, and requires Commander arrival. `roofedge` remains available for other ramp legs; mapped smoke now uses the exact designer155 case.
