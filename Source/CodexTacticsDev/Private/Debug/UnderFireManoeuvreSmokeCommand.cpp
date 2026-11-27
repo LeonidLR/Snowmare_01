@@ -479,8 +479,14 @@ namespace UnderFireManoeuvreSmoke
 			Leader->StopOperative();
 			Leader->TeleportTo(State.HoldSlot.WorldLocation + State.HoldSlot.WallNormal * 160.f
 				+ FVector(0.f, 0.f, Leader->GetSimpleCollisionHalfHeight()), FRotator::ZeroRotator, false, true);
-			Exposed->TeleportTo(State.HoldSlot.WorldLocation - State.HoldSlot.WallNormal * 1000.f
-				+ State.HoldSlot.RightTangent() * 1500.f + FVector(0.f, 0.f, Exposed->GetSimpleCollisionHalfHeight()), FRotator::ZeroRotator);
+			// Aim the oblique line through the longer half of this finite crate. The
+			// arena is clear, but the enemy point can be outside it: do not let world
+			// collision silently reject the test placement and leave him on our side.
+			const float Side = !State.HoldSlot.bLeftEdgeExposed
+				|| (State.HoldSlot.bRightEdgeExposed && State.HoldSlot.LeftEdgeDistanceCm > State.HoldSlot.RightEdgeDistanceCm) ? -1.f : 1.f;
+			Check(State, Exposed->TeleportTo(State.HoldSlot.WorldLocation - State.HoldSlot.WallNormal * 1000.f
+				+ State.HoldSlot.RightTangent() * (600.f * Side) + FVector(0.f, 0.f, Exposed->GetSimpleCollisionHalfHeight()),
+				FRotator::ZeroRotator, false, true), TEXT("D: enemy placed at the oblique test point"));
 			Check(State, CoverThreatRules::Quality(State.HoldSlot, Exposed->GetActorLocation()) > 0.35f,
 				TEXT("D: oblique enemy is on the protecting side accepted by UnderFire"));
 			Check(State, CoverThreatRules::Quality(State.HoldSlot, Exposed->GetActorLocation()) < FMath::Cos(FMath::DegreesToRadians(30.f)),
