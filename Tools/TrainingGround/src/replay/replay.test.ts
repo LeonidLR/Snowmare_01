@@ -171,18 +171,26 @@ test('role display names map squad roles to Russian names while preserving IDs a
   };
   const r = parseReplay(text([
     squadHeader,
+    { type: 'round_start', t: 0.5, round: 1 },
     { type: 'snap', t: 1, ops: [{ id: 'BP_Operative_C_0', p: [0, 0], sel: true, lead: true }, { id: 'BP_Operative_C_1', p: [100, 0], sel: false }], threats: [{ id: 'BP_Operative_C_7', p: [500, 0] }] },
     { type: 'snap', t: 3, ops: [{ id: 'BP_Operative_C_0', p: [0, 0], sel: false }, { id: 'BP_Operative_C_1', p: [100, 0], sel: true }] },
+    { type: 'round_start', t: 10, round: 2 },
+    { type: 'snap', t: 11, ops: [{ id: 'BP_Operative_C_6', p: [0, 0], sel: true, lead: true }, { id: 'BP_Operative_C_70', p: [100, 0], sel: false }, { id: 'BP_Operative_C_8', p: [200, 0], sel: false }] },
   ]));
   assert.deepEqual(squadUnitIds(r), ['BP_Operative_C_0', 'BP_Operative_C_1', 'BP_Operative_C_2', 'BP_Operative_C_9']);
+  assert.deepEqual(squadUnitIds(r, 11), ['BP_Operative_C_6', 'BP_Operative_C_70', 'BP_Operative_C_8']);
   assert.equal(unitDisplayName(r, 'BP_Operative_C_0'), 'Командир');
   assert.equal(unitDisplayName(r, 'BP_Operative_C_1'), 'Инженер');
   assert.equal(unitDisplayName(r, 'BP_Operative_C_2'), 'Медик-сапёр');
   assert.equal(unitDisplayName(r, 'BP_Operative_C_9'), 'Новобранец');
+  assert.equal(unitDisplayName(r, 'BP_Operative_C_6'), 'Командир');
+  assert.equal(unitDisplayName(r, 'BP_Operative_C_70'), 'Инженер');
+  assert.equal(unitDisplayName(r, 'BP_Operative_C_8'), 'Медик-сапёр');
   assert.equal(unitDisplayName(r, 'BP_Operative_C_7'), 'PMC 7');
   assert.equal(selectedReplayUnit(r, 0), 'BP_Operative_C_0');
   assert.equal(selectedReplayUnit(r, 1), 'BP_Operative_C_0');
   assert.equal(selectedReplayUnit(r, 3), 'BP_Operative_C_1');
+  assert.equal(selectedReplayUnit(r, 11), 'BP_Operative_C_6');
 });
 
 test('tag field validates allowed values and maintains backward compatibility for untagged notes', () => {

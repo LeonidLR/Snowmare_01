@@ -104,8 +104,44 @@ const ROLE_DISPLAY_NAMES: Record<string, string> = {
   Recruit: 'Новобранец',
 };
 
-export function squadUnitIds(replay: Replay | undefined): string[] {
-  const squad: SquadMember[] = Array.isArray(replay?.header.squad) ? replay!.header.squad : [];
+const squadCache = new WeakMap<Replay, Map<string, SquadMember>>();
+
+function squadMemberMap(replay: Replay | undefined): Map<string, SquadMember> {
+  if (!replay) return new Map();
+  const cached = squadCache.get(replay);
+  if (cached) return cached;
+  const map = new Map<string, SquadMember>();
+  const squad: SquadMember[] = Array.isArray(replay.header.squad) ? replay.header.squad : [];
+  for (const m of squad) if (m?.id) map.set(m.id, m);
+  if (squad.length > 0) {
+    const starts = replay.rows.filter(r => r.type === 'round_start').map(r => r.t!);
+    const segments: [number, number][] = starts.length === 0
+      ? [[0, Infinity]]
+      : [[0, starts[0]], ...starts.map((s, i): [number, number] => [s, starts[i + 1] ?? Infinity])];
+    for (const [t0, t1] of segments) {
+      const first = replay.frames.find(f => f.t! >= t0 && f.t! < t1 && (f.ops?.length ?? 0) > 0);
+      if (!first?.ops) continue;
+      for (let i = 0; i < Math.min(first.ops.length, squad.length); i++) {
+        const id = first.ops[i]?.id;
+        if (id && !map.has(id)) map.set(id, squad[i]);
+      }
+    }
+  }
+  squadCache.set(replay, map);
+  return map;
+}
+
+export function squadUnitIds(replay: Replay | undefined, t?: number): string[] {
+  if (!replay) return [];
+  if (t !== undefined) {
+    const round = roundAt(replay, t);
+    const nextRound = replay.rows.find(r => r.type === 'round_start' && r.t! > (round?.t ?? -1));
+    const t0 = round?.t ?? 0;
+    const t1 = nextRound?.t ?? Infinity;
+    const first = replay.frames.find(f => f.t! >= t0 && f.t! < t1 && (f.ops?.length ?? 0) > 0);
+    if (first?.ops?.length) return first.ops.map(u => u.id);
+  }
+  const squad: SquadMember[] = Array.isArray(replay.header.squad) ? replay.header.squad : [];
   const ids: string[] = [];
   for (const m of squad) if (m?.id && !ids.includes(m.id)) ids.push(m.id);
   return ids;
@@ -113,14 +149,15 @@ export function squadUnitIds(replay: Replay | undefined): string[] {
 
 export function unitDisplayName(replay: Replay | undefined, id: string, unit?: Unit): string {
   if (!id) return 'Any / unassigned';
-  const squad: SquadMember[] = Array.isArray(replay?.header.squad) ? replay!.header.squad : [];
-  const member = squad.find(m => m?.id === id);
+  const map = squadMemberMap(replay);
+  const member = map.get(id);
   if (member) {
     const explicit = member.display_name || member.name;
     if (explicit) return explicit;
     const shortRole = member.role?.split('::').pop() || '';
     if (shortRole) {
       const base = ROLE_DISPLAY_NAMES[shortRole] ?? shortRole;
+      const squad: SquadMember[] = Array.isArray(replay?.header.squad) ? replay!.header.squad : [];
       const sameRole = squad.filter(m => (m?.role?.split('::').pop() || '') === shortRole).length > 1;
       return sameRole ? `${base} (${id.split('_').pop()})` : base;
     }

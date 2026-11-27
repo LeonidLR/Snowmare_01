@@ -68,12 +68,19 @@ export function ReplayDepartment() {
   const units = replay ? unitsAt(replay, t) : [];
   const frameSelectedUnit = useMemo(() => selectedReplayUnit(replay, t), [replay, t]);
   const activeReplayUnit = clickedUnit || frameSelectedUnit;
+  useEffect(() => { setClickedUnit(''); }, [round?.round]);
   useEffect(() => { if (!selected && !unitManual) setUnit(activeReplayUnit); }, [activeReplayUnit, selected, unitManual]);
   const whoIds = useMemo(() => [...new Set([
-    ...squadUnitIds(replay),
+    ...squadUnitIds(replay, t),
     ...units.map(u => u.id),
     ...(notes?.annotations.map(a => a.unit).filter(Boolean) || []),
-  ])], [replay, units, notes]);
+  ])], [replay, t, units, notes]);
+  const whoLabels = useMemo(() => {
+    const raw = whoIds.map(id => unitDisplayName(replay, id, units.find(u => u.id === id)));
+    const counts = new Map<string, number>();
+    for (const lbl of raw) counts.set(lbl, (counts.get(lbl) ?? 0) + 1);
+    return whoIds.map((id, idx) => ((counts.get(raw[idx]) ?? 0) > 1 ? `${raw[idx]} (${id.split('_').pop()})` : raw[idx]));
+  }, [whoIds, replay, units]);
   const events = useMemo(() => replay?.events.filter(e => e.t! <= t && e.t! >= (round?.t ?? 0)) || [], [replay, t, round]);
   const layout = geometry?.layout;
   const box = sectorView && replay?.header.sector_box_cm || layout?.bounds || { min: [-16000, -23000], max: [16000, 24000] };
@@ -197,7 +204,7 @@ export function ReplayDepartment() {
       <p className="replay-help">Route: drag a smooth path. Polyline: click vertices, then Finish. Arrow / zone: drag. Select: drag any drawing to move it, or drag white handles to reshape; click an operative to default Who.</p>
       <label>Label / comment<textarea aria-label="Annotation label" value={label} onChange={e => setLabel(e.target.value)} /></label>
       <div className="replay-fields"><label>Author<input value={author} onChange={e => setAuthor(e.target.value)} /></label><label>Colour<input aria-label="Annotation colour" type="color" value={color} onChange={e => setColor(e.target.value)} /></label></div>
-      <div className="replay-fields-equal"><label>Who<select aria-label="Annotation unit" value={unit} onChange={e => { setUnit(e.target.value); if (!selected) setUnitManual(true); }}><option value="">Any / unassigned</option>{whoIds.map(id => <option key={id} value={id}>{unitDisplayName(replay, id, units.find(u => u.id === id))}</option>)}</select></label><label>Tag<select aria-label="Annotation tag" value={tag} onChange={e => setTag(e.target.value as NoteTag)}>{NOTE_TAGS.map(tOpt => <option key={tOpt} value={tOpt}>{tOpt}</option>)}</select></label></div>
+      <div className="replay-fields-equal"><label>Who<select aria-label="Annotation unit" value={unit} onChange={e => { setUnit(e.target.value); if (!selected) setUnitManual(true); }}><option value="">Any / unassigned</option>{whoIds.map((id, i) => <option key={id} value={id}>{whoLabels[i]}</option>)}</select></label><label>Tag<select aria-label="Annotation tag" value={tag} onChange={e => setTag(e.target.value as NoteTag)}>{NOTE_TAGS.map(tOpt => <option key={tOpt} value={tOpt}>{tOpt}</option>)}</select></label></div>
       <label>Height above ground (cm, optional)<input type="number" value={height} onChange={e => setHeight(e.target.value)} placeholder="Explicit roof evidence for decoder" /></label>
       <div className="replay-tools">{tool === 'polyline' && <button disabled={draft.length < 2} onClick={() => add(draft)}>Finish polyline</button>}{tool === 'comment' && <button onClick={() => add([])}>Pin to time only</button>}<button disabled={!history.length} onClick={() => { setNotes(history[history.length - 1]); setHistory(v => v.slice(0, -1)); setDirty(true); setSelected(''); }}>Undo</button>
         <button disabled={!selected} onClick={() => commit(notes!.annotations.map(a => a.id === selected ? { ...a, label, author, unit, color, tag, height_cm: height === '' ? undefined : Number(height) } : a))}>Apply edits</button><button disabled={!selected} onClick={() => { commit(notes!.annotations.filter(a => a.id !== selected)); clearSelection(); }}>Delete</button><button disabled={!notes?.annotations.length} onClick={() => { if (!notes) return; const { annotations, removed } = deduplicateAnnotations(notes.annotations); if (!removed) { setStatus('No duplicates found.'); return; } commit(annotations); if (selected && !annotations.some(a => a.id === selected)) clearSelection(); setStatus(`Removed ${removed} duplicate(s) — save notes to keep.`); }}>Remove duplicates</button></div>
