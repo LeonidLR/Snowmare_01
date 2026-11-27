@@ -277,7 +277,14 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 		{
 			switch (Event.Type)
 			{
-			case FDemoEvent::EType::ShotHit:
+			case FDemoEvent::EType::RoundMark:
+                W.WriteValue(TEXT("type"), TEXT("round_mark"));
+                W.WriteValue(TEXT("t"), Finite(Event.Time));
+                W.WriteValue(TEXT("rt"), Finite(Event.RealTime));
+                W.WriteValue(TEXT("round"), Event.Round);
+                W.WriteValue(TEXT("value"), Event.Value);
+                break;
+            case FDemoEvent::EType::ShotHit:
 				W.WriteValue(TEXT("type"), TEXT("shot_hit"));
 				W.WriteValue(TEXT("t"), Finite(Event.Time));
 				W.WriteValue(TEXT("rt"), Finite(Event.RealTime));
@@ -514,4 +521,32 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 		}
 	});
 	return Out;
+}
+
+int32 SessionRecordingRules::ChooseMarkRound(const FDemoSession& Session, double Now, bool bContact, bool bPrevious, int32 ExplicitRound)
+{
+ int32 Current = INDEX_NONE, Previous = INDEX_NONE;
+ double Started = 0.;
+ bool bActive = false;
+ for (const FDemoRoundEvent& Round : Session.Rounds)
+ {
+  if (Round.bPmcRelocated || Round.Time > Now) { continue; }
+  if (ExplicitRound != INDEX_NONE && Round.Round == ExplicitRound) { return ExplicitRound; }
+  if (Round.bStart)
+  {
+   Previous = Current;
+   Current = Round.Round;
+   Started = Round.Time;
+   bActive = true;
+  }
+  else { Current = Round.Round; bActive = false; }
+ }
+ if (ExplicitRound != INDEX_NONE) { return INDEX_NONE; }
+ if (!bActive) { return Current; } // The last completed round during intermission.
+ if (bPrevious || (Now - Started < 30. && !bContact))
+ {
+  if (Previous != INDEX_NONE) { return Previous; }
+  if (bPrevious) { return INDEX_NONE; }
+ }
+ return Current;
 }

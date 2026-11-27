@@ -1,3 +1,4 @@
+import { syncTrainingLevels } from './trainingSync.ts';
 import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -504,8 +505,9 @@ export async function handleOpenEditor(root: string, deps: TrainingLaunchDeps = 
   const uprojectPath = path.join(buildRoot, 'CodexTactics.uproject');
   const args = [uprojectPath, X6_MAP_PATH, '-NoZenAutoLaunch'];
   const runDetached = deps.spawnDetached ?? defaultSpawnDetached;
+  const syncMessage = syncTrainingLevels(root, buildRoot);
   const pid = runDetached(UE_EDITOR_EXE, args, buildRoot);
-  return { status: 200, body: { build: selected.build, pid: pid ?? null, cmdPath, command: UE_EDITOR_EXE, args } };
+  return { status: 200, body: { build: selected.build, syncMessage, pid: pid ?? null, cmdPath, command: UE_EDITOR_EXE, args } };
 }
 
 export async function handlePlaySector(
@@ -541,8 +543,9 @@ export async function handlePlaySector(
     '-NoZenAutoLaunch',
   ];
   const runDetached = deps.spawnDetached ?? defaultSpawnDetached;
+  const syncMessage = syncTrainingLevels(root, buildRoot);
   const pid = runDetached(UE_EDITOR_EXE, args, buildRoot);
-  return { status: 200, body: { build: selected.build, pid: pid ?? null, active, command: UE_EDITOR_EXE, args } };
+  return { status: 200, body: { build: selected.build, syncMessage, pid: pid ?? null, active, command: UE_EDITOR_EXE, args } };
 }
 
 type Use = (route: string, handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>) => void;

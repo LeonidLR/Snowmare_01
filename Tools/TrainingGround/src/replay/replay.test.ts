@@ -10,6 +10,18 @@ import { containedFile, demoLeaf, setupReplayApi } from '../../server/replayApi.
 const text = (rows: unknown[]) => rows.map(r => JSON.stringify(r)).join('\n');
 const u = (x: number, id = 'a') => ({ id, p: [x, 0, 92], yaw: 90 });
 const header = { type: 'header', map: 'L_Gen_Depot_1_X6' };
+
+test('late round marks appear on their target fight, preserving call time; footer is legacy only', () => {
+  const rounds = [header, { type: 'round_start', t: 0, round: 1 }, { type: 'round_end', t: 90, round: 1 },
+    { type: 'round_start', t: 100, round: 2 }];
+  const r = parseReplay(text([...rounds, { type: 'round_mark', t: 105, rt: 107, round: 1, value: 'good' },
+    { type: 'footer', mark: 'good' }]));
+  const marks = r.events.filter(e => e.type === 'round_mark');
+  assert.deepEqual(marks.map(e => [e.t, e.round, e.value, e.recorded_t]), [[0, 1, 'good', 105]]);
+  assert.equal(r.rows.find(e => e.type === 'round_mark')?.t, 105);
+  const legacy = parseReplay(text([...rounds, { type: 'footer', mark: 'bad' }]));
+  assert.deepEqual(legacy.events.filter(e => e.type === 'round_mark').map(e => [e.t, e.round, e.value]), [[0, 1, 'bad'], [100, 2, 'bad']]);
+});
 const notes = { schema: 'codex.demo_notes/1', coordinates: 'UE_cm_X_north_Y_east', recording: 'real.jsonl', map: header.map,
   annotations: [{ id: 'one', kind: 'route', t: 1, author: 'Designer', unit: 'a', label: 'Flank', color: '#facc15', points: [[0, 0], [100, 200]] }] };
 
