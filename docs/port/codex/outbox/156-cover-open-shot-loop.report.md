@@ -33,4 +33,4 @@ Extended full command: `CodexTactics.UnderFireManoeuvreSmoke`; part D places a P
 Impact-map validation and TypeSafe protected-path audit pass. Exact designer play-copy geometry and interactive visual playtest are not reproduced; no claim about animation polish or RPG choice.
 
 
-Lead acceptance addendum: sample real feet throughout the >=5 s hold against the frozen resolved arrival slot. Require max XY distance <=120 cm and positive wall-side depth, in addition to all existing D/E assertions. This extra smoke assertion is pending the Lead merge gate; no new runtime changes.
+Lead acceptance addendum: sample real feet throughout the >=5 s hold against the frozen resolved arrival slot. Require max XY distance <=120 cm and positive wall-side depth, in addition to all existing D/E assertions. Lead merge gate PASS on 019beb5e: Smart485/485, all12 mapped gate smokes PASS; actual drift0.0cm and protecting-side depth53.0cm. Designer JSON verified intact1/1. No new runtime changes.
