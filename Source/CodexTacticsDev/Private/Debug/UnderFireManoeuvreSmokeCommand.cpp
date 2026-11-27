@@ -9,6 +9,7 @@
 //  B. a new move order to the leader releases the followers' held spots at once (never over the player's order);
 //  C. the same rule for the PMC: a second fighter standing in the open past the passage's mouth, a crate 1.5 m from him, is fired at by
 //     the leader - he takes cover behind the crate (no commander: the shared rule).
+// D. an oblique enemy outside the low pose arc cannot break a player cover hold for >=5 s.
 // Nothing is saved.
 
 #include "CoreMinimal.h"
@@ -25,6 +26,8 @@
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/UnderFireRules.h"
+#include "Tactics/CoverThreatRules.h"
+#include "Tactics/CoverFacingRules.h"
 #include "Components/StaticMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
 #include "Containers/Ticker.h"
@@ -59,6 +62,9 @@ namespace UnderFireManoeuvreSmoke
 		TArray<float> MaxOffCm;
 		bool bMateInLineAtStart[3] = { false, false, false };
 		float NextShot = 0.f;
+		float CoverHeldSeconds = 0.f;
+		bool bCoverBroke = false;
+		FCoverSlot HoldSlot;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -456,6 +462,45 @@ namespace UnderFireManoeuvreSmoke
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: C: the fighter - cover moves %d, prone drops %d, in cover %d, stance %d"), Exposed->UnderFireCoverMoves,
 				Exposed->UnderFireProneDrops, Exposed->bInCover ? 1 : 0, static_cast<int32>(Exposed->GetStance()));
 			Check(State, Exposed->UnderFireCoverMoves > 0 && Exposed->bInCover, TEXT("C: the PMC fighter under fire took cover behind the crate (the shared rule)"));
+			if (!Exposed->bInCover) { return Finish(State, false); }
+			State.HoldSlot = Exposed->GetCoverSlot();
+			// D: force the old disagreement: a protecting oblique line, outside the low pose arc.
+			Exposed->LeaveCover(TEXT("smoke setup"));
+			Exposed->StopOperative();
+			Exposed->SetActorTickEnabled(false);
+			Leader->LeaveCover(TEXT("smoke player cover setup"));
+			Leader->StopOperative();
+			Leader->TeleportTo(State.HoldSlot.WorldLocation + State.HoldSlot.WallNormal * 160.f
+				+ FVector(0.f, 0.f, Leader->GetSimpleCollisionHalfHeight()), FRotator::ZeroRotator, false, true);
+			Exposed->TeleportTo(State.HoldSlot.WorldLocation - State.HoldSlot.WallNormal * 1000.f
+				+ State.HoldSlot.RightTangent() * 1500.f + FVector(0.f, 0.f, Exposed->GetSimpleCollisionHalfHeight()), FRotator::ZeroRotator);
+			Check(State, CoverThreatRules::Quality(State.HoldSlot, Exposed->GetActorLocation()) > 0.35f,
+				TEXT("D: oblique enemy is on the protecting side accepted by UnderFire"));
+			if (IConsoleVariable* Arc = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Cover.FrontalArcDeg")))
+			{
+				Arc->Set(60.f, ECVF_SetByConsole);
+			}
+			Check(State, Leader->OrderTakeCover(State.HoldSlot, false) == EOperativeOrderResult::Accepted,
+				TEXT("D: player orders low cover with an enemy beyond the old pose reach"));
+			Next(State);
+			return true;
+		}
+		case 6:
+		{
+			AOperativeCharacter* Leader = State.Members[0].Get();
+			AOperativeCharacter* Enemy = State.Exposed.Get();
+			if (!Leader || !Enemy) { return Finish(State, false); }
+			if (!Leader->bInCover && State.CoverHeldSeconds == 0.f && State.StageTime < 15.f) { return true; }
+			State.bCoverBroke |= !Leader->bInCover;
+			if (Leader->bInCover)
+			{
+				// Exercise the common escape gate too (the animation fire gate can request this independently of the pose rule).
+				State.bCoverBroke |= Leader->BeginOpenShotFromCover(Enemy);
+				State.bCoverBroke |= Leader->DecideCoverFireAtPoint(Enemy->GetActorLocation(), true) == CoverFacingRules::ECoverFireAt::StepOut;
+			}
+			State.CoverHeldSeconds += StepSeconds;
+			if (State.CoverHeldSeconds < 5.1f) { return true; }
+			Check(State, !State.bCoverBroke && Leader->bInCover, TEXT("D: player cover held continuously >= 5 s against oblique enemy; no open-shot escape"));
 			return Finish(State, true);
 		}
 		default:
@@ -465,7 +510,7 @@ namespace UnderFireManoeuvreSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs UnderFireManoeuvreCommand(
 		TEXT("CodexTactics.UnderFireManoeuvreSmoke"),
-		TEXT("Dev check (bug #43, L_Gen_Depot_1): a column halted in a narrow passage fired at from its far end - the rear men step off the line and return fire, someone takes cover, a new order releases them; a PMC fighter in the open takes cover too; logs PASS/FAIL, then exits."),
+		TEXT("Dev check (bugs #43/156, retained X6): a column halted in a narrow passage fired at from its far end - the rear men step off the line and return fire, someone takes cover, a new order releases them; a PMC fighter in the open takes cover too; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>&, UWorld* World)
 		{
 			if (!World)

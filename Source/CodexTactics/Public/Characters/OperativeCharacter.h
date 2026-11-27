@@ -1489,7 +1489,7 @@ public:
 	 * raging / panicking. In the tactical pause the controller plans the walk instead and calls SetPendingCover.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Cover")
-	EOperativeOrderResult OrderTakeCover(const FCoverSlot& Slot, bool bSprint);
+	EOperativeOrderResult OrderTakeCover(const FCoverSlot& Slot, bool bSprint, bool bPlayerOrder = true);
 
 	/**
 	 * Group cover order (game designer 2026-10-20, GroupCoverRules): he holds exactly the slot that order gave him - no automatic
@@ -3107,6 +3107,9 @@ private:
 	bool bOpenShotReturnToCornerHold = false;
 	ECoverFacing OpenShotReturnFacing = ECoverFacing::Right;
 	bool bOpenShotReturnPending = false;
+	/** Held until leaving/replacing the player cover order, including its settled hold. */
+	bool bPlayerCoverOrderActive = false;
+	double LastCoverOpenShotTransition = -1.e30;
 	/** The current cover entry is the return after an open shot (IsQuietCoverEntry); the request is set around that EnterCover. */
 	bool bQuietCoverEntry = false;
 	bool bQuietCoverEntryRequest = false;
