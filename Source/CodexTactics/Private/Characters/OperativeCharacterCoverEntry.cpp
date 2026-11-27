@@ -466,7 +466,7 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 		const float OppDist = CoverFacingRules::EdgeDistance(CoverSlot, OppSide);
 		if (OppDist >= 0.f)
 		{
-			Clamped = FMath::Max(Clamped, -(OppDist - CornerEdgeAlignOppositeMarginCm));
+			Clamped = FMath::Max(Clamped, FMath::Min(0.f, -(OppDist - CornerEdgeAlignOppositeMarginCm)));
 		}
 		return Clamped;
 	};

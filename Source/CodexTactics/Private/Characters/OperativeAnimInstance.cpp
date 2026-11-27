@@ -1559,7 +1559,15 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 	}
 	else
 	{
-		CornerLookTrimAlpha = FMath::FInterpTo(CornerLookTrimAlpha, 0.f, DeltaSeconds, AimYawInterpSpeed);
+		if (!bInCover)
+		{
+			// Stepped out of cover: actor facing now owns aim alignment; drop CS trim immediately to avoid fading toward a stale target.
+			CornerLookTrimAlpha = 0.f;
+		}
+		else
+		{
+			CornerLookTrimAlpha = FMath::FInterpTo(CornerLookTrimAlpha, 0.f, DeltaSeconds, AimYawInterpSpeed);
+		}
 		if (CornerLookTrimAlpha <= 0.005f)
 		{
 			CornerLookTrimAlpha = 0.f;
@@ -1833,7 +1841,7 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
 	}
-	if (bCornerLookAimTrim)
+	if (bCornerLookAimTrim && StealthWeight <= MinSampleWeight)
 	{
 		ApplyCornerLookAimTrim(Output);
 	}
