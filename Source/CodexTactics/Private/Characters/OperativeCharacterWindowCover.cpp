@@ -121,18 +121,24 @@ bool AOperativeCharacter::GetActiveWindowForShot(const FVector& AimAt, WindowCov
 	{
 		return false;
 	}
-	if (IsWindowCoverConfirmed() && WindowCover.Opening.IsValid && FMath::LineBoxIntersection(WindowCover.Opening, From, AimAt, Delta))
+	if (IsWindowCoverConfirmed() && WindowCover.Opening.IsValid
+		&& WindowCoverRules::IsInWindowArc(CoverSlot.WallNormal, CoverSlot.WorldLocation, AimAt, CoverRules::GetConfig().FrontalArcDeg)
+		&& FMath::LineBoxIntersection(WindowCover.Opening, From, AimAt, Delta))
 	{
 		OutBinding = WindowCover;
 		return true;
 	}
-	if (bAtCoverCorner && !CoverSlot.IsEdgeExposed(CoverFacing))
+	if (bAtCoverCorner)
 	{
 		const bool bLeft = CoverFacing == ECoverFacing::Left;
 		const bool bWinEdge = bLeft ? WindowCover.bLeftEdgeExposed : WindowCover.bRightEdgeExposed;
+		const float WinDist = bLeft ? WindowCover.LeftEdgeDistanceCm : WindowCover.RightEdgeDistanceCm;
+		const bool bWallEdge = CoverSlot.IsEdgeExposed(CoverFacing);
+		const float WallDist = bLeft ? CoverSlot.LeftEdgeDistanceCm : CoverSlot.RightEdgeDistanceCm;
 		const FBox& EdgeOpening = bLeft ? WindowCover.LeftEdgeOpening : WindowCover.RightEdgeOpening;
 		AActor* EdgeSill = bLeft ? WindowCover.LeftEdgeSill.Get() : WindowCover.RightEdgeSill.Get();
-		if (bWinEdge && EdgeSill && EdgeOpening.IsValid && FMath::LineBoxIntersection(EdgeOpening, From, AimAt, Delta))
+		if (bWinEdge && (!bWallEdge || WinDist <= WallDist + WindowCoverRules::WindowFrameEdgeToleranceCm)
+			&& EdgeSill && EdgeOpening.IsValid && FMath::LineBoxIntersection(EdgeOpening, From, AimAt, Delta))
 		{
 			OutBinding = WindowCover;
 			OutBinding.Sill = EdgeSill;

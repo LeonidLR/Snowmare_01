@@ -156,8 +156,8 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	EShotLineHit Kind = EShotLineHit::Clear;
 	AActor* HitEnemy = Enemy;
 	FHitResult Hit;
-	const FVector LineFrom = (bCornerShot || (bInCover && (CurrentCoverHeight == ECoverHeight::LowCover || IsWindowCoverConfirmed()))) ? GetCoverFireOrigin() : GetMuzzleLocation();
 	const FVector LineTo = EnemyFeet + FVector(0.f, 0.f, 80.f);
+	const FVector LineFrom = (bCornerShot || (bInCover && (CurrentCoverHeight == ECoverHeight::LowCover || (IsWindowCoverConfirmed() && IsWindowCoverShot(LineTo))))) ? GetCoverFireOrigin() : GetMuzzleLocation();
 	const bool bLineHit = World->LineTraceSingleByChannel(Hit, LineFrom, LineTo, ECC_Visibility, Params);
 	if (OutDetail)
 	{
@@ -331,7 +331,8 @@ bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShoo
 	}
 	EShotLineHit Kind = EShotLineHit::Clear;
 	FHitResult Hit;
-	if (World->LineTraceSingleByChannel(Hit, (bCornerShot || (bInCover && (CurrentCoverHeight == ECoverHeight::LowCover || IsWindowCoverConfirmed()))) ? GetCoverFireOrigin() : GetMuzzleLocation(), Ghost.GetAimPoint(), ECC_Visibility, Params) && Hit.GetActor())
+	const FVector GhostAim = Ghost.GetAimPoint();
+	if (World->LineTraceSingleByChannel(Hit, (bCornerShot || (bInCover && (CurrentCoverHeight == ECoverHeight::LowCover || (IsWindowCoverConfirmed() && IsWindowCoverShot(GhostAim))))) ? GetCoverFireOrigin() : GetMuzzleLocation(), GhostAim, ECC_Visibility, Params) && Hit.GetActor())
 	{
 		Kind = Hit.GetActor()->IsA<ABarricadeActor>() ? EShotLineHit::Barricade : EShotLineHit::Blocked;
 	}

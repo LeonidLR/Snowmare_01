@@ -208,9 +208,37 @@ namespace CoverTraceRules
 		{
 			return false;
 		}
-		if (!bChestHit || (bKneeHit && Knee.Distance + 25.f < Chest.Distance))
+		const bool bOriginalChestHit = bChestHit;
+		bool bSnappedToKnee = false;
+		if (!bChestHit)
 		{
-			Chest = Knee; // the low obstacle or sill below a window opening (chest trace passed through to a far wall)
+			Chest = Knee; // the low obstacle's surface
+			bSnappedToKnee = true;
+		}
+		else if (bKneeHit && Knee.Distance + 25.f < Chest.Distance)
+		{
+			// Only snap chest to a closer knee hit (e.g. a window sill where chest passed through the opening) if the
+			// foreground geometry actually qualifies as cover height (do not let a low curb < 40 cm hijack a tall wall).
+			FVector KneeNormal = FVector(Knee.ImpactNormal.X, Knee.ImpactNormal.Y, 0.f);
+			if (FMath::Abs(Knee.ImpactNormal.Z) <= Config.MaxWallNormalZ && KneeNormal.Normalize())
+			{
+				if (FVector::DotProduct(KneeNormal, Direction) > 0.f)
+				{
+					KneeNormal = -KneeNormal;
+				}
+				const FVector KneeInside = Knee.ImpactPoint - KneeNormal * 10.f;
+				FHitResult KneeTop;
+				float KneeTopCm = 0.f;
+				if (CoverTrace(World, FVector(KneeInside.X, KneeInside.Y, GroundZ + 450.f), FVector(KneeInside.X, KneeInside.Y, GroundZ + 5.f), IgnoredActors, KneeTop))
+				{
+					KneeTopCm = KneeTop.ImpactPoint.Z - GroundZ;
+				}
+				if (KneeTopCm <= 0.f || ClassifyHeight(KneeTopCm, Config) != ECoverHeight::None)
+				{
+					Chest = Knee;
+					bSnappedToKnee = true;
+				}
+			}
 		}
 		FVector Normal = FVector(Chest.ImpactNormal.X, Chest.ImpactNormal.Y, 0.f);
 		if (FMath::Abs(Chest.ImpactNormal.Z) > Config.MaxWallNormalZ || !Normal.Normalize())
@@ -278,8 +306,8 @@ namespace CoverTraceRules
 			const FVector Along = Side == 0 ? -Right : Right;
 			auto WallAt = [&](float DistanceCm)
 			{
-				// A low cover is probed at knee height (at chest height its edges read as exposed right away).
-				const FVector ProbeStart = FVector(Chest.ImpactPoint.X, Chest.ImpactPoint.Y, GroundZ + (bChestHit ? Config.ChestHeightCm : Config.KneeHeightCm))
+				// A low cover or window sill (where chest trace passed through the opening) is probed at knee height.
+				const FVector ProbeStart = FVector(Chest.ImpactPoint.X, Chest.ImpactPoint.Y, GroundZ + ((bOriginalChestHit && !bSnappedToKnee) ? Config.ChestHeightCm : Config.KneeHeightCm))
 					+ Normal * 60.f + Along * DistanceCm;
 				FHitResult ProbeHit;
 				return CoverTrace(World, ProbeStart, ProbeStart - Normal * 140.f, IgnoredActors, ProbeHit)

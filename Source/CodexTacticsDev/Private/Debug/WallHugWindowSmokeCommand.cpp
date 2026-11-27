@@ -90,12 +90,15 @@ namespace WallHugWindowSmoke
 		bool bShimmyStarted = false;
 		float StandHeadZBefore = 0.f;
 		float MinHeadZWin1 = FLT_MAX;
+		float MaxHeadZWin1 = -FLT_MAX;
 		float MaxHeadZBetween = -FLT_MAX;
 		float MinHeadZWin2 = FLT_MAX;
+		float MaxHeadZWin2 = -FLT_MAX;
 		int32 PasShotsBefore = 0;
 		bool bSawEdgeCornerAim = false;
 		float EdgeTargetHpBefore = 0.f;
 		FVector EdgeTuckedHead = FVector::ZeroVector;
+		FVector EdgeMaxPeekHead = FVector::ZeroVector;
 		float EdgeMaxPeekReach = 0.f;
 		bool bEdgeReturnedPose = false;
 		float EdgeReturnWaitTime = -1.f;
@@ -404,31 +407,33 @@ namespace WallHugWindowSmoke
 			const FVector Here = Leader->GetActorLocation();
 			FVector Head, Pelvis, Hand;
 			SamplePose(*Leader, Head, Pelvis, Hand);
-			if (FVector::Dist2D(Here, State.Setup.SlotWin1.WorldLocation) <= 55.f && Leader->GetStance() == EOperativeStance::Crouching)
+			if (FVector::Dist2D(Here, State.Setup.SlotWin1.WorldLocation) <= 35.f && Leader->GetStance() == EOperativeStance::Crouching)
 			{
 				State.bCrouchedWin1 = true;
 				State.MinHeadZWin1 = FMath::Min(State.MinHeadZWin1, static_cast<float>(Head.Z));
+				State.MaxHeadZWin1 = FMath::Max(State.MaxHeadZWin1, static_cast<float>(Head.Z));
 			}
 			if (FVector::Dist2D(Here, State.Setup.SlotBetween.WorldLocation) <= 55.f && Leader->GetStance() == EOperativeStance::Standing)
 			{
 				State.bStoodBetween = true;
 				State.MaxHeadZBetween = FMath::Max(State.MaxHeadZBetween, static_cast<float>(Head.Z));
 			}
-			if (FVector::Dist2D(Here, State.Setup.SlotWin2.WorldLocation) <= 55.f && Leader->GetStance() == EOperativeStance::Crouching)
+			if (FVector::Dist2D(Here, State.Setup.SlotWin2.WorldLocation) <= 35.f && Leader->GetStance() == EOperativeStance::Crouching)
 			{
 				State.bCrouchedWin2 = true;
 				State.MinHeadZWin2 = FMath::Min(State.MinHeadZWin2, static_cast<float>(Head.Z));
+				State.MaxHeadZWin2 = FMath::Max(State.MaxHeadZWin2, static_cast<float>(Head.Z));
 			}
 			if (!Leader->bShimmying && State.StageTime > 0.5f)
 			{
-				Check(State, State.bCrouchedWin1 && State.MinHeadZWin1 <= State.StandHeadZBefore - 15.f,
-					FString::Printf(TEXT("crouched while shimmying under window 1 (head Z %.0f vs stand %.0f, sill %.0f)"),
-						State.MinHeadZWin1, State.StandHeadZBefore, State.Setup.Box1.Max.Z));
+				Check(State, State.bCrouchedWin1 && State.MaxHeadZWin1 <= State.Setup.Box1.Max.Z + 10.f && State.MaxHeadZWin1 <= State.StandHeadZBefore - 15.f,
+					FString::Printf(TEXT("crouched while shimmying under window 1 (max head Z %.0f <= sill %.0f + 10, stand %.0f)"),
+						State.MaxHeadZWin1, State.Setup.Box1.Max.Z, State.StandHeadZBefore));
 				Check(State, State.bStoodBetween && State.MaxHeadZBetween >= State.MinHeadZWin1 + 15.f,
 					FString::Printf(TEXT("stood up in solid wall gap between windows (head Z %.0f)"), State.MaxHeadZBetween));
-				Check(State, State.bCrouchedWin2 && State.MinHeadZWin2 <= State.MaxHeadZBetween - 15.f,
-					FString::Printf(TEXT("crouched while shimmying under window 2 (head Z %.0f, sill %.0f)"),
-						State.MinHeadZWin2, State.Setup.Box2.Max.Z));
+				Check(State, State.bCrouchedWin2 && State.MaxHeadZWin2 <= State.Setup.Box2.Max.Z + 10.f && State.MaxHeadZWin2 <= State.MaxHeadZBetween - 15.f,
+					FString::Printf(TEXT("crouched while shimmying under window 2 (max head Z %.0f <= sill %.0f + 10)"),
+						State.MaxHeadZWin2, State.Setup.Box2.Max.Z));
 				Check(State, Leader->GetStance() == EOperativeStance::Standing && Head.Z >= State.MinHeadZWin2 + 15.f,
 					FString::Printf(TEXT("stood back up after window 2 (head Z %.0f)"), Head.Z));
 
@@ -536,7 +541,12 @@ namespace WallHugWindowSmoke
 				State.bSawEdgeCornerAim = true;
 				FVector PeekHead, PeekPelvis, PeekHand;
 				SamplePose(*Leader, PeekHead, PeekPelvis, PeekHand);
-				State.EdgeMaxPeekReach = FMath::Max(State.EdgeMaxPeekReach, static_cast<float>(FVector::Dist2D(PeekHead, State.EdgeTuckedHead)));
+				const float Reach = static_cast<float>(FVector::Dist2D(PeekHead, State.EdgeTuckedHead));
+				if (Reach > State.EdgeMaxPeekReach)
+				{
+					State.EdgeMaxPeekReach = Reach;
+					State.EdgeMaxPeekHead = PeekHead;
+				}
 			}
 			if (State.bSawEdgeCornerAim && Target->HealthComponent->GetCurrentHealth() < State.EdgeTargetHpBefore - 1.f)
 			{
@@ -562,7 +572,7 @@ namespace WallHugWindowSmoke
 				{
 					State.EdgeReturnWaitTime = State.StageTime;
 				}
-				if (State.StageTime - State.EdgeReturnWaitTime < 0.4f)
+				if (State.StageTime - State.EdgeReturnWaitTime < 0.8f)
 				{
 					return true;
 				}
@@ -574,9 +584,10 @@ namespace WallHugWindowSmoke
 			FVector ReturnHead, ReturnPelvis, ReturnHand;
 			SamplePose(*Leader, ReturnHead, ReturnPelvis, ReturnHand);
 			const float ReturnDist = static_cast<float>(FVector::Dist2D(ReturnHead, State.EdgeTuckedHead));
-			Check(State, !Leader->IsCornerAimActive() && !Leader->bIsCornerLeaning && ReturnDist < FMath::Max(State.EdgeMaxPeekReach, 12.f),
-				FString::Printf(TEXT("calmly returns behind the solid wall when not firing (%.1f s, head offset %.1f cm vs peek %.1f cm)"),
-					State.StageTime, ReturnDist, State.EdgeMaxPeekReach));
+			const float RetractedFromPeek = static_cast<float>(FVector::Dist2D(ReturnHead, State.EdgeMaxPeekHead));
+			Check(State, !Leader->IsCornerAimActive() && !Leader->bIsCornerLeaning && RetractedFromPeek >= 5.f && ReturnDist < State.EdgeMaxPeekReach,
+				FString::Printf(TEXT("calmly returns behind the solid wall when not firing (%.1f s, retracted %.1f cm from peek, head offset %.1f cm vs peek %.1f cm)"),
+					State.StageTime, RetractedFromPeek, ReturnDist, State.EdgeMaxPeekReach));
 
 			// Step 6: Under-sill BlindFire at window 2 (keep manual BlindFire mode active; silent squadmate spots target outside).
 			Squad->SetAutonomousSquadCombat(false);
@@ -628,8 +639,9 @@ namespace WallHugWindowSmoke
 				State.bBlindPoseSampled = true;
 			}
 			const bool bStayedCrouched = Leader->GetStance() == EOperativeStance::Crouching && !Leader->IsCornerAimActive();
-			const bool bHeadHidden = State.bBlindPoseSampled && State.BlindMaxHeadZ <= State.StandHeadZBefore - 20.f;
-			const bool bWeaponRaised = State.bBlindPoseSampled && FMath::Max(State.BlindMaxHandZ, State.BlindMaxMuzzleZ) > State.BlindMaxHeadZ;
+			const bool bHeadHidden = State.bBlindPoseSampled && State.BlindMaxHeadZ <= State.Setup.Box2.Max.Z + 12.f && State.BlindMaxHeadZ <= State.StandHeadZBefore - 20.f;
+			const bool bWeaponRaised = State.bBlindPoseSampled && FMath::Max(State.BlindMaxHandZ, State.BlindMaxMuzzleZ) > State.Setup.Box2.Max.Z
+				&& FMath::Max(State.BlindMaxHandZ, State.BlindMaxMuzzleZ) > State.BlindMaxHeadZ;
 			const bool bOriginOverSill = Leader->GetCoverFireOrigin().Z > State.Setup.Box2.Max.Z;
 			if (Leader->GetCoverBlindShots() > State.BlindShotsBefore && Target->HealthComponent->GetCurrentHealth() < State.BlindHpBefore - 1.f)
 			{

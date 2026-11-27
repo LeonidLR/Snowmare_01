@@ -1095,7 +1095,14 @@ bool ACodexTacticsPlayerController::IsWindowHighlightShown() const
 bool ACodexTacticsPlayerController::UpdateWindowHover(AOperativeCharacter* Operative, const FHitResult* Hit)
 {
 	const bool bLegacySilhouette = WindowHoverLocal::CVarHoverStyle.GetValueOnGameThread() == 1;
-	AActor* Sill = Hit && Hit->bBlockingHit && Operative && !IsClickPreviewArmed() ? WindowBreakage::FindWindowSillAt(*GetWorld(), *Hit) : nullptr;
+	AActor* DummyWindowSill = nullptr;
+	FVector DummyWindowNormal;
+	bool bDummyWindowSlide = false;
+	const bool bWindowAsCoverHover = !GetActiveTurnBased() && Operative && Hit && Hit->bBlockingHit
+		&& ControllerWindowCover::ShouldTakeWindowClickAsCover(GetWorld(), GetSquad(), Operative, *Hit, IsSquadWideModifierDown(),
+			DummyWindowSill, DummyWindowNormal, bDummyWindowSlide);
+	AActor* Sill = Hit && Hit->bBlockingHit && Operative && !IsClickPreviewArmed() && !bWindowAsCoverHover
+		? WindowBreakage::FindWindowSillAt(*GetWorld(), *Hit) : nullptr;
 	FVector Feet;
 	float Yaw = 0.f;
 	const bool bWanted = Operative && Sill && !IsAttackModifierDown() && !GetActiveTurnBased()

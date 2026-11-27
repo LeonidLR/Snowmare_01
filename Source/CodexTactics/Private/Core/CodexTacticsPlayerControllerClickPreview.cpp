@@ -145,14 +145,15 @@ bool ACodexTacticsPlayerController::IsClickPreviewBypass(const FHitResult& Hit) 
 		return true;
 	}
 	// Designer 2026-11-22: a click on a ground-floor window (its face; the silhouette shows past it) is the window order, not a cover ghost.
-	// 144: when hugging that wall (in cover or wall-hug formation), keep the click on the wall-hug side as cover / shimmy / slide.
+	// 144: when hugging that wall (in cover or Alt+cover), keep the click on the wall-hug side as cover / shimmy; formation wall-slide bypasses preview to HandleWorldHit.
 	if (!GetActiveTurnBased())
 	{
 		AActor* Sill = nullptr;
 		FVector SideNormal;
 		bool bFormSlide = false;
 		if (WindowBreakage::FindWindowSillAt(*GetWorld(), Hit)
-			&& !ControllerWindowCover::ShouldTakeWindowClickAsCover(GetWorld(), Squad, Leader, Hit, IsSquadWideModifierDown(), Sill, SideNormal, bFormSlide))
+			&& (!ControllerWindowCover::ShouldTakeWindowClickAsCover(GetWorld(), Squad, Leader, Hit, IsSquadWideModifierDown(), Sill, SideNormal, bFormSlide)
+				|| bFormSlide))
 		{
 			return true;
 		}
@@ -195,6 +196,10 @@ bool ACodexTacticsPlayerController::ResolveClickCoverSlot(AOperativeCharacter& L
 	bool bWindowFormSlide = false;
 	const bool bWindowCover = !GetActiveTurnBased()
 		&& ControllerWindowCover::ShouldTakeWindowClickAsCover(GetWorld(), GetSquad(), &Leader, Hit, IsSquadWideModifierDown(), WindowSill, WindowSideNormal, bWindowFormSlide);
+	if (bWindowCover && bWindowFormSlide)
+	{
+		return false;
+	}
 	FCoverSlot SideSlot;
 	EWallClickSide WallSide = EWallClickSide::None;
 	const bool bSideSlot = !bVehicle && !bWindowCover && ResolveWallSideSlot(Hit, SideSlot, WallSide);
