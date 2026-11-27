@@ -31,3 +31,6 @@ One local fallback attempt with worker-built DLLs failed during startup, before 
 Extended full command: `CodexTactics.UnderFireManoeuvreSmoke`; part D places a PMC beyond the low wall at an oblique angle outside a deliberately narrowed pose arc and samples uninterrupted player cover for >=5 seconds, including direct requests through the final escape gate. Part E moves the enemy onto the open side after cooldown to test player intent independently of wall protection.
 
 Impact-map validation and TypeSafe protected-path audit pass. Exact designer play-copy geometry and interactive visual playtest are not reproduced; no claim about animation polish or RPG choice.
+
+
+Lead acceptance addendum: sample real feet throughout the >=5 s hold against the frozen resolved arrival slot. Require max XY distance <=120 cm and positive wall-side depth, in addition to all existing D/E assertions. This extra smoke assertion is pending the Lead merge gate; no new runtime changes.

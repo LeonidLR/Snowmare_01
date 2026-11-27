@@ -64,6 +64,8 @@ namespace UnderFireManoeuvreSmoke
 		bool bMateInLineAtStart[3] = { false, false, false };
 		float NextShot = 0.f;
 		float CoverHeldSeconds = 0.f;
+		float MaxHeldSlotDistanceCm = 0.f;
+		float MinHeldWallSideCm = FLT_MAX;
 		bool bCoverBroke = false;
 		FCoverSlot HoldSlot;
 	};
@@ -510,6 +512,15 @@ namespace UnderFireManoeuvreSmoke
 			State.bCoverBroke |= !Leader->bInCover;
 			if (Leader->bInCover)
 			{
+				if (State.CoverHeldSeconds == 0.f)
+				{
+					State.HoldSlot = Leader->GetCoverSlot(); // freeze the resolved arrival slot, not a moving reference
+				}
+				const FVector Feet = Leader->GetActorLocation() - FVector(0.f, 0.f, Leader->GetSimpleCollisionHalfHeight());
+				State.MaxHeldSlotDistanceCm = FMath::Max(State.MaxHeldSlotDistanceCm,
+					static_cast<float>(FVector::Dist2D(Feet, State.HoldSlot.WorldLocation)));
+				State.MinHeldWallSideCm = FMath::Min(State.MinHeldWallSideCm,
+					static_cast<float>(FVector::DotProduct(Feet - State.HoldSlot.WallPoint, State.HoldSlot.WallNormal.GetSafeNormal2D())));
 				// Exercise the common escape gate too (the animation fire gate can request this independently of the pose rule).
 				State.bCoverBroke |= Leader->BeginOpenShotFromCover(Enemy);
 				State.bCoverBroke |= Leader->DecideCoverFireAtPoint(Enemy->GetActorLocation(), true) == CoverFacingRules::ECoverFireAt::StepOut;
@@ -517,6 +528,9 @@ namespace UnderFireManoeuvreSmoke
 			State.CoverHeldSeconds += StepSeconds;
 			if (State.CoverHeldSeconds < 5.1f) { return true; }
 			Check(State, !State.bCoverBroke && Leader->bInCover, TEXT("D: player cover held continuously >= 5 s against oblique enemy; no open-shot escape"));
+			Check(State, State.MaxHeldSlotDistanceCm <= 120.f && State.MinHeldWallSideCm > 0.f,
+				FString::Printf(TEXT("D: real feet stayed at resolved cover >=5 s (max XY drift %.1f cm <=120, min protecting-side depth %.1f cm >0)"),
+					State.MaxHeldSlotDistanceCm, State.MinHeldWallSideCm));
 			// Beyond the cooldown, test player intent independently of the protecting-line guard.
 			Check(State, !Leader->bShimmying, TEXT("E: settled before testing the player-intent escape guard"));
 			const FCoverSlot Current = Leader->GetCoverSlot();
