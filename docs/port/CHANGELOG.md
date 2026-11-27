@@ -12,6 +12,8 @@ Last update: 2026-09-29 by Claude, after commit `2ca14b0`.
 
 ## 10. Change log (newest first)
 
+- 2026-11-27 (Codex149b): canonical damage_dealt with legacy reading; gate config hash/freeze identity and effective resume validation; full-round probe/freeze baseline campaign and 16:30 queue-only night window. Python142 PASS; G1/G2 live BLOCKED, baseline scheduled not claimed. No C++/assets/champion changes. See `codex/outbox/149b-trainer-metrics.report.md`.
+
 | Commit | What |
 |---|---|
 | `codex/149-demos-to-trainer` | **docs(trainer), 2026-11-27, 149 finish:** package saved six-round A/A proof, final dataset/scoring report and offline metric diagnostics; explicitly document G2 dead signals, damage-field mismatch and missing G3 freeze baseline. Tooling merge-ready; full nights still gated. Prior demo43/trainer134 checks retained, no engine/test reruns. |

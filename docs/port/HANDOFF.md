@@ -1,5 +1,7 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**149b BLOCKER (2026-11-27, codex/149b-trainer-metrics).** Damage canonicalization + config/freeze-bound gates tested (Python142 PASS); real sector probe12 + auxiliary full-map tactical2, no crashes. Heals/concealed damage/unobserved strikes/objective capture live; ambush success and completed flanks remain unproved. Explicit X6 smokes3 PASS/4 FAIL; live G1/G2 blocked. G3 baseline task Ready for 16:30 today, pinned worker lane/code77f2e9f5, >=30 actual healthy rounds/scenario, stop07:45/cutoff07:50. Sector tactical/chokepoint placement gaps remain. No champion. Report: `docs/port/codex/outbox/149b-trainer-metrics.report.md`.
+
 **149 demos -> weekend trainer (2026-11-27, codex/149-demos-to-trainer).** MERGE-READY tooling: 17 real recordings -> 65 fights/legacy sessions, 48 completed (29 W / 13 L / 6 D), opt-in bounded PMC doctrine proxies, dedicated 204-pair/arm weekend preparation. Prior checks: demo43/trainer134 PASS; real A/A calibration 3 pairs/6 rounds, zero crashes, both weight files loaded. **Full nights remain G2/G3-blocked:** reward/descriptor zeros and a damage-field mismatch; no freeze baseline. Retreat survival and suppress-then-move are observed/varying; captures have coverage but zero positive examples. Report and frozen trial/metric proof: `docs/port/codex/outbox/149-demos-to-trainer.report.md`. Lead owns merge, gate/config/freeze validation and scheduling; no champion applied or long run started. Passed runs were not repeated on resume.
 
 
