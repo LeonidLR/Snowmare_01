@@ -17,6 +17,7 @@
 #include "Interactables/WindowOrderRules.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Tactics/CoverFacingRules.h"
+#include "Tactics/CoverRules.h"
 #include "Tactics/WindowCoverRules.h"
 
 namespace
