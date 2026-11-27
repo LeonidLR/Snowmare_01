@@ -1,4 +1,5 @@
 #include "Tactics/CoverLookAoRules.h"
+#include "Tactics/CoverFacingRules.h"
 
 namespace CoverLookAoRules
 {
@@ -40,5 +41,20 @@ namespace CoverLookAoRules
 	bool WantsPose(bool bInCornerPeek, bool bHasLook)
 	{
 		return bInCornerPeek && bHasLook;
+	}
+
+	bool IsWithinCornerAoReach(const FCoverSlot& Slot, ECoverFacing LookFacing, const FVector& LookDirection,
+		float OutwardDeg, float MaxAoOffDeg, float* OutOffDeg)
+	{
+		const FVector Look2D = LookDirection.GetSafeNormal2D();
+		const FVector Base = CoverFacingRules::CornerAimDirection(Slot, LookFacing, OutwardDeg);
+		if (Look2D.IsNearlyZero() || Base.IsNearlyZero())
+		{
+			if (OutOffDeg) { *OutOffDeg = 0.f; }
+			return true;
+		}
+		const float OffDeg = FMath::Abs(FRotator::NormalizeAxis(Look2D.Rotation().Yaw - Base.Rotation().Yaw));
+		if (OutOffDeg) { *OutOffDeg = OffDeg; }
+		return OffDeg <= FMath::Max(MaxAoOffDeg, 0.f);
 	}
 }

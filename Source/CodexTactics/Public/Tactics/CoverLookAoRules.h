@@ -31,4 +31,11 @@ namespace CoverLookAoRules
 
 	/** The CoverIndoor pose is on only while he is in the corner peek and a look is held. */
 	CODEXTACTICS_API bool WantsPose(bool bInCornerPeek, bool bHasLook);
+
+	/**
+	 * Unsigned yaw delta (degrees) between LookDirection and CornerAimDirection(Slot, LookFacing, OutwardDeg).
+	 * Returns true when that delta <= MaxAoOffDeg (in cover AO can reach the look; otherwise step out / turn body).
+	 */
+	CODEXTACTICS_API bool IsWithinCornerAoReach(const FCoverSlot& Slot, ECoverFacing LookFacing, const FVector& LookDirection,
+		float OutwardDeg, float MaxAoOffDeg, float* OutOffDeg = nullptr);
 }
