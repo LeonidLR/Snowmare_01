@@ -509,8 +509,9 @@ void AOperativeCharacter::RefreshWindowCover(bool bForce)
 			CollectedSpans.Add(WindowCoverRules::CrouchSpanForOpening(SpanMin, SpanMax, WindowCoverRules::ShimmyCrouchMarginCm,
 				SillAboveFeet, TopAboveFeet));
 			// Only windows outside the operative's own interval (not past a real wall end) act as corner frame edges.
-			const bool bOutside = (HereMin > 0.f && (!CoverSlot.bRightEdgeExposed || HereMin < CoverSlot.RightEdgeDistanceCm))
-				|| (HereMax < 0.f && (!CoverSlot.bLeftEdgeExposed || -HereMax < CoverSlot.LeftEdgeDistanceCm));
+			const float Tol = WindowCoverRules::WindowFrameEdgeToleranceCm;
+			const bool bOutside = (HereMin >= -Tol && HereMax > Tol && (!CoverSlot.bRightEdgeExposed || HereMin < CoverSlot.RightEdgeDistanceCm))
+				|| (HereMax <= Tol && HereMin < -Tol && (!CoverSlot.bLeftEdgeExposed || -HereMax < CoverSlot.LeftEdgeDistanceCm));
 			if (bOutside && FVector::Dist2D(Center, Here) <= WindowBreakage::ThroughLandingCm + EdgeReachCm)
 			{
 				WindowCoverRules::FWindowEdgeOpening EdgeOp;

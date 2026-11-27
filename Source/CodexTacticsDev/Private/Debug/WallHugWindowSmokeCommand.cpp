@@ -420,7 +420,7 @@ namespace WallHugWindowSmoke
 				Squad->SetAutonomousSquadCombat(true);
 				Squad->SetSquadPosture(ESquadFirePosture::Passive);
 				Leader->bTacticalCeaseFire = false;
-				State.PasShotsBefore = Leader->RoundsSpent;
+				State.PasShotsBefore = Leader->GetRoundsSpent();
 				Pmc->RefreshSight();
 				Next(State, EStage::FireModePas);
 			}
@@ -439,13 +439,13 @@ namespace WallHugWindowSmoke
 			}
 			if (Squad->GetSquadPosture() == ESquadFirePosture::Passive)
 			{
-				Check(State, Leader->RoundsSpent == State.PasShotsBefore, TEXT("PAS mode holds fire under window"));
+				Check(State, Leader->GetRoundsSpent() == State.PasShotsBefore, TEXT("PAS mode holds fire under window"));
 				Squad->SetSquadPosture(ESquadFirePosture::Defensive);
 				State.StageTime = 0.f;
-				State.PasShotsBefore = Leader->RoundsSpent;
+				State.PasShotsBefore = Leader->GetRoundsSpent();
 				return true;
 			}
-			Check(State, Leader->RoundsSpent == State.PasShotsBefore, TEXT("unprovoked DEF mode holds fire against unaware target"));
+			Check(State, Leader->GetRoundsSpent() == State.PasShotsBefore, TEXT("unprovoked DEF mode holds fire against unaware target"));
 			Squad->SetSquadPosture(ESquadFirePosture::Aggressive);
 			Pmc->RefreshSight();
 			Next(State, EStage::FireModeAgg);
@@ -470,7 +470,6 @@ namespace WallHugWindowSmoke
 				State.EdgeTargetHpBefore = PmcStartHp;
 				EnterSlot(*Leader, State.Setup.SlotFrameEdge1);
 				Leader->SetCoverFireMode(ECoverFireMode::CornerLean);
-				Leader->UpdateCoverFacing(false);
 				Check(State, Leader->GetStance() == EOperativeStance::Standing && !Leader->IsWindowCoverConfirmed()
 					&& Leader->HasAnyExposedCoverEdge() && Leader->bAtCoverCorner,
 					TEXT("standing beside window frame exposes window edge corner"));
