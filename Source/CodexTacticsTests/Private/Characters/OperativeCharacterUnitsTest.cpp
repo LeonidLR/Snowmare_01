@@ -80,4 +80,77 @@ bool FOperativeUnitsWorldFreeTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOperativeOrderGaitTest, "CodexTactics.Characters.OperativeUnits.OrderSprintSurvivesTraversal",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FOperativeOrderGaitTest::RunTest(const FString&)
+{
+	AOperativeCharacter* Op = NewObject<AOperativeCharacter>();
+	const FVector Goal(1000.f, 0.f, 0.f);
+	// World-free: OrderMoveTo records the real gait, while no controller can start a path.
+	Op->OrderMoveTo(Goal, true);
+	TestTrue(TEXT("run intent recorded"), Op->bOrderSprint);
+	Op->bHasMoveOrder = true; // stand in for a successful path request
+	Op->RefreshOrderSprint();
+	TestTrue(TEXT("run order starts sprinting"), Op->IsSprinting());
+	Op->HandleMoveFinished(); // window / mantle ends the path, not the order
+	TestFalse(TEXT("path completion stops current sprint"), Op->IsSprinting());
+	TestTrue(TEXT("path completion retains run intent"), Op->bOrderSprint);
+	Op->RefreshOrderSprint();
+	TestFalse(TEXT("arrival never starts an idle sprint"), Op->IsSprinting());
+	Op->PauseMoveForTraversal(); // ladder / queued ladder / ledge drop
+	TestTrue(TEXT("traversal pause retains run intent"), Op->bOrderSprint);
+	Op->bHasMoveOrder = true;
+	Op->RefreshOrderSprint();
+	TestTrue(TEXT("resumed path runs without another run order"), Op->IsSprinting());
+	TestEqual(TEXT("resumed speed is sprint speed"), Op->GetCharacterMovement()->MaxWalkSpeed, Op->GetMaxSpeed());
+
+	Op->SetCarrying(true);
+	Op->RefreshOrderSprint();
+	TestFalse(TEXT("carrying suspends running"), Op->IsSprinting());
+	Op->SetCarrying(false);
+	Op->RefreshOrderSprint();
+	TestTrue(TEXT("running resumes after carrying"), Op->IsSprinting());
+	Op->bWounded = true;
+	Op->RefreshOrderSprint();
+	TestFalse(TEXT("wound suspends running"), Op->IsSprinting());
+	Op->bWounded = false;
+	Op->ColdLevel = 100.f;
+	Op->RefreshOrderSprint();
+	TestFalse(TEXT("cold suspends running"), Op->IsSprinting());
+	Op->ColdLevel = 0.f;
+	Op->RefreshOrderSprint();
+	TestTrue(TEXT("running resumes after wound and cold"), Op->IsSprinting());
+	Op->Stance = EOperativeStance::Prone;
+	Op->RefreshOrderSprint();
+	TestFalse(TEXT("prone suspends running"), Op->IsSprinting());
+	Op->Stance = EOperativeStance::Standing;
+	Op->bStealthMode = true;
+	Op->RefreshOrderSprint();
+	TestFalse(TEXT("stealth suspends running"), Op->IsSprinting());
+	Op->bStealthMode = false;
+	Op->RefreshOrderSprint();
+	TestTrue(TEXT("running resumes when stance and stealth allow it"), Op->IsSprinting());
+
+	Op->OrderMoveTo(Goal, false);
+	TestFalse(TEXT("new walk order replaces run intent"), Op->bOrderSprint);
+	Op->PauseMoveForTraversal();
+	Op->bHasMoveOrder = true;
+	Op->RefreshOrderSprint();
+	TestFalse(TEXT("walk order stays walking after traversal"), Op->IsSprinting());
+	Op->OrderMoveTo(Goal, true);
+	Op->StopOperative();
+	TestFalse(TEXT("explicit stop clears run intent"), Op->bOrderSprint);
+	Op->bHasMoveOrder = true;
+	Op->RefreshOrderSprint();
+	TestFalse(TEXT("stopped run cannot leak to another path"), Op->IsSprinting());
+	Op->OrderMoveTo(Goal, true);
+	Op->RequestMove(Goal, true);
+	TestFalse(TEXT("formation path replaces own gait intent"), Op->bOrderSprint);
+	Op->SetSprinting(false);
+	Op->RefreshOrderSprint();
+	TestFalse(TEXT("follower remains under formation gait control"), Op->IsSprinting());
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

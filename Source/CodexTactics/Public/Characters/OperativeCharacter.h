@@ -280,6 +280,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Operative")
 	void StopOperative();
 
+	/** Ends only the current path while a traversal retains the order and its gait. */
+	void PauseMoveForTraversal();
+
 	/** Stops, drops the sprint and turns to face Location (public since 2026-11-04: the order catalog's Hold faces a remembered threat). */
 	void StopAndFace(const FVector& Location);
 
@@ -3442,6 +3445,10 @@ private:
 	EOperativeStance Stance = EOperativeStance::Standing;
 	float ColdSpeedMultiplier = 1.f;
 	bool bSprinting = false;
+	/** Requested gait survives path completion / traversal; only applied while an own path is active. */
+	bool bOrderSprint = false;
+	void RefreshOrderSprint();
+	friend class FOperativeOrderGaitTest;
 	bool bHasMoveOrder = false;
 	/** The running move is an order of his own (OrderMoveTo), not a formation move (HasOwnMoveOrder). */
 	bool bOwnMoveOrder = false;

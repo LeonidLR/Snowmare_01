@@ -331,7 +331,7 @@ void ULedgeFallComponent::CancelWait()
 	EnterState(ELedgeFallState::None);
 }
 
-void ULedgeFallComponent::StopOwnerMove()
+void ULedgeFallComponent::StopOwnerMove(bool bPreserveOrderGait)
 {
 	ACharacter* Character = GetCharacter();
 	if (!Character)
@@ -342,7 +342,14 @@ void ULedgeFallComponent::StopOwnerMove()
 	const bool bKeep = bHasPendingDestination;
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Character))
 	{
-		Operative->StopOperative();
+		if (bPreserveOrderGait)
+		{
+			Operative->PauseMoveForTraversal();
+		}
+		else
+		{
+			Operative->StopOperative();
+		}
 	}
 	else if (AController* Controller = Character->GetController())
 	{
@@ -398,7 +405,7 @@ void ULedgeFallComponent::StartDrop()
 		// He waits at the link: another man's drop lands there now (one at a time), or he stands up first.
 		if (State != ELedgeFallState::Waiting)
 		{
-			StopOwnerMove();
+			StopOwnerMove(true);
 			EnterState(ELedgeFallState::Waiting);
 			UE_LOG(LogCodexTactics, Display, TEXT("[Fall] %s waits at drop link %d (%s)"), *GetNameSafe(Character), Index, bMustStand ? TEXT("stands up first") : TEXT("the landing is taken"));
 		}
@@ -411,7 +418,7 @@ void ULedgeFallComponent::StartDrop()
 	}
 
 	// Take the body over: the path ends here (it resumes at the landing); the run-up off the edge.
-	StopOwnerMove();
+	StopOwnerMove(true);
 	UCharacterMovementComponent* Movement = Character->GetCharacterMovement();
 	if (!bMovementSaved)
 	{

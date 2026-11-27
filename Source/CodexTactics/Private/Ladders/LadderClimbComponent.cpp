@@ -648,7 +648,7 @@ void ULadderClimbComponent::StartEntry()
 			{
 				const FVector Keep = PendingDestination;
 				const bool bKeep = bHasPendingDestination;
-				Operative->StopOperative();
+				Operative->PauseMoveForTraversal();
 				PendingDestination = Keep;
 				bHasPendingDestination = bKeep;
 			}
@@ -693,7 +693,7 @@ void ULadderClimbComponent::StartEntry()
 		const bool bKeep = bHasPendingDestination;
 		if (Operative)
 		{
-			Operative->StopOperative();
+			Operative->PauseMoveForTraversal();
 		}
 		else if (Character->GetController())
 		{

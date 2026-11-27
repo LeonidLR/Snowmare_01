@@ -196,7 +196,7 @@ private:
 	/** Gives the character movement back its own values (the walk-off flag, his speeds). */
 	void RestoreMovement();
 	/** Stops his path / AI move (an operative keeps his order's destination as the pending one). */
-	void StopOwnerMove();
+	void StopOwnerMove(bool bPreserveOrderGait = false);
 	void ResumePath();
 	void Refuse(const FString& Line);
 
