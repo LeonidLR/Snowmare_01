@@ -1,5 +1,7 @@
 #include "Telemetry/SessionRecordingSubsystem.h"
 #include "Training/TrainingSectorSubsystem.h"
+#include "UI/FloatingTextSubsystem.h"
+#include "EngineUtils.h"
 
 #include "AI/PmcSquadSubsystem.h"
 #include "Characters/EnemyCharacter.h"
@@ -29,7 +31,7 @@
 namespace SessionRecordingRuntime
 {
 	TAutoConsoleVariable<int32> CVarRecord(TEXT("Codex.Demo.Record"), 1, TEXT("0: off; 1: human game worlds; 2: force for manual checks."));
-	FAutoConsoleCommandWithWorldAndArgs MarkCommand(TEXT("Codex.Demo.Mark"), TEXT("Set the current recording mark."),
+	FAutoConsoleCommandWithWorldAndArgs MarkCommand(TEXT("Codex.Demo.Mark"), TEXT("Mark a round: <value> [prev | round <index>]."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(World))
@@ -247,6 +249,52 @@ void USessionRecordingSubsystem::Stamp(FDemoFrame& Frame) const
 {
 	Frame.Time = FMath::Max(0., GetWorld()->GetTimeSeconds() - GameStart);
 	Frame.RealTime = FMath::Max(0., FPlatformTime::Seconds() - RealStart);
+}
+
+void USessionRecordingSubsystem::MarkSession(const FString& Command)
+{
+ TArray<FString> Args;
+ Command.ParseIntoArrayWS(Args);
+ if (Args.IsEmpty() || !GetWorld()) { return; }
+ bool bPrevious = false;
+ int32 Explicit = INDEX_NONE;
+ if (Args.Num() == 2 && Args[1] == TEXT("prev")) { bPrevious = true; }
+ else if (Args.Num() == 3 && Args[1] == TEXT("round") && Args[2].IsNumeric())
+ { Explicit = FCString::Atoi(*Args[2]); if (Explicit < 0) { return; } }
+ else if (Args.Num() != 1) { return; }
+ const double Now = GetWorld()->GetTimeSeconds() - GameStart;
+ double Started = 0.;
+ for (const FDemoRoundEvent& Round : Session.Rounds)
+ { if (Round.bStart && !Round.bPmcRelocated) { Started = Round.Time; } }
+ bool bContact = false;
+ for (const FDemoEvent& Event : Session.Events)
+ { if (Event.Time >= Started && (Event.Type == FDemoEvent::EType::ShotHit || Event.Type == FDemoEvent::EType::Damage)) { bContact = true; } }
+ for (const FDemoFrame& Frame : Session.Frames)
+ {
+  if (Frame.Time < Started) { continue; }
+  if (Frame.NumThreats > 0) { bContact = true; }
+  for (int32 I = Frame.FirstOp; I < Frame.FirstOp + Frame.NumOps; ++I)
+  { if (Session.Ops[I].SeenByEnemy > 0) { bContact = true; } }
+ }
+ if (const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(GetWorld()))
+ { bContact |= Pmc->GetLatestContactActivityTime() > GameStart + Started; }
+ for (TActorIterator<AOperativeCharacter> It(GetWorld()); It; ++It)
+ { bContact |= It->GetLastShotTime() > GameStart + Started; }
+ const int32 Round = SessionRecordingRules::ChooseMarkRound(Session, Now, bContact, bPrevious, Explicit);
+ if (Round == INDEX_NONE) { return; }
+ Session.Mark = Args[0];
+ FDemoEvent& Event = Session.Events.AddDefaulted_GetRef();
+ Event.Type = FDemoEvent::EType::RoundMark;
+ Event.Time = Now;
+ Event.RealTime = FPlatformTime::Seconds() - RealStart;
+ Event.Round = Round;
+ Event.Value = Args[0];
+ if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+ {
+  UFloatingTextSubsystem::SpawnAboveOperative(Squad->GetLeader(),
+   FString::Printf(TEXT("Раунд %d помечен: %s"), Round, *Args[0]), FLinearColor::White);
+ }
+ UE_LOG(LogCodexTactics, Display, TEXT("[DemoRecord] round %d marked: %s"), Round, *Args[0]);
 }
 
 void USessionRecordingSubsystem::RecordSectorRound(const FDemoRoundEvent& Event)

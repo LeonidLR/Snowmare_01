@@ -9,6 +9,8 @@ under_fire / scan_pitch fields.
 
 from __future__ import annotations
 
+from demo_marks import round_marks
+
 import argparse
 from dataclasses import dataclass, field
 import json
@@ -66,6 +68,7 @@ class TaggerReport:
     duration_s: float
     tactics: List[DetectedTactic] = field(default_factory=list)
     kills: List[KillRecord] = field(default_factory=list)
+    round_marks: Dict[str, str] = field(default_factory=dict)
     unwatched_flank_seconds: float = 0.0
     scan_pitch_min: float = 0.0
     scan_pitch_max: float = 0.0
@@ -125,6 +128,7 @@ def analyze_records(records: List[Dict[str, Any]]) -> TaggerReport:
     footer = next((r for r in reversed(records) if r.get("type") == "footer"), {})
     result = TaggerReport(str(header.get("session", "")), str(header.get("map", "")),
                           float(footer.get("duration_s", 0)))
+    result.round_marks = round_marks(records)
     ordered = sorted((r for r in records if r.get("type") not in ("header", "footer")),
                      key=lambda r: (float(r.get("t", 0)),
                          -1 if r.get("type") == "round_start" else 1 if r.get("type") == "round_end" else 0))
@@ -339,6 +343,7 @@ def format_report(report: TaggerReport) -> str:
              if any(t.tag == "scan_pitch_range" for t in report.tactics) else "unknown (not recorded)")
     lines = [
         f"Session: {report.session} | Map: {report.map_name} | Duration: {report.duration_s:.1f}s",
+        "Round marks: " + ", ".join(f"{rid}: {mark or '—'}" for rid, mark in report.round_marks.items()),
         f"Unwatched flank max: {report.unwatched_flank_seconds:.1f}s | Scan pitch range: {pitch}",
         "",
         "TACTICS DETECTED:",
@@ -374,6 +379,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "session": report.session,
             "map": report.map_name,
             "duration_s": report.duration_s,
+            "round_marks": report.round_marks,
             "unwatched_flank_seconds": report.unwatched_flank_seconds,
             "scan_pitch_range": report.scan_pitch_range if any(t.tag == "scan_pitch_range" for t in report.tactics) else None,
             "tactics": [vars(t) for t in report.tactics],

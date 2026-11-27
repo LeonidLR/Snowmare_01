@@ -20,6 +20,37 @@
 
 using namespace SessionRecordingRules;
 
+DEMO_TEST(RoundMarks)
+bool FDemoRoundMarksTest::RunTest(const FString& Parameters)
+{
+ FDemoSession Session;
+ TestEqual(TEXT("No round"), ChooseMarkRound(Session, 0., false), INDEX_NONE);
+ FDemoRoundEvent Round;
+ Round.Round = 1;
+ Session.Rounds.Add(Round);
+ TestEqual(TEXT("First round has no implicit predecessor"), ChooseMarkRound(Session, 1., false), 1);
+ TestEqual(TEXT("Explicit prev needs predecessor"), ChooseMarkRound(Session, 1., false, true), INDEX_NONE);
+ Round.bStart = false; Round.Time = 90.; Session.Rounds.Add(Round);
+ TestEqual(TEXT("Between rounds"), ChooseMarkRound(Session, 95., true), 1);
+ TestEqual(TEXT("Prev during intermission means completed round"), ChooseMarkRound(Session, 95., true, true), 1);
+ Round.bStart = true; Round.Round = 3; Round.Time = 100.; Session.Rounds.Add(Round);
+ TestEqual(TEXT("Quiet new round"), ChooseMarkRound(Session, 129.99, false), 1);
+ TestEqual(TEXT("Thirty seconds"), ChooseMarkRound(Session, 130., false), 3);
+ TestEqual(TEXT("Contact selects current"), ChooseMarkRound(Session, 101., true), 3);
+ TestEqual(TEXT("Prev overrides contact"), ChooseMarkRound(Session, 140., true, true), 1);
+ TestEqual(TEXT("Explicit current overrides grace"), ChooseMarkRound(Session, 101., false, false, 3), 3);
+ TestEqual(TEXT("Explicit old round"), ChooseMarkRound(Session, 140., true, false, 1), 1);
+ TestEqual(TEXT("Unknown round rejected"), ChooseMarkRound(Session, 140., true, false, 2), INDEX_NONE);
+ FDemoEvent Mark;
+ Mark.Type = FDemoEvent::EType::RoundMark; Mark.Round = 1; Mark.Time = 105.; Mark.RealTime = 110.; Mark.Value = TEXT("good");
+ Session.Events.Add(Mark); Session.Mark = Mark.Value;
+ const FString Text = SerializeSession(Session, TEXT("test"));
+ TestTrue(TEXT("Mark event serialized"), Text.Contains(TEXT("\"type\":\"round_mark\"")));
+ TestTrue(TEXT("Mark value serialized"), Text.Contains(TEXT("\"value\":\"good\"")));
+ TestTrue(TEXT("Legacy footer preserved"), Text.Contains(TEXT("\"mark\":\"good\"")));
+ return true;
+}
+
 DEMO_TEST(Gate)
 bool FDemoGateTest::RunTest(const FString& Parameters)
 {

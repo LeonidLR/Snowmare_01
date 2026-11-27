@@ -111,10 +111,12 @@ struct FDemoOp
 
 struct FDemoEvent
 {
-	enum class EType : uint8 { ShotHit, Damage, Kill, Down, Stealth, Cover, Climb };
+	enum class EType : uint8 { ShotHit, Damage, Kill, Down, Stealth, Cover, Climb, RoundMark };
 	EType Type = EType::ShotHit;
 	double Time = 0.;
 	double RealTime = 0.;
+	int32 Round = 0;
+	FString Value;
 	FName Who;
 	FName Whom;
 	FName Weapon;
@@ -197,6 +199,8 @@ namespace SessionRecordingRules
 	inline constexpr double FlankDeg = 45.;
 	inline constexpr double MaxSessionSec = 14400.;
 
+	// INDEX_NONE means no recorded round can be marked. Explicit round must exist.
+	CODEXTACTICS_API int32 ChooseMarkRound(const FDemoSession& Session, double Now, bool bContact, bool bPrevious = false, int32 ExplicitRound = INDEX_NONE);
 	CODEXTACTICS_API const TCHAR* OffReason(const FDemoGate& Gate);
 	CODEXTACTICS_API bool ShouldRecord(const FDemoGate& Gate);
 	CODEXTACTICS_API bool ShouldDiscard(double Duration, int32 Accepted, bool bSuppressed);

@@ -19,7 +19,20 @@ export function parseReplay(text: string): Replay {
     .sort((a, b) => a.t! - b.t! || (a.type === 'round_start' ? -1 : a.type === 'round_end' ? 1 : 0) - (b.type === 'round_start' ? -1 : b.type === 'round_end' ? 1 : 0));
   // Footer duration can be wall time (legacy), so playback follows game time.
   const duration = Math.max(0, ...timed.map(r => r.t!));
-  return { header, footer, rows: timed, frames: timed.filter(r => Array.isArray(r.ops)), events: timed.filter(r => r.type !== 'snap'), duration, warnings };
+  // Display a late mark on its target fight; preserve its actual call time separately.
+  const marks = timed.filter(r => r.type === 'round_mark');
+  const events = timed.filter(r => r.type !== 'snap' && r.type !== 'round_mark');
+  for (const start of timed.filter(r => r.type === 'round_start')) {
+    const own = marks.filter(m => m.round === start.round);
+    if (own.length) {
+      for (const mark of own) events.push({ ...mark, recorded_t: mark.t, t: start.t });
+    } else if (!marks.length && footer.mark) {
+      events.push({ type: 'round_mark', t: start.t, round: start.round, value: footer.mark });
+    }
+  }
+  if (!timed.some(r => r.type === 'round_start')) events.push(...marks);
+  events.sort((a, b) => a.t! - b.t!);
+  return { header, footer, rows: timed, frames: timed.filter(r => Array.isArray(r.ops)), events, duration, warnings };
 }
 export function roundAt(replay: Replay, t: number): RecordRow | undefined {
   return replay.rows.filter(r => r.type === 'round_start' && r.t! <= t).at(-1);

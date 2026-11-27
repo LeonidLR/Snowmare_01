@@ -13,6 +13,7 @@ import hashlib
 import json
 from pathlib import Path
 
+from demo_marks import round_marks
 import demo_notes
 from demo_tactics import analyze_records, load_jsonl
 
@@ -76,6 +77,7 @@ def recording(path, map_paths=None, notes_directory=None):
             decoded = demo_notes.decode(notes, demo_notes.load_map(map_path), demo_notes.load_json(index_path))
         else:
             notes_error = 'No explicit map/index supplied; raw intent retained, geometry unknown'
+    marks = round_marks(records)
     rows, assigned_notes = [], set()
     for i, (h, end, segment, t0, t1, rid) in enumerate(fights(records)):
         report = analyze_records([h, *segment, {'type': 'footer', 'duration_s': t1 - t0}])
@@ -90,6 +92,7 @@ def recording(path, map_paths=None, notes_directory=None):
                                     'decoded': next((d for d in (decoded or {}).get('annotations', []) if d['id'] == a['id']), None)})
         flags = h.get('flags', {})
         rows.append({'id': f'{path.stem}:{i + 1}', 'recording': path.name, 'round': rid,
+                     'mark': marks.get(rid, ''),
                      'map': h.get('map'), 'sector': next((r.get('sector_id') for r in segment if 'sector_id' in r), h.get('sector_id')),
                      'seed': next((r.get('seed') for r in segment if 'seed' in r), None),
                      'start_s': t0, 'end_s': t1, 'duration_s': float(end.get('duration_s', t1 - t0)),

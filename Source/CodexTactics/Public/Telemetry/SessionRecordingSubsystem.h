@@ -34,7 +34,7 @@ public:
 	void RecordStealth(const AOperativeCharacter* Op, bool bEnabled);
 	void RecordCover(const AOperativeCharacter* Op, bool bEntered, FName HeightName);
 	void RecordClimb(const AActor* Op, FName Kind, float HeightCm);
-	void MarkSession(const FString& Mark) { Session.Mark = Mark; }
+	void MarkSession(const FString& Command);
 
 #if WITH_DEV_AUTOMATION_TESTS
 	void StartForTest(const FString& Directory);

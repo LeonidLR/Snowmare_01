@@ -191,13 +191,19 @@ const clearLaunch = {
 
 test('Main/Play launch uses only canonical project and cwd; selection stays on TG root', async (t) => {
   const { root, play, put } = buildFixture(t);
+  const levelName = 'Content/Data/LevelJson/' + X6 + '.json';
+  const mainText = '{"environment":{"start_hour":12}}';
+  put(root, levelName, mainText);
+  put(play, levelName, '{"environment":{"start_hour":2}}');
   const calls: Array<{ args: string[]; cwd: string }> = [];
   const deps = { ...clearLaunch, spawnDetached: (_command: string, args: string[], cwd: string) => {
+    assert.equal(fs.readFileSync(path.join(cwd, levelName), 'utf8'), mainText, 'settings arrive before spawning');
     calls.push({ args, cwd }); return 123;
   } };
   const selected = await handlePlaySector(root, { build: 'play', sector: 0, root: 'C:/untrusted' }, deps);
   assert.equal(selected.status, 200);
   assert.equal(selected.body.build, 'play');
+  assert.match(String(selected.body.syncMessage), /start_hour 2 -> 12/);
   assert.equal(calls[0].args[0], path.join(play, 'CodexTactics.uproject'));
   assert.equal(calls[0].cwd, play);
   assert.ok(calls[0].args.includes('-Sector=0'));
