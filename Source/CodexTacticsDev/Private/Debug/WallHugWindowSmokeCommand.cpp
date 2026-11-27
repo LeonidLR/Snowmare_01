@@ -510,7 +510,7 @@ namespace WallHugWindowSmoke
 			{
 				return Finish(State, false);
 			}
-			if (State.StageTime < 0.3f)
+			if (State.StageTime < 0.3f || ((Leader->IsCornerAimActive() || Leader->bIsCornerLeaning) && State.StageTime < 6.f))
 			{
 				return true;
 			}
@@ -518,7 +518,15 @@ namespace WallHugWindowSmoke
 				TEXT("back behind the solid wall when not firing"));
 			Leader->bIgnoreCoverThreatForTesting = false;
 
-			// Step 6: Under-sill BlindFire at window 2.
+			// Step 6: Under-sill BlindFire at window 2 (keep manual BlindFire mode active; silent squadmate spots target outside).
+			Squad->SetAutonomousSquadCombat(false);
+			TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+			Members.Sort([](const AOperativeCharacter& L, const AOperativeCharacter& R) { return L.SquadIndex < R.SquadIndex; });
+			if (Members.Num() > 1)
+			{
+				Members[1]->bTacticalCeaseFire = true;
+				PlaceOnSpot(Members[1], State.Setup.EnemySpot1, 0.f);
+			}
 			EnterSlot(*Leader, State.Setup.SlotWin2);
 			Leader->SetCoverFireMode(ECoverFireMode::BlindFire);
 			Check(State, Leader->IsWindowCoverConfirmed() && Leader->IsCoverShotBlind() && Leader->GetStance() == EOperativeStance::Crouching,
