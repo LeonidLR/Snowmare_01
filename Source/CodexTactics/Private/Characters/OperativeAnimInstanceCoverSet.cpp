@@ -208,11 +208,38 @@ void UOperativeAnimInstance::ResolveCoverAnimSets(TArray<FSoftObjectPath>* OutPa
 	}
 }
 
+void UOperativeAnimInstance::SetCoverAnimSetOverrideForTesting(const FString& SetName)
+{
+	CoverAnimSetOverrideForTesting = SetName;
+	if (bInCover)
+	{
+		if (const AOperativeCharacter* Operative = BoundOperative.Get())
+		{
+			ChooseCoverAnimSet(*Operative);
+		}
+	}
+}
+
 void UOperativeAnimInstance::ChooseCoverAnimSet(const AOperativeCharacter& Operative)
 {
 	FString Wanted;
 	CoverSetSlotPoint = Operative.GetCoverSlot().WallPoint;
-	if (IsCoverSetsOn(bUseCoverAnimSets) && bUseNativeCoverClips)
+	if (!CoverAnimSetOverrideForTesting.IsEmpty() && bUseNativeCoverClips)
+	{
+		CoverAnimContextName = CoverAnimSetOverrideForTesting == TEXT("m4") ? TEXT("outdoor") : TEXT("indoor");
+		if (CoverAnimSetOverrideForTesting != TEXT("m4"))
+		{
+			if (LoadedCoverSets.IsEmpty())
+			{
+				ResolveCoverAnimSets(nullptr);
+			}
+			if (LoadedCoverSets.Contains(CoverAnimSetOverrideForTesting))
+			{
+				Wanted = CoverAnimSetOverrideForTesting;
+			}
+		}
+	}
+	else if (IsCoverSetsOn(bUseCoverAnimSets) && bUseNativeCoverClips)
 	{
 		FString Building;
 		int32 Storey = INDEX_NONE;

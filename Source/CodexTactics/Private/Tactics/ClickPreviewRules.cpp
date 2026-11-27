@@ -4,6 +4,14 @@
 
 namespace ClickPreviewRules
 {
+	ECoverPreviewCommit DecideCoverCommit(bool bValidTarget, bool bApproachAvailable, bool bInCover, bool bSameWall, float AlongCm)
+	{
+		if (!bValidTarget) { return ECoverPreviewCommit::InvalidTarget; }
+		if (!bApproachAvailable) { return ECoverPreviewCommit::NoApproach; }
+		if (bInCover && bSameWall && FMath::Abs(AlongCm) < 10.f) { return ECoverPreviewCommit::AlreadyThere; }
+		return ECoverPreviewCommit::Order;
+	}
+
 	EClickPreviewAction DecideClick(const FClickPreviewClickFacts& Facts)
 	{
 		if (!Facts.bEnabled)

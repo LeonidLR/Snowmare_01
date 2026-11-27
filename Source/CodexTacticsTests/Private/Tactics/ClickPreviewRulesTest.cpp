@@ -78,6 +78,19 @@ bool FClickPreviewDoubleClickTest::RunTest(const FString&)
 	return true;
 }
 
+CLICK_PREVIEW_TEST(FClickPreviewCoverCommitTest, "CoverCommit")
+bool FClickPreviewCoverCommitTest::RunTest(const FString&)
+{
+	using namespace ClickPreviewRules;
+	TestEqual(TEXT("in cover -> another cover issues an order"), DecideCoverCommit(true, true, true, false, 0.f), ECoverPreviewCommit::Order);
+	TestEqual(TEXT("walking / leaving cover: stale current slot cannot suppress replacement"), DecideCoverCommit(true, true, false, true, 0.f), ECoverPreviewCommit::Order);
+	TestEqual(TEXT("same wall, different slot: shimmy order"), DecideCoverCommit(true, true, true, true, -100.f), ECoverPreviewCommit::Order);
+	TestEqual(TEXT("current slot: visible already-there reason"), DecideCoverCommit(true, true, true, true, 0.f), ECoverPreviewCommit::AlreadyThere);
+	TestEqual(TEXT("unavailable low-cover approach: visible refusal, never silent"), DecideCoverCommit(true, false, false, false, 0.f), ECoverPreviewCommit::NoApproach);
+	TestEqual(TEXT("missing target wins over approach failure"), DecideCoverCommit(false, false, false, false, 0.f), ECoverPreviewCommit::InvalidTarget);
+	return true;
+}
+
 CLICK_PREVIEW_TEST(FClickPreviewStructureTest, "Structure")
 bool FClickPreviewStructureTest::RunTest(const FString&)
 {

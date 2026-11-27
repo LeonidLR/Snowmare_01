@@ -17,6 +17,7 @@
 #include "Tactics/CoverRules.h"
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTraceRules.h"
+#include "Tactics/ClickPreviewRules.h"
 #include "Tactics/GroupCoverRules.h"
 #include "Tactics/RunCornerPeekRules.h"
 #include "Data/SquadWallTuning.h"
@@ -48,6 +49,15 @@
 
 namespace
 {
+	void ReportCoverCommitReason(UWorld* World, const FText& Reason)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] confirmation: %s"), *Reason.ToString());
+		if (UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(LOCTEXT("HQ", "HQ"), Reason);
+		}
+	}
+
 	TAutoConsoleVariable<int32> CVarGroupCoverLeaderPriority(TEXT("Codex.GroupCover.LeaderPriority"), 1,
 		TEXT("1 (default): in a group cover order the others wait ~1.6 m off the wall until the leader has taken his cover (game designer 2026-10-23); 0: the old rule (everybody runs straight into his slot)."));
 	TAutoConsoleVariable<int32> CVarGroupCoverNearbyCovers(TEXT("Codex.GroupCover.NearbyCovers"), 1,
@@ -372,6 +382,7 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	if (!TurnBased && !CoverTraceRules::ResolveLowCoverApproach(GetWorld(), Operative->GetActorLocation(), Slot))
 	{
 		HideCoverPreview();
+		ReportCoverCommitReason(GetWorld(), LOCTEXT("CoverNoApproach", "Can't take this cover: no usable approach on your side."));
 		return true; // an unavailable cover approach must not become a movement order
 	}
 	// Turn-based: the slot snaps to the nearest free cell of the grid.
@@ -903,24 +914,34 @@ bool ACodexTacticsPlayerController::GetCoverSwitchPreviewLine(FVector& OutFrom, 
 
 void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 {
+	bLastCoverConfirmSwitch = false;
 	AOperativeCharacter* Operative = CoverPreviewOperative.Get();
 	const FCoverSlot Slot = CoverPreviewSlot;
 	// A switchable preview commits the slot its ghost shows (the resolved corner, its arrival side), double or slow confirm alike.
 	const bool bPreviewSwitchable = bCoverPreviewSwitchable;
 	FCoverSlot Target = bPreviewSwitchable ? CoverPreviewResolvedSlot : Slot;
-	if (Operative && !GetActiveTurnBased() && !CoverTraceRules::ResolveLowCoverApproach(GetWorld(), Operative->GetActorLocation(), Target))
+	const bool bValidTarget = Operative && Slot.IsValid() && Target.IsValid();
+	const bool bApproachAvailable = !bValidTarget || GetActiveTurnBased()
+		|| CoverTraceRules::ResolveLowCoverApproach(GetWorld(), Operative->GetActorLocation(), Target);
+	const bool bSameWall = bValidTarget && Operative->bInCover && CoverTraceRules::IsSameWall(Operative->GetCoverSlot(), Target);
+	const float AlongCm = bSameWall ? CoverTraceRules::AlongWallDistanceFrom(Operative->GetCoverSlot(), Operative->GetActorLocation(), Target.WorldLocation) : 0.f;
+	const ECoverPreviewCommit Commit = ClickPreviewRules::DecideCoverCommit(bValidTarget, bApproachAvailable,
+		Operative && Operative->bInCover && !Operative->IsMoving() && !Operative->bShimmying, bSameWall, AlongCm);
+	if (Commit != ECoverPreviewCommit::Order)
 	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: confirmation declined (%d), target %s at %s, in cover %d, moving %d, shimmying %d, same wall %d, approach %d"),
+			*GetNameSafe(Operative), static_cast<int32>(Commit), *GetNameSafe(Target.WallActor.Get()), *Target.WorldLocation.ToCompactString(),
+			Operative && Operative->bInCover, Operative && Operative->IsMoving(), Operative && Operative->bShimmying, bSameWall, bApproachAvailable);
 		HideCoverPreview();
+		ReportCoverCommitReason(GetWorld(), Commit == ECoverPreviewCommit::NoApproach
+			? LOCTEXT("CoverNoApproach", "Can't take this cover: no usable approach on your side.")
+			: Commit == ECoverPreviewCommit::AlreadyThere ? LOCTEXT("CoverAlreadyThere", "Already at this cover slot.")
+			: LOCTEXT("CoverTargetGone", "Can't take cover: the operative or cover target is no longer available."));
 		return;
 	}
 	const ECoverFacing Arrival = CoverPreviewArrivalFacing;
 	FDemoOrderScope Demo(this, EDemoOrderKind::Cover, Operative, Target.WorldLocation, bDoubleClick, false, &Target);
 	HideCoverPreview();
-	bLastCoverConfirmSwitch = false;
-	if (!Operative || !Slot.IsValid())
-	{
-		return;
-	}
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
 	UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>();
 	if (UTurnBasedCombatSubsystem* TurnBased = GetActiveTurnBased(); TurnBased && TurnBased->GetGrid())
@@ -1035,9 +1056,12 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 			Messages->PostMessage(Operative->DisplayName, bSwitch ? LOCTEXT("CoverSwitchOrdered", "🏃 Dash to the other cover!") : LOCTEXT("CoverOrdered", "🏃 Take cover!"));
 		}
 	}
-	else if (Messages && Result == EOperativeOrderResult::Unreachable)
+	else
 	{
-		Messages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("CoverUnreachable", "⚠️ No path to this cover."));
+		ReportCoverCommitReason(GetWorld(), Result == EOperativeOrderResult::Unreachable
+			? LOCTEXT("CoverUnreachable", "⚠️ No path to this cover.")
+			: Result == EOperativeOrderResult::NoController ? LOCTEXT("CoverNoController", "Can't take cover: this operative has no movement controller.")
+			: LOCTEXT("CoverOrderRefused", "Can't take cover: the operative cannot follow this order now (check panic, rage or movement restrictions)."));
 	}
 }
 

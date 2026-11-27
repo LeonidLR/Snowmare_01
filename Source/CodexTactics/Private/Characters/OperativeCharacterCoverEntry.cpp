@@ -412,15 +412,76 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 		Wanted -= Tangent * FVector::DotProduct(RootWorldOffset, Tangent) * CoverLeanCancelAlpha;
 	}
 	// The corner peek leans a little further out than the clip's own step-out (CornerLeanExtraPack*Cm: the _R clips' head is only 14 cm past the
-	// edge): an eased share of it on the mesh while the peek is on, tracked with the other offsets and gone when it is over.
-	const bool bLeansOut = IsPeekingRoundCorner();
+	// Measure outer clavicle (clavicle_l / clavicle_r) against the exposed corner edge without any corner-along offset
+	// so active corner peeks (-21 cm past edge) and idle/return corner poses (+14 cm inward) stay symmetric across L/R, stand/crouch, and both 'm4' & 'riffle' sets.
+	const UOperativeAnimInstance* CornerAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	ECoverFacing CornerEdgeSide = CoverFacing;
+	if (bInCover && !CoverSlot.IsEdgeExposed(CornerEdgeSide))
+	{
+		if (bManualCornerPeek && CoverSlot.IsEdgeExposed(ManualCornerPeekSide))
+		{
+			CornerEdgeSide = ManualCornerPeekSide;
+		}
+		else if (CoverSlot.bLeftEdgeExposed != CoverSlot.bRightEdgeExposed)
+		{
+			CornerEdgeSide = CoverSlot.bLeftEdgeExposed ? ECoverFacing::Left : ECoverFacing::Right;
+		}
+	}
+	const float CornerEdgeDist = bInCover ? CoverFacingRules::EdgeDistance(CoverSlot, CornerEdgeSide) : -1.f;
+	const bool bHasExposedCornerEdge = bInCover && bAtCoverCorner && CornerEdgeDist >= 0.f && CornerEdgeDist <= GetCoverFacingConfig().CornerReachCm;
+	auto MeasureOuterClavicleInwardCm = [&](bool bIncludeEntryOffset, float& OutInwardCm) -> bool
+	{
+		const USkeletalMeshComponent* SkinMesh = GetMesh();
+		if (!bHasExposedCornerEdge || !SkinMesh || !bMeshBaseCaptured)
+		{
+			return false;
+		}
+		const TArray<FTransform>& CompSpace = SkinMesh->GetComponentSpaceTransforms();
+		const int32 ClavL = SkinMesh->GetBoneIndex(TEXT("clavicle_l"));
+		const int32 ClavR = SkinMesh->GetBoneIndex(TEXT("clavicle_r"));
+		if (!CompSpace.IsValidIndex(ClavL) || !CompSpace.IsValidIndex(ClavR))
+		{
+			return false;
+		}
+		FRotator RelRot = SkinMesh->GetRelativeRotation();
+		RelRot.Yaw = MeshBaseYaw + CoverEntryAppliedYaw;
+		const float EntryX = bIncludeEntryOffset ? CoverEntryAppliedOffset.X : 0.f;
+		const float EntryY = bIncludeEntryOffset ? CoverEntryAppliedOffset.Y : 0.f;
+		const FVector RelLoc(MeshBaseXY.X + CoverWallPushAppliedLocal.X + EntryX,
+			MeshBaseXY.Y + CoverWallPushAppliedLocal.Y + EntryY, SkinMesh->GetRelativeLocation().Z);
+		const FTransform BaseWorld = FTransform(RelRot, RelLoc, SkinMesh->GetRelativeScale3D()) * GetActorTransform();
+		const FVector TowardEdge = CoverFacingRules::AlongWallDirection(CoverSlot, CornerEdgeSide);
+		const FVector EdgeWorld = CoverSlot.WallPoint + TowardEdge * CornerEdgeDist;
+		const FVector PosL = BaseWorld.TransformPosition(CompSpace[ClavL].GetLocation());
+		const FVector PosR = BaseWorld.TransformPosition(CompSpace[ClavR].GetLocation());
+		const float InL = static_cast<float>(FVector::DotProduct(EdgeWorld - PosL, TowardEdge));
+		const float InR = static_cast<float>(FVector::DotProduct(EdgeWorld - PosR, TowardEdge));
+		OutInwardCm = FMath::Min(InL, InR);
+		return true;
+	};
+	auto ClampAlongEdgeShift = [&](float DesiredShiftCm) -> float
+	{
+		float Clamped = FMath::Clamp(DesiredShiftCm, CornerEdgeAlignMinShiftCm, CornerEdgeAlignMaxShiftCm);
+		const ECoverFacing OppSide = CornerEdgeSide == ECoverFacing::Right ? ECoverFacing::Left : ECoverFacing::Right;
+		const float OppDist = CoverFacingRules::EdgeDistance(CoverSlot, OppSide);
+		if (OppDist >= 0.f)
+		{
+			Clamped = FMath::Max(Clamped, FMath::Min(0.f, -(OppDist - CornerEdgeAlignOppositeMarginCm)));
+		}
+		return Clamped;
+	};
+	const bool bLeansOut = IsPeekingRoundCorner() || (bHasExposedCornerEdge && !bShimmying && WantsCornerLookPose());
 	CornerLeanExtraAlpha = FMath::FInterpConstantTo(CornerLeanExtraAlpha, bLeansOut ? 1.f : 0.f, DeltaTime, 1.f / FMath::Max(CoverLeanBlendSeconds, 0.05f));
 	if (bLeansOut && bInCover)
 	{
-		// The side he leans to now (fix/corner-exit-jerk: kept for the ease-out - a shimmy turns the facing to the other side, whose amount
-		// is 0 cm, and the cover's slot is gone once he leaves: both dropped the 11 cm in one frame).
-		const float Extra = CoverFacingRules::ClipIndex(CoverFacing) == 0 ? CornerLeanExtraPackLCm : CornerLeanExtraPackRCm;
-		CornerLeanExtraVector = CoverFacingRules::AlongWallDirection(CoverSlot, CoverFacing) * Extra;
+		float Extra = CoverFacingRules::ClipIndex(CornerEdgeSide) == 0 ? CornerLeanExtraPackLCm : CornerLeanExtraPackRCm;
+		float NaturalInwardCm = 0.f;
+		const bool bFireOrPeekPose = !CornerAnim || CornerAnim->IsCoverInFirePose() || IsCoverEntryPeekStance();
+		if (bFireOrPeekPose && !bCoverEntryAwaitClip && CoverEntryBlendTime < 0.f && MeasureOuterClavicleInwardCm(false, NaturalInwardCm))
+		{
+			Extra = ClampAlongEdgeShift(NaturalInwardCm - CornerEdgeTargetPeekInwardCm);
+		}
+		CornerLeanExtraVector = CoverFacingRules::AlongWallDirection(CoverSlot, CornerEdgeSide) * Extra;
 	}
 	if (CornerLeanExtraAlpha > 0.f)
 	{
@@ -544,6 +605,29 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 			GetMesh()->AddRelativeLocation(PushLocal - CoverWallPushAppliedLocal);
 			CoverWallPushAppliedLocal = PushLocal;
 		}
+		// 135b: keep idle / ReturnNoTargets corner poses cleanly at +14 cm inward from the exposed edge across both sets & stances,
+		// tracked separately from CoverEntryAppliedOffset so wall-hug wrap/switch smokes see GetCoverEntryMeshOffset() == 0.
+		FVector TargetAlignLocal = FVector::ZeroVector;
+		const bool bIdleAtCorner = bHasExposedCornerEdge && !bLeansOut && !bShimmying && !bCoverSnapPending && !bBodyYawFree
+			&& CurrentCoverHeight != ECoverHeight::None && Stance != EOperativeStance::Prone
+			&& !bCoverEntryAwaitClip && CoverEntryBlendTime < 0.f
+			&& (!CornerAnim || !CornerAnim->IsCoverInFirePose());
+		float IdleNaturalInwardCm = 0.f;
+		if (bIdleAtCorner && MeasureOuterClavicleInwardCm(true, IdleNaturalInwardCm))
+		{
+			const float ShiftCm = ClampAlongEdgeShift(IdleNaturalInwardCm - CornerEdgeTargetIdleInwardCm);
+			const FVector ShiftWorld = CoverFacingRules::AlongWallDirection(CoverSlot, CornerEdgeSide) * ShiftCm;
+			TargetAlignLocal = GetActorRotation().UnrotateVector(ShiftWorld);
+		}
+		const FVector NewAlignLocal = DeltaTime <= 0.f
+			? TargetAlignLocal
+			: FMath::VInterpTo(CoverCornerAlignAppliedLocal, TargetAlignLocal, DeltaTime, CornerEdgeAlignInterpSpeed);
+		const FVector SnappedAlignLocal = NewAlignLocal.IsNearlyZero(0.05) ? FVector::ZeroVector : NewAlignLocal;
+		if (!SnappedAlignLocal.Equals(CoverCornerAlignAppliedLocal, 0.01))
+		{
+			GetMesh()->AddRelativeLocation(SnappedAlignLocal - CoverCornerAlignAppliedLocal);
+			CoverCornerAlignAppliedLocal = SnappedAlignLocal;
+		}
 	}
 }
 
@@ -554,7 +638,7 @@ void AOperativeCharacter::EnforceMeshBaseOffset()
 	{
 		return;
 	}
-	const FVector Tracked = CoverEntryAppliedOffset + CoverWallPushAppliedLocal + MantleMeshShift; // + a mantle clip's root-lock shift (OperativeCharacterMantle.cpp)
+	const FVector Tracked = CoverEntryAppliedOffset + CoverWallPushAppliedLocal + CoverCornerAlignAppliedLocal + MantleMeshShift; // + a mantle clip's root-lock shift (OperativeCharacterMantle.cpp)
 	const FVector Location = SkinMesh->GetRelativeLocation();
 	const FVector2D Expected = MeshBaseXY + FVector2D(Tracked);
 	const float ExpectedYaw = MeshBaseYaw + CoverEntryAppliedYaw;
@@ -613,8 +697,17 @@ void AOperativeCharacter::ResetBodyOffsets()
 	bBodyYawFree = false;
 	CoverWallPush = 0.f;
 	CoverWallPushAppliedLocal = FVector::ZeroVector;
+	CoverCornerAlignAppliedLocal = FVector::ZeroVector;
 	CoverLeanCancelAlpha = 1.f;
 	CornerLeanExtraAlpha = 0.f;
+	if (USkeletalMeshComponent* SkinMesh = GetMesh(); SkinMesh && bMeshBaseCaptured)
+	{
+		const FVector2D Expected = MeshBaseXY + FVector2D(MantleMeshShift);
+		SkinMesh->SetRelativeLocation(FVector(Expected.X, Expected.Y, SkinMesh->GetRelativeLocation().Z));
+		FRotator Rotation = SkinMesh->GetRelativeRotation();
+		Rotation.Yaw = MeshBaseYaw;
+		SkinMesh->SetRelativeRotation(Rotation);
+	}
 	EnforceMeshBaseOffset();
 }
 

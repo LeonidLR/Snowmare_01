@@ -227,6 +227,16 @@ private:
 	 * BeginPeekStanceYawLock) - the pose blend's own ~160 deg turn counter-turned exactly, in the very evaluation that draws it.
 	 */
 	void ApplyPeekStanceYawLock(FPoseContext& Output) const;
+	/**
+	 * 135b: Aligns the weapon barrel to the manual corner look target (distributed over spine_01..03 in component space)
+	 * when an AimOffset clip's hand_r / socket geometry stops short or overshoots (e.g. AO_CoverIndoor_StandR/CrouchR or M4 R).
+	 */
+	void ApplyCornerLookAimTrim(FPoseContext& Output) const;
+	bool bCornerLookAimTrim = false;
+	FVector CornerLookBarrelInHandR = FVector::ZeroVector;
+	float CornerLookTargetYawCs = 0.f;
+	float CornerLookTrimAlpha = 0.f;
+	float CornerLookTrimMaxDeg = 95.f;
 	/** The lock for this evaluation (computed in PreUpdate): the drawn body's target yaw in component space, its strength, the shoulder share. */
 	float PeekLockTargetCs = 0.f;
 	float PeekLockAlpha = 0.f;
@@ -986,6 +996,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset", meta = (ClampMin = "0.1"))
 	float AimYawInterpSpeed = 12.f;
 
+	/** Maximum upper-body spine yaw trim applied on top of cover-corner AimOffsets so the rifle barrel aligns to manual look yaw, deg. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Aim Offset", meta = (ClampMin = "0", ClampMax = "180"))
+	float CornerLookTrimMaxDegrees = 95.f;
+
 	/** Yaw from the pose's aim direction to the target in degrees (+ = to his right), eased; 0 with no target. The AO's "Yaw" axis. */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|Aim Offset")
 	float AimYaw = 0.f;
@@ -1309,8 +1323,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover Animation Sets")
 	FString GetActiveCoverAnimSet() const { return ActiveCoverAnimSet; }
 
+	/** Dev smokes only: forces a cover animation set by name ("m4" for native clips, "riffle" for indoor set; empty = auto). */
+	void SetCoverAnimSetOverrideForTesting(const FString& SetName);
+
 	/** The context the last cover entry was judged in ("indoor" / "outdoor" / "stealth"; smokes). */
 	const FString& GetCoverAnimContext() const { return CoverAnimContextName; }
+	FString CoverAnimSetOverrideForTesting;
 
 	/** The active set has its own clip for Key base (stand_reload, crouch_over_fire_idle, ...) on Facing's side. */
 	bool HasCoverSetClip(const TCHAR* KeyBase, ECoverFacing Facing) const;
@@ -2571,6 +2589,13 @@ private:
 	/** AimPitch / AimOffsetAlpha from the operative's aim target (game thread, UpdateState). */
 	void UpdateAimOffset(const class AOperativeCharacter& Operative, float DeltaSeconds);
 	float AimOffsetLinear = 0.f;
+	/** 135b game-thread snapshot for ApplyCornerLookAimTrim. */
+	bool bCornerLookTrimActive = false;
+	FVector CornerLookBarrelInHandR = FVector::ZeroVector;
+	float CornerLookTargetYawCs = 0.f;
+	float CornerLookTrimAlpha = 0.f;
+	FVector2D CornerLookDirSmoothed = FVector2D::ZeroVector;
+	bool bCornerLookDirInitialized = false;
 	/** A shot waiting for the enter transition / the previous one-shot to end. */
 	TWeakObjectPtr<UAnimSequenceBase> CoverPendingFireClip;
 	TArray<FString> CoverClipLog;

@@ -214,11 +214,18 @@ bool ACodexTacticsPlayerController::ResolveClickCoverSlot(AOperativeCharacter& L
 	{
 		return false;
 	}
+	// Match confirmation's near-side rule before showing or classifying the ghost. A failed probe still
+	// keeps the cover meaning: confirmation reports the refusal instead of turning it into a ground move.
+	FCoverSlot Approach = Slot;
+	if (CoverTraceRules::ResolveLowCoverApproach(GetWorld(), Leader.GetActorLocation(), Approach))
+	{
+		Slot = Approach;
+	}
 	if (Leader.bInCover)
 	{
 		const FCoverSlot& Own = Leader.GetCoverSlot();
 		const bool bOwnObject = Own.WallComponent.IsValid() ? Hit.GetComponent() == Own.WallComponent.Get() : HitActor == Own.WallActor.Get();
-		const FVector2D HitNormal = bSideSlot ? FVector2D(SideSlot.WallNormal).GetSafeNormal() : FVector2D(Hit.ImpactNormal.X, Hit.ImpactNormal.Y).GetSafeNormal();
+		const FVector2D HitNormal = FVector2D(Slot.WallNormal).GetSafeNormal();
 		if (bOwnObject && FVector2D::DotProduct(HitNormal, FVector2D(Own.WallNormal).GetSafeNormal()) < 0.9f)
 		{
 			OutSlot = Slot; // round his own object along its wall (TryOrderCoverWrap on the second click)
@@ -228,7 +235,8 @@ bool ACodexTacticsPlayerController::ResolveClickCoverSlot(AOperativeCharacter& L
 		{
 			FCoverSlot Shimmy;
 			OutSlot = CoverTraceRules::FindShimmySlot(GetWorld(), Own, bSideSlot ? Slot.WallPoint : FVector(Hit.ImpactPoint), Shimmy) ? Shimmy : Slot;
-			return true; // along his own wall: the shimmy on the second click
+			bOutConfirm = true; // commit directly; redispatching a click can merely arm another preview
+			return true;
 		}
 	}
 	OutSlot = Slot;
