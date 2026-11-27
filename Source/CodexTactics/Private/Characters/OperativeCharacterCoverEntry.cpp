@@ -461,12 +461,12 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 	};
 	auto ClampAlongEdgeShift = [&](float DesiredShiftCm) -> float
 	{
-		float Clamped = FMath::Clamp(DesiredShiftCm, -65.f, 140.f);
+		float Clamped = FMath::Clamp(DesiredShiftCm, CornerEdgeAlignMinShiftCm, CornerEdgeAlignMaxShiftCm);
 		const ECoverFacing OppSide = CornerEdgeSide == ECoverFacing::Right ? ECoverFacing::Left : ECoverFacing::Right;
 		const float OppDist = CoverFacingRules::EdgeDistance(CoverSlot, OppSide);
 		if (OppDist >= 0.f)
 		{
-			Clamped = FMath::Max(Clamped, -(OppDist - 30.f));
+			Clamped = FMath::Max(Clamped, -(OppDist - CornerEdgeAlignOppositeMarginCm));
 		}
 		return Clamped;
 	};
@@ -479,8 +479,7 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 		const bool bFireOrPeekPose = !CornerAnim || CornerAnim->IsCoverInFirePose() || IsCoverEntryPeekStance();
 		if (bFireOrPeekPose && !bCoverEntryAwaitClip && CoverEntryBlendTime < 0.f && MeasureOuterClavicleInwardCm(false, NaturalInwardCm))
 		{
-			constexpr float TargetPeekInwardCm = -19.f;
-			Extra = ClampAlongEdgeShift(NaturalInwardCm - TargetPeekInwardCm);
+			Extra = ClampAlongEdgeShift(NaturalInwardCm - CornerEdgeTargetPeekInwardCm);
 		}
 		CornerLeanExtraVector = CoverFacingRules::AlongWallDirection(CoverSlot, CornerEdgeSide) * Extra;
 	}
@@ -616,14 +615,13 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 		float IdleNaturalInwardCm = 0.f;
 		if (bIdleAtCorner && MeasureOuterClavicleInwardCm(true, IdleNaturalInwardCm))
 		{
-			constexpr float TargetIdleInwardCm = 14.f;
-			const float ShiftCm = ClampAlongEdgeShift(IdleNaturalInwardCm - TargetIdleInwardCm);
+			const float ShiftCm = ClampAlongEdgeShift(IdleNaturalInwardCm - CornerEdgeTargetIdleInwardCm);
 			const FVector ShiftWorld = CoverFacingRules::AlongWallDirection(CoverSlot, CornerEdgeSide) * ShiftCm;
 			TargetAlignLocal = GetActorRotation().UnrotateVector(ShiftWorld);
 		}
 		const FVector NewAlignLocal = DeltaTime <= 0.f
 			? TargetAlignLocal
-			: FMath::VInterpTo(CoverCornerAlignAppliedLocal, TargetAlignLocal, DeltaTime, 12.f);
+			: FMath::VInterpTo(CoverCornerAlignAppliedLocal, TargetAlignLocal, DeltaTime, CornerEdgeAlignInterpSpeed);
 		const FVector SnappedAlignLocal = NewAlignLocal.IsNearlyZero(0.05) ? FVector::ZeroVector : NewAlignLocal;
 		if (!SnappedAlignLocal.Equals(CoverCornerAlignAppliedLocal, 0.01))
 		{

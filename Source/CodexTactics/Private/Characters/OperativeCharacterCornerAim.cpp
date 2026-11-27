@@ -875,14 +875,12 @@ bool AOperativeCharacter::CanReachCornerLookInCover(const FVector& LookPoint, fl
 	const FVector LookDir = LookPoint - GetActorLocation();
 	const float SignedAbs = FMath::Abs(CoverLookAoRules::SignedYawFromNormal(CoverSlot.WallNormal, LookDir));
 	// Cover corner side aim poses face round the edge (~85..145 deg off the wall normal);
-	// front-facing looks (< 85 deg, e.g. straight out or across the wall face) or rear looks (> 145 deg) step out of cover to turn.
-	constexpr float MinSideYawDeg = 85.f;
-	constexpr float MaxSideYawDeg = 145.f;
+	// front-facing looks (< min) or rear looks (> max) step out of cover to turn.
 	if (OutOffDeg)
 	{
 		*OutOffDeg = SignedAbs;
 	}
-	return SignedAbs >= MinSideYawDeg && SignedAbs <= MaxSideYawDeg;
+	return SignedAbs >= CornerLookMinSideYawDeg && SignedAbs <= CornerLookMaxSideYawDeg;
 }
 
 bool AOperativeCharacter::WantsCornerLookPose() const

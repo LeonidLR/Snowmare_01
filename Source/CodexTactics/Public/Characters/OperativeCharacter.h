@@ -2226,6 +2226,30 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
 	float CornerLeanExtraPackRCm = 11.f;
 
+	/** Target inward margin from exposed corner edge to outer clavicle in corner peek fire-ready pose, cm (135b). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
+	float CornerEdgeTargetPeekInwardCm = -19.f;
+	/** Target inward margin from exposed corner edge to outer clavicle in idle / ReturnNoTargets corner hug, cm (135b). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
+	float CornerEdgeTargetIdleInwardCm = 14.f;
+	/** Bounds on along-wall mesh shift applied for clavicle corner alignment, cm (135b). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
+	float CornerEdgeAlignMinShiftCm = -65.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover")
+	float CornerEdgeAlignMaxShiftCm = 140.f;
+	/** Clearance kept from opposite corner edge when clamping along-wall shift, cm (135b). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CornerEdgeAlignOppositeMarginCm = 30.f;
+	/** Interpolation speed for corner idle edge alignment offset, 1/s (135b). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0.1"))
+	float CornerEdgeAlignInterpSpeed = 12.f;
+
+	/** Corner look side-aim cone off the wall normal (in-cover AO range; outside steps out of cover), deg (135b). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0", ClampMax = "180"))
+	float CornerLookMinSideYawDeg = 85.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0", ClampMax = "180"))
+	float CornerLookMaxSideYawDeg = 145.f;
+
 	/**
 	 * Wall clearance (user report 2026-10-11: the body / rifle sank into the wall - during a cover entry the old run pose,
 	 * held on the turned mesh, blends with the enter clip and swings a hand through the wall): while in cover the closest
