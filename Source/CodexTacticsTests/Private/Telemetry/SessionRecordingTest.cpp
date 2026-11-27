@@ -3,6 +3,8 @@
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
+#include "Combat/HealthComponent.h"
 #include "HAL/FileManager.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
@@ -237,6 +239,173 @@ bool FDemoLifecycleTest::RunTest(const FString& Parameters)
 	GEngine->DestroyWorldContext(World);
 	World->DestroyWorld(false);
 	return true;
+}
+
+DEMO_TEST(TacticsEvents)
+bool FDemoTacticsEventsTest::RunTest(const FString& Parameters)
+{
+	FDemoSession Session;
+	Session.Map = TEXT("L_Gen_Depot_1_X6");
+	Session.AcceptedOrders = 1;
+	Session.Duration = 65.;
+
+	FDemoFrame Snap;
+	Snap.Type = FDemoFrame::EType::Snapshot;
+	Snap.Time = 2.0;
+	Snap.RealTime = 2.0;
+	Snap.FirstOp = 0;
+	Snap.NumOps = 1;
+	FDemoOp Op;
+	Op.Id = FName(TEXT("Op_0"));
+	Op.bAlive = true;
+	Op.bCover = true;
+	Op.bStealth = true;
+	Op.HeightAboveGroundCm = 360.f;
+	Op.SeenByEnemy = 2;
+	Op.UnderFireSeconds = 1.5;
+	Op.ScanPitchDeg = 18.5f;
+	Session.Ops.Add(Op);
+	Session.Frames.Add(Snap);
+
+	auto AddEv = [&](FDemoEvent::EType Type, double T, FName Who, FName Whom = NAME_None, FName Kind = NAME_None, float Amt = 0.f, float Dist = -1.f, bool Flag = false, bool Cov = false)
+	{
+		FDemoEvent E;
+		E.Type = Type;
+		E.Time = T;
+		E.RealTime = T;
+		E.Who = Who;
+		E.Whom = Whom;
+		E.Weapon = FName(TEXT("m16"));
+		E.Kind = Kind;
+		E.Amount = Amt;
+		E.DistanceCm = Dist;
+		E.bFlag = Flag;
+		E.bCoveredByAlly = Cov;
+		Session.Events.Add(E);
+	};
+	AddEv(FDemoEvent::EType::Stealth, 0.5, FName(TEXT("Op_0")), NAME_None, NAME_None, 0.f, -1.f, true);
+	AddEv(FDemoEvent::EType::Cover, 1.0, FName(TEXT("Op_0")), NAME_None, FName(TEXT("Low")), 0.f, -1.f, true);
+	AddEv(FDemoEvent::EType::Climb, 1.5, FName(TEXT("Op_0")), NAME_None, FName(TEXT("roof")), 360.f);
+	AddEv(FDemoEvent::EType::ShotHit, 2.5, FName(TEXT("Op_0")), FName(TEXT("PMC_0")), NAME_None, 32.f, 1800.f);
+	AddEv(FDemoEvent::EType::Damage, 2.5, FName(TEXT("Op_0")), FName(TEXT("PMC_0")), NAME_None, 32.f, 1800.f);
+	AddEv(FDemoEvent::EType::Kill, 3.0, FName(TEXT("Op_0")), FName(TEXT("PMC_0")), NAME_None, 0.f, 1800.f, false, true);
+
+	TArray<FString> Lines;
+	SerializeSession(Session, TEXT("tactics_test")).ParseIntoArrayLines(Lines);
+	// header + 6 events + 1 snap + footer = 9 lines
+	if (!TestEqual(TEXT("Line count with events"), Lines.Num(), 9)) { return false; }
+	TestTrue(TEXT("Snapshot has stealth/in_cover/height/seen_by_enemy/under_fire/scan_pitch"),
+		Lines[4].Contains(TEXT("\"stealth\":true"))
+		&& Lines[4].Contains(TEXT("\"in_cover\":true"))
+		&& Lines[4].Contains(TEXT("\"height\":360"))
+		&& Lines[4].Contains(TEXT("\"seen_by_enemy\":2"))
+		&& Lines[4].Contains(TEXT("\"under_fire\":1.5"))
+		&& Lines[4].Contains(TEXT("\"scan_pitch\":18.5")));
+	TestTrue(TEXT("stealth_on serialized"), Lines[1].Contains(TEXT("\"type\":\"stealth_on\"")));
+	TestTrue(TEXT("cover_enter serialized"), Lines[2].Contains(TEXT("\"type\":\"cover_enter\"")));
+	TestTrue(TEXT("climb serialized"), Lines[3].Contains(TEXT("\"type\":\"climb\"")) && Lines[3].Contains(TEXT("\"kind\":\"roof\"")));
+	TestTrue(TEXT("shot_hit serialized"), Lines[5].Contains(TEXT("\"type\":\"shot_hit\"")));
+	TestTrue(TEXT("damage serialized"), Lines[6].Contains(TEXT("\"type\":\"damage\"")));
+	TestTrue(TEXT("kill serialized"), Lines[7].Contains(TEXT("\"type\":\"kill\"")) && Lines[7].Contains(TEXT("\"victim_covered_by_ally\":true")));
+	return true;
+}
+
+DEMO_TEST(HitAttribution)
+bool FDemoHitAttributionTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, FName(TEXT("DemoHitAttributionWorld")));
+    if (!TestNotNull(TEXT("World"), World)) { return false; }
+    FWorldContext& Context = GEngine->CreateNewWorldContext(EWorldType::Game);
+    Context.SetCurrentWorld(World);
+    World->InitializeActorsForPlay(FURL());
+    USessionRecordingSubsystem* Recorder = World->GetSubsystem<USessionRecordingSubsystem>();
+    if (TestNotNull(TEXT("Recorder"), Recorder))
+    {
+        const FString Root = FPaths::AutomationTransientDir() / TEXT("DemoAttribution") / FGuid::NewGuid().ToString();
+        Recorder->StartForTest(Root);
+        Recorder->RecordOrderAt(1., FDemoFacts{});
+        AActor* Shooter = World->SpawnActor<AActor>();
+        AActor* Victim = World->SpawnActor<AActor>();
+        Recorder->RecordShotHit(Shooter, Victim, TEXT("rifle"), 10.f, 300.f);
+        Recorder->RecordDamage(Shooter->GetName(), Victim, 10.f, FVector::ZeroVector);
+        // A later unrelated source in the same frame must invalidate the shot context.
+        Recorder->RecordDamage(TEXT("Burn"), Victim, 5.f, FVector::ZeroVector);
+        Recorder->RecordKillOrDown(Victim, TEXT("Burn"), false);
+        Recorder->FinishAt(61.);
+        TArray<FString> Files;
+        IFileManager::Get().FindFiles(Files, *(Root / TEXT("*.jsonl")), true, false);
+        if (TestEqual(TEXT("One demo"), Files.Num(), 1))
+        {
+            FString Data;
+            FFileHelper::LoadFileToString(Data, *(Root / Files[0]));
+            TestTrue(TEXT("Non-shot death keeps its actual source"), Data.Contains(TEXT("\"killer\":\"Burn\"")));
+            TArray<FString> Lines;
+            Data.ParseIntoArrayLines(Lines);
+            for (const FString& Line : Lines)
+            {
+                if (Line.Contains(TEXT("\"type\":\"kill\"")))
+                {
+                    TestFalse(TEXT("Non-shot death does not inherit old weapon"), Line.Contains(TEXT("\"weapon\":\"rifle\"")));
+                    TestTrue(TEXT("Unresolved attacker awareness is unknown"), Line.Contains(TEXT("\"was_victim_aware\":null")));
+                }
+            }
+        }
+        IFileManager::Get().DeleteDirectory(*Root, false, true);
+    }
+    GEngine->DestroyWorldContext(World);
+    World->DestroyWorld(false);
+    return true;
+}
+
+DEMO_TEST(AllHealthLossPaths)
+bool FDemoAllHealthLossPathsTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, FName(TEXT("DemoHealthLossWorld")));
+    if (!TestNotNull(TEXT("World"), World)) { return false; }
+    FWorldContext& Context = GEngine->CreateNewWorldContext(EWorldType::Game);
+    Context.SetCurrentWorld(World);
+    World->InitializeActorsForPlay(FURL());
+    USessionRecordingSubsystem* Recorder = World->GetSubsystem<USessionRecordingSubsystem>();
+    if (TestNotNull(TEXT("Recorder"), Recorder))
+    {
+        const FString Root = FPaths::AutomationTransientDir() / TEXT("DemoHealthLoss") / FGuid::NewGuid().ToString();
+        Recorder->StartForTest(Root);
+        Recorder->RecordOrderAt(1., FDemoFacts{});
+        AActor* Owner = World->SpawnActor<AActor>();
+        UHealthComponent* Health = NewObject<UHealthComponent>(Owner);
+        Owner->AddInstanceComponent(Health);
+        Health->RegisterComponent();
+        Health->RestoreHealth(100.f, 100.f);
+        Health->ApplyDirectHealthLoss(10.f, TEXT("Freezing"));
+        FDamageSpec Spec;
+        Spec.Amount = 5.f;
+        Spec.AttackerSource = TEXT("Attack");
+        Health->TakeDamage(Spec);
+        Spec.StatusEffect = EStatusEffect::Burning;
+        Spec.StatusDuration = 2.f;
+        Spec.StatusTickDamage = 3.f;
+        Health->TakeDamage(Spec);
+        Health->TickComponent(1.f, LEVELTICK_All, nullptr);
+        Recorder->FinishAt(61.);
+        TArray<FString> Files;
+        IFileManager::Get().FindFiles(Files, *(Root / TEXT("*.jsonl")), true, false);
+        if (TestEqual(TEXT("One demo"), Files.Num(), 1))
+        {
+            FString Data;
+            FFileHelper::LoadFileToString(Data, *(Root / Files[0]));
+            TArray<FString> Lines;
+            Data.ParseIntoArrayLines(Lines);
+            int32 DamageEvents = 0;
+            for (const FString& Line : Lines) { DamageEvents += Line.Contains(TEXT("\"type\":\"damage\"")) ? 1 : 0; }
+            TestEqual(TEXT("Direct, two ordinary hits and one burning tick, exactly once each"), DamageEvents, 4);
+            TestTrue(TEXT("Freezing recorded"), Data.Contains(TEXT("\"who\":\"Freezing\"")));
+            TestTrue(TEXT("Burning recorded"), Data.Contains(TEXT("\"who\":\"Burning\"")));
+        }
+        IFileManager::Get().DeleteDirectory(*Root, false, true);
+    }
+    GEngine->DestroyWorldContext(World);
+    World->DestroyWorld(false);
+    return true;
 }
 
 #undef DEMO_TEST

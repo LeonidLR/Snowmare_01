@@ -31,6 +31,7 @@
 #include "Tactics/CoverLookAoRules.h"
 #include "Tactics/CoverRules.h"
 #include "Tactics/CoverTraceRules.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Tactics/LookHoldRules.h"
 #include "Tactics/RunCornerPeekRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
@@ -250,6 +251,13 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	StopOperative();
 	CoverSlot = Slot;
 	bInCover = true;
+	if (!bWasInCover && !bQuietCoverEntryRequest)
+	{
+		if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+		{
+			Recorder->RecordCover(this, true, Slot.Height == ECoverHeight::HighCover ? FName(TEXT("High")) : FName(TEXT("Low")));
+		}
+	}
 	if (LookHoldRules::ShouldClearOnCover(bInCover))
 	{
 		ClearManualLookPoint();
@@ -529,6 +537,10 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 	else if (!bQuietCoverLeaveRequest)
 	{
 		RaiseCoverEvent(GameplayEvents::CoverLeft, CoverSlot, CurrentCoverHeight == ECoverHeight::HighCover ? FName(TEXT("High")) : FName(TEXT("Low")));
+		if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+		{
+			Recorder->RecordCover(this, false, CurrentCoverHeight == ECoverHeight::HighCover ? FName(TEXT("High")) : FName(TEXT("Low")));
+		}
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: left the cover (%s)"), *DisplayName.ToString(), *Reason);
 	if ((bCornerAimActive || bIsCornerLeaning || IsPeekingRoundCorner()) && GetWorld())

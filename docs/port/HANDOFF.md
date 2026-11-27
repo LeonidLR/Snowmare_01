@@ -1,5 +1,11 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**121 BLOCKER (2026-11-27): real PIE acceptance evidence still needed.** C++8de50957: worker build PASS410.31s; Smart848/848 PASS including HitAttribution/AllHealthLossPaths; all16 mapped smokes PASS first try; Python20/20 PASS including actual null-target schema and round-end ties. Recording facts/tagger finished and reviewed, but no real new PIE fight showing all3 core tactics was captured in this headless run. Synthetic fixture is not acceptance evidence. See `docs/port/codex/outbox/121-recording-tactics.report.md`. Stop here; Lead owns the next task.
+
+
+**121 checkpoint (2026-11-27, gemini/121-recording-tactics).** Reviewed Gemini telemetry; corrected attribution, optical observer/support facts, ground and look measurements, death/down semantics, and conservative round-scoped tactic tagging. Python18/18 PASS; final worker build/Smart/smokes and new PIE acceptance recording pending. Report: `docs/port/codex/outbox/121-recording-tactics.report.md`. Not merge-ready.
+
+
 **Window order rules (`claude/bgen-test`, 2026-11-23 morning; designer decision via Lead).** `WindowOrderRules` + `Content/Data/Interactables/windows.json`:
 (1) Solo with the WHOLE squad box-selected, in a fight (wave / firefight / squad detected): every move order opens the windows on the way;
 (2) formation: a follower never paths / auto-vaults through a WHOLE window, even on the leader's window order - he follows once the leader
@@ -751,3 +757,6 @@ Newest first, one table row per commit (`| Commit | What |`). Append your row at
 - 2026-11-16: Gemini CLI runner `f0a65516` ([CLI_RULES.md](gemini/CLI_RULES.md)); fallback/FINISH rules `46f3e8e3`, token/cost ledger `9995dde8`, job arguments `3111fc6e`, quote/newline and HTTP 402 handling `2b99cd57`; usage-test merge `4d069017` is covered above. No separate runner report was added in those direct commits.
 
 **Task148 (2026-11-27):** TG fight replay/notes + decoder + stable building index implemented; Node7/7, Python14/14, typecheck/build pass. Screenshot acceptance blocked by Windows browser URL-policy support; see `docs/port/codex/outbox/148-fight-replay-annotate.report.md` and `docs/systems/fight-replay.md`. No UE changes.
+- 121 offline edge correction (2026-11-27): round_end sorts after same-timestamp kills, preserving the final kill and completed flank; Python19/19 PASS. Final runtime/PIE validation remains pending (task121 report).
+
+- 121 direct-loss completeness checkpoint (2026-11-27): health recording now observes actual common health decreases (normal/direct/cold/burning/bleeding) exactly once, removing actor callback duplication. Known TakeHit attackers arm a synchronous context; critical down is recorded across the same paths. Added C++ AllHealthLossPaths coverage; final worker checks pending.

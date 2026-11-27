@@ -136,6 +136,8 @@ namespace SessionRecordingJson
 	{
 		Writer.WriteValue(TEXT("id"), Target.Id.ToString());
 		Writer.WriteValue(TEXT("arch"), Target.Archetype.ToString());
+		Writer.WriteValue(TEXT("yaw"), Round(Target.Yaw, 10.));
+		if (Target.InCover.IsSet()) { Writer.WriteValue(TEXT("in_cover"), Target.InCover.GetValue()); }
 		Position(Writer, TEXT("p"), Target.Position);
 	}
 }
@@ -260,6 +262,85 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 			}
 		});
 	};
+	TArray<int32> EventIndices;
+	EventIndices.Reserve(Session.Events.Num());
+	for (int32 Index = 0; Index < Session.Events.Num(); ++Index) { EventIndices.Add(Index); }
+	EventIndices.StableSort([&](int32 Left, int32 Right)
+	{
+		return Finite(Session.Events[Left].Time) < Finite(Session.Events[Right].Time);
+	});
+	int32 EventCursor = 0;
+	const auto EmitEvent = [&](int32 EventIndex)
+	{
+		const FDemoEvent& Event = Session.Events[EventIndex];
+		Line([&](FWriter& W)
+		{
+			switch (Event.Type)
+			{
+			case FDemoEvent::EType::ShotHit:
+				W.WriteValue(TEXT("type"), TEXT("shot_hit"));
+				W.WriteValue(TEXT("t"), Finite(Event.Time));
+				W.WriteValue(TEXT("rt"), Finite(Event.RealTime));
+				W.WriteValue(TEXT("who"), Event.Who.ToString());
+				W.WriteValue(TEXT("whom"), Event.Whom.ToString());
+				W.WriteValue(TEXT("weapon"), Event.Weapon.ToString());
+				W.WriteValue(TEXT("dmg"), Round(Event.Amount, 10.));
+				W.WriteValue(TEXT("dist"), Round(Event.DistanceCm));
+				break;
+			case FDemoEvent::EType::Damage:
+				W.WriteValue(TEXT("type"), TEXT("damage"));
+				W.WriteValue(TEXT("t"), Finite(Event.Time));
+				W.WriteValue(TEXT("rt"), Finite(Event.RealTime));
+				W.WriteValue(TEXT("who"), Event.Who.ToString());
+				W.WriteValue(TEXT("whom"), Event.Whom.ToString());
+				W.WriteValue(TEXT("weapon"), Event.Weapon.ToString());
+				W.WriteValue(TEXT("dmg"), Round(Event.Amount, 10.));
+				W.WriteValue(TEXT("dist"), Round(Event.DistanceCm));
+				break;
+			case FDemoEvent::EType::Kill:
+			case FDemoEvent::EType::Down:
+				W.WriteValue(TEXT("type"), Event.Type == FDemoEvent::EType::Kill ? TEXT("kill") : TEXT("down"));
+				W.WriteValue(TEXT("t"), Finite(Event.Time));
+				W.WriteValue(TEXT("rt"), Finite(Event.RealTime));
+				W.WriteValue(TEXT("killer"), Event.Who.ToString());
+				W.WriteValue(TEXT("victim"), Event.Whom.ToString());
+				W.WriteValue(TEXT("weapon"), Event.Weapon.ToString());
+				W.WriteValue(TEXT("dist"), Round(Event.DistanceCm));
+				if (Event.bContextKnown)
+				{
+					W.WriteValue(TEXT("was_victim_aware"), Event.bFlag);
+					W.WriteValue(TEXT("victim_covered_by_ally"), Event.bCoveredByAlly);
+				}
+				else
+				{
+					W.WriteNull(TEXT("was_victim_aware"));
+					W.WriteNull(TEXT("victim_covered_by_ally"));
+				}
+				break;
+			case FDemoEvent::EType::Stealth:
+				W.WriteValue(TEXT("type"), Event.bFlag ? TEXT("stealth_on") : TEXT("stealth_off"));
+				W.WriteValue(TEXT("t"), Finite(Event.Time));
+				W.WriteValue(TEXT("rt"), Finite(Event.RealTime));
+				W.WriteValue(TEXT("op"), Event.Who.ToString());
+				break;
+			case FDemoEvent::EType::Cover:
+				W.WriteValue(TEXT("type"), Event.bFlag ? TEXT("cover_enter") : TEXT("cover_leave"));
+				W.WriteValue(TEXT("t"), Finite(Event.Time));
+				W.WriteValue(TEXT("rt"), Finite(Event.RealTime));
+				W.WriteValue(TEXT("op"), Event.Who.ToString());
+				W.WriteValue(TEXT("height"), Event.Kind.ToString());
+				break;
+			case FDemoEvent::EType::Climb:
+				W.WriteValue(TEXT("type"), TEXT("climb"));
+				W.WriteValue(TEXT("t"), Finite(Event.Time));
+				W.WriteValue(TEXT("rt"), Finite(Event.RealTime));
+				W.WriteValue(TEXT("op"), Event.Who.ToString());
+				W.WriteValue(TEXT("kind"), Event.Kind.ToString());
+				W.WriteValue(TEXT("height_cm"), Round(Event.Amount));
+				break;
+			}
+		});
+	};
 	int32 Orders = 0;
 	int32 Snaps = 0;
 	for (int32 Index : Indices)
@@ -268,6 +349,11 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 		{
 			EmitRound(RoundIndices[RoundCursor]);
 			++RoundCursor;
+		}
+		while (EventCursor < EventIndices.Num() && Finite(Session.Events[EventIndices[EventCursor]].Time) <= Finite(Session.Frames[Index].Time))
+		{
+			EmitEvent(EventIndices[EventCursor]);
+			++EventCursor;
 		}
 		const FDemoFrame& F = Session.Frames[Index];
 		if (F.Type == FDemoFrame::EType::Order && F.Facts.Kind == EDemoOrderKind::Suppress && !F.Facts.bAccepted) { continue; }
@@ -349,9 +435,16 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 				W.WriteValue(TEXT("alive"), Op.bAlive ? 1 : 0);
 				Position(W, TEXT("p"), Op.Position);
 				W.WriteValue(TEXT("yaw"), Round(Op.Yaw, 10.));
+				W.WriteValue(TEXT("look_yaw"), Round(Op.LookYaw, 10.));
 				W.WriteValue(TEXT("st"), static_cast<int32>(Op.Stance));
 				W.WriteValue(TEXT("mv"), Op.bMoving);
 				W.WriteValue(TEXT("cov"), Op.bCover);
+				W.WriteValue(TEXT("in_cover"), Op.bCover);
+				W.WriteValue(TEXT("stealth"), Op.bStealth);
+				W.WriteValue(TEXT("height"), Round(Op.HeightAboveGroundCm));
+				W.WriteValue(TEXT("seen_by_enemy"), Op.SeenByEnemy);
+				W.WriteValue(TEXT("under_fire"), Op.UnderFireSeconds >= 0. ? Round(Op.UnderFireSeconds, 10.) : -1.);
+				W.WriteValue(TEXT("scan_pitch"), Round(Op.ScanPitchDeg, 10.));
 				W.WriteValue(TEXT("hp"), Finite(Op.Health));
 				W.WriteValue(TEXT("clip"), Op.Clip);
 				W.WriteValue(TEXT("res"), Op.Reserve);
@@ -380,6 +473,11 @@ FString SessionRecordingRules::SerializeSession(const FDemoSession& Session, con
 	{
 		EmitRound(RoundIndices[RoundCursor]);
 		++RoundCursor;
+	}
+	while (EventCursor < EventIndices.Num())
+	{
+		EmitEvent(EventIndices[EventCursor]);
+		++EventCursor;
 	}
 	Line([&](FWriter& W)
 	{
