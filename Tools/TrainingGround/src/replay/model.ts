@@ -210,3 +210,132 @@ export function deduplicateAnnotations(annotations: Annotation[]): { annotations
   const result = annotations.filter((_, idx) => keptIndices.has(idx));
   return { annotations: result, removed: annotations.length - result.length };
 }
+
+export interface ReplayRound {
+  round: number;
+  startT: number;
+  endT: number;
+  duration: number;
+  result?: string;
+}
+
+export function roundResultLabel(result?: string): string {
+  switch (result?.toLowerCase()) {
+    case 'victory': return 'победа';
+    case 'defeat': return 'поражение';
+    case 'draw': return 'ничья';
+    case 'aborted': return 'прерван';
+    default: return result || '';
+  }
+}
+
+export function splitRounds(replay: Replay): ReplayRound[] {
+  const starts = replay.rows.filter(r => r.type === 'round_start');
+  const ends = replay.rows.filter(r => r.type === 'round_end');
+  if (starts.length === 0) {
+    const end = ends.at(-1);
+    const endT = Math.max(0, replay.duration);
+    const result = end?.result ?? (replay.footer.result || undefined);
+    return [{
+      round: 1,
+      startT: 0,
+      endT,
+      duration: endT,
+      ...(result !== undefined ? { result } : {}),
+    }];
+  }
+  return starts.map((start, i) => {
+    const nextStart = starts[i + 1];
+    const roundNum = typeof start.round === 'number' ? start.round : i + 1;
+    const startT = start.t!;
+    const end = ends.find(e => e.t! >= startT && (!nextStart || e.t! < nextStart.t!) && (e.round === undefined || e.round === roundNum));
+    const endT = end ? end.t! : nextStart ? nextStart.t! : Math.max(startT, replay.duration);
+    const result = end?.result ?? (!nextStart && replay.footer.result ? replay.footer.result : undefined);
+    return {
+      round: roundNum,
+      startT,
+      endT,
+      duration: Math.max(0, endT - startT),
+      ...(result !== undefined ? { result } : {}),
+    };
+  });
+}
+
+export function annotationRound(a: Pick<Annotation, 'round' | 't'>, replay: Replay | undefined, rounds: ReplayRound[]): number | undefined {
+  if (a.round !== undefined) return a.round;
+  if (!replay || rounds.length === 0) return undefined;
+  return roundAt(replay, a.t)?.round ?? rounds[0].round;
+}
+
+export type NoteRoundScope = 'current' | 'all';
+
+export interface NoteFilterOptions {
+  selectedRound: number | 'all';
+  currentRound?: number;
+  scope: NoteRoundScope;
+  tags: readonly NoteTag[];
+  labelsOnMap: boolean;
+  hoveredId?: string;
+  selectedId?: string;
+}
+
+export interface EvaluatedAnnotation {
+  annotation: Annotation;
+  round: number | undefined;
+  inList: boolean;
+  mapMode: 'full' | 'faint' | 'hidden';
+  showLabel: boolean;
+  highlighted: boolean;
+}
+
+export function evaluateAnnotations(
+  annotations: readonly Annotation[],
+  replay: Replay | undefined,
+  rounds: ReplayRound[],
+  opts: NoteFilterOptions,
+): EvaluatedAnnotation[] {
+  const targetRound = opts.selectedRound !== 'all'
+    ? opts.selectedRound
+    : (opts.currentRound ?? rounds[0]?.round);
+  return annotations.map(annotation => {
+    const round = annotationRound(annotation, replay, rounds);
+    const noteTag: NoteTag = annotation.tag ?? 'прочее';
+    const tagMatch = opts.tags.length === 0 || opts.tags.includes(noteTag);
+    if (!tagMatch) {
+      return { annotation, round, inList: false, mapMode: 'hidden', showLabel: false, highlighted: false };
+    }
+    const isCurrentRound = targetRound === undefined || round === targetRound;
+    const highlighted = annotation.id === opts.selectedId || annotation.id === opts.hoveredId;
+    if (opts.selectedRound !== 'all') {
+      if (!isCurrentRound) {
+        return { annotation, round, inList: false, mapMode: 'hidden', showLabel: false, highlighted: false };
+      }
+      return {
+        annotation,
+        round,
+        inList: true,
+        mapMode: 'full',
+        showLabel: opts.labelsOnMap || highlighted,
+        highlighted,
+      };
+    }
+    if (opts.scope === 'current') {
+      return {
+        annotation,
+        round,
+        inList: isCurrentRound,
+        mapMode: isCurrentRound || highlighted ? 'full' : 'faint',
+        showLabel: highlighted || (isCurrentRound && opts.labelsOnMap),
+        highlighted,
+      };
+    }
+    return {
+      annotation,
+      round,
+      inList: true,
+      mapMode: 'full',
+      showLabel: opts.labelsOnMap || highlighted,
+      highlighted,
+    };
+  });
+}
