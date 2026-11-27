@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
-import { parseReplay, unitsAt, eventUnits, smoothRoute, validNotes } from './model.ts';
+import { parseReplay, unitsAt, eventUnits, smoothRoute, validNotes, translatePoints, deduplicateAnnotations, unitDisplayName, squadUnitIds, selectedReplayUnit, NOTE_TAGS } from './model.ts';
+import type { Annotation } from './model.ts';
 import { containedFile, demoLeaf, setupReplayApi } from '../../server/replayApi.ts';
 
 const text = (rows: unknown[]) => rows.map(r => JSON.stringify(r)).join('\n');
@@ -111,4 +112,84 @@ test('all locally available real recordings parse with finite frame positions', 
     count += r.rows.length;
   }
   console.log(`Real recordings: ${files.length}, timed rows: ${count}`);
+});
+
+test('translatePoints shifts 2D and 3D coordinates for whole-shape dragging', () => {
+  assert.deepEqual(translatePoints([[100, 200], [300, -400, 92]], 50.4, -20.6), [[150, 179], [350, -421, 92]]);
+});
+
+test('deduplicateAnnotations keeps pointed note over time-only duplicate within 2s and preserves distinct points', () => {
+  const base: Omit<Annotation, 'id' | 'points' | 't'> = { kind: 'comment', author: 'Designer', unit: '', label: 'Cover bug', color: '#facc15' };
+  const input: Annotation[] = [
+    { ...base, id: '1', t: 64.5, points: [] },
+    { ...base, id: '2', t: 64.5, points: [[-2812, -12943]] },
+    { ...base, id: '3', t: 66.0, points: [] },
+    { ...base, id: '4', t: 64.5, points: [[-6434, -18735]] },
+    { ...base, id: '5', t: 68.5, points: [] },
+    { ...base, id: '6', t: 69.0, points: [] },
+    { ...base, id: '7', t: 64.5, points: [[-2812, -12943]] },
+  ];
+  const { annotations, removed } = deduplicateAnnotations(input);
+  assert.equal(removed, 4);
+  assert.deepEqual(annotations.map(a => a.id), ['2', '4', '5']);
+});
+
+test('real 51-note designer session copies to temp dir, validates legacy schema, and deduplicates cleanly', () => {
+  const candidates = [
+    path.join(os.homedir(), 'Documents/Unreal Projects/CodexTactics-play/Saved/Demos/2026-11-27_L_Gen_Depot_1_X6_085013.notes.json'),
+    path.join(os.homedir(), 'Documents/Unreal Projects/CodexTactics/Saved/Demos/2026-11-27_L_Gen_Depot_1_X6_085013.notes.json'),
+  ];
+  const src = candidates.find(p => fs.existsSync(p));
+  if (!src) return;
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'replay154-notes-'));
+  try {
+    const copyPath = path.join(tmpDir, path.basename(src));
+    fs.copyFileSync(src, copyPath);
+    const parsed = JSON.parse(fs.readFileSync(copyPath, 'utf8').replace(/^\uFEFF/, ''));
+    assert.ok(validNotes(parsed, '2026-11-27_L_Gen_Depot_1_X6_085013.jsonl', 'L_Gen_Depot_1_X6'));
+    const { annotations, removed } = deduplicateAnnotations(parsed.annotations);
+    assert.ok(removed > 0);
+    assert.ok(annotations.length < parsed.annotations.length);
+    const savedCopy = { ...parsed, annotations };
+    fs.writeFileSync(copyPath, JSON.stringify(savedCopy, null, 2));
+    assert.ok(validNotes(JSON.parse(fs.readFileSync(copyPath, 'utf8')), '2026-11-27_L_Gen_Depot_1_X6_085013.jsonl', 'L_Gen_Depot_1_X6'));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('role display names map squad roles to Russian names while preserving IDs and selection defaults', () => {
+  const squadHeader = {
+    type: 'header',
+    map: 'L_Gen_Depot_1_X6',
+    squad: [
+      { id: 'BP_Operative_C_0', role: 'EOperativeRole::Commander' },
+      { id: 'BP_Operative_C_1', role: 'EOperativeRole::Engineer' },
+      { id: 'BP_Operative_C_2', role: 'EOperativeRole::MedicSapper' },
+      { id: 'BP_Operative_C_9', role: 'EOperativeRole::Recruit' },
+    ],
+  };
+  const r = parseReplay(text([
+    squadHeader,
+    { type: 'snap', t: 1, ops: [{ id: 'BP_Operative_C_0', p: [0, 0], sel: true, lead: true }, { id: 'BP_Operative_C_1', p: [100, 0], sel: false }], threats: [{ id: 'BP_Operative_C_7', p: [500, 0] }] },
+    { type: 'snap', t: 3, ops: [{ id: 'BP_Operative_C_0', p: [0, 0], sel: false }, { id: 'BP_Operative_C_1', p: [100, 0], sel: true }] },
+  ]));
+  assert.deepEqual(squadUnitIds(r), ['BP_Operative_C_0', 'BP_Operative_C_1', 'BP_Operative_C_2', 'BP_Operative_C_9']);
+  assert.equal(unitDisplayName(r, 'BP_Operative_C_0'), 'Командир');
+  assert.equal(unitDisplayName(r, 'BP_Operative_C_1'), 'Инженер');
+  assert.equal(unitDisplayName(r, 'BP_Operative_C_2'), 'Медик-сапёр');
+  assert.equal(unitDisplayName(r, 'BP_Operative_C_9'), 'Новобранец');
+  assert.equal(unitDisplayName(r, 'BP_Operative_C_7'), 'PMC 7');
+  assert.equal(selectedReplayUnit(r, 0), 'BP_Operative_C_0');
+  assert.equal(selectedReplayUnit(r, 1), 'BP_Operative_C_0');
+  assert.equal(selectedReplayUnit(r, 3), 'BP_Operative_C_1');
+});
+
+test('tag field validates allowed values and maintains backward compatibility for untagged notes', () => {
+  for (const tag of NOTE_TAGS) {
+    const withTag = { ...notes, annotations: [{ ...notes.annotations[0], tag }] };
+    assert.ok(validNotes(withTag, 'real.jsonl', header.map), tag);
+  }
+  assert.ok(validNotes(notes, 'real.jsonl', header.map));
+  assert.ok(!validNotes({ ...notes, annotations: [{ ...notes.annotations[0], tag: 'unknown_tag' }] }, 'real.jsonl', header.map));
 });
