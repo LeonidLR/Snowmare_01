@@ -20,6 +20,8 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "UI/GameMessageSubsystem.h"
+#include "UI/FloatingTextSubsystem.h"
+#include "Interactables/WindowBreakage.h"
 
 namespace RoofAccessAudit155
 {
@@ -124,7 +126,7 @@ void Audit(UWorld* World)
 		Q.SetAllowPartialPaths(false);
 		return Nav->FindPathSync(Q);
 	};
-	int32 Count = 0, Broken = 0;
+	int32 Count = 0, Broken = 0, LadderCount = 0, RampCount = 0;
 	FString Table = TEXT("# X6 placed access audit (155)\n\nRead-only runtime geometry; Default infantry navmesh, +/-60 cm endpoint snap. "
 						 "Heights cm. A complete alternate path alone does not prove the audited ladder link.\n\n| Building | Actor / "
 						 "component | Kind | Bottom Z | Top Z | Claimed landing Z | Bottom nav | Top nav | Connected | Findings / proposed "
@@ -190,6 +192,7 @@ void Audit(UWorld* World)
 	};
 	for (TActorIterator<ALadderActor> It(World); It; ++It)
 	{
+		++LadderCount;
 		const FBuilding* B = BuildingAt(**It, It->GetTopLinkWorld());
 		float Expected = It->GetTopWorldZ();
 		const FString To = Tag(**It, TEXT("to="));
@@ -278,6 +281,7 @@ void Audit(UWorld* World)
 				}
 			}
 
+			++RampCount;
 			Row(**It, It->GetName() + TEXT("/") + C->GetName(), TEXT("ramp"), Foot, B, Landing, Expected, nullptr,
 				RampIssue + (FMath::Abs(B.Z - Expected) > 60.f
 								 ? FString::Printf(TEXT("physical ramp top %.1f misses floor %.1f; "), B.Z, Expected)
@@ -287,7 +291,17 @@ void Audit(UWorld* World)
 	Table += FString::Printf(TEXT("\n%d placed accesses inspected; %d require review/data repair.\n"), Count, Broken);
 	FFileHelper::SaveStringToFile(Table, *(FPaths::ProjectSavedDir() / TEXT("Logs/155-roof-access-audit.md")));
 	UE_LOG(LogCodexTactics, Display, TEXT("[AccessAudit155] COMPLETE accesses=%d review=%d"), Count, Broken);
-	int32 CodeFailures = 0, RoofFaces = 0;
+	int32 ExpectedRamps = 0;
+	for (const auto& V : Layout->GetArrayField(TEXT("buildings")))
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Stairs = nullptr;
+		if (V->AsObject()->TryGetArrayField(TEXT("stairs"), Stairs)) { ExpectedRamps += Stairs->Num(); }
+	}
+	const bool InventoryComplete = LadderCount >= Layout->GetArrayField(TEXT("ladders")).Num() && RampCount >= ExpectedRamps;
+	UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: placed inventory %d ladders / %d ramp slabs; layout claims %d ladders / %d stairs"),
+		InventoryComplete ? TEXT("ok") : TEXT("FAIL"), LadderCount, RampCount, Layout->GetArrayField(TEXT("ladders")).Num(), ExpectedRamps);
+	int32 CodeFailures = InventoryComplete ? 0 : 1, RoofFaces = 0;
+	bool Case2Click = false;
 	ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
 	if (PC && Op)
 	{
@@ -303,16 +317,35 @@ void Audit(UWorld* World)
 			Raw.bBlockingHit = true;
 			const FHitResult Kept = PC->LowerBuildingHit(Raw);
 			CodeFailures += Kept.GetActor() != Raw.GetActor() || !Kept.ImpactPoint.Equals(Raw.ImpactPoint, 0.1) ? 1 : 0;
+			CodeFailures += WindowBreakage::FindWindowSillAt(*World, Raw) != nullptr ? 1 : 0;
+			if (!Case2Click && It->ActorHasTag(TEXT("building=B_x1_16_t7_block")))
+			{
+				// An actual placed case-2 roof edge through the full player dispatch. Historical cursor rays were not recorded.
+				const FBox Box = It->GetComponentsBoundingBox(true);
+				Raw.ImpactPoint = Box.GetCenter();
+				const FVector2D Away = (FVector2D(Box.GetCenter()) - FVector2D(-8050.f,16418.f)).GetSafeNormal();
+				Raw.ImpactNormal = Box.GetSize().X < Box.GetSize().Y ? FVector(FMath::Sign(Away.X),0,0) : FVector(0,FMath::Sign(Away.Y),0);
+				PC->HandlePlayerClick(Raw);
+				Case2Click = FMath::Abs(Op->GetLastMoveDestination().Z - Box.Min.Z) <= 60.f;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: case2 %s roof click retains requested floor %.0f (actual goal %s)"),
+					Case2Click ? TEXT("ok") : TEXT("FAIL"), *It->GetName(), Box.Min.Z, *Op->GetLastMoveDestination().ToCompactString());
+				CodeFailures += Case2Click ? 0 : 1;
+			}
 		}
 		const EOperativeOrderResult Refused = Op->OrderMoveTo(Op->GetFloorReferenceLocation() + FVector(0.f, 0.f, 5000.f), false);
 		const UGameMessageSubsystem* Feed = World->GetSubsystem<UGameMessageSubsystem>();
 		const bool Explained =
 			Feed && !Feed->GetHistory().IsEmpty() && Feed->GetHistory().Last().Text.ToString().Contains(TEXT("No way up"));
+		UFloatingTextSubsystem* Floating = World->GetSubsystem<UFloatingTextSubsystem>();
+		const bool FloatingShown = Floating && Floating->GetTexts().ContainsByPredicate([](const FCombatFloatingText& T)
+		{ return T.Text.Contains(TEXT("NO WAY UP")); });
+		CodeFailures += FloatingShown ? 0 : 1;
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: refused roof order spawns live floating NO WAY UP text"), FloatingShown ? TEXT("ok") : TEXT("FAIL"));
 		CodeFailures += Refused != EOperativeOrderResult::Unreachable || !Explained ? 1 : 0;
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: elevated order refused with on-screen No way up reason"),
 			   Explained && Refused == EOperativeOrderResult::Unreachable ? TEXT("ok") : TEXT("FAIL"));
 	}
-	CodeFailures += RoofFaces == 0 ? 1 : 0;
+	CodeFailures += RoofFaces == 0 || !Case2Click ? 1 : 0;
 	UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: %d elevated parapet faces preserve raw hit height; code failures=%d"),
 		   CodeFailures == 0 ? TEXT("ok") : TEXT("FAIL"), RoofFaces, CodeFailures);
 	// This gate proves exhaustive execution, not map health; every defect remains in the table.
