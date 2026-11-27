@@ -50,7 +50,7 @@ namespace ControllerWindowCover
 			const FCoverSlot& Own = Leader->GetCoverSlot();
 			const bool bSameWall = WindowCoverRules::OnSameWallPlane(SillCenter, Own.WallPoint, Own.WallNormal, Limit);
 			const bool bSameSide = FVector::DotProduct(Leader->GetActorLocation() - SillCenter, Own.WallNormal) >= -WindowBreakage::FaceMarginCm;
-			if (WindowCoverRules::CanClickWindowAsCover(bSameWall, bAlt, bSameSide))
+			if (bSameWall && WindowCoverRules::CanClickWindowAsCover(bSameWall, bAlt, bSameSide))
 			{
 				OutSill = Sill;
 				OutSideNormal = Own.WallNormal.GetSafeNormal2D();
@@ -62,7 +62,7 @@ namespace ControllerWindowCover
 		{
 			const FVector WallNormal = FRotator(0.f, WallYaw, 0.f).Vector().GetSafeNormal2D();
 			const bool bSameWall = WindowCoverRules::OnSameWallPlane(SillCenter, Leader->GetActorLocation() - WallNormal * 45.f, WallNormal, Limit);
-			if (WindowCoverRules::CanClickWindowAsCover(bSameWall, bAlt, bSameWall))
+			if (bSameWall && WindowCoverRules::CanClickWindowAsCover(bSameWall, bAlt, bSameWall))
 			{
 				OutSill = Sill;
 				OutSideNormal = WallNormal;

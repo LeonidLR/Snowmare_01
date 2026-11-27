@@ -156,7 +156,6 @@ namespace WindowCoverRules
 		FVector SideNormal = FVector::ForwardVector;
 		FVector AlongAxis = FVector::RightVector;
 		FVector IntervalOrigin = FVector::ZeroVector;
-		FVector SpanOrigin = FVector::ZeroVector;
 		float AlongMinCm = 0.f;
 		float AlongMaxCm = 0.f;
 		float SillTopCm = 0.f;
@@ -178,7 +177,6 @@ namespace WindowCoverRules
 		EWindowGlassState RightEdgeGlass = EWindowGlassState::Missing;
 		int32 LeftEdgeGlassRounds = 0;
 		int32 RightEdgeGlassRounds = 0;
-		TArray<FWindowCrouchSpan> WallSpans;
 		/** Sampled when the sill is bound. A glazed pane ignores visibility, so the shot line cannot see it. */
 		EWindowGlassState Glass = EWindowGlassState::Missing;
 		EWindowCoverReject Reject = EWindowCoverReject::SolidWall;

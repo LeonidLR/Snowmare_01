@@ -1,5 +1,6 @@
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/CoverWrapRules.h"
+#include "Interactables/WindowBreakage.h"
 #include "Vehicles/VehiclePawn.h"
 
 #include "Combat/EnemyGhostActor.h"
@@ -215,10 +216,10 @@ namespace CoverTraceRules
 			Chest = Knee; // the low obstacle's surface
 			bSnappedToKnee = true;
 		}
-		else if (bKneeHit && Knee.Distance + 25.f < Chest.Distance)
+		else if (bKneeHit && Knee.Distance + 25.f < Chest.Distance && WindowBreakage::FindWindowSillAt(*World, Knee) != nullptr)
 		{
-			// Only snap chest to a closer knee hit (e.g. a window sill where chest passed through the opening) if the
-			// foreground geometry actually qualifies as cover height (do not let a low curb < 40 cm hijack a tall wall).
+			// Only snap chest to a closer knee hit on an actual window sill (where chest passed through the opening),
+			// and only if the sill top itself is detected as cover height (never on a missed top trace or low curb/crate).
 			FVector KneeNormal = FVector(Knee.ImpactNormal.X, Knee.ImpactNormal.Y, 0.f);
 			if (FMath::Abs(Knee.ImpactNormal.Z) <= Config.MaxWallNormalZ && KneeNormal.Normalize())
 			{
@@ -233,7 +234,7 @@ namespace CoverTraceRules
 				{
 					KneeTopCm = KneeTop.ImpactPoint.Z - GroundZ;
 				}
-				if (KneeTopCm <= 0.f || ClassifyHeight(KneeTopCm, Config) != ECoverHeight::None)
+				if (KneeTopCm > 0.f && ClassifyHeight(KneeTopCm, Config) != ECoverHeight::None)
 				{
 					Chest = Knee;
 					bSnappedToKnee = true;

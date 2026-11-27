@@ -200,17 +200,28 @@ void AOperativeCharacter::UpdateCornerAim(float DeltaTime)
 		EndCornerAim(ECornerAimDecision::DuckForSafety, TEXT("suppressed: head down"));
 		return;
 	}
-	if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && !IsWindowCoverConfirmed() && !IsCornerHoldSpot() && !IsManualCornerPeekSpot())
+	if (IsWindowCoverConfirmed())
 	{
-		EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("no longer at the exposed edge"));
-		return;
+		if (!HasWindowCoverAim() && GetWorld() && GetWorld()->GetTimeSeconds() - CoverLastShotTime > CoverEngageHoldSeconds)
+		{
+			EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("no window aim target"));
+			return;
+		}
 	}
-	// The hold outside a fight lasts while a threat is known (or he fired lately): then back to hugging the wall.
-	if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && !IsWindowCoverConfirmed() && !WantsCornerHold() && GetWorld()
-		&& GetWorld()->GetTimeSeconds() - CoverLastShotTime > CoverEngageHoldSeconds)
+	else
 	{
-		EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("no fight, no threat known"));
-		return;
+		if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && !IsCornerHoldSpot() && !IsManualCornerPeekSpot())
+		{
+			EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("no longer at the exposed edge"));
+			return;
+		}
+		// The hold outside a fight lasts while a threat is known (or he fired lately): then back to hugging the wall.
+		if (bCornerHoldAtEdge && CurrentCoverHeight == ECoverHeight::HighCover && !WantsCornerHold() && GetWorld()
+			&& GetWorld()->GetTimeSeconds() - CoverLastShotTime > CoverEngageHoldSeconds)
+		{
+			EndCornerAim(ECornerAimDecision::ReturnNoTargets, TEXT("no fight, no threat known"));
+			return;
+		}
 	}
 	// Leaned out (sight: exposed) for as long as the aim lasts.
 	bIsCornerLeaning = true;

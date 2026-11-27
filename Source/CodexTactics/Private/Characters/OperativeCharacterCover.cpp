@@ -1136,7 +1136,7 @@ bool AOperativeCharacter::IsCoverThreatActive() const
 bool AOperativeCharacter::IsCoverFireReady() const
 {
 	const UWorld* World = GetWorld();
-	if (!bInCover || !World || bIsReloading || IsCoverShotBlind())
+	if (!bInCover || !World || bIsReloading || (IsWindowCoverConfirmed() && IsCoverShotBlind()))
 	{
 		return false;
 	}

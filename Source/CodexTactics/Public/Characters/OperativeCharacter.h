@@ -3104,12 +3104,22 @@ private:
 	WindowCoverRules::EWindowIntervalPlace WindowCoverLastPlace = WindowCoverRules::EWindowIntervalPlace::Outside;
 	FVector WindowCoverSegment = FVector(FLT_MAX);
 	TWeakObjectPtr<UPrimitiveComponent> WindowCoverWall;
-	/** 144: Cached same-wall/floor window sills to avoid rescanning world actors every 5 cm during shimmy. */
-	TArray<TWeakObjectPtr<AActor>> CachedWindowWallSills;
+	/** 144: Wall-plane crouch spans kept outside FWindowCoverBinding so GetActiveWindowForShot has zero heap copies. */
+	TArray<WindowCoverRules::FWindowCrouchSpan> WindowCoverWallSpans;
+	FVector WindowCoverSpanOrigin = FVector::ZeroVector;
+	/** 144: Cached same-wall/floor window sills (geometry + floor) to avoid rescanning world actors during shimmy. */
+	struct FCachedWindowSill
+	{
+		TWeakObjectPtr<AActor> Sill;
+		FBox SillBox = FBox(ForceInit);
+		FBox OpeningBox = FBox(ForceInit);
+		FString Building;
+		int32 Floor = INDEX_NONE;
+	};
+	TArray<FCachedWindowSill> CachedWindowWallSills;
 	FVector CachedWindowWallSillsAt = FVector(FLT_MAX);
 	TWeakObjectPtr<UPrimitiveComponent> CachedWindowWallComp;
 	int32 CachedWindowWallFloor = INDEX_NONE;
-	double CachedWindowWallTime = -1000.0;
 	/** 144: Cached crouch spans for wall-slide formation walk (invalidated on wall/floor/distance/time). */
 	TArray<WindowCoverRules::FWindowCrouchSpan> CachedWallSlideSpans;
 	FVector CachedWallSlideOrigin = FVector(FLT_MAX);
