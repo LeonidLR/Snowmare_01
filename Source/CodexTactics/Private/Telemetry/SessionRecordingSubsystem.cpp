@@ -281,7 +281,26 @@ void USessionRecordingSubsystem::MarkSession(const FString& Command)
  for (TActorIterator<AOperativeCharacter> It(GetWorld()); It; ++It)
  { bContact |= It->GetLastShotTime() > GameStart + Started; }
  const int32 Round = SessionRecordingRules::ChooseMarkRound(Session, Now, bContact, bPrevious, Explicit);
- if (Round == INDEX_NONE) { return; }
+ if (Round == INDEX_NONE)
+ {
+  // No sector rounds (lake / tutorial / free play) or an unknown round: keep the pre-151 behaviour - mark the whole recording - and say so.
+  if (bPrevious || Explicit != INDEX_NONE)
+  {
+   UE_LOG(LogCodexTactics, Display, TEXT("[DemoRecord] mark '%s': no such round - nothing marked"), *Command);
+   if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+   {
+    UFloatingTextSubsystem::SpawnAboveOperative(Squad->GetLeader(), TEXT("Нет такого раунда - пометка не сделана"), FLinearColor::White);
+   }
+   return;
+  }
+  Session.Mark = Args[0];
+  UE_LOG(LogCodexTactics, Display, TEXT("[DemoRecord] whole recording marked: %s"), *Args[0]);
+  if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+  {
+   UFloatingTextSubsystem::SpawnAboveOperative(Squad->GetLeader(), FString::Printf(TEXT("Запись помечена: %s"), *Args[0]), FLinearColor::White);
+  }
+  return;
+ }
  Session.Mark = Args[0];
  FDemoEvent& Event = Session.Events.AddDefaulted_GetRef();
  Event.Type = FDemoEvent::EType::RoundMark;
