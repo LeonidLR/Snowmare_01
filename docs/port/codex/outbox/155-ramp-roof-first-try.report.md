@@ -1,0 +1,17 @@
+# 155 ? ramp / roof first order
+
+Status: implementation checkpoint; final worker build, Smart tests, X6 audit and mapped smokes pending. Branch `codex/155-ramp-roof-first-try`, base `17c15000`.
+
+Evidence read without changing the play copy: both supplied excerpts, case-2 screenshot, recorded session `2026-11-27_L_Gen_Depot_1_X6_085013.jsonl`, current full play log (contains case 2; the earlier case-1 session is no longer in that file).
+
+The recording resolves Commander `BP_Operative_C_12` orders at t721.9995 / 727.7694 / 739.5760 to ground Cover at Z10, rather than an elevated path that GiveWay later replaces. The intervening moves are Z0. It does not retain the original cursor ray/hit. No historical first-failed/second-successful roof path can be reconstructed from these records alone. This distinction matters: the supplied ground-order excerpt cannot establish a failed ramp nav link.
+
+Case 2 is building **64, B_x1_16_t7_block**. Full log identifies `StaticMeshActor_1019` at09:00:41 and `StaticMeshActor_1026` at09:01:17 as window-sill dispatch, with destination Z10. These orders are rewritten before movement. Code inspection found two concrete interception defects: high-hit lowering can substitute another actor below based on normal alone; window face bounds extend260cm above a sill and the through-ray landing test checks only XY. An upper window can therefore absorb a roof-edge hit, while window target selection places its crossing on the operative's current floor. Historical raw hits are unavailable, so this is a reproduced-code mechanism to validate, not a claim that the recorded ray is known.
+
+Changes: preserve ramp/slab/parapet/window hits before cover preview; validate lower-hit identity; bypass preview for original interaction targets; a high parapet click from below targets its roof floor; limit window picks to the opening/storey; compare pending window/cover targets with height; reject partial or lower-projected elevated own moves and show No way up in the HUD feed and floating text.
+
+Verification tools: `CodexTactics.LevelGenRampSmoke` reused on `/Game/Maps/Generated/L_Gen_Depot_1_X6`; `roofedge` sends one placed parapet-face hit through HandlePlayerClick. `CodexTactics.RoofAccessAuditSmoke` inventories placed ladders and sloped slabs, maps building numbers from148, checks physical top/claimed floor, infantry landing polygons, enabled ladder links, endpoint path/link IDs, ramp surface and direct top joins. Audit PASS means execution and code refusal checks passed; its defect table is reported separately. No map/data fixes are applied.
+
+139 merge note: its HasNoWayUp guard overlaps RequestMove. Reconcile the guards when merging; retain139's authored standing capsule allowance for legacy ground goals. Worker sync's implicit LFS upload was removed here as in139, because this task explicitly forbids pushes.
+
+Initial validation attempts: worker compile found missing NavigationSystem.h (fixed); an early local Smart invocation before lane binaries were available matched zero tests and is not acceptance evidence. Final results will replace this checkpoint below.

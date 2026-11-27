@@ -35,6 +35,7 @@
 #include "Level/CrawlGapActor.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationData.h"
+#include "NavigationSystem.h"
 #include "NavMesh/NavMeshPath.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Tactics/LookHoldRules.h"
@@ -115,7 +116,8 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	}
 	// Sprint 12: a move order away from the wall leaves the cover (a cover / shimmy order keeps it; so does the planned
 	// walk to the pending slot that the tactical pause releases).
-	const bool bToPendingSlot = bHasPendingCover && FVector::Dist2D(Destination, PendingCoverSlot.WorldLocation) <= 60.f;
+	const bool bToPendingSlot = bHasPendingCover && FVector::Dist2D(Destination, PendingCoverSlot.WorldLocation) <= 60.f
+		&& FMath::Abs(Destination.Z - PendingCoverSlot.WorldLocation.Z) <= 120.f;
 	if (!bCoverMoveOrder && !bPendingMoveReplay && !bToPendingSlot)
 	{
 		if (bInCover)
@@ -254,11 +256,21 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	ApplyMovementParams();
 	// The order's destination is always the click (the far landing). A walk to his own side must not replace it.
 	// A different click drops the window file. The climb leg orders the landing again and keeps it.
-	if (bWindowFileActive && FVector::Dist2D(Destination, WindowApproachLanding) > WindowOrderRules::Get().ApproachMatchCm)
+	if (bWindowFileActive && FVector::Dist(Destination, WindowApproachLanding) > WindowOrderRules::Get().ApproachMatchCm)
 	{
 		bWindowFileActive = false;
 	}
 	EOperativeOrderResult Result = RequestMove(Destination);
+	if (Result == EOperativeOrderResult::Unreachable && IsPlayerTeam() && !bAutonomousOrder
+		&& Destination.Z > GetFloorReferenceLocation().Z + 150.f)
+	{
+		const FText Reason = NSLOCTEXT("OperativeMovement", "NoWayUp", "No way up: no complete path to that roof or upper floor. Check the ramp or ladder landing.");
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("NO WAY UP - CHECK RAMP / LADDER"), FLinearColor(1.f, 0.4f, 0.1f));
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(DisplayName, Reason);
+		}
+	}
 	bOwnMoveOrder = bHasMoveOrder; // rev 5g: his own order (the formation leaves him alone until it is done)
 	if (bWindowApproachPending)
 	{
@@ -266,7 +278,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		// this window. Automatic routing never arms the via, so it keeps the open path. Followers file through once he
 		// is on the far side (QueueThroughWindow); they do not take a whole window themselves.
 		const FWindowOrderTuning& WindowTuning = WindowOrderRules::Get();
-		const bool bThisWindow = FVector::Dist2D(Destination, WindowApproachLanding) <= WindowTuning.ApproachMatchCm;
+		const bool bThisWindow = FVector::Dist(Destination, WindowApproachLanding) <= WindowTuning.ApproachMatchCm;
 		if (Result == EOperativeOrderResult::Accepted && bHasMoveOrder && bThisWindow)
 		{
 			// This leg only walks to his own side, and must not enter another opening. SteerOwnMoveVia keeps the landing.
@@ -512,9 +524,28 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 	{
 		return EOperativeOrderResult::NoController;
 	}
+	// 155: a roof order must reach THAT level. The default broad projection and partial paths
+	// could accept a ground endpoint below an isolated roof as a successful move.
+	const bool bElevatedOrder = IsPlayerTeam() && !bFormationMove && !bAutonomousOrder
+		&& Destination.Z > GetFloorReferenceLocation().Z + 150.f;
+	FVector PathGoal = Destination;
+	if (bElevatedOrder)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+		const ANavigationData* NavData = Nav ? Nav->GetNavDataForProps(GetNavAgentPropertiesRef(), GetNavAgentLocation()) : nullptr;
+		FNavLocation OnNav;
+		if (!NavData || !Nav->ProjectPointToNavigation(Destination, OnNav, FVector(80.f, 80.f, 60.f), NavData))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[RoofOrder] %s refused %s: no landing navmesh within 60 cm of requested height"), *DisplayName.ToString(), *Destination.ToCompactString());
+			bHasMoveOrder = false;
+			AIController->StopMovement();
+			return EOperativeOrderResult::Unreachable;
+		}
+		PathGoal = OnNav.Location;
+	}
 	EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(
-		Destination, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true,
-		/*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false, ChooseMoveFilter());
+		PathGoal, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true,
+		/*bProjectDestinationToNavigation*/ !bElevatedOrder, /*bCanStrafe*/ false, ChooseMoveFilter(), /*bAllowPartialPath*/ !bElevatedOrder);
 	// Mantling: on a mantle top whose path off it does not start (no navmesh on the top) or ends short of the goal (an island, a partial
 	// path: MantlingProblem_06 "stuck on top"), he comes down over the face nearest the goal and walks on from there (batch 2).
 	// (The player's operatives only: the PMC's own operatives keep their paths - their AI is not touched by batch 2.)
@@ -552,7 +583,7 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 	// the nearest navmesh point that reaches the main area and the order is asked again.
 	if (Result == EPathFollowingRequestResult::Failed && LedgeFall && LedgeFall->RescueIfOffNavmesh(TEXT("an order could not start"), /*bResumeOrder*/ false))
 	{
-		Result = AIController->MoveToLocation(Destination, MovementConfig.AcceptanceRadius, false, true, true, false, ChooseMoveFilter());
+		Result = AIController->MoveToLocation(PathGoal, MovementConfig.AcceptanceRadius, false, true, !bElevatedOrder, false, ChooseMoveFilter(), !bElevatedOrder);
 	}
 	if (Result == EPathFollowingRequestResult::Failed)
 	{

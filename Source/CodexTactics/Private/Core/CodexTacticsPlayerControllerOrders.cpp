@@ -565,6 +565,17 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		}
 	}
 	FVector WindowFeet;
+	// 155: a parapet viewed from below is the roof destination. Keep the requested floor
+	// through window / cover dispatch; a broken route is refused by OrderMoveTo on that floor.
+	if (const AActor* Edge = Hit.GetActor(); Edge && Edge->ActorHasTag(TEXT("parapet"))
+		&& Edge->GetComponentsBoundingBox(true).Min.Z > Leader->GetFloorReferenceLocation().Z + 150.f)
+	{
+		const FVector RoofFeet(Hit.ImpactPoint.X - Hit.ImpactNormal.X * 100.f,
+			Hit.ImpactPoint.Y - Hit.ImpactNormal.Y * 100.f, Edge->GetComponentsBoundingBox(true).Min.Z);
+		UE_LOG(LogCodexTactics, Display, TEXT("[RoofOrder] edge %s hit %s -> roof %s"), *Edge->GetName(), *Hit.ImpactPoint.ToCompactString(), *RoofFeet.ToCompactString());
+		Hit = FHitResult(nullptr, nullptr, RoofFeet, FVector::UpVector);
+		Hit.bBlockingHit = true;
+	}
 	float WindowYaw = 0.f;
 	FVector WindowApproach = FVector::ZeroVector;
 	bool bWindowApproachOnNav = false;
@@ -983,6 +994,11 @@ bool ACodexTacticsPlayerController::FindWindowSillTarget(const AActor& Sill, con
 	const FVector Size = Local.GetSize() * Sill.GetActorScale3D().GetAbs();
 	const FVector Center = Sill.GetActorTransform().TransformPosition(Local.GetCenter());
 	const float FeetZ = static_cast<float>(Operative.GetActorLocation().Z - Operative.GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	// A window on another storey must never produce a crossing on the operative's floor.
+	if (FMath::Abs(Sill.GetComponentsBoundingBox(true).Min.Z - FeetZ) > 120.f)
+	{
+		return false;
+	}
 	const FVector Feet(Operative.GetActorLocation().X, Operative.GetActorLocation().Y, FeetZ);
 	const FWindowOrderTuning& Tuning = WindowOrderRules::Get();
 	const FWindowSideChoice Choice = WindowOrderRules::ChooseSide(Feet, Center, Sill.GetActorForwardVector(), Sill.GetActorRightVector(),

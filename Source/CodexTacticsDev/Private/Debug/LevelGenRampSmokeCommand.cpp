@@ -35,6 +35,8 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "Components/PrimitiveComponent.h"
 #include "Formation/RampFileRules.h"
 #include "GameFlow/LevelExitSubsystem.h"
 #include "HAL/IConsoleManager.h"
@@ -79,6 +81,7 @@ namespace LevelGenRampSmoke
 
 	struct FLeg
 	{
+		FHitResult EdgeHit;
 		ELegKind Kind = ELegKind::Squad;
 		int32 Stair = 0;
 		FVector Goal = FVector::ZeroVector;
@@ -109,6 +112,7 @@ namespace LevelGenRampSmoke
 		TArray<FString> Summary;
 		FString Only;
 		bool bStrictNav = false;
+		bool bRoofEdge = false;
 		bool bTrace = false;
 		float TraceClock = 0.f;
 		/** Own-order bit last sample, so a trace run can name the moment it drops. */
@@ -467,6 +471,33 @@ namespace LevelGenRampSmoke
 					// a switchback below the roof arrives on a floor landing between closed flat doors: the goal is that landing, never a roof-style goal
 					Leg.Goal = Stair.LevelFrom > 0 || (Stair.bSwitchback && Stair.LevelTo < Floors) ? TopOnNav
 						: RoofGoal(State, State.Stairs[Index], Kind == ELegKind::Group ? 250.f : 600.f);
+					// 155: optionally replay a real parapet face hit, including the click-preview entry point.
+					// A constructed floor hit alone cannot catch a roof click being lowered to ground cover/window.
+					if (State.bRoofEdge && Stair.LevelTo == Floors)
+					{
+						double Best = TNumericLimits<double>::Max();
+						const FName BuildingTag(*FString::Printf(TEXT("building=%s"), *B->GetStringField(TEXT("id"))));
+						for (TActorIterator<AActor> It(World); It; ++It)
+						{
+							if (!It->ActorHasTag(BuildingTag) || !It->ActorHasTag(TEXT("parapet"))) { continue; }
+							const FBox Box = It->GetComponentsBoundingBox(true);
+							const FVector Center = Box.GetCenter();
+							const FVector2D RoofCenter = Roof.GetCenter();
+							const FVector Normal = Box.GetSize().X < Box.GetSize().Y
+								? FVector(Center.X > RoofCenter.X ? 1.f : -1.f, 0.f, 0.f)
+								: FVector(0.f, Center.Y > RoofCenter.Y ? 1.f : -1.f, 0.f);
+							const FVector Point = Box.GetClosestPointTo(FVector(Stair.Top, Center.Z));
+							const FVector Goal(Point.X - Normal.X * 100.f, Point.Y - Normal.Y * 100.f, Box.Min.Z);
+							const double Distance = FVector::DistSquared2D(Goal, FVector(Stair.Top, Goal.Z));
+							if (Distance < Best)
+							{
+								Best = Distance;
+								Leg.Goal = Goal;
+								Leg.EdgeHit = FHitResult(*It, It->FindComponentByClass<UPrimitiveComponent>(), Point, Normal);
+								Leg.EdgeHit.bBlockingHit = true;
+							}
+						}
+					}
 					Leg.Limit = 60.f + Rise / 10.f;
 					State.Legs.Add(Leg);
 				}
@@ -604,10 +635,10 @@ namespace LevelGenRampSmoke
 		Hit.ImpactNormal = FVector::UpVector;
 		Hit.Normal = FVector::UpVector;
 		Hit.bBlockingHit = true;
-		PC->HandleWorldHit(Hit);
+		PC->HandlePlayerClick(Hit);
 		if (bDouble)
 		{
-			PC->HandleWorldHit(Hit); // the second click within the double-click time (same frame, same mouse position): sprint
+			PC->HandlePlayerClick(Hit); // the second click within the double-click time (same frame, same mouse position): sprint
 		}
 	}
 
@@ -754,7 +785,17 @@ namespace LevelGenRampSmoke
 			}
 			Squad->ResetFormationState(FVector(State.Stairs[Leg.Stair].Dir, 0.0));
 			Squad->SetFollowersHolding(Leg.Kind == ELegKind::Solo);
-			Click(World, Leg.Goal, Leg.Kind == ELegKind::Group);
+			if (Leg.EdgeHit.bBlockingHit)
+			{
+				if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController()))
+				{
+					PC->HandlePlayerClick(Leg.EdgeHit); // one roof order; no retry
+				}
+			}
+			else
+			{
+				Click(World, Leg.Goal, Leg.Kind == ELegKind::Group);
+			}
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: leg %d / %d - %s %s: %s (selected, %d in the selection) clicked to %s"), State.Leg + 1, State.Legs.Num(),
 				*State.Stairs[Leg.Stair].Id, KindName(Leg.Kind), *Ordered->DisplayName.ToString(), Squad->GetSelectedGroup().Num(), *Leg.Goal.ToCompactString());
 			State.PhaseTime = 0.f;
@@ -868,6 +909,7 @@ namespace LevelGenRampSmoke
 				State->LegFilter.Append(Parts);
 			}
 			State->bStrictNav |= Arg == TEXT("strictnav");
+			State->bRoofEdge |= Arg == TEXT("roofedge");
 			State->bTrace |= Arg == TEXT("trace");
 		}
 		if (IConsoleVariable* Pressure = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.Enabled")))
