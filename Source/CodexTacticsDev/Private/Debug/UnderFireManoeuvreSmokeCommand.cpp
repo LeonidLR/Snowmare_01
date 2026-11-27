@@ -224,6 +224,13 @@ namespace UnderFireManoeuvreSmoke
 			bBlocks &= SpawnUnderFireBlock(World, At(State, 2480.f, 0.f, 60.f), Along, FVector(30.f, 300.f, 120.f)) != nullptr;
 			bBlocks &= SpawnUnderFireBlock(World, At(State, 2350.f, 480.f, 50.f), Along, FVector(50.f, 160.f, 100.f)) != nullptr;
 			Check(State, bBlocks, TEXT("the passage (3.6 m x 22 m, 3 m walls), the far wall, part C's crate"));
+			// X6 has no scripted wave: the hostile must exist before starting the fight, or it clears on the next tick.
+			AOperativeCharacter* Shooter = SpawnFighter(World, At(State, 2600.f, 0.f), (-State.F).Rotation(), 31);
+			Check(State, Shooter != nullptr, TEXT("a PMC fighter behind the 1.2 m wall at the passage's far end"));
+			if (!Shooter) { return Finish(State, false); }
+			Shooter->SetStance(EOperativeStance::Standing);
+			Shooter->bTacticalCeaseFire = true; // his rounds are the smoke's
+			State.Shooter = Shooter;
 			SmokeUtils::StartWaveFight(Flow);
 			if (Squad->IsSoloMode())
 			{
@@ -293,15 +300,6 @@ namespace UnderFireManoeuvreSmoke
 			const float CrateR = FMath::Clamp(static_cast<float>(FVector::DotProduct(RearD, State.R)) - 50.f, -90.f, 90.f);
 			Check(State, SpawnUnderFireBlock(World, At(State, CrateF, CrateR, 50.f), State.F.Rotation(), FVector(40.f, 160.f, 100.f)) != nullptr,
 				FString::Printf(TEXT("a 1 m crate just ahead of the rearmost man %s (F %.0f, R %.0f)"), *State.Members[Rearmost]->DisplayName.ToString(), CrateF, CrateR));
-			AOperativeCharacter* Shooter = SpawnFighter(World, At(State, 2600.f, 0.f), (-State.F).Rotation(), 31);
-			Check(State, Shooter != nullptr, TEXT("a PMC fighter behind the 1.2 m wall at the passage's far end"));
-			if (!Shooter)
-			{
-				return Finish(State, false);
-			}
-			Shooter->SetStance(EOperativeStance::Standing);
-			Shooter->bTacticalCeaseFire = true; // his rounds are the smoke's
-			State.Shooter = Shooter;
 			Next(State);
 			return true;
 		}
@@ -476,6 +474,8 @@ namespace UnderFireManoeuvreSmoke
 				+ State.HoldSlot.RightTangent() * 1500.f + FVector(0.f, 0.f, Exposed->GetSimpleCollisionHalfHeight()), FRotator::ZeroRotator);
 			Check(State, CoverThreatRules::Quality(State.HoldSlot, Exposed->GetActorLocation()) > 0.35f,
 				TEXT("D: oblique enemy is on the protecting side accepted by UnderFire"));
+			Check(State, CoverThreatRules::Quality(State.HoldSlot, Exposed->GetActorLocation()) < FMath::Cos(FMath::DegreesToRadians(30.f)),
+				TEXT("D: enemy is outside the 60-degree pose arc (the old step-out trigger)"));
 			if (IConsoleVariable* Arc = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Cover.FrontalArcDeg")))
 			{
 				Arc->Set(60.f, ECVF_SetByConsole);
@@ -490,6 +490,7 @@ namespace UnderFireManoeuvreSmoke
 			AOperativeCharacter* Leader = State.Members[0].Get();
 			AOperativeCharacter* Enemy = State.Exposed.Get();
 			if (!Leader || !Enemy) { return Finish(State, false); }
+			Leader->NoteUnderFire(Enemy, Enemy->GetActorLocation()); // keep the shared under-fire decision active during the hold
 			if (!Leader->bInCover && State.CoverHeldSeconds == 0.f && State.StageTime < 15.f) { return true; }
 			State.bCoverBroke |= !Leader->bInCover;
 			if (Leader->bInCover)
@@ -501,6 +502,15 @@ namespace UnderFireManoeuvreSmoke
 			State.CoverHeldSeconds += StepSeconds;
 			if (State.CoverHeldSeconds < 5.1f) { return true; }
 			Check(State, !State.bCoverBroke && Leader->bInCover, TEXT("D: player cover held continuously >= 5 s against oblique enemy; no open-shot escape"));
+			// Beyond the cooldown, test player intent independently of the protecting-line guard.
+			Check(State, !Leader->bShimmying, TEXT("E: settled before testing the player-intent escape guard"));
+			const FCoverSlot Current = Leader->GetCoverSlot();
+			Enemy->TeleportTo(Current.WorldLocation + Current.WallNormal * 800.f
+				+ FVector(0.f, 0.f, Enemy->GetSimpleCollisionHalfHeight()), FRotator::ZeroRotator, false, true);
+			Check(State, !CoverThreatRules::BlocksLine(Current, Enemy->GetActorLocation()), TEXT("E: enemy moved to the open side"));
+			Check(State, !Leader->BeginOpenShotFromCover(Enemy)
+				&& Leader->DecideCoverFireAtPoint(Enemy->GetActorLocation(), true) != CoverFacingRules::ECoverFireAt::StepOut
+				&& Leader->bInCover, TEXT("E: completed cooldown cannot override the player's cover hold even on the open side"));
 			return Finish(State, true);
 		}
 		default:
