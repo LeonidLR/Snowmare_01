@@ -11,6 +11,9 @@ param(
     # Worker (codex-worker) offline: run the mapped smokes HERE in the main checkout (Scripts/smoke_parallel.ps1 -Remote off), after
     # the tests (one heavy job at a time). Same smoke list and verdict rules; a failure stays red (no automatic baseline in this mode).
     [switch]$LocalSmokes,
+    # With -LocalSmokes: a smoke_parallel result JSON from the PRE-MERGE binaries (Lead's manual baseline). A local failure that also
+    # FAILed there counts as pre-existing (exit 2 unless -AcceptPreExisting); any other failure stays red.
+    [string]$LocalBaselineJson = '',
     [int]$Jobs = 0
 )
 
@@ -399,7 +402,7 @@ function Show-GateSmokeReasons($Plan) {
     }
 }
 
-function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$RunFull, [switch]$ResumeRun, [switch]$AllowPreExisting, [switch]$AllowNoWorkerSmokes, [switch]$UseLocalSmokes, [int]$RequestedJobs = 0) {
+function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$RunFull, [switch]$ResumeRun, [switch]$AllowPreExisting, [switch]$AllowNoWorkerSmokes, [switch]$UseLocalSmokes, [string]$BaselineJson = '', [int]$RequestedJobs = 0) {
     $ErrorActionPreference = 'Stop'
     $toolsDir = $PSScriptRoot
     $scriptsDir = Split-Path $toolsDir -Parent
@@ -637,8 +640,19 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
                 Assert-GateWorkerVerdicts $rows $resultDir $localExit
                 $summary = @($rows | ForEach-Object { "$($_.Name)=$($_.State)" }) -join ', '
                 $failed = @($rows | Where-Object State -eq 'FAIL' | ForEach-Object Name)
-                if ($failed.Count) { throw "Local smoke failures (no automatic baseline with -LocalSmokes): $($failed -join ', '). Results: $summary" }
                 $stages['Worker smokes'] = "LOCAL: $summary"
+                if ($failed.Count) {
+                    $baseFailed = @()
+                    if ($BaselineJson -and (Test-Path -LiteralPath $BaselineJson)) {
+                        $baseFailed = @((Get-Content -LiteralPath $BaselineJson -Raw -Encoding UTF8 | ConvertFrom-Json).results |
+                            Where-Object { $_.State -in @('FAIL','KNOWN-FAIL') } | ForEach-Object Name)
+                    }
+                    $regressions = @($failed | Where-Object { $_ -notin $baseFailed })
+                    if ($regressions.Count) { throw "Local smoke failures not failing in the baseline ($BaselineJson): $($regressions -join ', '). Results: $summary" }
+                    $preExistingNeedsApproval = -not $AllowPreExisting
+                    $decision = if ($preExistingNeedsApproval) { 'requires -AcceptPreExisting' } else { 'accepted by -AcceptPreExisting' }
+                    $stages['Worker smokes'] = "LOCAL PRE-EXISTING per $([IO.Path]::GetFileName($BaselineJson)) ($decision): $($failed -join ', '). $summary"
+                }
                 $workerWall = ([DateTime]::UtcNow - $smokeStarted).TotalSeconds
             } else {
                 $stages['Worker smokes'] = 'none mapped'
@@ -700,5 +714,5 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
-    exit (Invoke-MergeGate $Branches -Preview:$DryRun -RunFull:$FullTests -ResumeRun:$Resume -AllowPreExisting:$AcceptPreExisting -AllowNoWorkerSmokes:$AllowNoWorkerSmokes -UseLocalSmokes:$LocalSmokes -RequestedJobs $Jobs)
+    exit (Invoke-MergeGate $Branches -Preview:$DryRun -RunFull:$FullTests -ResumeRun:$Resume -AllowPreExisting:$AcceptPreExisting -AllowNoWorkerSmokes:$AllowNoWorkerSmokes -UseLocalSmokes:$LocalSmokes -BaselineJson $LocalBaselineJson -RequestedJobs $Jobs)
 }
