@@ -14,7 +14,8 @@ Default recordings directory is the current user's `Documents/Unreal Projects/Co
 Default notes directory is the recording directory. Set environment variables before starting Vite.
 The same middleware is available in Vite preview; this feature needs its local server.
 
-Choose a recording, scrub or enter a second, play at 1/2/4x. Space toggles playback; arrows move one second (Shift: ten).
+Choose a recording, scrub or enter a second, play at 1/2/4x, or pick a round from the round bar above the timeline (`Весь бой` or `Раунд N · результат · MM:SS`, with `◀ Пред.` / `След. ▶` and `PageUp`/`PageDown`). Space toggles playback; arrows move one second (Shift: ten).
+In round mode, the timeline, clock (`00:00` = round spawn), units, event feed, and notes are scoped strictly to that round, and new annotations receive that round automatically. Legacy recordings without `round_start` events appear as a single round; `pmc_relocated` events do not split rounds.
 Round boundaries stop interpolation across respawns. Visible enemies only are shown; missing observations do not become omniscient positions.
 121's `shot_hit` / `damage` use `who,whom`; `kill` / `down` use `killer,victim`; state events use `op`.
 Hit lines require both actors' snapshot positions and are approximate. All events remain in the feed even without positions.
@@ -37,7 +38,7 @@ The index is excluded from the ordinary level picker. No in-game roof label was 
 - Select & move: click a drawing or its list entry, then edit metadata with **Apply edits**. Drag any shape (`comment` pin, `arrow`, `zone`, `route`, `polyline`) as a whole to move it, or drag white handles to reshape (up to ~25 handles shown for a sampled route). Round is stored per note; colour stays free for the designer.
 - **Remove duplicates**: merges duplicate notes matching kind, text, time within 2 s, and same or absent point (keeping the pointed entry).
 - Delete / Undo support 50 recent edits. **Save notes** explicitly persists; department/recording switches and browser close warn about unsaved edits.
-- Notes list entries jump to their pinned time. Drawings remain visible at other times, with timestamp labels, for comparison.
+- Notes list entries jump to their pinned time. In `Весь бой` mode, the filter row controls scope (`Текущий раунд` shows current round notes fully and other rounds as faint shapes without labels; `Все` shows all rounds fully), tag filters (`хорошо`, `ошибка`, `как надо`, `баг`), and the `Подписи на карте` toggle (labels always stay visible in the list). Hovering or selecting a list entry highlights it on the map with its full wrapped label. In single-round mode, notes from other rounds are hidden.
 
 `<recording-stem>.notes.json` uses schema `codex.demo_notes/1`, `recording` (JSONL filename), `map`,
 `coordinates: UE_cm_X_north_Y_east`, and `annotations[]`:

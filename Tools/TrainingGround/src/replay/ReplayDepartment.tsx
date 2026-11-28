@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { clockText, deduplicateAnnotations, eventUnits, frameAt, NOTE_TAGS, parseReplay, roundAt, selectedReplayUnit, smoothRoute, squadUnitIds, translatePoints, unitDisplayName, unitsAt, validNotes } from './model';
-import type { Annotation, Notes, NoteTag, Point, Replay } from './model';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { annotationRound, clockText, compactMapLabel, deduplicateAnnotations, evaluateAnnotations, eventUnits, frameAt, NOTE_TAGS, parseReplay, roundAt, roundResultLabel, selectedReplayUnit, smoothRoute, splitRounds, squadUnitIds, translatePoints, unitDisplayName, unitsAt, validNotes, wrapLabelLines } from './model';
+import type { Annotation, Notes, NoteRoundScope, NoteTag, Point, Replay } from './model';
 import { confirmLeave, setUnsaved } from '../utils/unsavedGuard';
 import './replay.css';
 
+const FILTER_TAGS: readonly NoteTag[] = ['хорошо', 'ошибка', 'как надо', 'баг'];
 const api = async (url: string, options?: RequestInit) => {
   const response = await fetch('/api/replay/' + url, options);
   if (!response.ok) throw Error((await response.json()).error || response.statusText);
@@ -21,6 +22,11 @@ export function ReplayDepartment() {
   const [tool, setTool] = useState<Tool>('select'), [draft, setDraft] = useState<Point[]>([]), [selected, setSelected] = useState('');
   const [label, setLabel] = useState(''), [author, setAuthor] = useState('Designer'), [unit, setUnit] = useState(''), [color, setColor] = useState('#facc15'), [height, setHeight] = useState('');
   const [tag, setTag] = useState<NoteTag>('прочее'), [clickedUnit, setClickedUnit] = useState(''), [unitManual, setUnitManual] = useState(false);
+  const [selectedRound, setSelectedRound] = useState<number | 'all'>('all');
+  const [noteScope, setNoteScope] = useState<NoteRoundScope>('current');
+  const [selectedTags, setSelectedTags] = useState<NoteTag[]>([]);
+  const [labelsOnMap, setLabelsOnMap] = useState(true);
+  const [hoveredNoteId, setHoveredNoteId] = useState('');
   const [sectorView, setSectorView] = useState(true), [cones, setCones] = useState(false), [zoom, setZoom] = useState(1), [pan, setPan] = useState<[number, number]>([0, 0]);
   const svg = useRef<SVGSVGElement>(null), dragMode = useRef<'draw' | 'handle' | 'move' | null>(null), dragId = useRef('');
   const handle = useRef<number | null>(null), moveOrigin = useRef<Point>([0, 0]), moveBase = useRef<Point[]>([]), draftRef = useRef<Point[]>([]), gesture = useRef<Point[]>([]);
@@ -31,7 +37,7 @@ export function ReplayDepartment() {
     if (!file) return;
     const version = ++loadVersion.current;
     setPlaying(false); setReplay(undefined); setGeometry(undefined); setNotes(undefined); setT(0); setDraft([]); draftRef.current = [];
-    setSelected(''); setClickedUnit(''); setUnit(''); setUnitManual(false); setLabel(''); setHeight(''); setTag('прочее'); setStatus('Loading recording…');
+    setSelected(''); setHoveredNoteId(''); setSelectedRound('all'); setClickedUnit(''); setUnit(''); setUnitManual(false); setLabel(''); setHeight(''); setTag('прочее'); setStatus('Loading recording…');
     (async () => {
       const response = await fetch('/api/replay/recording?file=' + encodeURIComponent(file));
       if (!response.ok) throw Error('Cannot read recording');
@@ -49,39 +55,143 @@ export function ReplayDepartment() {
     window.addEventListener('beforeunload', unload);
     return () => { setUnsaved('fight-replay', null); window.removeEventListener('beforeunload', unload); };
   }, [dirty]);
+  const rounds = useMemo(() => replay ? splitRounds(replay) : [], [replay]);
+  const activeRoundObj = useMemo(() => selectedRound === 'all' ? undefined : rounds.find(r => r.round === selectedRound), [selectedRound, rounds]);
+  const viewStart = activeRoundObj ? activeRoundObj.startT : 0;
+  const viewEnd = activeRoundObj ? activeRoundObj.endT : (replay?.duration || 0);
+  const viewDuration = Math.max(0.1, viewEnd - viewStart);
+  const displayT = Math.max(0, t - viewStart);
+  const displayDuration = activeRoundObj ? activeRoundObj.duration : (replay?.duration || 0);
+  const resetDrag = useCallback(() => { dragMode.current = null; dragId.current = ''; handle.current = null; moveBase.current = []; draftRef.current = []; setDraft([]); }, []);
+  const roundSequence = useMemo<(number | 'all')[]>(() => ['all', ...rounds.map(r => r.round)], [rounds]);
+  const selectRound = useCallback((nextRound: number | 'all') => {
+    setPlaying(false);
+    resetDrag();
+    setSelectedRound(nextRound);
+    setHoveredNoteId('');
+    if (nextRound === 'all') {
+      setT(old => Math.max(0, Math.min(replay?.duration || 0, old)));
+      return;
+    }
+    const target = rounds.find(r => r.round === nextRound);
+    if (target) setT(target.startT);
+    if (selected && notes) {
+      const selNote = notes.annotations.find(a => a.id === selected);
+      if (selNote && annotationRound(selNote, replay, rounds) !== nextRound) {
+        setSelected(''); setLabel(''); setHeight(''); setTag('прочее');
+      }
+    }
+  }, [replay, rounds, selected, notes, resetDrag]);
+  const roundSeqIdx = roundSequence.indexOf(selectedRound);
+  const canPrevRound = roundSeqIdx > 0;
+  const canNextRound = roundSeqIdx >= 0 && roundSeqIdx < roundSequence.length - 1;
+  const stepRound = useCallback((delta: -1 | 1) => {
+    const idx = roundSequence.indexOf(selectedRound);
+    const nextIdx = idx + delta;
+    if (nextIdx >= 0 && nextIdx < roundSequence.length) selectRound(roundSequence[nextIdx]);
+  }, [roundSequence, selectedRound, selectRound]);
   useEffect(() => {
     if (!playing || !replay) return;
     let previous = performance.now();
-    const timer = window.setInterval(() => { const now = performance.now(); const dt = (now - previous) / 1000 * speed; previous = now; setT(old => { const next = Math.min(replay.duration, old + dt); if (next >= replay.duration) setPlaying(false); return next; }); }, 40);
+    const timer = window.setInterval(() => {
+      const now = performance.now();
+      const dt = (now - previous) / 1000 * speed;
+      previous = now;
+      setT(old => {
+        const next = Math.min(viewEnd, Math.max(viewStart, old) + dt);
+        if (next >= viewEnd) setPlaying(false);
+        return next;
+      });
+    }, 40);
     return () => clearInterval(timer);
-  }, [playing, speed, replay]);
+  }, [playing, speed, replay, viewStart, viewEnd]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.closest('input,textarea,select,button')) return;
+      const el = e.target as HTMLElement | null;
+      if (e.code === 'PageUp' || e.code === 'PageDown') {
+        if (el?.closest('textarea,select') || (el?.tagName === 'INPUT' && (el as HTMLInputElement).type !== 'range')) return;
+        e.preventDefault();
+        stepRound(e.code === 'PageUp' ? -1 : 1);
+        return;
+      }
+      if (el?.closest('input,textarea,select,button')) return;
       if (e.code === 'Space') { e.preventDefault(); setPlaying(v => !v); }
-      if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); setPlaying(false); setT(v => Math.max(0, Math.min(replay?.duration || 0, v + (e.code === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 10 : 1)))); }
+      if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+        e.preventDefault(); setPlaying(false);
+        setT(v => Math.max(viewStart, Math.min(viewEnd, v + (e.code === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 10 : 1))));
+      }
       if (e.code === 'Escape') { setDraft([]); draftRef.current = []; }
     };
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
-  }, [replay]);
-  const frame = replay && frameAt(replay, t), round = replay && roundAt(replay, t);
-  const units = replay ? unitsAt(replay, t) : [];
-  const frameSelectedUnit = useMemo(() => selectedReplayUnit(replay, t), [replay, t]);
+  }, [replay, viewStart, viewEnd, stepRound]);
+  const round = replay && roundAt(replay, t);
+  const currentRoundNum = activeRoundObj?.round ?? round?.round ?? rounds[0]?.round;
+  const firstRoundFrame = useMemo(
+    () => (replay && activeRoundObj ? replay.frames.find(f => f.t! >= viewStart && f.t! <= viewEnd) : undefined),
+    [replay, activeRoundObj, viewStart, viewEnd],
+  );
+  const rawFrame = replay && frameAt(replay, t);
+  const renderT = !rawFrame && activeRoundObj && firstRoundFrame && t < firstRoundFrame.t! ? firstRoundFrame.t! : t;
+  const frame = rawFrame ?? (renderT !== t ? firstRoundFrame : undefined);
+  const units = replay ? unitsAt(replay, renderT) : [];
+  const frameSelectedUnit = useMemo(() => selectedReplayUnit(replay, renderT), [replay, renderT]);
   const activeReplayUnit = clickedUnit || frameSelectedUnit;
-  useEffect(() => { setClickedUnit(''); }, [round?.round]);
+  useEffect(() => { setClickedUnit(''); }, [currentRoundNum, selectedRound]);
   useEffect(() => { if (!selected && !unitManual) setUnit(activeReplayUnit); }, [activeReplayUnit, selected, unitManual]);
   const whoIds = useMemo(() => [...new Set([
-    ...squadUnitIds(replay, t),
+    ...squadUnitIds(replay, renderT),
     ...units.map(u => u.id),
     ...(notes?.annotations.map(a => a.unit).filter(Boolean) || []),
-  ])], [replay, t, units, notes]);
+  ])], [replay, renderT, units, notes]);
   const whoLabels = useMemo(() => {
     const raw = whoIds.map(id => unitDisplayName(replay, id, units.find(u => u.id === id)));
     const counts = new Map<string, number>();
     for (const lbl of raw) counts.set(lbl, (counts.get(lbl) ?? 0) + 1);
     return whoIds.map((id, idx) => ((counts.get(raw[idx]) ?? 0) > 1 ? `${raw[idx]} (${id.split('_').pop()})` : raw[idx]));
   }, [whoIds, replay, units]);
-  const events = useMemo(() => replay?.events.filter(e => e.t! <= t && e.t! >= (round?.t ?? 0)) || [], [replay, t, round]);
+  const minEventT = activeRoundObj ? viewStart : (round?.t ?? 0);
+  const maxEventT = activeRoundObj ? Math.min(t, viewEnd) : t;
+  const belongsToActiveRound = useCallback(
+    (e: { type: string; t?: number; round?: number }) => {
+      if (!activeRoundObj) return true;
+      if (e.round !== undefined && e.round !== activeRoundObj.round) return false;
+      if ((e.type === 'round_start' || e.type === 'round_mark') && e.t! > viewStart && e.t! >= viewEnd) return false;
+      return true;
+    },
+    [activeRoundObj, viewStart, viewEnd],
+  );
+  const events = useMemo(
+    () => replay?.events.filter(e => e.t! >= minEventT && e.t! <= maxEventT && belongsToActiveRound(e)) || [],
+    [replay, minEventT, maxEventT, belongsToActiveRound],
+  );
+  const timelineEvents = useMemo(() => {
+    if (!replay) return [];
+    if (!activeRoundObj) return replay.events;
+    return replay.events.filter(e => e.t! >= viewStart && e.t! <= viewEnd && belongsToActiveRound(e));
+  }, [replay, activeRoundObj, viewStart, viewEnd, belongsToActiveRound]);
+  const evaluatedNotes = useMemo(
+    () => evaluateAnnotations(notes?.annotations ?? [], replay, rounds, {
+      selectedRound,
+      currentRound: currentRoundNum,
+      scope: noteScope,
+      tags: selectedTags,
+      labelsOnMap,
+      hoveredId: hoveredNoteId || undefined,
+      selectedId: selected || undefined,
+    }),
+    [notes, replay, rounds, selectedRound, currentRoundNum, noteScope, selectedTags, labelsOnMap, hoveredNoteId, selected],
+  );
+  const mapNotes = useMemo(() => {
+    const rank = { faint: 0, normal: 1, highlighted: 2 } as const;
+    return evaluatedNotes
+      .filter(e => e.mapMode !== 'hidden')
+      .sort((a, b) => rank[a.highlighted ? 'highlighted' : a.mapMode === 'faint' ? 'faint' : 'normal'] - rank[b.highlighted ? 'highlighted' : b.mapMode === 'faint' ? 'faint' : 'normal']);
+  }, [evaluatedNotes]);
+  const listNotes = useMemo(() => evaluatedNotes.filter(e => e.inList), [evaluatedNotes]);
+  useEffect(() => {
+    if (hoveredNoteId && !listNotes.some(e => e.annotation.id === hoveredNoteId)) setHoveredNoteId('');
+  }, [hoveredNoteId, listNotes]);
+  const toggleFilterTag = (tVal: NoteTag) => setSelectedTags(prev => prev.includes(tVal) ? prev.filter(x => x !== tVal) : [...prev, tVal]);
   const layout = geometry?.layout;
   const box = sectorView && replay?.header.sector_box_cm || layout?.bounds || { min: [-16000, -23000], max: [16000, 24000] };
   const w = (box.max[1] - box.min[1] + 800) / zoom, h = (box.max[0] - box.min[0] + 800) / zoom;
@@ -102,9 +212,10 @@ export function ReplayDepartment() {
       return;
     }
     lastAdded.current = { time: now, kind: tool, label, t, empty: points.length === 0, pt: points[0] };
-    const a: Annotation = { id: crypto.randomUUID(), kind: tool, t, author, unit, label, color, tag, points: tool === 'route' ? smoothRoute(points) : points, round: round?.round,
+    const a: Annotation = { id: crypto.randomUUID(), kind: tool, t, author, unit, label, color, tag, points: tool === 'route' ? smoothRoute(points) : points, round: activeRoundObj?.round ?? currentRoundNum,
       ...(height !== '' && Number.isFinite(Number(height)) ? { height_cm: Number(height) } : {}) };
     commit([...notes.annotations, a]); setSelected(a.id); setLabel(''); setUnitManual(false); setUnit(activeReplayUnit); setDraft([]); draftRef.current = [];
+    if (selectedTags.length > 0 && !selectedTags.includes(tag)) setSelectedTags(prev => [...prev, tag]);
     setStatus('Annotation added — save notes to keep it.');
   };
   const point = (e: React.PointerEvent): Point => {
@@ -135,7 +246,6 @@ export function ReplayDepartment() {
       draftRef.current = gesture.current; setDraft(gesture.current);
     }
   };
-  const resetDrag = () => { dragMode.current = null; dragId.current = ''; handle.current = null; moveBase.current = []; draftRef.current = []; setDraft([]); };
   const up = () => {
     const mode = dragMode.current;
     if (!mode) return;
@@ -153,11 +263,11 @@ export function ReplayDepartment() {
     }
     resetDrag();
   };
-  const shape = (a: Pick<Annotation, 'kind' | 'points' | 'color'>, width = 3, hit = false) => {
+  const shape = (a: Pick<Annotation, 'kind' | 'points' | 'color'>, width = 3, hit = false, halo = false) => {
     const p = a.points;
     if (!p.length) return null;
-    if (a.kind === 'zone' && p.length >= 2) return <circle cx={p[0][1]} cy={-p[0][0]} r={Math.hypot(p[1][0] - p[0][0], p[1][1] - p[0][1])} fill={a.color} fillOpacity=".10" stroke={a.color} strokeWidth={width * scale} />;
-    if (a.kind === 'comment') return <>{hit && <circle cx={p[0][1]} cy={-p[0][0]} r={r * 1.8} fill="transparent" />}<circle cx={p[0][1]} cy={-p[0][0]} r={r} fill={a.color} /></>;
+    if (a.kind === 'zone' && p.length >= 2) return <circle cx={p[0][1]} cy={-p[0][0]} r={Math.hypot(p[1][0] - p[0][0], p[1][1] - p[0][1])} fill={halo ? 'none' : a.color} fillOpacity=".10" stroke={a.color} strokeWidth={width * scale} />;
+    if (a.kind === 'comment') return <>{hit && <circle cx={p[0][1]} cy={-p[0][0]} r={r * 1.8} fill="transparent" />}<circle cx={p[0][1]} cy={-p[0][0]} r={halo ? r * 1.65 : r} fill={a.color} /></>;
     return <>{hit && <polyline points={p.map(xy).join(' ')} fill="none" stroke="transparent" strokeWidth={14 * scale} strokeLinecap="round" strokeLinejoin="round" />}
       <polyline points={p.map(xy).join(' ')} fill="none" stroke={a.color} strokeWidth={width * scale} strokeLinecap="round" strokeLinejoin="round" />
       {p.length > 1 && (() => { const end = p[p.length - 1], prev = p[p.length - 2], angle = Math.atan2(-(end[0] - prev[0]), end[1] - prev[1]) * 180 / Math.PI; return <path d={`M ${-r * 2} ${-r} L 0 0 L ${-r * 2} ${r}`} fill="none" stroke={a.color} strokeWidth={width * scale} transform={`translate(${end[1]},${-end[0]}) rotate(${angle})`} />; })()}</>;
@@ -191,14 +301,39 @@ export function ReplayDepartment() {
           <text x={u.p[1] + r * 1.5} y={-u.p[0] - r} fill={friendly ? '#a5f3fc' : '#fda4af'} fontSize={11 * scale} paintOrder="stroke" stroke="#101f2c" strokeWidth={3 * scale}>{name} {u.alive === 0 ? '✕' : ''} {u.stealth ? 'S' : ''} {u.height === undefined ? `z=${u.p[2] ?? '?'}cm` : `↑${Math.round(u.height)}cm`}</text>
         </g>; })}
         {events.filter(e => ['shot_hit', 'damage', 'kill', 'down'].includes(e.type) && t - e.t! < 1.5).map((e, i) => { const [a, b] = eventUnits(e), from = units.find(u => u.id === a), to = units.find(u => u.id === b); return <g key={'hit' + i}>{from && to && <line x1={from.p[1]} y1={-from.p[0]} x2={to.p[1]} y2={-to.p[0]} stroke="#fb923c" strokeWidth={3 * scale} />}{to && <circle cx={to.p[1]} cy={-to.p[0]} r={r * 2} fill="none" stroke="#f87171" strokeWidth={3 * scale} />}</g>; })}
-        {notes?.annotations.map(a => { const live = a.id === selected && draft.length > 0 && (dragMode.current === 'handle' || dragMode.current === 'move') ? { ...a, points: draft } : a; return <g key={a.id} opacity={a.id === selected ? 1 : .65} onPointerDown={e => { if (tool !== 'select' || e.button !== 0) return; e.stopPropagation(); chooseAnnotation(a); if (a.points.length > 0) { dragMode.current = 'move'; dragId.current = a.id; moveOrigin.current = point(e); moveBase.current = a.points; draftRef.current = a.points; setDraft(a.points); svg.current?.setPointerCapture(e.pointerId); } }} style={{ cursor: tool === 'select' ? 'grab' : undefined }}>{shape(live, a.id === selected ? 4 : 3, tool === 'select')}{live.points[0] && <text x={live.points[0][1] + r} y={-live.points[0][0] - r * 2} fontSize={12 * scale} fill={a.color} paintOrder="stroke" stroke="#101f2c" strokeWidth={3 * scale}>{clockText(a.t)} {a.label || a.kind}</text>}
-          {tool === 'select' && a.id === selected && live.points.map((p, i) => (i % Math.max(1, Math.floor(live.points.length / 25)) === 0 || i === live.points.length - 1) && <circle key={i} cx={p[1]} cy={-p[0]} r={r * .7} fill="white" stroke={a.color} strokeWidth={scale} style={{ cursor: 'crosshair' }} onPointerDown={e => { if (e.button !== 0) return; e.stopPropagation(); dragMode.current = 'handle'; dragId.current = a.id; handle.current = i; draftRef.current = a.points; setDraft(a.points); svg.current!.setPointerCapture(e.pointerId); }} />)}</g>; })}
+        {mapNotes.map(({ annotation: a, mapMode, showLabel, highlighted }) => {
+          const live = a.id === selected && draft.length > 0 && (dragMode.current === 'handle' || dragMode.current === 'move') ? { ...a, points: draft } : a;
+          const noteClock = clockText(Math.max(0, a.t - viewStart));
+          if (mapMode === 'faint') {
+            return <g key={a.id} opacity={0.16} pointerEvents="none">{shape(live, 2.5, false)}</g>;
+          }
+          const lines = highlighted ? wrapLabelLines(`${noteClock} ${a.label || a.kind}`, 48) : [];
+          return <g key={a.id} opacity={highlighted ? 1 : .85} onPointerDown={e => { if (tool !== 'select' || e.button !== 0) return; e.stopPropagation(); chooseAnnotation(a); if (a.points.length > 0) { dragMode.current = 'move'; dragId.current = a.id; moveOrigin.current = point(e); moveBase.current = a.points; draftRef.current = a.points; setDraft(a.points); svg.current?.setPointerCapture(e.pointerId); } }} style={{ cursor: tool === 'select' ? 'grab' : undefined }}>
+            {highlighted && <g opacity={0.45} pointerEvents="none">{shape({ ...live, color: '#f8fafc' }, 7, false, true)}</g>}
+            {shape(live, highlighted ? 4.5 : 3, tool === 'select')}
+            {showLabel && live.points[0] && (highlighted
+              ? <text x={live.points[0][1] + r} y={-live.points[0][0] - r * 2} fontSize={13 * scale} fontWeight={700} fill={a.color} paintOrder="stroke" stroke="#07111d" strokeWidth={4 * scale}>{lines.map((ln, idx) => <tspan key={idx} x={live.points[0][1] + r} dy={idx === 0 ? 0 : 15 * scale}>{ln}</tspan>)}</text>
+              : <text x={live.points[0][1] + r} y={-live.points[0][0] - r * 2} fontSize={11.5 * scale} fill={a.color} paintOrder="stroke" stroke="#101f2c" strokeWidth={3 * scale}>{noteClock} {compactMapLabel(a.label || a.kind, 38)}</text>)}
+            {tool === 'select' && a.id === selected && live.points.map((p, i) => (i % Math.max(1, Math.floor(live.points.length / 25)) === 0 || i === live.points.length - 1) && <circle key={i} cx={p[1]} cy={-p[0]} r={r * .7} fill="white" stroke={a.color} strokeWidth={scale} style={{ cursor: 'crosshair' }} onPointerDown={e => { if (e.button !== 0) return; e.stopPropagation(); dragMode.current = 'handle'; dragId.current = a.id; handle.current = i; draftRef.current = a.points; setDraft(a.points); svg.current!.setPointerCapture(e.pointerId); }} />)}
+          </g>;
+        })}
         {draft.length > 0 && dragMode.current !== 'handle' && dragMode.current !== 'move' && shape({ kind: tool === 'select' ? 'route' : tool, points: draft, color })}
       </svg>
       <div className="replay-legend">↑ N · → E &nbsp; <b>● Squad</b> <em>● PMC (visible only)</em> · gold = low cover / cover state · purple = ladder / stairs · numbered buildings</div>
-      <div className="replay-transport"><button disabled={!replay} onClick={() => { if (t >= (replay?.duration || 0)) setT(0); setPlaying(v => !v); }}>{playing ? 'Pause' : 'Play'}</button>{[1, 2, 4].map(v => <button key={v} aria-pressed={speed === v} onClick={() => setSpeed(v)}>×{v}</button>)}<strong>{clockText(t)} / {clockText(replay?.duration || 0)}</strong><label>Time (s)<input aria-label="Go to second" style={{ maxWidth: 90 }} type="number" min="0" max={replay?.duration || 0} value={Math.round(t * 10) / 10} onChange={e => { setT(Math.max(0, Math.min(replay?.duration || 0, Number(e.target.value)))); setPlaying(false); }} /></label><span>Round {round?.round ?? '—'} · {frame?.mode || '—'} · {replay?.footer.result || '—'}</span></div>
-      <div className="replay-timeline"><svg viewBox="0 0 1000 15" preserveAspectRatio="none" aria-label="Event ticks">{replay?.events.map((e, i) => <rect key={i} x={e.t! / (replay.duration || 1) * 998} width={e.type.startsWith('round_') ? 3 : 1} height={e.type === 'order' ? 5 : 15} fill={e.type === 'kill' ? '#f87171' : e.type.startsWith('round_') ? '#c084fc' : '#38bdf8'}><title>{clockText(e.t!)} {e.type} {e.type === "round_mark" ? `R${e.round}: ${e.value}` : ""}</title></rect>)}</svg><input aria-label="Replay time" type="range" min="0" max={replay?.duration || 1} step=".1" value={t} onChange={e => { setT(Number(e.target.value)); setPlaying(false); }} /></div>
-      <p className="replay-help">Space: play/pause · ←/→: 1 second · Shift: 10 seconds. Orange hit lines use snapshot positions; events without both actors stay in the feed. Legacy recordings have no confirmed shot/kill/stealth events.</p>
+      <div className="replay-rounds" role="group" aria-label="Round picker">
+        <button disabled={!replay || !canPrevRound} onClick={() => stepRound(-1)} title="Предыдущий раунд (PageUp)">◀ Пред.</button>
+        <button aria-pressed={selectedRound === 'all'} disabled={!replay} onClick={() => selectRound('all')}>Весь бой</button>
+        {rounds.map(rm => {
+          const res = roundResultLabel(rm.result);
+          return <button key={rm.round} aria-pressed={selectedRound === rm.round} onClick={() => selectRound(rm.round)}>
+            Раунд {rm.round}{res ? ` · ${res}` : ''} · {clockText(rm.duration)}
+          </button>;
+        })}
+        <button disabled={!replay || !canNextRound} onClick={() => stepRound(1)} title="Следующий раунд (PageDown)">След. ▶</button>
+      </div>
+      <div className="replay-transport"><button disabled={!replay} onClick={() => { if (t >= viewEnd || t < viewStart) setT(viewStart); setPlaying(v => !v); }}>{playing ? 'Pause' : 'Play'}</button>{[1, 2, 4].map(v => <button key={v} aria-pressed={speed === v} onClick={() => setSpeed(v)}>×{v}</button>)}<strong>{clockText(displayT)} / {clockText(displayDuration)}</strong><label>Time (s)<input aria-label="Go to second" style={{ maxWidth: 90 }} type="number" min="0" max={displayDuration} value={Math.round(displayT * 10) / 10} onChange={e => { setT(Math.max(viewStart, Math.min(viewEnd, viewStart + Number(e.target.value)))); setPlaying(false); }} /></label><span>{activeRoundObj ? `Раунд ${activeRoundObj.round}${activeRoundObj.result ? ` · ${roundResultLabel(activeRoundObj.result)}` : ''} · ${frame?.mode || '—'}` : `Раунд ${currentRoundNum ?? '—'} · ${frame?.mode || '—'} · ${roundResultLabel(replay?.footer.result) || replay?.footer.result || '—'}`}</span></div>
+      <div className="replay-timeline"><svg viewBox="0 0 1000 15" preserveAspectRatio="none" aria-label="Event ticks">{timelineEvents.map((e, i) => <rect key={i} x={((e.t! - viewStart) / viewDuration) * 998} width={e.type.startsWith('round_') ? 3 : 1} height={e.type === 'order' ? 5 : 15} fill={e.type === 'kill' ? '#f87171' : e.type.startsWith('round_') ? '#c084fc' : '#38bdf8'}><title>{clockText(Math.max(0, e.t! - viewStart))} {e.type} {e.type === 'round_mark' ? `R${e.round}: ${e.value}` : ''}</title></rect>)}</svg><input aria-label="Replay time" type="range" min={viewStart} max={viewEnd > viewStart ? viewEnd : viewStart + 0.1} step="any" value={Math.max(viewStart, Math.min(viewEnd, t))} onChange={e => { setT(Number(e.target.value)); setPlaying(false); }} /></div>
+      <p className="replay-help">Space: play/pause · ←/→: 1 second · Shift: 10 seconds · PageUp/PageDown: round. Orange hit lines use snapshot positions; events without both actors stay in the feed. Legacy recordings have no confirmed shot/kill/stealth events.</p>
     </section><aside>
       <h2>Designer annotations</h2><div className="replay-tools">{(['select', 'comment', 'route', 'polyline', 'arrow', 'zone'] as Tool[]).map(k => <button key={k} aria-pressed={tool === k} onClick={() => chooseTool(k)}>{k}</button>)}</div>
       <p className="replay-help">Route: drag a smooth path. Polyline: click vertices, then Finish. Arrow / zone: drag. Select: drag any drawing to move it, or drag white handles to reshape; click an operative to default Who.</p>
@@ -208,8 +343,23 @@ export function ReplayDepartment() {
       <label>Height above ground (cm, optional)<input type="number" value={height} onChange={e => setHeight(e.target.value)} placeholder="Explicit roof evidence for decoder" /></label>
       <div className="replay-tools">{tool === 'polyline' && <button disabled={draft.length < 2} onClick={() => add(draft)}>Finish polyline</button>}{tool === 'comment' && <button onClick={() => add([])}>Pin to time only</button>}<button disabled={!history.length} onClick={() => { setNotes(history[history.length - 1]); setHistory(v => v.slice(0, -1)); setDirty(true); setSelected(''); }}>Undo</button>
         <button disabled={!selected} onClick={() => commit(notes!.annotations.map(a => a.id === selected ? { ...a, label, author, unit, color, tag, height_cm: height === '' ? undefined : Number(height) } : a))}>Apply edits</button><button disabled={!selected} onClick={() => { commit(notes!.annotations.filter(a => a.id !== selected)); clearSelection(); }}>Delete</button><button disabled={!notes?.annotations.length} onClick={() => { if (!notes) return; const { annotations, removed } = deduplicateAnnotations(notes.annotations); if (!removed) { setStatus('No duplicates found.'); return; } commit(annotations); if (selected && !annotations.some(a => a.id === selected)) clearSelection(); setStatus(`Removed ${removed} duplicate(s) — save notes to keep.`); }}>Remove duplicates</button></div>
-      <div className="replay-annotations">{notes?.annotations.map(a => <button key={a.id} aria-pressed={selected === a.id} onClick={() => { chooseAnnotation(a); setT(a.t); setPlaying(false); setTool('select'); }}>{clockText(a.t)} · R{a.round ?? '—'} · {a.tag ? `[${a.tag}] · ` : ''}{a.kind} · {a.label || '(no label)'}</button>)}</div>
-      <h2>Recorded events</h2><div className="replay-events">{events.slice(-35).reverse().map((e, i) => <button key={i} onClick={() => { setT(e.t!); setPlaying(false); }}><time>{clockText(e.t!)}</time> {e.type} {e.type === 'round_mark' ? `R${e.round}: ${e.value}` : e.kind || e.result || ''}<small>{eventUnits(e).filter(Boolean).join(' → ')} {e.dmg === undefined ? '' : ` · ${e.dmg} damage`}</small></button>)}</div>
+      <div className="replay-note-filters" role="group" aria-label="Note filters">
+        <div className="replay-filter-row">
+          <button aria-pressed={noteScope === 'current'} disabled={selectedRound !== 'all'} title={selectedRound !== 'all' ? 'Доступно в режиме «Весь бой»' : undefined} onClick={() => setNoteScope('current')}>Текущий раунд</button>
+          <button aria-pressed={noteScope === 'all'} disabled={selectedRound !== 'all'} title={selectedRound !== 'all' ? 'Доступно в режиме «Весь бой»' : undefined} onClick={() => setNoteScope('all')}>Все</button>
+        </div>
+        <div className="replay-filter-row">
+          <span className="replay-filter-label">Только теги:</span>
+          {FILTER_TAGS.map(tOpt => <button key={tOpt} aria-pressed={selectedTags.includes(tOpt)} onClick={() => toggleFilterTag(tOpt)}>{tOpt}</button>)}
+          {selectedTags.length > 0 && <button onClick={() => setSelectedTags([])} title="Сбросить фильтр тегов">✕</button>}
+        </div>
+        <label className="replay-toggle"><input type="checkbox" checked={labelsOnMap} onChange={e => setLabelsOnMap(e.target.checked)} /> Подписи на карте</label>
+      </div>
+      <div className="replay-annotations">
+        {listNotes.length === 0 && (notes?.annotations.length ?? 0) > 0 && <div className="replay-annotations-empty"><span>{selectedTags.length > 0 ? 'Нет заметок с выбранными тегами' : `В раунде ${currentRoundNum ?? '—'} нет заметок (всего: ${notes!.annotations.length})`}</span>{selectedRound === 'all' && noteScope === 'current' && selectedTags.length === 0 && <button onClick={() => setNoteScope('all')}>Показать все</button>}</div>}
+        {listNotes.map(({ annotation: a, round: aRound }) => <button key={a.id} aria-pressed={selected === a.id} onMouseEnter={() => setHoveredNoteId(a.id)} onMouseLeave={() => setHoveredNoteId(id => (id === a.id ? '' : id))} onFocus={() => setHoveredNoteId(a.id)} onBlur={() => setHoveredNoteId(id => (id === a.id ? '' : id))} onClick={() => { chooseAnnotation(a); setT(Math.max(viewStart, Math.min(viewEnd, a.t))); setPlaying(false); setTool('select'); }}>{clockText(Math.max(0, a.t - viewStart))} · R{aRound ?? '—'} · {a.tag ? `[${a.tag}] · ` : ''}{a.kind} · {a.label || '(no label)'}</button>)}
+      </div>
+      <h2>Recorded events</h2><div className="replay-events">{events.slice(-35).reverse().map((e, i) => <button key={i} onClick={() => { setT(e.t!); setPlaying(false); }}><time>{clockText(Math.max(0, e.t! - viewStart))}</time> {e.type} {e.type === 'round_mark' ? `R${e.round}: ${e.value}` : e.kind || e.result || ''}<small>{eventUnits(e).filter(Boolean).join(' → ')} {e.dmg === undefined ? '' : ` · ${e.dmg} damage`}</small></button>)}</div>
     </aside></div><footer role="status">{status} {replay && ` · ${replay.frames.length} frames · ${replay.events.length} events`}</footer>
   </main>;
 }

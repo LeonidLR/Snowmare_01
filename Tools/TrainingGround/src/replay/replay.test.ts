@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
-import { parseReplay, unitsAt, eventUnits, smoothRoute, validNotes, translatePoints, deduplicateAnnotations, unitDisplayName, squadUnitIds, selectedReplayUnit, NOTE_TAGS } from './model.ts';
+import { parseReplay, unitsAt, eventUnits, smoothRoute, validNotes, translatePoints, deduplicateAnnotations, unitDisplayName, squadUnitIds, selectedReplayUnit, splitRounds, roundResultLabel, evaluateAnnotations, compactMapLabel, wrapLabelLines, NOTE_TAGS } from './model.ts';
 import type { Annotation } from './model.ts';
 import { containedFile, demoLeaf, setupReplayApi } from '../../server/replayApi.ts';
 
@@ -200,4 +200,123 @@ test('tag field validates allowed values and maintains backward compatibility fo
   }
   assert.ok(validNotes(notes, 'real.jsonl', header.map));
   assert.ok(!validNotes({ ...notes, annotations: [{ ...notes.annotations[0], tag: 'unknown_tag' }] }, 'real.jsonl', header.map));
+});
+
+test('splitRounds splits by round_start/round_end, ignores pmc_relocated, and treats legacy files as one round', () => {
+  const multi = parseReplay(text([
+    header,
+    { type: 'snap', t: 1, ops: [u(0)] },
+    { type: 'round_start', t: 2.5, round: 1 },
+    { type: 'pmc_relocated', t: 20, round: 1, distance_m: 44, los: false },
+    { type: 'round_end', t: 60.5, round: 1, result: 'victory' },
+    { type: 'round_start', t: 68.5, round: 2 },
+    { type: 'pmc_relocated', t: 150, round: 2, distance_m: 42, los: true },
+    { type: 'round_start', t: 200, round: 3 },
+    { type: 'snap', t: 220, ops: [u(10)] },
+    { type: 'footer', result: 'ABORTED' },
+  ]));
+  const rounds = splitRounds(multi);
+  assert.equal(rounds.length, 3);
+  assert.deepEqual(rounds[0], { round: 1, startT: 2.5, endT: 60.5, duration: 58, result: 'victory' });
+  assert.deepEqual(rounds[1], { round: 2, startT: 68.5, endT: 200, duration: 131.5 });
+  assert.deepEqual(rounds[2], { round: 3, startT: 200, endT: 220, duration: 20, result: 'ABORTED' });
+  assert.equal(roundResultLabel(rounds[0].result), 'победа');
+  assert.equal(roundResultLabel('defeat'), 'поражение');
+  assert.equal(roundResultLabel('draw'), 'ничья');
+  assert.equal(roundResultLabel(rounds[2].result), 'прерван');
+
+  const legacy = parseReplay(text([
+    header,
+    { type: 'snap', t: 1, ops: [u(0)] },
+    { type: 'pmc_relocated', t: 30, distance_m: 40, los: false },
+    { type: 'snap', t: 50, ops: [u(10)] },
+    { type: 'footer', result: 'victory' },
+  ]));
+  const legacyRounds = splitRounds(legacy);
+  assert.deepEqual(legacyRounds, [{ round: 1, startT: 0, endT: 50, duration: 50, result: 'victory' }]);
+});
+
+test('evaluateAnnotations applies default current-round focus, all-round mode, tag filters, round-picker hiding, and hover/select highlight', () => {
+  const replay = parseReplay(text([
+    header,
+    { type: 'round_start', t: 2, round: 1 },
+    { type: 'round_end', t: 50, round: 1, result: 'victory' },
+    { type: 'round_start', t: 60, round: 2 },
+    { type: 'round_end', t: 120, round: 2, result: 'draw' },
+  ]));
+  const rounds = splitRounds(replay);
+  const anns: Annotation[] = [
+    { id: 'n1', kind: 'comment', t: 10, round: 1, author: 'Designer', unit: '', label: 'R1 good', color: '#facc15', tag: 'хорошо', points: [[0, 0]] },
+    { id: 'n2', kind: 'route', t: 70, round: 2, author: 'Designer', unit: '', label: 'R2 bug', color: '#ef4444', tag: 'баг', points: [[0, 0], [100, 100]] },
+    { id: 'n3', kind: 'arrow', t: 80, author: 'Designer', unit: '', label: 'R2 inferred', color: '#22d3ee', points: [[10, 10], [50, 50]] },
+  ];
+
+  // Default: Весь бой + текущий раунд (R2) + labelsOnMap=true
+  const def = evaluateAnnotations(anns, replay, rounds, {
+    selectedRound: 'all', currentRound: 2, scope: 'current', tags: [], labelsOnMap: true,
+  });
+  assert.deepEqual(def.map(e => [e.annotation.id, e.mapMode, e.showLabel, e.inList]), [
+    ['n1', 'faint', false, false],
+    ['n2', 'full', true, true],
+    ['n3', 'full', true, true],
+  ]);
+
+  // Весь бой + все + labelsOnMap=false + hovered n1 -> only n1 shows label & highlighted
+  const allNoLabels = evaluateAnnotations(anns, replay, rounds, {
+    selectedRound: 'all', currentRound: 2, scope: 'all', tags: [], labelsOnMap: false, hoveredId: 'n1',
+  });
+  assert.deepEqual(allNoLabels.map(e => [e.annotation.id, e.mapMode, e.showLabel, e.highlighted, e.inList]), [
+    ['n1', 'full', true, true, true],
+    ['n2', 'full', false, false, true],
+    ['n3', 'full', false, false, true],
+  ]);
+
+  // Tag filter: только теги ['баг']
+  const byTag = evaluateAnnotations(anns, replay, rounds, {
+    selectedRound: 'all', currentRound: 2, scope: 'all', tags: ['баг'], labelsOnMap: true,
+  });
+  assert.deepEqual(byTag.map(e => [e.annotation.id, e.mapMode, e.inList]), [
+    ['n1', 'hidden', false],
+    ['n2', 'full', true],
+    ['n3', 'hidden', false],
+  ]);
+
+  // Round mode: Раунд 1 picked -> other rounds hidden completely
+  const r1Only = evaluateAnnotations(anns, replay, rounds, {
+    selectedRound: 1, currentRound: 2, scope: 'all', tags: [], labelsOnMap: true,
+  });
+  assert.deepEqual(r1Only.map(e => [e.annotation.id, e.mapMode, e.showLabel, e.inList]), [
+    ['n1', 'full', true, true],
+    ['n2', 'hidden', false, false],
+    ['n3', 'hidden', false, false],
+  ]);
+
+  // Round mode + labelsOnMap=false + selectedId=n2 -> only n2 shows full label
+  const r2Selected = evaluateAnnotations(anns, replay, rounds, {
+    selectedRound: 2, currentRound: 2, scope: 'current', tags: [], labelsOnMap: false, selectedId: 'n2',
+  });
+  assert.deepEqual(r2Selected.map(e => [e.annotation.id, e.mapMode, e.showLabel, e.highlighted, e.inList]), [
+    ['n1', 'hidden', false, false, false],
+    ['n2', 'full', true, true, true],
+    ['n3', 'full', false, false, true],
+  ]);
+
+  assert.equal(compactMapLabel('Командир выходит левым флангом, но выходит недостаточно широко', 20), 'Командир выходит ле…');
+  assert.deepEqual(wrapLabelLines('Один два три четыре пять шесть', 12), ['Один два три', 'четыре пять', 'шесть']);
+
+  // Fallback round inference when round_start omits explicit .round
+  const noExplicitRoundNum = parseReplay(text([
+    header,
+    { type: 'round_start', t: 1 },
+    { type: 'round_start', t: 20 },
+  ]));
+  const inferredRounds = splitRounds(noExplicitRoundNum);
+  const evNoRound = evaluateAnnotations(
+    [{ id: 'x', kind: 'comment', t: 25, author: 'Designer', unit: '', label: 'R2', color: '#facc15', points: [[0, 0]] }],
+    noExplicitRoundNum,
+    inferredRounds,
+    { selectedRound: 2, currentRound: 2, scope: 'current', tags: [], labelsOnMap: true },
+  );
+  assert.equal(evNoRound[0].round, 2);
+  assert.equal(evNoRound[0].mapMode, 'full');
 });
