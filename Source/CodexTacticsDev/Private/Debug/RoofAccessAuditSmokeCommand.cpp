@@ -15,6 +15,7 @@
 #include "Misc/Paths.h"
 #include "NavLinkCustomComponent.h"
 #include "NavMesh/NavMeshPath.h"
+#include "NavMesh/RecastNavMesh.h"
 #include "NavigationData.h"
 #include "NavigationSystem.h"
 #include "Serialization/JsonReader.h"
@@ -127,6 +128,8 @@ void Audit(UWorld* World)
 		return Nav->FindPathSync(Q);
 	};
 	int32 Count = 0, Broken = 0, LadderCount = 0, RampCount = 0;
+	bool GoodLadder = false, GoodRamp = false;
+	UE_LOG(LogCodexTactics, Display, TEXT("[AccessAudit155] sampling infantry data=%s building=%d"), *NavData->GetName(), Nav->IsNavigationBuildInProgress());
 	FString Table = TEXT("# X6 placed access audit (155)\n\nRead-only runtime geometry; Default infantry navmesh, +/-60 cm endpoint snap. "
 						 "Heights cm. A complete alternate path alone does not prove the audited ladder link.\n\n| Building | Actor / "
 						 "component | Kind | Bottom Z | Top Z | Claimed landing Z | Bottom nav | Top nav | Connected | Findings / proposed "
@@ -184,6 +187,10 @@ void Audit(UWorld* World)
 			++Broken;
 		}
 		const FBuilding* Bld = BuildingAt(Actor, Top);
+		if (Bld && Bld->Id == TEXT("B_hall_n") && Low && High && Connected && Issue.IsEmpty())
+		{
+			if (Link) { GoodLadder = true; } else { GoodRamp = true; }
+		}
 		const FString Line = FString::Printf(TEXT("| %s %s | %s | %s | %.1f | %.1f | %.1f | %d | %d | %d | %s |"),
 											 Bld ? *Bld->Number : TEXT("?"), Bld ? *Bld->Id : TEXT("unindexed"), *Name, Kind, Bottom.Z,
 											 Top.Z, Expected, Low, High, Connected, Issue.IsEmpty() ? TEXT("OK") : *Issue);
@@ -304,7 +311,9 @@ void Audit(UWorld* World)
 	const bool InventoryComplete = LadderCount >= Layout->GetArrayField(TEXT("ladders")).Num() && RampCount >= ExpectedRamps;
 	UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: placed inventory %d ladders / %d ramp slabs; layout claims %d ladders / %d stairs"),
 		InventoryComplete ? TEXT("ok") : TEXT("FAIL"), LadderCount, RampCount, Layout->GetArrayField(TEXT("ladders")).Num(), ExpectedRamps);
-	int32 CodeFailures = InventoryComplete ? 0 : 1, RoofFaces = 0;
+	UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: B_hall_n known-good ladder=%d ramp=%d (both endpoints and complete path)"),
+		GoodLadder && GoodRamp ? TEXT("ok") : TEXT("FAIL"), GoodLadder, GoodRamp);
+	int32 CodeFailures = InventoryComplete && GoodLadder && GoodRamp ? 0 : 1, RoofFaces = 0;
 	bool Case2Click = false;
 	ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
 	if (PC && Op)
@@ -378,11 +387,24 @@ void Run(const TArray<FString>& Args, UWorld* World)
 				FPlatformMisc::RequestExit(false, TEXT("RoofAccessAuditSmoke"));
 				return false;
 			}
-			if (++*Frames < 300)
+			UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(Weak.Get());
+			if (*Frames == 0 && Nav)
+			{
+				for (TActorIterator<ARecastNavMesh> It(Weak.Get()); It; ++It)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[AccessAudit155] nav=%s agent=%s tiles=%d bounds=%s building=%d"),
+						*It->GetName(), *It->GetConfig().Name.ToString(), It->GetNumActiveTiles(), *It->GetBounds().ToString(), Nav->IsNavigationBuildInProgress());
+				}
+			}
+			if (++*Frames < 300 || (Nav && Nav->IsNavigationBuildInProgress() && *Frames < 18000))
 			{
 				return true;
 			}
-			if (UWorld* W = Weak.Get())
+			if (!Nav || Nav->IsNavigationBuildInProgress())
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: FAIL (navigation did not finish building; no audit table produced)"));
+			}
+			else if (UWorld* W = Weak.Get())
 			{
 				Audit(W);
 			}

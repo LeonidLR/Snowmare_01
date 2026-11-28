@@ -116,6 +116,7 @@ namespace LevelGenRampSmoke
 		bool bRoofEdge = false;
 		bool bDesigner155 = false;
 		bool bDesignerSwitched = false;
+		bool bLoggedNavWait = false;
 		bool bTrace = false;
 		float TraceClock = 0.f;
 		/** Own-order bit last sample, so a trace run can name the moment it drops. */
@@ -369,6 +370,22 @@ namespace LevelGenRampSmoke
 		{
 			Check(State, false, Error);
 			return Finish(State, false);
+		}
+		if (State.bDesigner155)
+		{
+			// Recorded scenario is independent of layout filtering and ramp probe success.
+			FStair Stair;
+			Stair.Id = TEXT("B_x1_10_t7_store_stair_0");
+			Stair.Kind = TEXT("recorded round 4");
+			Stair.LevelTo = 3;
+			State.Stairs.Add(Stair);
+			FLeg Leg;
+			Leg.Kind = ELegKind::Solo;
+			Leg.Goal = FVector(-9111.f, -11096.f, 900.f);
+			Leg.Limit = 150.f;
+			State.Legs.Add(Leg);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: designer155 directly staged: 1 recorded leg, no stair eligibility filter"));
+			return true;
 		}
 		State.GroundZ = Layout->HasField(TEXT("ground_z")) ? static_cast<float>(Layout->GetNumberField(TEXT("ground_z"))) : 0.f;
 		for (const TSharedPtr<FJsonValue>& BV : Layout->GetArrayField(TEXT("buildings")))
@@ -687,11 +704,13 @@ namespace LevelGenRampSmoke
 		// Keep the staged squad in place while the teleport settles between legs.
 		Squad->SetFollowersHolding(true);
 		Squad->SetSelectedGroup(TArray<AOperativeCharacter*>{ Squad->GetLeader() }, false);
-		State.Ordered = PlaceSquad(World, *Squad, Stair, State.GroundZ + Stair.LevelFrom * LevelHeightCm);
+		if (!State.bDesigner155) { State.Ordered = PlaceSquad(World, *Squad, Stair, State.GroundZ + Stair.LevelFrom * LevelHeightCm); }
 		if (State.bDesigner155)
 		{
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
+				Member->ColdLevel = 0.f;
+				if (Member->ColdSurvival) { Member->ColdSurvival->SetComponentTickEnabled(false); }
 				if (Member->bInCover) { Member->LeaveCover(TEXT("155 staging")); }
 				Member->StopOperative();
 				const float X = Member->SquadRole == EOperativeRole::Commander ? -7398.f
@@ -702,7 +721,11 @@ namespace LevelGenRampSmoke
 				{
 					Member->EnterCover(Cover);
 				}
-				if (Member->SquadRole == EOperativeRole::Commander) { State.Ordered = Member; }
+				if (Member->SquadRole == EOperativeRole::Commander)
+				{
+					State.Ordered = Member;
+					Check(State, Member->bInCover, TEXT("155: Commander staged in recorded cover at (-7398,-12825)"));
+				}
 			}
 			State.bDesignerSwitched = false;
 		}
@@ -754,10 +777,22 @@ namespace LevelGenRampSmoke
 		case EPhase::Settle:
 		{
 			const ULevelExitSubsystem* Exit = World->GetSubsystem<ULevelExitSubsystem>();
-			if (!Leader || State.PhaseTime < 3.5f || (Exit && Exit->IsStartFadeResolved() && Exit->GetStartFadeAlpha() > 0.f && State.PhaseTime < 15.f))
+			UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+			if (Nav && Nav->IsNavigationBuildInProgress() && !State.bLoggedNavWait)
+			{
+				State.bLoggedNavWait = true;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: waiting for dynamic navigation before ramp probes / recorded roof order"));
+			}
+			if (!Leader || (Nav && Nav->IsNavigationBuildInProgress() && State.PhaseTime < 120.f) || State.PhaseTime < 3.5f || (Exit && Exit->IsStartFadeResolved() && Exit->GetStartFadeAlpha() > 0.f && State.PhaseTime < 15.f))
 			{
 				return true;
 			}
+			if (!Nav || Nav->IsNavigationBuildInProgress())
+			{
+				Check(State, false, TEXT("navigation did not finish building"));
+				return Finish(State, false);
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: dynamic navigation ready after %.2f smoke seconds"), State.PhaseTime);
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				if (Member)
@@ -819,7 +854,7 @@ namespace LevelGenRampSmoke
 			}
 			else
 			{
-				Click(World, Leg.Goal, State.bDesigner155 || Leg.Kind == ELegKind::Group);
+				Click(World, Leg.Goal, Leg.Kind == ELegKind::Group);
 			}
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: leg %d / %d - %s %s: %s (selected, %d in the selection) clicked to %s"), State.Leg + 1, State.Legs.Num(),
 				*State.Stairs[Leg.Stair].Id, KindName(Leg.Kind), *Ordered->DisplayName.ToString(), Squad->GetSelectedGroup().Num(), *Leg.Goal.ToCompactString());
