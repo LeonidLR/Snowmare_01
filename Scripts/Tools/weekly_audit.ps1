@@ -62,6 +62,13 @@ if ($NoJev) { $pyArgs += "--no-jev" }
 & python @pyArgs
 if ($note) { Add-Content -Path (Join-Path $Root "docs\port\audit\AUDIT_$Date.md") -Value "`nNote: $note" -Encoding utf8 }
 & python (Join-Path $ToolDir "build_health_dashboard.py") --root $Root
+# 2026-11-28: the 11-15 / 11-22 reports were written but never read (left untracked, later swept away). Tell the Lead in AgentChat.
+$Report = Join-Path $Root "docs\port\audit\AUDIT_$Date.md"
+if (Test-Path $Report) {
+    $Summary = (Get-Content $Report -Encoding UTF8 | Select-String -Pattern 'warnings|предупреждений' | Select-Object -First 1).Line
+    & python (Join-Path $ToolDir "agent_chat.py") post --as claude --to claude --topic audit `
+        --text "AUDIT READY $Date | docs/port/audit/AUDIT_$Date.md (untracked: Lead commits it) | $Summary$(if ($note) { " | $note" })"
+}
 
 if ($analyzerTime -and -not $NoRestore) {
     Write-Host "[audit] restoring the normal build"
