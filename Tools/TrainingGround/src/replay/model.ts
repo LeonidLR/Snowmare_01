@@ -264,7 +264,33 @@ export function splitRounds(replay: Replay): ReplayRound[] {
 export function annotationRound(a: Pick<Annotation, 'round' | 't'>, replay: Replay | undefined, rounds: ReplayRound[]): number | undefined {
   if (a.round !== undefined) return a.round;
   if (!replay || rounds.length === 0) return undefined;
-  return roundAt(replay, a.t)?.round ?? rounds[0].round;
+  return [...rounds].reverse().find(r => r.startT <= a.t)?.round ?? rounds[0].round;
+}
+
+export function wrapLabelLines(text: string, maxChars = 46): string[] {
+  const clean = text.trim();
+  if (!clean) return [];
+  if (clean.length <= maxChars) return [clean];
+  const lines: string[] = [];
+  let line = '';
+  for (const word of clean.split(/\s+/)) {
+    if (!line) {
+      line = word;
+    } else if (line.length + 1 + word.length <= maxChars) {
+      line += ' ' + word;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+export function compactMapLabel(text: string, maxChars = 40): string {
+  const clean = text.trim();
+  if (clean.length <= maxChars) return clean;
+  return clean.slice(0, maxChars - 1).trimEnd() + '…';
 }
 
 export type NoteRoundScope = 'current' | 'all';
