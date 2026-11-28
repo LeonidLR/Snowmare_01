@@ -18,7 +18,7 @@
     "TutorialAmbushLakeMineSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "TurnArenaLakeSmoke", "TurnArenaYardSmoke",
     "EnvironmentLakeSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "WeatherLakeSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke", "SnowIndoorSmoke",
     "StartLightingSmoke", "StartSnowSmoke", "FormationWallHugSmoke", "FormationFenceCrossSmoke", "StartFlickerSmoke", "LevelGenBuildingsSmoke", "RoofCutawayStoreySmoke", "CutawayClickSmoke",
-    "SectorBoundarySmoke", "SectorRoundsSmoke", "RoofFightSmoke", "CorpseSearchSmoke",
+    "SectorBoundarySmoke", "SectorRoundsSmoke", "RoofFightSmoke", "CorpseSearchSmoke", "RoofAccessAuditSmoke", "LevelGenRampSmoke",
     "DropLinkReachSmoke", "ColdIndoorsSmoke", "WindowStairHoverSmoke", "FormationStairSmoke", "FormationWindowSmoke", "CoverIndoorSmoke",
     "DoorsSmoke", "DoorBreachSmoke", "WindowCoverFireSmoke", "WallHugWindowSmoke", "WindowDetourSmoke", "CornerSlotSmoke",
     "TorsoDriftSmoke", "FormationScanPitchSmoke", "LookDirectionSmoke", "FormationRunStanceSmoke"
@@ -90,6 +90,8 @@
     "TutorialAmbushLakeEarlyKillSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-22: the first PMC wire -> the tripwire card; both A4 zombies killed early -> every bound step closes (no stale target); A7 -> PREPARE THE GROUND" },
     "SectorBoundarySmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-Sector=1 -SectorSeed=91", "timeout": 300, "_why": "Task 106: one active training sector constrains a squad move and its PMC squad"},
     "SectorRoundsSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-Sector=5 -SectorSeed=91", "timeout": 300, "_why": "G019: a wiped side starts the next round on a different start and post; an empty reserve refills only after the quiet delay"},
+    "RoofAccessAuditSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 300, "_why": "155 read-only placed access audit; PASS proves execution, review findings are reported separately"},
+    "LevelGenRampSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "args": "designer155 trace", "timeout": 600, "_why": "155 exact round4 first roof order: cover at (-7398,-12825), goal (-9111,-11096,900), select another man after10s; no second roof order"},
     "RoofFightSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 300, "_why": "G023: X6 walkable roof LowCover shooting at ground PMC 20-40 m below + full-wall block + grenade throw yaw <= 20 deg (op & PMC) + first-aid chest yaw <= 30 deg behind/beside"},
     "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" }
   },
@@ -103,7 +105,7 @@
     "/Game/Maps/Generated/L_Gen_Depot_1": [
       "CameraMinZoomDepotSmoke", "ClickPreviewSmoke", "ConePerfSmoke", "CorpseCostSmoke", "CorpsePersistSmoke", "DepotCampaignStartSmoke",
       "DepotVaultSmoke", "DropSoftlockSmoke", "FallDropSmoke", "FormationMantleSmoke", "HitchProbeSmoke",
-      "HordeFirefightsSmoke", "InjuredLocomotionDepotSmoke", "LevelGenLaddersSmoke", "LevelGenRampSmoke", "LevelGenRouteSmoke", "MantleAlignSmoke",
+      "HordeFirefightsSmoke", "InjuredLocomotionDepotSmoke", "LevelGenLaddersSmoke", "LevelGenRouteSmoke", "MantleAlignSmoke",
       "MantleClickSmoke", "MantleDescentSmoke", "MantleFenceRouteSmoke", "MantleSmoke", "PmcAlleySmoke", "PmcCrossroadsSmoke",
       "PmcEncounterHuntSmoke", "PmcEncounterSmoke", "PmcOwnedChargesSmoke", "PmcPostsSmoke", "PmcRoofDefenceSmoke", "PmcStalemateSmoke",
       "ProneCrawlSmoke", "RampFightSmoke", "RoofCutawayFocusSmoke", "SightConditionsSmoke", "VisionHeightSmoke",
@@ -179,6 +181,12 @@
   },
   "nonSmokeDebugCommands": ["PmcArena", "LevelGenIslandsProbe", "GiveWeapon", "MortarList", "MortarMan", "MortarFire", "MortarCease", "MortarCrewPmc", "ShotgunD1Shots", "ShotgunLoopShots", "RpgShots", "RecoilProbe", "CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots", "StoryShowcaseFixShots"],
   "rules": [
+    {
+      "name": "roof-access-155",
+      "globs": ["Source/**/Debug/RoofAccessAuditSmoke*", "Source/**/Characters/OperativeCharacterMovement.cpp", "Source/**/Core/CodexTacticsPlayerControllerClickPreview.cpp", "Source/**/Core/CodexTacticsPlayerControllerOrders.cpp", "Source/**/Interactables/WindowBreakage*"],
+      "tests": ["CodexTactics.Tactics.ClickPreview", "CodexTactics.Interactables.WindowBreakage"],
+      "smokes": ["RoofAccessAuditSmoke", "LevelGenRampSmoke"]
+    },
     {
       "name": "cover-open-shot-loop-156",
       "globs": ["Source/**/Tactics/CoverThreatRules*", "Source/**/Characters/OperativeCharacterUnderFire*", "Source/**/Debug/UnderFireManoeuvreSmokeCommand.cpp"],

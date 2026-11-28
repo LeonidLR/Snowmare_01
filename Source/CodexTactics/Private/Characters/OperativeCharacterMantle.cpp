@@ -975,6 +975,7 @@ bool AOperativeCharacter::StartMantleHop(const FVector& LandingFeet)
 {
 	// The vault's own short arc (UpdateObstacleStepOff's step down): collision off, flown, the walk resumes at the landing.
 	bVaultResume = bMantleResume;
+	bVaultResumeOwnOrder = bMantleResumeOwnOrder;
 	VaultResumeTarget = MantleResumeTarget;
 	bMantleResume = false;
 	if (AController* OwnerController = GetController())

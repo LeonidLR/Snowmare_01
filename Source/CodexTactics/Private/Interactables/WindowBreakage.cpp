@@ -26,6 +26,16 @@ bool WindowBreakage::IsOwnClickTarget(const AActor* HitActor)
 	return HitActor && (HitActor->IsA<APawn>() || HitActor->IsA<AInteractableActor>() || HitActor->ActorHasTag(FName(TEXT("Enemy"))));
 }
 
+bool WindowBreakage::IsThroughLanding(const FBox& S, const FVector& Start, const FVector& Landing)
+{
+	const FBox Opening = MakeOpeningBox(S);
+	const FVector Delta = Landing - Start;
+	return S.IsValid && !Delta.IsNearlyZero() && !Start.IsNearlyZero()
+		&& Landing.Z >= S.Min.Z - ThroughLandingCm && Landing.Z <= Opening.Max.Z
+		&& FMath::LineBoxIntersection(Opening, Start, Landing, Delta)
+		&& S.ComputeSquaredDistanceToPoint(FVector(Landing.X, Landing.Y, S.GetCenter().Z)) <= FMath::Square(ThroughLandingCm);
+}
+
 AActor* WindowBreakage::FindWindowSillAt(UWorld& World, const FHitResult& Hit)
 {
 	static const FName SillTag(TEXT("window_sill"));
@@ -60,7 +70,6 @@ AActor* WindowBreakage::FindWindowSillAt(UWorld& World, const FHitResult& Hit)
 	double BestDistance = TNumericLimits<double>::Max();
 	const bool bFace = Hit.ImpactNormal.Z <= 0.7f;
 	const FVector Start = Hit.TraceStart;
-	const FVector Delta = Hit.ImpactPoint - Start;
 	for (const TPair<TWeakObjectPtr<AActor>, FBox>& Entry : Sills)
 	{
 		AActor* Sill = Entry.Key.Get();
@@ -71,11 +80,9 @@ AActor* WindowBreakage::FindWindowSillAt(UWorld& World, const FHitResult& Hit)
 		// The window face itself (glass, frame, the wall round it; a floor hit beside the window is a plain move), or a ray that went THROUGH
 		// the window opening (the cursor on the window, landing on the floor behind it: the opening has no glass collision).
 		const FBox& S = Entry.Value;
-		const FBox Opening = MakeOpeningBox(S);
 		// Only a landing just behind the opening (CutawayClickSmoke 2026-11-22: a far floor click whose camera ray happened to pass a storey-0
 		// window 4 m away became a window order - the leader climbed out instead of walking to the point).
-		const bool bThrough = !Delta.IsNearlyZero() && !Start.IsNearlyZero() && FMath::LineBoxIntersection(Opening, Start, Hit.ImpactPoint, Delta)
-			&& FMath::Sqrt(S.ComputeSquaredDistanceToPoint(FVector(Hit.ImpactPoint.X, Hit.ImpactPoint.Y, S.GetCenter().Z))) <= ThroughLandingCm;
+		const bool bThrough = IsThroughLanding(S, Start, Hit.ImpactPoint);
 		if ((bFace && IsOverSill(S, Hit.ImpactPoint, FaceMarginCm, FaceHeightCm)) || bThrough)
 		{
 			const double Distance = FVector::DistSquared2D(Entry.Value.GetCenter(), Hit.ImpactPoint);

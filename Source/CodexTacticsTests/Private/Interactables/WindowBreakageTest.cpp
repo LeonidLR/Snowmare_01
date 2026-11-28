@@ -35,4 +35,19 @@ bool FWindowBreakageOwnClickTargetTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWindowRoofLanding155Test, "CodexTactics.Interactables.WindowBreakage.RoofLanding155",
+ EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FWindowRoofLanding155Test::RunTest(const FString& Parameters)
+{
+ const FBox Sill(FVector(-10.f,-60.f,0.f), FVector(10.f,60.f,95.f));
+	TestFalse(TEXT("roof edge above upper-storey sill is not its window face"), WindowBreakage::IsOverSill(
+		FBox(FVector(-10.f,-60.f,300.f), FVector(10.f,60.f,395.f)), FVector(0.f,0.f,600.f), WindowBreakage::FaceMarginCm, WindowBreakage::FaceHeightCm));
+ TestTrue(TEXT("near landing through opening"), WindowBreakage::IsThroughLanding(Sill, FVector(-300.f,0.f,400.f), FVector(100.f,0.f,0.f)));
+ // Both rays cross the pane and land within 150 cm in XY. The old XY-only test steals the roof / lower floor click.
+ TestFalse(TEXT("roof beside upper window stays a roof order"), WindowBreakage::IsThroughLanding(Sill, FVector(-100.f,0.f,-200.f), FVector(100.f,0.f,600.f)));
+ TestFalse(TEXT("another floor below stays its own order"), WindowBreakage::IsThroughLanding(Sill, FVector(-100.f,0.f,600.f), FVector(100.f,0.f,-300.f)));
+ TestFalse(TEXT("far floor beyond opening"), WindowBreakage::IsThroughLanding(Sill, FVector(-300.f,0.f,400.f), FVector(600.f,0.f,0.f)));
+ return true;
+}
+
 #endif

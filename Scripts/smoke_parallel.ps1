@@ -165,6 +165,9 @@ function Start-SmokeProcess($Task) {
     $optExtra = Get-Option $Name "extra" ""
     if ($ForceMap) { $optExtra = $optExtra -replace '-LevelJson=\S+', ("-LevelJson=" + ($Map -split '/')[-1] + ".json") }
     $extra = $optExtra + " " + (Get-ClockArgs $Name $RepeatIndex) + " " + $ExtraArgs
+    # 2026-11-28: the designer's saved training sector (Saved/Training/active_sector.json, shared with the play copy) cut the X6 navmesh
+    # in main-checkout smokes (roof / ladder / window setups failed, worker passed). Smokes run on the whole map unless they name a sector.
+    if ($extra -notmatch '(^|\s)-Sector=') { $extra += " -Sector=0" }
     # 2026-11-09: levels start in Solo; smokes written for the formation start get -SquadStart=formation (smokeDefaults.squadStart),
     # a smoke's own "squadStart": "level" runs the level's real start mode.
     $startDefault = $(if ($TestMap.PSObject.Properties["smokeDefaults"] -and $TestMap.smokeDefaults.PSObject.Properties["squadStart"]) { $TestMap.smokeDefaults.squadStart } else { "level" })
