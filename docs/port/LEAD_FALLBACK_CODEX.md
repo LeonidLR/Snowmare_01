@@ -34,39 +34,20 @@ executor as usual. The Claude Lead updates the STATE block below after every mer
   `pro` subagent, the Lead reviews every diff.
 - Spend little: react only to FINISH / blockers / the designer.
 
-## STATE (updated by the Codex Lead - 2026-11-27, after green 156 merge gate) - HANDOVER: Claude weekly limit 98 %, resets 2026-11-28 11:00
-Designer 2026-11-27 15:10: "when close to 1 % of tokens - Codex is the new Lead"; 15:20 ACTIVATED ("Да, Codex лид"): Codex leads
-until Claude's reset (Sat 2026-11-28 11:00 local), then hands back (post a short STATE here + chat line).
-origin/main 839268f6 (pushed), validated gameplay merge019beb5e (156). Gate-v10-1/2/3 all EXIT 0: 135b (50334424), 153 (f17b3f35), 154 (8af22865); builds, Smart tests and mapped worker smokes passed; designer files intact. Earlier today merged: 149b trainer metrics, 151 per-round demo marks + TG->Play X6 sync, 152 run order kept after traversals.
-Designer priority: recording + analysis of his fights; trainer runs NEXT week (memory trainer-next-week-2026-11-27; 149b worker baseline task disabled).
-
-LIVE STATUS (Codex Lead takeover; designer explicitly requested 156 -> 155):
-1. Gate chain 135b -> 153 -> 154 is GREEN and pushed; Saved/Logs/gate-v10-{1,2,3}.exit each says EXIT 0.
-   Play copy1372f029 now contains origin/main839268f6; post156 worker build is running (Saved/Logs/play-after-156.{log,exit}).
-2. Gemini 144 -> 154b is running via agy_task.ps1; 144 START at 15:16, heartbeat at 15:46 local. The earlier authentication failure
-   was resolved by the designer removing dead Antigravity Tools NRPT DNS rules. agy_task.ps1 probes proxy 8899 then direct Google access;
-   this reviewed route fix is committed with this handover. Watch MERGE-READY / BLOCKER / LIMIT; do not duplicate the run.
-3. 156 MERGED and gate GREEN (Saved/Logs/gate-codex-lead-156.exit EXIT 0; merged gameplay head019beb5e, tipc523163a).
-   Lead reviewed runtime/units/smokes and added real-feet hold assertions: max XY drift0.0 cm, protecting-side depth53.0 cm during >=5 s.
-   Worker build PASS; Smart485/485 PASS; all12 gate-selected worker smokes PASS first try; designer JSON verified intact1/1.
-   Earlier executor RoofFight retry and local preload crash remain disclosed in the report. No runtime changes after gate.
-   Play was merged cleanly with its editor closed; play1372f029 post156 worker build started17:30 local. Set editor_status to play only after build exit0 (runner does this).
-4. Queue156 ->155 advanced automatically: 155 START17:04 local, preserved4b725e7d, merged origin/main058e0900, removed unrelated worker_sync.ps1 diff.
-   155 reused existing worker-slot1 after machine_dispatch reported it free17:28; cancelled only its own waiting main-root job. Build/ref870acc85 pending. No new lane/root.
-   Inbox155 includes Lead resume review; require real roof arrival, visible refusal, complete read-only ladder/ramp audit and own-order A/B.
-5. Designer renewed full Lead authorization until Sat11:00: own review + green merge_gate before push; commit STATE/HANDOFF/TASK_BOARD only outside gates;
-   update play only with its editor closed. No force-push, push without green gate, or protected designer files. Gameplay forks go to the designer.
-6. 144 review messages1541/1542/1548/1550: main integrated, window caches and real bone/natural-return smoke checks added; pro review findings addressed
-   in80065445. Final worker verification pending. Require actual head-vs-sill hiding and same-frame weapon clearance, not just stand-minus15cm.
-   After156 is pushed,144 must preserve its player-cover intent/three-second transition guard when integrating main. Gemini then runs154b.
-7. Worker-night stall1559 acknowledged: trainer remains deferred to next week. Scheduled regression night-sweep GREEN16:52 (main058e0900, build0,
-   one scenario smoke PASS). Existing worker slots serve active Lead/144/155 checks; do not restart trainer in response to the generic watchdog notice.
-QUEUE after these: 139 (MERGE-READY 69927b35; merge only after the designer's LadderActor_22 TopStandoff/TopExitStandoff 49->125 map fix) ->
-147 PMC fled -> 143 -> 146 -> 136 -> 137 -> 138 -> 140. 157 per-shot accuracy recording: ONLY if the designer says yes (asked, no answer yet).
-Designer analysed 2 fights in "Хроника боя" (CodexTactics-play/Saved/Demos/2026-11-27_*_085013 / _104238 .notes.json): keep the notes, the
-trainer work next week turns them into rules / plays (5 annotated fights first, then A/B).
-Lead review lessons today: Codex once changed shared infra unasked (worker_sync LFS, reverted); agents' self-reported BLOCKERs were often fine
-(121, 148) - always look at the diff + gate yourself; agy needs prompts as a FILE pointer (PS 5.1 breaks long args).
+## STATE (Claude Lead, 2026-11-28 ~13:40) - Claude is Lead again (weekly reset 0 %); Codex is an executor
+origin/main b4848608: 154b replay rounds + notes filter (Gemini, merged e4e2c00b), merge_gate -LocalSmokes / -LocalBaselineJson (worker off).
+Worker codex-worker OFF today; the designer moves the main PC back to the university network later today (agy_task.ps1 picks proxy 8899
+vs direct itself). Local X6 smokes on the main PC are noisy: FormationScanPitchSmoke + WindowDetourSmoke fail on base main,
+FormationFenceCrossSmoke + TorsoDriftSmoke pass only on re-run (baseline Saved/Logs/baseline-1128-x6.json).
+DESIGNER DECISION 2026-11-28: FREEZE the cover / window / corner / orders node for new features until the code audit; agent MERGE-READY
+without real smoke results is rejected. Audit tonight: MSVC /analyze (build.ps1 -StaticAnalyzer VisualCpp) + Fable review of 8 hot systems.
+In flight (both lanes now have junctions to the content packs + DDC + Content/Maps/KitPilot, so smokes run in the lane):
+1. Gemini 144 fix round (agy, lane 144, prompt Saved/Lead/agy_144_fix_1128.md): gate in main failed - WallHugWindowSmoke setup finds no
+   window pair, FormationFenceCrossSmoke 0/3, RoofFightSmoke fire gate 1/2. Lead merged main into 144 (2ecf491e) + registered its smoke.
+2. Codex 155 fix round (lane 155, prompt Saved/Lead/codex_155_fix_1128.md): gate built + 18 smokes PASS but LevelGenRampSmoke designer155
+   planned 0 legs and the RoofAccessAudit table reads no navmesh almost everywhere (audit timing?) - reverted, needs real evidence.
+Next after these: Codex flaky-smokes task on the worker (after the PC move). QUEUE then: 139 (waits for LadderActor_22 map fix 49->125) ->
+147 -> 143 -> 146 -> 136 -> 137 -> 138 -> 140 (respect the freeze). 157 per-shot accuracy only if the designer says yes.
 
 ## Re-plan 2026-11-26 evening (designer: Gemini unreliable, rely on Codex)
 Codex: 139 (finishing) -> 121 full recording (Gemini WIP fbad5357; needed before the designer's fights 11-27) -> 147 PMC fled = win ->
