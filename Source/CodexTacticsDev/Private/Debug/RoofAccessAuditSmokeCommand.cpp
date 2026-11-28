@@ -211,6 +211,10 @@ void Audit(UWorld* World)
 			}
 		}
 		FString Fix = It->IsClimbable() ? FString() : TEXT("decoration / no enabled climb; ");
+		if (!It->GetNavLink())
+		{
+			Fix += TEXT("missing ladder nav link: restore smart-link component and rebuild navigation; ");
+		}
 		if (FMath::Abs(It->GetTopWorldZ() - Expected) > 25.f)
 		{
 			Fix += FString::Printf(TEXT("Height %.1f -> %.1f (%d rungs at pitch %.1f); "), It->Height,
