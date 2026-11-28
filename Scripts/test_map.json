@@ -20,7 +20,7 @@
     "StartLightingSmoke", "StartSnowSmoke", "FormationWallHugSmoke", "FormationFenceCrossSmoke", "StartFlickerSmoke", "LevelGenBuildingsSmoke", "RoofCutawayStoreySmoke", "CutawayClickSmoke",
     "SectorBoundarySmoke", "SectorRoundsSmoke", "RoofFightSmoke", "CorpseSearchSmoke",
     "DropLinkReachSmoke", "ColdIndoorsSmoke", "WindowStairHoverSmoke", "FormationStairSmoke", "FormationWindowSmoke", "CoverIndoorSmoke",
-    "DoorsSmoke", "DoorBreachSmoke", "WindowCoverFireSmoke", "WindowDetourSmoke", "CornerSlotSmoke",
+    "DoorsSmoke", "DoorBreachSmoke", "WindowCoverFireSmoke", "WallHugWindowSmoke", "WindowDetourSmoke", "CornerSlotSmoke",
     "TorsoDriftSmoke", "FormationScanPitchSmoke", "LookDirectionSmoke", "FormationRunStanceSmoke"
   ],
   "smokeDefaults": {
