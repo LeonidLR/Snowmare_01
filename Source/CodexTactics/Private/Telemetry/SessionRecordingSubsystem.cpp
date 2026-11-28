@@ -289,7 +289,7 @@ void USessionRecordingSubsystem::MarkSession(const FString& Command)
    UE_LOG(LogCodexTactics, Display, TEXT("[DemoRecord] mark '%s': no such round - nothing marked"), *Command);
    if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
    {
-    UFloatingTextSubsystem::SpawnAboveOperative(Squad->GetLeader(), TEXT("Нет такого раунда - пометка не сделана"), FLinearColor::White);
+    UFloatingTextSubsystem::SpawnAboveOperative(Squad->GetLeader(), TEXT("No such round - nothing marked"), FLinearColor::White);
    }
    return;
   }
@@ -297,7 +297,7 @@ void USessionRecordingSubsystem::MarkSession(const FString& Command)
   UE_LOG(LogCodexTactics, Display, TEXT("[DemoRecord] whole recording marked: %s"), *Args[0]);
   if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
   {
-   UFloatingTextSubsystem::SpawnAboveOperative(Squad->GetLeader(), FString::Printf(TEXT("Запись помечена: %s"), *Args[0]), FLinearColor::White);
+   UFloatingTextSubsystem::SpawnAboveOperative(Squad->GetLeader(), FString::Printf(TEXT("Recording marked: %s"), *Args[0]), FLinearColor::White);
   }
   return;
  }
@@ -311,7 +311,7 @@ void USessionRecordingSubsystem::MarkSession(const FString& Command)
  if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
  {
   UFloatingTextSubsystem::SpawnAboveOperative(Squad->GetLeader(),
-   FString::Printf(TEXT("Раунд %d помечен: %s"), Round, *Args[0]), FLinearColor::White);
+   FString::Printf(TEXT("Round %d marked: %s"), Round, *Args[0]), FLinearColor::White);
  }
  UE_LOG(LogCodexTactics, Display, TEXT("[DemoRecord] round %d marked: %s"), Round, *Args[0]);
 }

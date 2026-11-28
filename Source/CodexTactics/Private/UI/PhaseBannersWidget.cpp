@@ -254,7 +254,7 @@ void UPhaseBannersWidget::Refresh()
 	{
 		CutscenePanel->SetVisibility(bCutscene ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
-	if (CutsceneSkipText && bCutscene)
+	if (CutsceneSkipText && bCutscene && Flow) // audit 2026-11-28 (C6011)
 	{
 		CutsceneSkipText->SetText(FText::FromString(FString::Printf(TEXT("Continues in: %d sec... (or click)"),
 			FMath::CeilToInt(Flow->GetCutsceneTimeRemaining()))));

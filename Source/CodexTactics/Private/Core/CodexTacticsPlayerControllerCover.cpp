@@ -974,6 +974,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 	// 2026-10-21: a slow second click on a switchable ghost is the switch too (the quick dash); from anywhere else the ordinary cover order.
 	// Locked by the tutorial: the ordinary cover order (TutorialRules::ResolveLockedCommand degrades Cover.Switch to Cover.Enter).
 	const UTutorialSubsystem* SwitchTutorial = GetWorld()->GetSubsystem<UTutorialSubsystem>();
+	if (!Operative) { return; } // audit 2026-11-28 (C6011)
 	LastCoverSwitchVerdict = Operative->EvaluateCoverSwitch(Slot);
 	// Wall leadership (2026-11-01): the leader holds the corner of the SQUAD's peek - his double-click on another cover is the squad's wall
 	// order there (the formation wall layout; the peek carried over, bug_04 A), not his own dash with the others' legacy group cover.
@@ -1852,7 +1853,7 @@ bool ACodexTacticsPlayerController::UpdateStealthWallHover(AOperativeCharacter* 
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		StealthWallHoverGhost = GetWorld()->SpawnActor<ACoverGhostActor>(HoverSlot.WorldLocation, FRotator::ZeroRotator, Params);
 	}
-	if (!IsValid(StealthWallHoverGhost))
+	if (!IsValid(StealthWallHoverGhost) || !Operative) // audit 2026-11-28 (C6011)
 	{
 		return false;
 	}

@@ -1805,6 +1805,7 @@ void USaveGameSubsystem::RestoreSquad(FSaveRestoreContext& Context)
 			AOperativeCharacter* Member = nullptr;
 			for (AOperativeCharacter* Candidate : Squad->GetMembers())
 			{
+				if (!Candidate) { continue; } // audit 2026-11-28 (C28182)
 				if (Candidate->DisplayName.ToString() == Name || (!Member && UEnum::GetValueAsString(Candidate->SquadRole) == Role))
 				{
 					Member = Candidate;

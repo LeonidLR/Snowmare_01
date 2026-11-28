@@ -7,40 +7,41 @@ h1{font-size:20px}h2{font-size:16px;margin-top:24px}table{border-collapse:collap
 th,td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:right}th:first-child,td:first-child{text-align:left}
 .wrap{overflow-x:auto}.bad{color:var(--bad);font-weight:600}.mut{color:var(--mut)}.card{display:flex;gap:16px;flex-wrap:wrap}
 .card div{border:1px solid var(--line);border-radius:6px;padding:8px 12px}</style></head><body><h1>CodexTactics project health</h1>
-<p class='mut'>Latest audit: 2026-11-22 (3 runs). Generated from docs/port/audit/audit_*.json.</p>
-<div class='card'><div><b>79</b><br>analyzer warnings<br><span class='mut'>high 75</span></div><div><b>792</b><br>commits (7d)</div><div><b>3</b><br>grey zones</div></div>
-<h2>Actions of the week</h2><ol><li>Разобрать 28 новых серьёзных предупреждений анализатора (PmcSquadSubsystem.cpp, OperativeCharacterStance.cpp, OperativeCharacterSuppression.cpp).</li><li>Покрыть тестом PmcSquadSubsystem.cpp (изменён 31 раз за неделю, 3775 строк, риск Jev 3.55).</li><li>Серая зона: система LevelGen (13362 строк, 62 правок, тестов 22, смоков 10) - добавить тесты.</li></ol>
+<p class='mut'>Latest audit: 2026-11-28 (2 runs). Generated from docs/port/audit/audit_*.json.</p>
+<div class='card'><div><b>83</b><br>analyzer warnings<br><span class='mut'>high 75</span></div><div><b>1633</b><br>commits (7d)</div><div><b>16</b><br>grey zones</div></div>
+<h2>Actions of the week</h2><ol><li>Разобрать 30 новых серьёзных предупреждений анализатора (PmcSquadSubsystem.cpp, OperativeCharacterStance.cpp, OperativeCharacterSuppression.cpp).</li><li>Покрыть тестом PmcSquadSubsystem.cpp (изменён 39 раз за неделю, 3948 строк, риск Jev 3.58).</li><li>Серая зона: система Interactables (21362 строк, 156 правок, тестов 26, смоков 23) - добавить тесты.</li></ol>
 <h2>Weekly trends</h2><div class='wrap'><table><tr><th>Date</th><th>Commits</th><th>Warnings</th><th>High</th><th>New</th><th>Grey</th></tr>
-<tr><td>2026-11-22</td><td>792</td><td>79</td><td>75</td><td>29</td><td>3</td></tr>
-<tr><td>2026-11-15</td><td>536</td><td>50</td><td>48</td><td>11</td><td>3</td></tr>
+<tr><td>2026-11-28</td><td>1633</td><td>83</td><td>75</td><td>35</td><td>16</td></tr>
 <tr><td>2026-11-10</td><td>295</td><td>78</td><td>74</td><td>base</td><td>3</td></tr>
 </table></div>
-<p>Warnings <svg viewBox="0 0 160 36" width="160" height="36" role="img"><polyline fill="none" stroke="currentColor" stroke-width="2" points="2.0,4.0 80.0,33.0 158.0,3.0"/></svg> &nbsp; Commits <svg viewBox="0 0 160 36" width="160" height="36" role="img"><polyline fill="none" stroke="currentColor" stroke-width="2" points="2.0,33.0 80.0,18.5 158.0,3.0"/></svg></p>
+<p>Warnings <svg viewBox="0 0 160 36" width="160" height="36" role="img"><polyline fill="none" stroke="currentColor" stroke-width="2" points="2.0,33.0 158.0,3.0"/></svg> &nbsp; Commits <svg viewBox="0 0 160 36" width="160" height="36" role="img"><polyline fill="none" stroke="currentColor" stroke-width="2" points="2.0,33.0 158.0,3.0"/></svg></p>
 <h2>Systems</h2><div class='wrap'><table><tr><th>System</th><th>LOC</th><th>Tests</th><th>Smokes</th><th>7d</th><th>Grey</th></tr>
-<tr><td class='bad'>LevelGen</td><td>13362</td><td>22</td><td>10</td><td>62</td><td class='bad'>4.03</td></tr>
+<tr><td class='bad'>Interactables</td><td>21362</td><td>26</td><td>23</td><td>156</td><td class='bad'>6.18</td></tr>
+<tr><td class='bad'>Telemetry</td><td>2306</td><td>1</td><td>4</td><td>37</td><td class='bad'>6.07</td></tr>
+<tr><td class='bad'>Characters</td><td>67423</td><td>141</td><td>34</td><td>585</td><td class='bad'>5.66</td></tr>
+<tr><td class='bad'>LevelGen</td><td>13841</td><td>24</td><td>5</td><td>81</td><td class='bad'>4.77</td></tr>
+<tr><td class='bad'>Training</td><td>1940</td><td>3</td><td>2</td><td>27</td><td class='bad'>4.08</td></tr>
+<tr><td class='bad'>Falls</td><td>3896</td><td>2</td><td>1</td><td>9</td><td class='bad'>3.8</td></tr>
+<tr><td class='bad'>Core</td><td>19004</td><td>42</td><td>30</td><td>134</td><td class='bad'>3.69</td></tr>
+<tr><td class='bad'>UI</td><td>19431</td><td>18</td><td>29</td><td>25</td><td class='bad'>3.26</td></tr>
+<tr><td class='bad'>Vehicles</td><td>6376</td><td>3</td><td>4</td><td>0</td><td class='bad'>3.19</td></tr>
+<tr><td class='bad'>Camera</td><td>4360</td><td>4</td><td>7</td><td>17</td><td class='bad'>3.1</td></tr>
 <tr><td class='bad'>Audio</td><td>1145</td><td>1</td><td>0</td><td>10</td><td class='bad'>2.62</td></tr>
-<tr><td class='bad'>Characters</td><td>62707</td><td>138</td><td>218</td><td>282</td><td class='bad'>2.36</td></tr>
-<tr><td>Vehicles</td><td>6376</td><td>3</td><td>16</td><td>0</td><td>1.99</td></tr>
-<tr><td>Falls</td><td>3887</td><td>2</td><td>12</td><td>6</td><td>1.96</td></tr>
-<tr><td>Survival</td><td>6442</td><td>16</td><td>16</td><td>23</td><td>1.9</td></tr>
-<tr><td>Interactables</td><td>14134</td><td>16</td><td>88</td><td>43</td><td>1.75</td></tr>
-<tr><td>Tutorial</td><td>9463</td><td>14</td><td>16</td><td>0</td><td>1.75</td></tr>
-<tr><td>AI</td><td>14378</td><td>84</td><td>53</td><td>122</td><td>1.68</td></tr>
-<tr><td>Ladders</td><td>3788</td><td>8</td><td>12</td><td>10</td><td>1.52</td></tr>
-<tr><td>Core</td><td>17920</td><td>38</td><td>121</td><td>51</td><td>1.36</td></tr>
-<tr><td>UI</td><td>19384</td><td>18</td><td>137</td><td>20</td><td>1.28</td></tr>
-<tr><td>Power</td><td>1715</td><td>7</td><td>5</td><td>8</td><td>1.14</td></tr>
-<tr><td>Tactics</td><td>15966</td><td>49</td><td>84</td><td>28</td><td>1.12</td></tr>
-<tr><td>Environment</td><td>12918</td><td>49</td><td>18</td><td>4</td><td>1.09</td></tr>
-<tr><td>Bot</td><td>5788</td><td>22</td><td>8</td><td>1</td><td>0.97</td></tr>
-<tr><td>Combat</td><td>29434</td><td>139</td><td>144</td><td>56</td><td>0.94</td></tr>
-<tr><td>Formation</td><td>11155</td><td>42</td><td>49</td><td>10</td><td>0.92</td></tr>
-<tr><td>Camera</td><td>3482</td><td>4</td><td>22</td><td>0</td><td>0.87</td></tr>
-<tr><td>GameFlow</td><td>3162</td><td>5</td><td>36</td><td>5</td><td>0.74</td></tr>
-<tr><td>Data</td><td>8020</td><td>22</td><td>83</td><td>4</td><td>0.64</td></tr>
-<tr><td>Level</td><td>797</td><td>1</td><td>6</td><td>0</td><td>0.44</td></tr>
-<tr><td>Quests</td><td>1240</td><td>4</td><td>14</td><td>0</td><td>0.39</td></tr>
-<tr><td>Telemetry</td><td>525</td><td>0</td><td>4</td><td>0</td><td>0.38</td></tr>
-<tr><td>Subsystems</td><td>132</td><td>0</td><td>6</td><td>0</td><td>0.08</td></tr>
+<tr><td class='bad'>Survival</td><td>6526</td><td>16</td><td>5</td><td>28</td><td class='bad'>2.58</td></tr>
+<tr><td class='bad'>AI</td><td>14887</td><td>88</td><td>2</td><td>152</td><td class='bad'>2.41</td></tr>
+<tr><td class='bad'>Tactics</td><td>17028</td><td>54</td><td>22</td><td>72</td><td class='bad'>2.24</td></tr>
+<tr><td class='bad'>Ladders</td><td>3801</td><td>8</td><td>4</td><td>14</td><td class='bad'>2.2</td></tr>
+<tr><td class='bad'>Tutorial</td><td>9463</td><td>14</td><td>9</td><td>0</td><td class='bad'>2.01</td></tr>
+<tr><td>Formation</td><td>12489</td><td>44</td><td>10</td><td>42</td><td>1.93</td></tr>
+<tr><td>Data</td><td>8033</td><td>22</td><td>8</td><td>7</td><td>1.52</td></tr>
+<tr><td>Combat</td><td>29822</td><td>140</td><td>18</td><td>84</td><td>1.51</td></tr>
+<tr><td>GameFlow</td><td>3162</td><td>5</td><td>11</td><td>5</td><td>1.34</td></tr>
+<tr><td>Power</td><td>1715</td><td>7</td><td>1</td><td>8</td><td>1.33</td></tr>
+<tr><td>Bot</td><td>6138</td><td>23</td><td>2</td><td>5</td><td>1.23</td></tr>
+<tr><td>Environment</td><td>12918</td><td>49</td><td>7</td><td>4</td><td>1.19</td></tr>
+<tr><td>Debug</td><td>191</td><td>0</td><td>0</td><td>2</td><td>0.59</td></tr>
+<tr><td>Level</td><td>797</td><td>1</td><td>2</td><td>0</td><td>0.57</td></tr>
+<tr><td>Quests</td><td>1240</td><td>4</td><td>7</td><td>0</td><td>0.5</td></tr>
+<tr><td>Subsystems</td><td>132</td><td>0</td><td>5</td><td>0</td><td>0.09</td></tr>
 <tr><td>Text</td><td>0</td><td>2</td><td>0</td><td>0</td><td>0.0</td></tr>
 </table></div></body></html>

@@ -444,6 +444,7 @@ AOperativeCharacter* URelocationSubsystem::PickPreparationWorker(AOperativeChara
 		AOperativeCharacter* Carrier = Fallback && Fallback->GetDeployableCount(Type) > 0 ? Fallback : nullptr;
 		for (AOperativeCharacter* Member : Members)
 		{
+			if (!Member) { continue; } // audit 2026-11-28 (C28182)
 			if (!Carrier && Member->GetDeployableCount(Type) > 0)
 			{
 				Carrier = Member;
