@@ -29,6 +29,11 @@ bool FMovementNoWayUpTest::RunTest(const FString&)
 	TestFalse(TEXT("Legacy low-cover move uses capsule-centre Z, not an upper floor"), HasNoWayUp(2.2f, 89.5f, 90.f, true, false, 0.f));
 	TestTrue(TEXT("Prone capsule does not hide an unreachable upper floor"), HasNoWayUp(2.f, 150.f, 40.f, true, true, 10.f));
 	TestFalse(TEXT("Capsule-centre goal on a reachable upper floor stays valid"), HasNoWayUp(2.f, 400.f, 90.f, true, false, 310.f));
+	// 2026-11-28 lake regression: the floor under the goal decides (a chest-height cover slot on his ground is no upper level).
+	TestFalse(TEXT("Floor under a chest-high cover slot is his own ground"), IsUpperLevelGoal(2.f, 12.f));
+	TestFalse(TEXT("A slope 1 m up is still his ground"), IsUpperLevelGoal(2.f, 102.f));
+	TestTrue(TEXT("A roof 3 m up is an upper level"), IsUpperLevelGoal(2.f, 302.f));
+	TestFalse(TEXT("Going down is never an upper level"), IsUpperLevelGoal(300.f, 2.f));
 	return true;
 }
 

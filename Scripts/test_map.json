@@ -184,6 +184,13 @@
   },
   "nonSmokeDebugCommands": ["PmcArena", "LevelGenIslandsProbe", "GiveWeapon", "MortarList", "MortarMan", "MortarFire", "MortarCease", "MortarCrewPmc", "ShotgunD1Shots", "ShotgunLoopShots", "RpgShots", "RecoilProbe", "CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots", "StoryShowcaseFixShots"],
   "rules": [
+    {
+      "name": "elevated-orders-2026-11-28",
+      "_comment": "Elevated / no-way-up order guards (139, 155): a lowered threshold refused ordinary cover moves on the Lake (TutorialAmbushLakeSmoke, 2026-11-28) and no rule mapped the Lake smokes to the movement files.",
+      "globs": ["Source/**/Characters/OperativeCharacterMovement.cpp", "Source/**/Characters/OperativeMovementRules*"],
+      "tests": ["CodexTactics.Movement.NoWayUp"],
+      "smokes": ["TutorialAmbushLakeSmoke", "LowCoverMoveLakeSmoke", "LevelGenRampSmoke", "RoofAccessAuditSmoke", "RoofLadderRepairProbe"]
+    },
     {"name": "roof-ladder-139", "globs": ["Source/**/Debug/RoofLadderSmoke*"], "tests": ["CodexTactics.Movement.NoWayUp"], "smokes": ["RoofLadderSmoke", "RoofLadderRepairProbe"]},
     {
       "name": "roof-access-155",
