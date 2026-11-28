@@ -12,6 +12,8 @@ Last update: 2026-09-29 by Claude, after commit `2ca14b0`.
 
 ## 10. Change log (newest first)
 
+- 2026-11-27 (Codex156): share finite wall-side/intersection checks between under-fire cover selection and open-shot escape, retain protection when a pose cannot reach, enforce a three-second transition hold and preserve player cover orders after arrival. Unit regressions and extended X6 `UnderFireManoeuvreSmoke` continuous hold. See `codex/outbox/156-cover-open-shot-loop.report.md`.
+
 - 2026-11-27 (Codex149b): canonical damage_dealt with legacy reading; gate config hash/freeze identity and effective resume validation; full-round probe/freeze baseline campaign and 16:30 queue-only night window. Python142 PASS; G1/G2 live BLOCKED, baseline scheduled not claimed. No C++/assets/champion changes. See `codex/outbox/149b-trainer-metrics.report.md`.
 
 | Commit | What |

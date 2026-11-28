@@ -84,7 +84,7 @@ namespace
 		TEXT("CornerPeekEntryYawBlendSeconds); 0: the old entry - the enter clip spins him to the wall and back first (the 2026-11-01 bug; A/B)."));
 }
 
-EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& RequestedSlot, bool bSprint)
+EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& RequestedSlot, bool bSprint, bool bPlayerOrder)
 {
 	FCoverSlot Slot = RequestedSlot;
 	if (!Slot.IsValid() || (IsPlayerTeam() && !CoverTraceRules::ResolveLowCoverApproach(GetWorld(), GetActorLocation(), Slot))
@@ -101,18 +101,23 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Requ
 	if (IsKnockedDown())
 	{
 		TWeakObjectPtr<AOperativeCharacter> WeakThis(this);
-		KnockdownComponent->BufferOrder([WeakThis, Slot, bSprint]()
+		KnockdownComponent->BufferOrder([WeakThis, Slot, bSprint, bPlayerOrder]()
 		{
 			if (AOperativeCharacter* Self = WeakThis.Get())
 			{
-				Self->OrderTakeCover(Slot, bSprint);
+				Self->OrderTakeCover(Slot, bSprint, bPlayerOrder);
 			}
 		});
 		return EOperativeOrderResult::Accepted;
 	}
 	if (bInCover && CoverTraceRules::IsSameWall(CoverSlot, Slot))
 	{
-		return OrderShimmyTo(Slot);
+		const EOperativeOrderResult Result = OrderShimmyTo(Slot);
+		if (Result == EOperativeOrderResult::Accepted)
+		{
+			bPlayerCoverOrderActive = bPlayerOrder && IsPlayerTeam();
+		}
+		return Result;
 	}
 	// Rev 5i: a tutorial confinement refuses cover outside its area before he leaves the cover he holds.
 	if (!UTutorialSubsystem::CheckConfinedOrder(this, this, Slot.WorldLocation))
@@ -131,11 +136,13 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Requ
 		ArmRunCornerPeek(RunCornerPeekRequestEdge);
 		MarkCornerPeekArrival();
 	}
+	bPlayerCoverOrderActive = bPlayerOrder && IsPlayerTeam();
 	TGuardValue<bool> CoverOrder(bCoverMoveOrder, true);
 	const EOperativeOrderResult Result = OrderMoveTo(Slot.WorldLocation, bSprint);
 	if (Result != EOperativeOrderResult::Accepted)
 	{
 		bHasPendingCover = false;
+		bPlayerCoverOrderActive = false;
 	}
 	else
 	{
@@ -156,6 +163,7 @@ void AOperativeCharacter::SetPendingCover(const FCoverSlot& Slot)
 	bRunCornerPeekPending = false;
 	PendingCoverSlot = Slot;
 	bHasPendingCover = Slot.IsValid();
+	bPlayerCoverOrderActive = bHasPendingCover && IsPlayerTeam();
 }
 
 void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
@@ -251,6 +259,10 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	StopOperative();
 	CoverSlot = Slot;
 	bInCover = true;
+	if (!bWasInCover && GetWorld())
+	{
+		LastCoverOpenShotTransition = GetWorld()->GetTimeSeconds();
+	}
 	if (!bWasInCover && !bQuietCoverEntryRequest)
 	{
 		if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
@@ -533,6 +545,7 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 	{
 		return;
 	}
+	bPlayerCoverOrderActive = false;
 	ClearWindowCover();
 	if (bCoverEnteredEventPending)
 	{
