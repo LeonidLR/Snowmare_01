@@ -8,6 +8,9 @@ param(
     [switch]$Resume,
     [switch]$AcceptPreExisting,
     [switch]$AllowNoWorkerSmokes,
+    # Worker (codex-worker) offline: run the mapped smokes HERE in the main checkout (Scripts/smoke_parallel.ps1 -Remote off), after
+    # the tests (one heavy job at a time). Same smoke list and verdict rules; a failure stays red (no automatic baseline in this mode).
+    [switch]$LocalSmokes,
     [int]$Jobs = 0
 )
 
@@ -396,7 +399,7 @@ function Show-GateSmokeReasons($Plan) {
     }
 }
 
-function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$RunFull, [switch]$ResumeRun, [switch]$AllowPreExisting, [switch]$AllowNoWorkerSmokes, [int]$RequestedJobs = 0) {
+function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$RunFull, [switch]$ResumeRun, [switch]$AllowPreExisting, [switch]$AllowNoWorkerSmokes, [switch]$UseLocalSmokes, [int]$RequestedJobs = 0) {
     $ErrorActionPreference = 'Stop'
     $toolsDir = $PSScriptRoot
     $scriptsDir = Split-Path $toolsDir -Parent
@@ -540,7 +543,8 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
             Assert-GateEditorClosed $project
             if (Test-GateNeedsBuild $paths) {
                 # Designer 2026-11-25: compile on the worker (build_remote copies the DLLs back); local UBT only if the worker is unreachable (exit 2).
-                powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $scriptsDir 'build.ps1') -Remote worker | Out-Host
+                if ($UseLocalSmokes) { $global:LASTEXITCODE = 2 } # worker offline: straight to the local build
+                else { powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $scriptsDir 'build.ps1') -Remote worker | Out-Host }
                 if ($LASTEXITCODE -eq 2) {
                     Write-Host '[merge_gate] remote build unavailable (exit 2) - building locally'
                     powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $scriptsDir 'build.ps1') | Out-Host
@@ -553,7 +557,7 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
 
 
             $workerScript = Join-Path $toolsDir 'worker_sync.ps1'
-            if ($plan.Smokes.Count) {
+            if ($plan.Smokes.Count -and -not $UseLocalSmokes) {
                 $resultDir = Join-Path $repoDir "Saved/Logs/Worker/merge-gate-$stamp"
                 $smokeStarted = [DateTime]::UtcNow
                 $workerJob = Start-GateWorker $workerScript $resultDir $plan.Smokes $workerWidth $state.MergedHead
@@ -616,6 +620,26 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
                     $stages['Worker smokes'] = "PRE-EXISTING ($decision): $($preExisting -join ', ')"
                 }
                 $workerWall = ([DateTime]::UtcNow - $smokeStarted).TotalSeconds
+            } elseif ($UseLocalSmokes -and $plan.Smokes.Count) {
+                $resultDir = Join-Path $repoDir "Saved/Logs/Worker/merge-gate-$stamp-local"
+                New-Item -ItemType Directory -Force -Path $resultDir | Out-Null
+                $resultJson = Join-Path $resultDir 'SmokeParallel-worker.json'
+                $smokeStarted = [DateTime]::UtcNow
+                powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $scriptsDir 'smoke_parallel.ps1') -Commands ($plan.Smokes -join ',') `
+                    -Remote off -Jobs $workerWidth -ResultJson $resultJson | Out-Host
+                $localExit = $LASTEXITCODE
+                if (Test-Path -LiteralPath $resultJson) {
+                    foreach ($row in @((Get-Content -LiteralPath $resultJson -Raw -Encoding UTF8 | ConvertFrom-Json).results)) {
+                        if ($row.Log -and (Test-Path -LiteralPath $row.Log)) { Copy-Item -LiteralPath $row.Log -Destination $resultDir -Force }
+                    }
+                }
+                $rows = @(Read-GateWorkerRows $resultDir $smokeStarted $plan.Smokes $localExit)
+                Assert-GateWorkerVerdicts $rows $resultDir $localExit
+                $summary = @($rows | ForEach-Object { "$($_.Name)=$($_.State)" }) -join ', '
+                $failed = @($rows | Where-Object State -eq 'FAIL' | ForEach-Object Name)
+                if ($failed.Count) { throw "Local smoke failures (no automatic baseline with -LocalSmokes): $($failed -join ', '). Results: $summary" }
+                $stages['Worker smokes'] = "LOCAL: $summary"
+                $workerWall = ([DateTime]::UtcNow - $smokeStarted).TotalSeconds
             } else {
                 $stages['Worker smokes'] = 'none mapped'
             }
@@ -676,5 +700,5 @@ function Invoke-MergeGate([string[]]$BranchNames, [switch]$Preview, [switch]$Run
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
-    exit (Invoke-MergeGate $Branches -Preview:$DryRun -RunFull:$FullTests -ResumeRun:$Resume -AllowPreExisting:$AcceptPreExisting -AllowNoWorkerSmokes:$AllowNoWorkerSmokes -RequestedJobs $Jobs)
+    exit (Invoke-MergeGate $Branches -Preview:$DryRun -RunFull:$FullTests -ResumeRun:$Resume -AllowPreExisting:$AcceptPreExisting -AllowNoWorkerSmokes:$AllowNoWorkerSmokes -UseLocalSmokes:$LocalSmokes -RequestedJobs $Jobs)
 }
