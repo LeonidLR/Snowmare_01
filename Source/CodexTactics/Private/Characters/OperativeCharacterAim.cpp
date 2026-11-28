@@ -448,9 +448,12 @@ FVector AOperativeCharacter::GetStanceAimOrigin() const
 FVector AOperativeCharacter::GetStanceAimBaseDirection() const
 {
 	if (bInCover && ((CurrentCoverHeight == ECoverHeight::HighCover && (bCornerAimActive || IsCornerHoldSpot()))
+		|| (CurrentCoverHeight == ECoverHeight::LowCover && bCornerAimActive && !IsCoverShotBlind() && !HasWindowCoverAim() && Stance != EOperativeStance::Prone)
 		|| (bCornerAimActive && IsManualCornerPeekSpot()) || WantsCornerLookPose()))
 	{
-		return CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, GetCornerAimOutwardDeg()); // crouched at a high wall: its own clip's angle
+		const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+		const ECoverFacing PoseFacing = (Anim && Anim->IsCoverOverTopFireSet()) ? ECoverFacing::Left : CoverFacing;
+		return CoverFacingRules::CornerAimDirection(CoverSlot, PoseFacing, GetCornerAimOutwardDeg()); // crouched at a high wall / over-top pose: its own clip's angle
 	}
 	// Out of cover (and any other pose): the pose's barrel yaw (the rifle is held across the chest). BarrelYawOffset is
 	// measured on the weapon with the 2D aim offset's twist taken out (UpdateCombatFacing): a stable reference, the AO never

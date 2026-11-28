@@ -32,6 +32,7 @@
 #include "NavigationSystem.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/WindowCoverRules.h"
+#include "Training/TrainingSectorSubsystem.h"
 
 namespace WallHugWindowSmoke
 {
@@ -89,6 +90,7 @@ namespace WallHugWindowSmoke
 		bool bStoodBetween = false;
 		bool bCrouchedWin2 = false;
 		bool bShimmyStarted = false;
+		bool bSectorCleared = false;
 		float StandHeadZBefore = 0.f;
 		float MinHeadZWin1 = FLT_MAX;
 		float MaxHeadZWin1 = -FLT_MAX;
@@ -348,6 +350,21 @@ namespace WallHugWindowSmoke
 				}
 				return true;
 			}
+			if (!State.bSectorCleared)
+			{
+				if (UTrainingSectorSubsystem* Training = UTrainingSectorSubsystem::Get(World); Training && Training->HasActiveSector())
+				{
+					State.bSectorCleared = Training->SelectSector(0);
+					if (!State.bSectorCleared && State.StageTime < 8.f)
+					{
+						return true;
+					}
+				}
+				else
+				{
+					State.bSectorCleared = true;
+				}
+			}
 			SmokeUtils::StopLevelPmc(World);
 			if (IConsoleVariable* Pressure = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.Enabled")))
 			{
@@ -363,6 +380,11 @@ namespace WallHugWindowSmoke
 			}
 			TArray<AOperativeCharacter*> Members = Squad->GetMembers();
 			Members.Sort([](const AOperativeCharacter& L, const AOperativeCharacter& R) { return L.SquadIndex < R.SquadIndex; });
+			if (Members.IsEmpty() || !Members[0])
+			{
+				Check(State, false, TEXT("valid squad leader"));
+				return Finish(State, false);
+			}
 			State.Leader = Members[0];
 			TArray<const AActor*> Ignored;
 			for (AOperativeCharacter* M : Members)
@@ -372,6 +394,10 @@ namespace WallHugWindowSmoke
 				Ignored.Add(M);
 			}
 			State.Setup = FindB_x1_10_Windows(*World, Ignored);
+			if (!State.Setup.bFound && State.StageTime < 8.f)
+			{
+				return true; // wait for navmesh rebuild if SelectSector(0) just removed an active sector boundary
+			}
 			Check(State, State.Setup.bFound, TEXT("found 2 adjacent windows on X6 B_x1_10 wall"));
 			if (!State.Setup.bFound)
 			{

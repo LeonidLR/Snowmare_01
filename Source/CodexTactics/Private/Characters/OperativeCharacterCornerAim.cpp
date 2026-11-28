@@ -195,10 +195,10 @@ void AOperativeCharacter::UpdateCornerAim(float DeltaTime)
 		EndCornerAim(ECornerAimDecision::DuckToReload, TEXT("reloading"));
 		return;
 	}
-	// Suppressive fire (game designer decision 2026-10-26): suppressed / pinned he keeps his head down - no peeking.
-	if (!USuppressionSubsystem::MayExposeNow(this))
+	// Suppressive fire (game designer decision 2026-10-26) or BlindFire mode: keeps head down - no peeking.
+	if (!USuppressionSubsystem::MayExposeNow(this) || CoverFireMode == ECoverFireMode::BlindFire)
 	{
-		EndCornerAim(ECornerAimDecision::DuckForSafety, TEXT("suppressed: head down"));
+		EndCornerAim(ECornerAimDecision::DuckForSafety, CoverFireMode == ECoverFireMode::BlindFire ? TEXT("blind fire: head down") : TEXT("suppressed: head down"));
 		return;
 	}
 	if (IsWindowCoverConfirmed())

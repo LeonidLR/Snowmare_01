@@ -3099,6 +3099,8 @@ private:
 	WindowCoverRules::FWindowCoverBinding WindowCover;
 	bool bWindowCoverForcedCrouch = false;
 	bool bWallSlideWindowCrouch = false;
+	bool bWindowCoverLastAtCorner = false;
+	ECoverFacing WindowCoverLastFacing = ECoverFacing::Right;
 	EOperativeStance WindowCoverLastEdgeStance = EOperativeStance::Standing;
 	FVector WindowCoverSearchedAt = FVector(FLT_MAX);
 	WindowCoverRules::EWindowIntervalPlace WindowCoverLastPlace = WindowCoverRules::EWindowIntervalPlace::Outside;

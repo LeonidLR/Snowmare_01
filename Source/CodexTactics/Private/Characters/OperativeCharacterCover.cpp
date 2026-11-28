@@ -705,6 +705,10 @@ EOperativeOrderResult AOperativeCharacter::OrderShimmyTo(const FCoverSlot& Targe
 void AOperativeCharacter::SetCoverFireMode(ECoverFireMode Mode)
 {
 	CoverFireMode = Mode == ECoverFireMode::Normal ? ECoverFireMode::CornerLean : Mode;
+	if (CoverFireMode == ECoverFireMode::BlindFire && bCornerAimActive)
+	{
+		EndCornerAim(ECornerAimDecision::DuckForSafety, TEXT("blind fire: head down"));
+	}
 }
 
 ECoverFireMode AOperativeCharacter::ToggleCoverFireMode()
@@ -741,7 +745,7 @@ FVector AOperativeCharacter::GetCoverFireOrigin() const
 		const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 		return CoverFacingRules::OverTopFirePoint(Feet, CoverSlot.WallNormal, GetWindowCoverSillTopCm());
 	}
-	if (IsWindowCoverConfirmed())
+	if (IsWindowCoverConfirmed() && !IsManualCornerPeekSpot())
 	{
 		return Muzzle; // through the opening, not round a corner
 	}

@@ -462,7 +462,8 @@ void AOperativeCharacter::RefreshWindowCover(bool bForce)
 	const bool bWallChanged = WindowCoverWall.Get() != CoverSlot.WallComponent.Get();
 	const bool bSameSpot = FVector::DistSquared2D(Here, WindowCoverSearchedAt) <= FMath::Square(bShimmying ? 25.f : 5.f);
 	const bool bStanceChanged = WindowCoverLastEdgeStance != Stance;
-	if (!bForce && !bLostSill && !bCrossed && !bWallChanged && !bFloorChanged && !bNewSegment && !bStanceChanged && bSameSpot)
+	const bool bCornerChanged = bWindowCoverLastAtCorner != bAtCoverCorner || WindowCoverLastFacing != CoverFacing;
+	if (!bForce && !bLostSill && !bCrossed && !bWallChanged && !bFloorChanged && !bNewSegment && !bStanceChanged && !bCornerChanged && bSameSpot)
 	{
 		WindowCoverLastPlace = Place;
 		return;
@@ -721,6 +722,8 @@ void AOperativeCharacter::RefreshWindowCover(bool bForce)
 	WindowCoverWall = CoverSlot.WallComponent;
 	WindowCoverSegment = Segment;
 	WindowCoverLastEdgeStance = Stance;
+	bWindowCoverLastAtCorner = bAtCoverCorner;
+	WindowCoverLastFacing = CoverFacing;
 	if (WindowCover.bHasInterval)
 	{
 		const float Along = FVector::DotProduct(Here - WindowCover.IntervalOrigin, WindowCover.AlongAxis);
