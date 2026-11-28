@@ -121,5 +121,16 @@ class ProjectHealthTests(unittest.TestCase):
             self.assertIn("1 fail", proc.stdout)
 
 
+class UE58TestLogFormat(unittest.TestCase):
+    def test_name_between_result_and_path(self):
+        # UE 5.8 prints Result={..} Name={..} Path={..}; before 2026-11-28 the parser matched nothing (tests UNAVAILABLE).
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / 'AutomationTests.log'
+            log.write_text('[1]LogAutomationController: Display: Test Completed. Result={Success} Name={A} Path={CodexTactics.X.A}' + chr(10)
+                           + '[2]LogAutomationController: Error: Test Completed. Result={Fail} Name={B} Path={CodexTactics.X.B}' + chr(10), encoding='utf-8')
+            res = project_health.collect_latest_test_results(Path(tmp), str(log))
+            self.assertEqual((res['total'], res['passed']), (2, 1), res)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

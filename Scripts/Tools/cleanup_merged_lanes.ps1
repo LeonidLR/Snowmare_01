@@ -17,6 +17,29 @@ param(
     [string]$LanesRoot = 'C:\Work\Lanes'
 )
 $ErrorActionPreference = 'Stop'
+
+# Worker pass (designer 2026-11-28: no leftover copies on codex-worker either): its lane worktrees whose HEAD is already in
+# origin/main and that run nothing are removed with the same safe order (Scripts/Tools/worker_lane_clean.ps1 runs there).
+function Invoke-WorkerLanes {
+  try {
+    & ssh -o ConnectTimeout=6 -o BatchMode=yes codex-worker 'return' 2>$null
+    if ($LASTEXITCODE -ne 0) { Write-Host '[worker-lanes] worker unreachable - skipped'; return }
+    $script = Join-Path $PSScriptRoot 'worker_lane_clean.ps1'
+    & scp -q $script 'codex-worker:C:/Users/Public/worker_lane_clean.ps1'
+    $rows = @(& ssh codex-worker 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\Public\worker_lane_clean.ps1 -List')
+    & git -C $Main fetch -q origin 2>$null
+    $gone = @(foreach ($row in $rows) {
+        $p = $row -split '\|'
+        if ($p.Count -lt 3 -or $p[2] -ne '0' -or -not $p[1]) { continue }
+        & git -C $Main merge-base --is-ancestor $p[1] origin/main 2>$null
+        if ($LASTEXITCODE -eq 0) { $p[0] }
+    })
+    if (-not $gone.Count) { Write-Host "[worker-lanes] nothing merged to remove ($($rows.Count) lane(s) on the worker)"; return }
+    if ($DryRun) { $gone | ForEach-Object { Write-Host "[worker-lanes] would remove $_" }; return }
+    & ssh codex-worker "powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\Public\worker_lane_clean.ps1 -Remove $($gone -join ',')"
+  } catch { Write-Host "[worker-lanes] skipped: $($_.Exception.Message)" }
+}
+
 $Main = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 if (-not (Test-Path $LanesRoot)) { Write-Host "[lanes] $LanesRoot missing - nothing to do"; exit 0 }
 $LanesFull = (Resolve-Path $LanesRoot).Path.TrimEnd('\')
@@ -52,9 +75,9 @@ foreach ($dir in Get-ChildItem $LanesFull -Directory -Force) {
     $Plan += [pscustomobject]@{ Name = $dir.Name; Tree = $tree; Branch = $branch }
 }
 
-if (-not $Plan.Count) { Write-Host '[lanes] no merged idle lanes to remove'; exit 0 }
+if (-not $Plan.Count) { Write-Host '[lanes] no merged idle lanes to remove'; Invoke-WorkerLanes; exit 0 }
 Write-Host "[lanes] merged + idle: $($Plan.Count) - $(($Plan | ForEach-Object { $_.Name }) -join ', ')"
-if ($DryRun) { exit 0 }
+if ($DryRun) { Invoke-WorkerLanes; exit 0 }
 
 $Before = Count-Main
 $removed = 0
@@ -87,3 +110,4 @@ $Final = Count-Main
 if ($Final -ne $Before) { throw "main Content changed ($Before -> $Final files)" }
 $free = [math]::Round((Get-PSDrive ($LanesFull.Substring(0, 1))).Free / 1GB, 1)
 Write-Host "[lanes] removed $removed lane(s); main Content intact ($Final files); free on drive: $free GB"
+Invoke-WorkerLanes

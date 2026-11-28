@@ -438,7 +438,7 @@ def collect_latest_test_results(
         if re.search(r"No tests matched", content, re.IGNORECASE):
             res["error"] = "no tests matched"
             return res
-        matches = re.findall(r"Test Completed\.\s*Result=\{([^}]+)\}\.\s*Path=\{([^}]+)\}", content)
+        matches = re.findall(r"Test Completed\.\s*Result=\{([^}]+)\}\.?(?:\s*Name=\{[^}]*\})?\s*Path=\{([^}]+)\}", content)  # UE 5.8 prints Name={..} between Result and Path
         if matches:
             res["total"] = len(matches)
             res["passed"] = sum(1 for m in matches if m[0] == "Success")
