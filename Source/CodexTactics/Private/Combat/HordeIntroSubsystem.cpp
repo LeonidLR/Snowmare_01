@@ -403,7 +403,7 @@ void UHordeIntroSubsystem::GiveWarning(bool bFlyover)
 	++StartedCount;
 	FlyoverSeconds = 0.f;
 	CurrentShot = INDEX_NONE;
-	ReturnDistance = Camera->GetTargetDistance();
+	ReturnDistance = Camera ? Camera->GetTargetDistance() : ReturnDistance; // audit 2026-11-28 (C6011)
 	Camera->SetCinematicLock(true);
 	// The squad may not see the horde yet (Sprint 08 line of sight hides it): the flyover shows it.
 	if (UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>())

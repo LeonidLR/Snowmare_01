@@ -461,7 +461,7 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 		{
 			bOrdered = true;
 			Result = EOperativeOrderResult::Accepted;
-			if (Squad->HasFormationWallOrder())
+			if (Squad && Squad->HasFormationWallOrder()) // audit 2026-11-28 (C6011)
 			{
 				// The squad's wall layout at that corner; Q2 (the game designer 2026-11-08): once the LEADER is at that wall, the squad's corner
 				// peek round it (the man nearest it takes it), the others keep forming up behind.

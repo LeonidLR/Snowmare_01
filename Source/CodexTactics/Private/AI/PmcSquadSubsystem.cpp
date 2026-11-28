@@ -779,7 +779,7 @@ void UPmcSquadSubsystem::UpdateSight()
 				AOperativeCharacter* TargetOperative = Cast<AOperativeCharacter>(Target);
 				const float Distance = FVector::Dist2D(Observer->GetActorLocation(), Target->GetActorLocation());
 				const bool bStealth = TargetOperative && TargetOperative->IsInStealthMode();
-				const float Range = Sight->GetSightRangeCm(*Observer) * StealthModeRules::DetectionRangeScale(bStealth, TargetOperative && TargetOperative->IsStealthFast(), StealthModeRules::GetConfig());
+				const float Range = (Sight ? Sight->GetSightRangeCm(*Observer) : 0.f) * /* audit 2026-11-28 (C6011) */ StealthModeRules::DetectionRangeScale(bStealth, TargetOperative && TargetOperative->IsStealthFast(), StealthModeRules::GetConfig());
 				const bool bHidden = TargetOperative && TargetOperative->IsHiddenInCoverFrom(Observer->GetActorLocation());
 				bEye = !bHidden && (!bStealth || Distance <= Range)
 					&& ((SightRules::IsWithinTouchReveal(Distance) && Sight->HasClearSight(UTacticalSightSubsystem::EyePoint(*Observer), Profile))

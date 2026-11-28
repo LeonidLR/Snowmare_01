@@ -1321,6 +1321,7 @@ void UVehicleSubsystem::RestoreSave(const TArray<TSharedPtr<FJsonValue>>& Entrie
 			AOperativeCharacter* Operative = nullptr;
 			for (AOperativeCharacter* Candidate : Squad->GetMembers())
 			{
+				if (!Candidate) { continue; } // audit 2026-11-28 (C28182)
 				if (Candidate->DisplayName.ToString() == CharacterName || (!Operative && UEnum::GetValueAsString(Candidate->SquadRole) == Role))
 				{
 					Operative = Candidate;

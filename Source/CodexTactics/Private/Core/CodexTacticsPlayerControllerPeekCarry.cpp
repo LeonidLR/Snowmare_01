@@ -150,6 +150,7 @@ void ACodexTacticsPlayerController::TickSquadPeekCarry(float DeltaSeconds)
 	UPrimitiveComponent* WallComponent = PeekCarry.WallComponent.Get();
 	FHitResult Hit;
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(SquadPeekCarryTrace), false);
+	if (!Squad) { return; } // audit 2026-11-28 (C6011)
 	for (AOperativeCharacter* Member : Squad->GetMembers())
 	{
 		Params.AddIgnoredActor(Member);

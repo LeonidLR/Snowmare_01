@@ -1068,7 +1068,7 @@ bool ACodexTacticsPlayerController::IsStairHoverShown() const
 bool ACodexTacticsPlayerController::UpdateStairHover(AOperativeCharacter* Operative, const FHitResult* Hit)
 {
 	const URoofCutawaySubsystem* Roofs = GetWorld() ? GetWorld()->GetSubsystem<URoofCutawaySubsystem>() : nullptr;
-	FVector Feet;
+	FVector Feet = FVector::ZeroVector; // audit 2026-11-28 (C4701)
 	const bool bWanted = Operative && Hit && Roofs && !IsAttackModifierDown() && !GetActiveTurnBased() && Roofs->FindStairUpTarget(*Hit, *Operative, Feet);
 	if (!bWanted)
 	{
@@ -1119,7 +1119,7 @@ bool ACodexTacticsPlayerController::UpdateWindowHover(AOperativeCharacter* Opera
 			DummyWindowSill, DummyWindowNormal, bDummyWindowSlide);
 	AActor* Sill = Hit && Hit->bBlockingHit && Operative && !IsClickPreviewArmed() && !bWindowAsCoverHover
 		? WindowBreakage::FindWindowSillAt(*GetWorld(), *Hit) : nullptr;
-	FVector Feet;
+	FVector Feet = FVector::ZeroVector; // audit 2026-11-28 (C4701)
 	float Yaw = 0.f;
 	const bool bWanted = Operative && Sill && !IsAttackModifierDown() && !GetActiveTurnBased()
 		&& FindWindowSillTarget(*Sill, *Operative, Feet, Yaw);

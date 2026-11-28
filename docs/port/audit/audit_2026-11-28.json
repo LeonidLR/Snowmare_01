@@ -1,0 +1,1156 @@
+{
+ "date": "2026-11-28",
+ "commits": 1633,
+ "changed_source_files": 567,
+ "analyzer": {
+  "ran": true,
+  "flags": "-StaticAnalyzer=Default -StaticAnalyzerProjectOnly (MSVC /analyze, Development Win64, CodexTacticsEditor)",
+  "time": "20m40s",
+  "note": "",
+  "total": 83,
+  "high": 75,
+  "medium": 6,
+  "low": 2,
+  "baseline_existed": true,
+  "new": 35,
+  "fixed": 30,
+  "new_list": [
+   {
+    "file": "Source/CodexTactics/Private/AI/PmcSquadSubsystem.cpp",
+    "line": 782,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'this->Sight'. : Lines: 759, 760, 767, 771, 772, 774, 779, 780, 781, 782",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTactics/Private/Characters/OperativeCharacterStance.cpp",
+    "line": 144,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Anim'. : Lines: 111, 112, 113, 114, 115, 116, 117, 121, 128, 139, 143, 144",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTactics/Private/Characters/OperativeCharacterStance.cpp",
+    "line": 147,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Clip'. : Lines: 111, 112, 113, 114, 115, 116, 117, 121, 128, 139, 143, 144, 145, 146, 147",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTactics/Private/Characters/OperativeCharacterSuppression.cpp",
+    "line": 219,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Target'. : Lines: 210, 214, 215, 216, 217, 218, 219",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTactics/Private/Characters/SquadSubsystemMantleQueue.cpp",
+    "line": 199,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Obstacle'. : Lines: 170, 171, 172, 173, 174, 175, 193, 176, 194, 199",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerCover.cpp",
+    "line": 964,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Operative'. : Lines: 904, 905, 906, 908, 909, 910, 911, 913, 914, 915, 917, 929, 930, 931, 932, 933, 934, 957, 958, 963, 964",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerCover.cpp",
+    "line": 1846,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Operative'. : Lines: 1767, 1768, 1770, 1771, 1774, 1775, 1820, 1821, 1822, 1823, 1824, 1825, 1826, 1828, 1836, 1842, 1846",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerOrders.cpp",
+    "line": 1050,
+    "code": "C4701",
+    "message": "potentially uninitialized local variable 'Feet' used",
+    "severity": "low"
+   },
+   {
+    "file": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerOrders.cpp",
+    "line": 1150,
+    "code": "C4701",
+    "message": "potentially uninitialized local variable 'Feet' used",
+    "severity": "low"
+   },
+   {
+    "file": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerRunPeek.cpp",
+    "line": 464,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Squad'. : Lines: 379, 380, 381, 385, 386, 387, 391, 392, 394, 395, 396, 398, 400, 401, 402, 404, 405, 406, 407, 409, 413, 414, 415, 416, 418, 419, 420, 424, 425, 452, 454, 458, 459, 460, 462, 463, 464",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTactics/Private/Core/SaveGameSubsystem.cpp",
+    "line": 1808,
+    "code": "C28182",
+    "message": "Dereferencing NULL pointer. 'Candidate' contains the same NULL value as 'Member' did. See line 1808 for an earlier location where this can occur: Lines: 1758, 1759, 1760, 1761, 1764, 1765, 1766, 1793, 1794, 1796, 1798, 1799, 181, 1803, 181, 1804, 1805, 1806, 1808, 1810, 1806, 1808",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTactics/Private/LevelGen/PropsLayoutView.cpp",
+    "line": 663,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Size'. : Lines: 656, 657, 658, 659, 660, 661, 663",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTactics/Private/UI/ActionBarWidget.cpp",
+    "line": 539,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Member'. : Lines: 413, 414, 415, 419, 427, 435, 444, 459, 460, 479, 496, 514, 520, 521, 522, 524, 525, 526, 527, 528, 530, 531, 532, 536, 538, 540, 539",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTactics/Private/UI/CodexTacticsHUD.cpp",
+    "line": 1665,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Goals'. : Lines: 1648, 1649, 1650, 1655, 1656, 1657, 1658, 1659, 1660, 1661, 1662, 1663, 1664, 1665",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTactics/Private/UI/CodexTacticsHUD.cpp",
+    "line": 1840,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Panic'. : Lines: 1782, 1783, 1787, 1788, 1790, 1791, 1795, 1796, 1797, 1804, 1805, 1809, 1814, 1813, 1815, 1816, 1817, 1818, 1819, 1825, 1826, 1827, 1831, 1835, 1837, 1838, 1839, 1840",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsDev/Private/Debug/CoverReverseSmokeCommand.cpp",
+    "line": 324,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Op'. : Lines: 196, 197, 198, 199, 203, 204, 205, 206, 210, 211, 212, 216, 322, 324",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsDev/Private/Debug/DefendSmokeCommand.cpp",
+    "line": 201,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Defender'. : Lines: 79, 80, 81, 85, 86, 87, 88, 91, 93, 95, 105, 107, 108, 113, 195, 197, 201",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsDev/Private/Debug/DropSoftlockSmokeCommand.cpp",
+    "line": 585,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Squad'. : Lines: 485, 487, 488, 489, 493, 494, 495, 496, 497, 498, 499, 504, 528, 530, 534, 538, 539, 540, 541, 542, 543, 548, 579, 583, 584, 585",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsDev/Private/Debug/FallDropSmokeCommand.cpp",
+    "line": 1106,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Squad'. : Lines: 1016, 1018, 1019, 1020, 1024, 1025, 1026, 1027, 1028, 1029, 1030, 1035, 1101, 1102, 1106",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsDev/Private/Debug/FormationWindowSmokeCommand.cpp",
+    "line": 177,
+    "code": "C6336",
+    "message": "Arithmetic operator has precedence over question operator, use parentheses to clarify intent.",
+    "severity": "medium"
+   },
+   {
+    "file": "Source/CodexTacticsDev/Private/Debug/LevelGenLaddersSmokeCommand.cpp",
+    "line": 730,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Leader'. : Lines: 639, 641, 642, 643, 647, 648, 649, 650, 651, 652, 657, 726, 728, 729, 730",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsDev/Private/Debug/LevelGenRampSmokeCommand.cpp",
+    "line": 758,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Squad'. : Lines: 673, 675, 676, 677, 681, 682, 683, 684, 685, 686, 691, 696, 733, 735, 739, 740, 741, 746, 753, 755, 756, 757, 758",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsDev/Private/Debug/TurretPowerSmokeCommand.cpp",
+    "line": 208,
+    "code": "C6336",
+    "message": "Arithmetic operator has precedence over question operator, use parentheses to clarify intent.",
+    "severity": "medium"
+   },
+   {
+    "file": "Source/CodexTacticsTests/Private/Characters/EnemyAIRulesTest.cpp",
+    "line": 275,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'CVars'. : Lines: 262, 263, 267, 268, 269, 274, 275",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsTests/Private/Characters/WeaponAnimLayerTest.cpp",
+    "line": 342,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Retargeted'. : Lines: 275, 276, 278, 277, 288, 283, 289, 290, 291, 290, 291, 290, 292, 293, 292, 294, 295, 294, 296, 297, 298, 302, 303, 304, 305, 310, 335, 311, 336, 340, 341, 342",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsTests/Private/Combat/PistolRulesTest.cpp",
+    "line": 90,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Pistol'. : Lines: 76, 77, 78, 79, 81, 80, 86, 87, 88, 89, 90",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsTests/Private/Formation/FormationShapesFileTest.cpp",
+    "line": 110,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Shape'. : Lines: 84, 85, 91, 92, 97, 98, 99, 100, 103, 104, 105, 106, 107, 108, 110",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsTests/Private/LevelGen/BuildingWalkRulesTest.cpp",
+    "line": 114,
+    "code": "C6336",
+    "message": "Arithmetic operator has precedence over question operator, use parentheses to clarify intent.",
+    "severity": "medium"
+   },
+   {
+    "file": "Source/CodexTacticsTests/Private/LevelGen/CodexLevelPropsSubsystemTest.cpp",
+    "line": 469,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Props'. : Lines: 469",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsTests/Private/LevelGen/CodexLevelPropsSubsystemTest.cpp",
+    "line": 556,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Props'. : Lines: 556",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsTests/Private/LevelGen/LevelPropsFileTest.cpp",
+    "line": 439,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Presets'. : Lines: 398, 399, 403, 404, 408, 409, 410, 411, 412, 413, 414, 422, 423, 424, 425, 439",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsTests/Private/LevelGen/LevelPropsFileTest.cpp",
+    "line": 456,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Budgets'. : Lines: 398, 399, 403, 404, 408, 409, 410, 411, 412, 413, 414, 422, 423, 424, 425, 439, 442, 443, 444, 447, 450, 451, 456",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsTests/Private/LevelGen/LevelPropsFileTest.cpp",
+    "line": 464,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'LootTables'. : Lines: 398, 399, 403, 404, 408, 409, 410, 411, 412, 413, 414, 422, 423, 424, 425, 439, 442, 443, 444, 447, 450, 451, 456, 457, 460, 461, 462, 464",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsTests/Private/UI/HudLabelRulesTest.cpp",
+    "line": 137,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Labels'. : Lines: 117, 118, 122, 123, 124, 125, 126, 127, 128, 129, 130, 134, 136, 137",
+    "severity": "high"
+   },
+   {
+    "file": "Source/CodexTacticsTests/Private/UI/HudLabelRulesTest.cpp",
+    "line": 145,
+    "code": "C6011",
+    "message": "Dereferencing NULL pointer 'Entry'. : Lines: 117, 118, 122, 123, 124, 125, 126, 127, 128, 129, 130, 134, 136, 137, 141, 142, 143, 144, 145",
+    "severity": "high"
+   }
+  ],
+  "top": []
+ },
+ "jev": {
+  "used": true
+ },
+ "risk_files": [
+  {
+   "file": "Source/CodexTactics/Public/Characters/OperativeCharacter.h",
+   "changes": 51,
+   "loc": 3745,
+   "tested": true,
+   "risk": 3.26
+  },
+  {
+   "file": "Source/CodexTactics/Private/AI/PmcSquadSubsystem.cpp",
+   "changes": 39,
+   "loc": 3948,
+   "tested": false,
+   "risk": 3.58
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/OperativeCharacterMovement.cpp",
+   "changes": 37,
+   "loc": 1042,
+   "tested": true,
+   "risk": 2.72
+  },
+  {
+   "file": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerOrders.cpp",
+   "changes": 33,
+   "loc": 1761,
+   "tested": true,
+   "risk": 2.62
+  },
+  {
+   "file": "Source/CodexTactics/Public/Characters/SquadSubsystem.h",
+   "changes": 28,
+   "loc": 1960,
+   "tested": true,
+   "risk": 2.99
+  },
+  {
+   "file": "Source/CodexTactics/Private/AI/PmcCommanderRules.cpp",
+   "changes": 21,
+   "loc": 1334,
+   "tested": true,
+   "risk": 2.48
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/OperativeAnimInstance.cpp",
+   "changes": 20,
+   "loc": 2765,
+   "tested": true,
+   "risk": 2.01
+  },
+  {
+   "file": "Source/CodexTactics/Public/Characters/OperativeAnimInstance.h",
+   "changes": 19,
+   "loc": 2730,
+   "tested": true,
+   "risk": 1.92
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp",
+   "changes": 19,
+   "loc": 1210,
+   "tested": true,
+   "risk": 2.07
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/OperativeCharacterAim.cpp",
+   "changes": 19,
+   "loc": 632,
+   "tested": false,
+   "risk": 2.5
+  },
+  {
+   "file": "Source/CodexTactics/Private/Interactables/DoorSubsystem.cpp",
+   "changes": 18,
+   "loc": 2489,
+   "tested": false,
+   "risk": 2.18
+  },
+  {
+   "file": "Source/CodexTactics/Public/AI/PmcCommanderRules.h",
+   "changes": 18,
+   "loc": 958,
+   "tested": true,
+   "risk": 2.29
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/OperativeCharacterMantle.cpp",
+   "changes": 17,
+   "loc": 1399,
+   "tested": false,
+   "risk": 2.23
+  },
+  {
+   "file": "Source/CodexTactics/Public/AI/PmcSquadSubsystem.h",
+   "changes": 17,
+   "loc": 494,
+   "tested": false,
+   "risk": 3.07
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/OperativeCharacterVault.cpp",
+   "changes": 17,
+   "loc": 303,
+   "tested": false,
+   "risk": 1.85
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/SquadSubsystemFormation.cpp",
+   "changes": 15,
+   "loc": 1978,
+   "tested": false,
+   "risk": 2.52
+  },
+  {
+   "file": "Source/CodexTactics/Private/Formation/FormationConfinedRules.cpp",
+   "changes": 15,
+   "loc": 922,
+   "tested": true,
+   "risk": 2.06
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/OperativeCharacterHealth.cpp",
+   "changes": 14,
+   "loc": 774,
+   "tested": false,
+   "risk": 2.56
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/OperativeCharacterCornerAim.cpp",
+   "changes": 13,
+   "loc": 1059,
+   "tested": true,
+   "risk": 1.77
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/SquadSubsystemFormationConfined.cpp",
+   "changes": 13,
+   "loc": 545,
+   "tested": false,
+   "risk": 2.06
+  },
+  {
+   "file": "Source/CodexTactics/Public/Formation/FormationConfinedRules.h",
+   "changes": 13,
+   "loc": 372,
+   "tested": true,
+   "risk": 1.93
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/SquadSubsystem.cpp",
+   "changes": 12,
+   "loc": 2219,
+   "tested": true,
+   "risk": 2.78
+  },
+  {
+   "file": "Source/CodexTactics/Public/Core/CodexTacticsPlayerController.h",
+   "changes": 12,
+   "loc": 1359,
+   "tested": true,
+   "risk": 2.22
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/OperativeCharacterCombat.cpp",
+   "changes": 12,
+   "loc": 1353,
+   "tested": true,
+   "risk": 2.18
+  },
+  {
+   "file": "Source/CodexTactics/Private/Interactables/DoorRules.cpp",
+   "changes": 11,
+   "loc": 1400,
+   "tested": true,
+   "risk": 1.61
+  },
+  {
+   "file": "Source/CodexTactics/Private/Training/TrainingSectorSubsystem.cpp",
+   "changes": 11,
+   "loc": 1186,
+   "tested": false,
+   "risk": 1.4
+  },
+  {
+   "file": "Source/CodexTactics/Private/Telemetry/SessionRecordingSubsystem.cpp",
+   "changes": 11,
+   "loc": 885,
+   "tested": true,
+   "risk": 1.18
+  },
+  {
+   "file": "Source/CodexTactics/Public/Interactables/DoorRules.h",
+   "changes": 11,
+   "loc": 670,
+   "tested": true,
+   "risk": 1.56
+  },
+  {
+   "file": "Source/CodexTactics/Private/Core/CodexTacticsPlayerController.cpp",
+   "changes": 11,
+   "loc": 604,
+   "tested": true,
+   "risk": 2.16
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/OperativeCharacterStealth.cpp",
+   "changes": 11,
+   "loc": 368,
+   "tested": false,
+   "risk": 1.9
+  },
+  {
+   "file": "Source/CodexTactics/Private/LevelGen/CodexLevelPropsSubsystem.cpp",
+   "changes": 10,
+   "loc": 1499,
+   "tested": true,
+   "risk": 1.41
+  },
+  {
+   "file": "Source/CodexTactics/Private/Interactables/MantleNavigation.cpp",
+   "changes": 10,
+   "loc": 1046,
+   "tested": true,
+   "risk": 1.68
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/CorpseSubsystem.cpp",
+   "changes": 10,
+   "loc": 689,
+   "tested": false,
+   "risk": 1.54
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/OperativeAnimInstanceCoverSet.cpp",
+   "changes": 10,
+   "loc": 651,
+   "tested": false,
+   "risk": 1.72
+  },
+  {
+   "file": "Source/CodexTactics/Private/UI/CodexTacticsHUD.cpp",
+   "changes": 9,
+   "loc": 2136,
+   "tested": true,
+   "risk": 1.11
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/EnemyCharacterBehavior.cpp",
+   "changes": 9,
+   "loc": 1015,
+   "tested": true,
+   "risk": 1.52
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/MantleRules.cpp",
+   "changes": 9,
+   "loc": 959,
+   "tested": true,
+   "risk": 2.03
+  },
+  {
+   "file": "Source/CodexTactics/Public/Characters/MantleRules.h",
+   "changes": 9,
+   "loc": 561,
+   "tested": true,
+   "risk": 1.72
+  },
+  {
+   "file": "Source/CodexTactics/Private/Characters/SquadSubsystemGiveWay.cpp",
+   "changes": 9,
+   "loc": 483,
+   "tested": false,
+   "risk": 2.0
+  },
+  {
+   "file": "Source/CodexTactics/Public/Interactables/DoorSubsystem.h",
+   "changes": 9,
+   "loc": 409,
+   "tested": false,
+   "risk": 1.78
+  }
+ ],
+ "coverage": [
+  {
+   "system": "Interactables",
+   "loc": 21362,
+   "files": 77,
+   "tests": 26,
+   "smokes": [
+    "ColdIndoorsSmoke",
+    "CorpseSearchSmoke",
+    "CoverIndoorSmoke",
+    "CoverSwitchLakeSmoke",
+    "CutawayClickSmoke",
+    "DoorBreachSmoke",
+    "DoorsSmoke",
+    "FormationWindowSmoke",
+    "GateExitLakeNoPointsSmoke",
+    "GateExitLakeSmoke",
+    "InteriorExitSmoke",
+    "LakePauseOrdersSmoke",
+    "LakeQuestSmoke",
+    "LevelGenBuildingsSmoke",
+    "LowCoverMoveLakeSmoke",
+    "MainMenuSmoke",
+    "PeekMinesSmoke",
+    "SaveCoverageLakeSmoke",
+    "TurnArenaLakeSmoke",
+    "TutorialAmbushLakeSmoke",
+    "WeatherLakeSmoke",
+    "WindowCoverFireSmoke",
+    "WindowDetourSmoke"
+   ],
+   "churn": 156,
+   "filters": 49,
+   "grey_score": 6.18,
+   "grey": true
+  },
+  {
+   "system": "Telemetry",
+   "loc": 2306,
+   "files": 8,
+   "tests": 1,
+   "smokes": [
+    "SectorBoundarySmoke",
+    "SectorRoundsSmoke",
+    "TurnArenaLakeSmoke",
+    "TutorialAmbushLakeSmoke"
+   ],
+   "churn": 37,
+   "filters": 5,
+   "grey_score": 6.07,
+   "grey": true
+  },
+  {
+   "system": "Characters",
+   "loc": 67423,
+   "files": 188,
+   "tests": 141,
+   "smokes": [
+    "ColdIndoorsSmoke",
+    "CoverIndoorSmoke",
+    "CoverSwitchLakeSmoke",
+    "CutawayClickSmoke",
+    "DropLinkReachSmoke",
+    "FormationFenceCrossSmoke",
+    "FormationRunStanceSmoke",
+    "FormationScanPitchSmoke",
+    "FormationStairSmoke",
+    "FormationWallHugSmoke",
+    "FormationWindowSmoke",
+    "GateExitLakeKiaNoPointsSmoke",
+    "GateExitLakeKiaSmoke",
+    "GateExitLakeSmoke",
+    "InteriorExitSmoke",
+    "LakePauseOrdersSmoke",
+    "LevelGenBuildingsSmoke",
+    "LowCoverMoveLakeSmoke",
+    "PeekMinesSmoke",
+    "RoofFightSmoke",
+    "SaveCoverageLakeSmoke",
+    "SectorBoundarySmoke",
+    "SectorRoundsSmoke",
+    "TorsoDriftSmoke",
+    "TurnArenaLakeSmoke",
+    "TutorialAmbushLakeSmoke",
+    "TutorialAmbushLakeSpottedSmoke",
+    "TutorialSaveSmoke",
+    "UnderFireManoeuvreSmoke",
+    "VehicleCombatSmoke",
+    "WeatherLakeSmoke",
+    "WindowCoverFireSmoke",
+    "WindowDetourSmoke",
+    "WindowStairHoverSmoke"
+   ],
+   "churn": 585,
+   "filters": 140,
+   "grey_score": 5.66,
+   "grey": true
+  },
+  {
+   "system": "LevelGen",
+   "loc": 13841,
+   "files": 34,
+   "tests": 24,
+   "smokes": [
+    "GateExitLakeSmoke",
+    "GeneratedPropsX6Smoke",
+    "LevelGenBuildingsSmoke",
+    "TurnArenaLakeSmoke",
+    "TutorialAmbushLakeSmoke"
+   ],
+   "churn": 81,
+   "filters": 10,
+   "grey_score": 4.77,
+   "grey": true
+  },
+  {
+   "system": "Training",
+   "loc": 1940,
+   "files": 4,
+   "tests": 3,
+   "smokes": [
+    "SectorBoundarySmoke",
+    "SectorRoundsSmoke"
+   ],
+   "churn": 27,
+   "filters": 2,
+   "grey_score": 4.08,
+   "grey": true
+  },
+  {
+   "system": "Falls",
+   "loc": 3896,
+   "files": 11,
+   "tests": 2,
+   "smokes": [
+    "DropLinkReachSmoke"
+   ],
+   "churn": 9,
+   "filters": 4,
+   "grey_score": 3.8,
+   "grey": true
+  },
+  {
+   "system": "Core",
+   "loc": 19004,
+   "files": 52,
+   "tests": 42,
+   "smokes": [
+    "CoverSwitchLakeSmoke",
+    "CutawayClickSmoke",
+    "DoorBreachSmoke",
+    "FormationStairSmoke",
+    "FormationWallHugSmoke",
+    "FrontendSmoke",
+    "GateExitLakeKiaNoPointsSmoke",
+    "GateExitLakeKiaSmoke",
+    "GateExitLakeNoPointsSmoke",
+    "GateExitLakeSmoke",
+    "InteriorExitSmoke",
+    "LakePauseOrdersSmoke",
+    "LakeQuestSmoke",
+    "LevelGenBuildingsSmoke",
+    "LowCoverMoveLakeSmoke",
+    "MainMenuSmoke",
+    "PeekMinesSmoke",
+    "SaveCoverageLakeSmoke",
+    "TurnArenaLakeSmoke",
+    "TurnArenaYardSmoke",
+    "TutorialAmbushLakeEarlyKillSmoke",
+    "TutorialAmbushLakeLureSpottedSmoke",
+    "TutorialAmbushLakeMineSmoke",
+    "TutorialAmbushLakeSmoke",
+    "TutorialAmbushLakeSpottedSmoke",
+    "TutorialSaveSmoke",
+    "VehicleCombatSmoke",
+    "WindowCoverFireSmoke",
+    "WindowDetourSmoke",
+    "WindowStairHoverSmoke"
+   ],
+   "churn": 134,
+   "filters": 45,
+   "grey_score": 3.69,
+   "grey": true
+  },
+  {
+   "system": "UI",
+   "loc": 19431,
+   "files": 110,
+   "tests": 18,
+   "smokes": [
+    "ColdIndoorsSmoke",
+    "CorpseSearchSmoke",
+    "CoverIndoorSmoke",
+    "CoverSwitchLakeSmoke",
+    "DropLinkReachSmoke",
+    "FormationStairSmoke",
+    "FormationWallHugSmoke",
+    "FrontendSmoke",
+    "GateExitLakeKiaNoPointsSmoke",
+    "GateExitLakeKiaSmoke",
+    "GateExitLakeNoPointsSmoke",
+    "GateExitLakeSmoke",
+    "HordeArrowsSmoke",
+    "LakePauseOrdersSmoke",
+    "LakeQuestSmoke",
+    "LowCoverMoveLakeSmoke",
+    "MainMenuSmoke",
+    "PeekMinesSmoke",
+    "SaveCoverageLakeSmoke",
+    "SectorBoundarySmoke",
+    "SectorRoundsSmoke",
+    "TurnArenaLakeSmoke",
+    "TutorialAmbushLakeEarlyKillSmoke",
+    "TutorialAmbushLakeLureSpottedSmoke",
+    "TutorialAmbushLakeMineSmoke",
+    "TutorialAmbushLakeSmoke",
+    "TutorialAmbushLakeSpottedSmoke",
+    "TutorialSaveSmoke",
+    "VehicleDamageSmoke"
+   ],
+   "churn": 25,
+   "filters": 72,
+   "grey_score": 3.26,
+   "grey": true
+  },
+  {
+   "system": "Vehicles",
+   "loc": 6376,
+   "files": 14,
+   "tests": 3,
+   "smokes": [
+    "LakePauseOrdersSmoke",
+    "TurnArenaLakeSmoke",
+    "VehicleCombatSmoke",
+    "VehicleDamageSmoke"
+   ],
+   "churn": 0,
+   "filters": 5,
+   "grey_score": 3.19,
+   "grey": true
+  },
+  {
+   "system": "Camera",
+   "loc": 4360,
+   "files": 20,
+   "tests": 4,
+   "smokes": [
+    "ColdIndoorsSmoke",
+    "CoverSwitchLakeSmoke",
+    "CutawayClickSmoke",
+    "InteriorExitSmoke",
+    "LowCoverMoveLakeSmoke",
+    "RoofCutawayStoreySmoke",
+    "WeatherLakeSmoke"
+   ],
+   "churn": 17,
+   "filters": 7,
+   "grey_score": 3.1,
+   "grey": true
+  },
+  {
+   "system": "Audio",
+   "loc": 1145,
+   "files": 5,
+   "tests": 1,
+   "smokes": [],
+   "churn": 10,
+   "filters": 0,
+   "grey_score": 2.62,
+   "grey": true
+  },
+  {
+   "system": "Survival",
+   "loc": 6526,
+   "files": 24,
+   "tests": 16,
+   "smokes": [
+    "ColdIndoorsSmoke",
+    "RoofFightSmoke",
+    "TurnArenaLakeSmoke",
+    "TutorialAmbushLakeSmoke",
+    "WeatherLakeSmoke"
+   ],
+   "churn": 28,
+   "filters": 13,
+   "grey_score": 2.58,
+   "grey": true
+  },
+  {
+   "system": "AI",
+   "loc": 14887,
+   "files": 50,
+   "tests": 88,
+   "smokes": [
+    "TurnArenaLakeSmoke",
+    "TutorialAmbushLakeSmoke"
+   ],
+   "churn": 152,
+   "filters": 25,
+   "grey_score": 2.41,
+   "grey": true
+  },
+  {
+   "system": "Tactics",
+   "loc": 17028,
+   "files": 67,
+   "tests": 54,
+   "smokes": [
+    "ColdIndoorsSmoke",
+    "CoverIndoorSmoke",
+    "CoverSwitchLakeSmoke",
+    "DoorBreachSmoke",
+    "FormationScanPitchSmoke",
+    "FormationStairSmoke",
+    "FormationWallHugSmoke",
+    "FormationWindowSmoke",
+    "InteriorExitSmoke",
+    "LakePauseOrdersSmoke",
+    "LevelGenBuildingsSmoke",
+    "LookDirectionSmoke",
+    "LowCoverMoveLakeSmoke",
+    "RoofFightSmoke",
+    "TorsoDriftSmoke",
+    "TurnArenaLakeSmoke",
+    "TurnArenaYardSmoke",
+    "TutorialAmbushLakeSmoke",
+    "UnderFireManoeuvreSmoke",
+    "WeatherLakeSmoke",
+    "WindowCoverFireSmoke",
+    "WindowStairHoverSmoke"
+   ],
+   "churn": 72,
+   "filters": 40,
+   "grey_score": 2.24,
+   "grey": true
+  },
+  {
+   "system": "Ladders",
+   "loc": 3801,
+   "files": 15,
+   "tests": 8,
+   "smokes": [
+    "CoverSwitchLakeSmoke",
+    "LowCoverMoveLakeSmoke",
+    "TurnArenaLakeSmoke",
+    "TutorialAmbushLakeSmoke"
+   ],
+   "churn": 14,
+   "filters": 2,
+   "grey_score": 2.2,
+   "grey": true
+  },
+  {
+   "system": "Tutorial",
+   "loc": 9463,
+   "files": 12,
+   "tests": 14,
+   "smokes": [
+    "HordeArrowsSmoke",
+    "LakeQuestSmoke",
+    "PeekMinesSmoke",
+    "TutorialAmbushLakeEarlyKillSmoke",
+    "TutorialAmbushLakeLureSpottedSmoke",
+    "TutorialAmbushLakeMineSmoke",
+    "TutorialAmbushLakeSmoke",
+    "TutorialAmbushLakeSpottedSmoke",
+    "TutorialSaveSmoke"
+   ],
+   "churn": 0,
+   "filters": 4,
+   "grey_score": 2.01,
+   "grey": true
+  },
+  {
+   "system": "Formation",
+   "loc": 12489,
+   "files": 54,
+   "tests": 44,
+   "smokes": [
+    "CoverIndoorSmoke",
+    "CoverSwitchLakeSmoke",
+    "FormationFenceCrossSmoke",
+    "FormationScanPitchSmoke",
+    "FormationStairSmoke",
+    "FormationWallHugSmoke",
+    "InteriorExitSmoke",
+    "LevelGenBuildingsSmoke",
+    "LowCoverMoveLakeSmoke",
+    "TorsoDriftSmoke"
+   ],
+   "churn": 42,
+   "filters": 25,
+   "grey_score": 1.93,
+   "grey": false
+  },
+  {
+   "system": "Data",
+   "loc": 8033,
+   "files": 38,
+   "tests": 22,
+   "smokes": [
+    "ColdIndoorsSmoke",
+    "FormationStairSmoke",
+    "FormationWallHugSmoke",
+    "LakePauseOrdersSmoke",
+    "SaveCoverageLakeSmoke",
+    "TurnArenaLakeSmoke",
+    "TutorialAmbushLakeSmoke",
+    "WeatherLakeSmoke"
+   ],
+   "churn": 7,
+   "filters": 44,
+   "grey_score": 1.52,
+   "grey": false
+  },
+  {
+   "system": "Combat",
+   "loc": 29822,
+   "files": 139,
+   "tests": 140,
+   "smokes": [
+    "ColdIndoorsSmoke",
+    "CoverIndoorSmoke",
+    "CoverSwitchLakeSmoke",
+    "FormationFenceCrossSmoke",
+    "FormationStairSmoke",
+    "FormationWallHugSmoke",
+    "GateExitLakeKiaNoPointsSmoke",
+    "GateExitLakeKiaSmoke",
+    "GateExitLakeSmoke",
+    "HordeArrowsSmoke",
+    "LakePauseOrdersSmoke",
+    "LowCoverMoveLakeSmoke",
+    "MainMenuSmoke",
+    "RoofFightSmoke",
+    "TurnArenaLakeSmoke",
+    "TutorialAmbushLakeSmoke",
+    "TutorialAmbushLakeSpottedSmoke",
+    "WeatherLakeSmoke"
+   ],
+   "churn": 84,
+   "filters": 79,
+   "grey_score": 1.51,
+   "grey": false
+  },
+  {
+   "system": "GameFlow",
+   "loc": 3162,
+   "files": 19,
+   "tests": 5,
+   "smokes": [
+    "FormationStairSmoke",
+    "FormationWallHugSmoke",
+    "FrontendSmoke",
+    "GateExitLakeKiaNoPointsSmoke",
+    "GateExitLakeKiaSmoke",
+    "GateExitLakeNoPointsSmoke",
+    "GateExitLakeSmoke",
+    "LakePauseOrdersSmoke",
+    "MainMenuSmoke",
+    "TurnArenaLakeSmoke",
+    "TutorialAmbushLakeSmoke"
+   ],
+   "churn": 5,
+   "filters": 24,
+   "grey_score": 1.34,
+   "grey": false
+  },
+  {
+   "system": "Power",
+   "loc": 1715,
+   "files": 4,
+   "tests": 7,
+   "smokes": [
+    "GeneratedPropsX6Smoke"
+   ],
+   "churn": 8,
+   "filters": 3,
+   "grey_score": 1.33,
+   "grey": false
+  },
+  {
+   "system": "Bot",
+   "loc": 6138,
+   "files": 15,
+   "tests": 23,
+   "smokes": [
+    "TurnArenaLakeSmoke",
+    "TutorialAmbushLakeSmoke"
+   ],
+   "churn": 5,
+   "filters": 5,
+   "grey_score": 1.23,
+   "grey": false
+  },
+  {
+   "system": "Environment",
+   "loc": 12918,
+   "files": 48,
+   "tests": 49,
+   "smokes": [
+    "ColdIndoorsSmoke",
+    "EnvironmentLakeSmoke",
+    "SnowIndoorSmoke",
+    "StartFlickerSmoke",
+    "StartLightingSmoke",
+    "StartSnowSmoke",
+    "WeatherLakeSmoke"
+   ],
+   "churn": 4,
+   "filters": 9,
+   "grey_score": 1.19,
+   "grey": false
+  },
+  {
+   "system": "Debug",
+   "loc": 191,
+   "files": 2,
+   "tests": 0,
+   "smokes": [],
+   "churn": 2,
+   "filters": 0,
+   "grey_score": 0.59,
+   "grey": false
+  },
+  {
+   "system": "Level",
+   "loc": 797,
+   "files": 6,
+   "tests": 1,
+   "smokes": [
+    "InteriorExitSmoke",
+    "LevelGenBuildingsSmoke"
+   ],
+   "churn": 0,
+   "filters": 2,
+   "grey_score": 0.57,
+   "grey": false
+  },
+  {
+   "system": "Quests",
+   "loc": 1240,
+   "files": 10,
+   "tests": 4,
+   "smokes": [
+    "GateExitLakeKiaNoPointsSmoke",
+    "GateExitLakeKiaSmoke",
+    "GateExitLakeSmoke",
+    "LakeQuestSmoke",
+    "MainMenuSmoke",
+    "TurnArenaLakeSmoke",
+    "TutorialAmbushLakeSmoke"
+   ],
+   "churn": 0,
+   "filters": 7,
+   "grey_score": 0.5,
+   "grey": false
+  },
+  {
+   "system": "Subsystems",
+   "loc": 132,
+   "files": 2,
+   "tests": 0,
+   "smokes": [
+    "EnvironmentLakeSmoke",
+    "LakePauseOrdersSmoke",
+    "SaveCoverageLakeSmoke",
+    "TurnArenaLakeSmoke",
+    "TutorialAmbushLakeSmoke"
+   ],
+   "churn": 0,
+   "filters": 4,
+   "grey_score": 0.09,
+   "grey": false
+  },
+  {
+   "system": "Text",
+   "loc": 0,
+   "files": 0,
+   "tests": 2,
+   "smokes": [],
+   "churn": 0,
+   "filters": 0,
+   "grey_score": 0.0,
+   "grey": false
+  }
+ ],
+ "architecture_review_due": false,
+ "actions": [
+  {
+   "kind": "analyzer",
+   "ru": "\u0420\u0430\u0437\u043e\u0431\u0440\u0430\u0442\u044c 30 \u043d\u043e\u0432\u044b\u0445 \u0441\u0435\u0440\u044c\u0451\u0437\u043d\u044b\u0445 \u043f\u0440\u0435\u0434\u0443\u043f\u0440\u0435\u0436\u0434\u0435\u043d\u0438\u0439 \u0430\u043d\u0430\u043b\u0438\u0437\u0430\u0442\u043e\u0440\u0430 (PmcSquadSubsystem.cpp, OperativeCharacterStance.cpp, OperativeCharacterSuppression.cpp).",
+   "en": "Fix 30 new high-severity analyzer warnings (Source/CodexTactics/Private/AI/PmcSquadSubsystem.cpp, Source/CodexTactics/Private/Characters/OperativeCharacterStance.cpp, Source/CodexTactics/Private/Characters/OperativeCharacterSuppression.cpp)."
+  },
+  {
+   "kind": "risk",
+   "ru": "\u041f\u043e\u043a\u0440\u044b\u0442\u044c \u0442\u0435\u0441\u0442\u043e\u043c PmcSquadSubsystem.cpp (\u0438\u0437\u043c\u0435\u043d\u0451\u043d 39 \u0440\u0430\u0437 \u0437\u0430 \u043d\u0435\u0434\u0435\u043b\u044e, 3948 \u0441\u0442\u0440\u043e\u043a, \u0440\u0438\u0441\u043a Jev 3.58).",
+   "en": "Add a unit test for Source/CodexTactics/Private/AI/PmcSquadSubsystem.cpp (39 changes this week, 3948 lines, Jev risk 3.58)."
+  },
+  {
+   "kind": "grey",
+   "ru": "\u0421\u0435\u0440\u0430\u044f \u0437\u043e\u043d\u0430: \u0441\u0438\u0441\u0442\u0435\u043c\u0430 Interactables (21362 \u0441\u0442\u0440\u043e\u043a, 156 \u043f\u0440\u0430\u0432\u043e\u043a, \u0442\u0435\u0441\u0442\u043e\u0432 26, \u0441\u043c\u043e\u043a\u043e\u0432 23) - \u0434\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0442\u0435\u0441\u0442\u044b.",
+   "en": "Grey zone: Interactables (21362 LOC, 156 changes, 26 tests, 23 smokes) - add tests."
+  }
+ ]
+}
