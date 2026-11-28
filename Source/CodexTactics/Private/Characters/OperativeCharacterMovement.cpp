@@ -522,7 +522,7 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 	const float FeetZ = GetActorLocation().Z - GetSimpleCollisionHalfHeight();
 	const float GoalHalfHeight = FMath::Max(GetSimpleCollisionHalfHeight(),
 		GetClass()->GetDefaultObject<AOperativeCharacter>()->GetSimpleCollisionHalfHeight() * GetActorScale3D().Z);
-	const bool bElevatedOrder = IsPlayerTeam() && !bFormationMove && !bAutonomousOrder
+	bool bElevatedOrder = IsPlayerTeam() && !bFormationMove && !bAutonomousOrder
 		&& OperativeMovementRules::HasNoWayUp(FeetZ, Destination.Z, GoalHalfHeight, false, false, FeetZ);
 	const auto RefuseNoWayUp = [&]()
 	{
@@ -541,12 +541,22 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 		const ANavigationData* NavData = Nav ? Nav->GetNavDataForProps(GetNavAgentPropertiesRef(), GetNavAgentLocation()) : nullptr;
 		FNavLocation OnNav;
-		if (!NavData || !Nav->ProjectPointToNavigation(Destination, OnNav, FVector(80.f, 80.f, FMath::Max(80.f, GoalHalfHeight + 20.f)), NavData))
+		// 2026-11-28 (TutorialAmbushLakeSmoke regression after 139): a raised goal point - a cover slot at chest height, a capsule-centre
+		// goal on a slope - is no upper floor. The floor under it decides; only a floor UpperLevelMinRiseCm above his feet is strict.
+		const float SearchZ = FMath::Max(80.f, GoalHalfHeight + 20.f) + OperativeMovementRules::UpperLevelMinRiseCm;
+		if (!NavData || !Nav->ProjectPointToNavigation(Destination, OnNav, FVector(80.f, 80.f, SearchZ), NavData))
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("[RoofOrder] %s refused %s: no landing navmesh within capsule allowance of requested height"), *DisplayName.ToString(), *Destination.ToCompactString());
 			return RefuseNoWayUp();
 		}
-		PathGoal = OnNav.Location;
+		if (OperativeMovementRules::IsUpperLevelGoal(FeetZ, static_cast<float>(OnNav.Location.Z)))
+		{
+			PathGoal = OnNav.Location;
+		}
+		else
+		{
+			bElevatedOrder = false; // his own level: the ordinary projected / partial-path move
+		}
 	}
 	EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(
 		PathGoal, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true,

@@ -138,6 +138,12 @@ namespace OperativeMovementRules
 	/** An upper-level order must reach that level; accepts legacy capsule-centre goals and same-level partial approaches. Task139. */
 	CODEXTACTICS_API bool HasNoWayUp(float FeetZ, float GoalZ, float CapsuleHalfHeightCm, bool bHasPath, bool bPartial, float EndZ);
 
+	/** A floor this far above his feet is another level (a roof, an upper storey); less is his own ground (slopes, steps, cover slots). Task 155. */
+	inline constexpr float UpperLevelMinRiseCm = 150.f;
+
+	/** The navmesh floor under an order (NavZ) is an upper level that needs the strict no-partial-path route (2026-11-28 lake fix). */
+	CODEXTACTICS_API bool IsUpperLevelGoal(float FeetZ, float NavZ);
+
 	/** Speed multiplier of a stance relative to WalkSpeed. */
 	CODEXTACTICS_API float GetStanceSpeedMultiplier(const FOperativeMovementConfig& Config, EOperativeStance Stance);
 

@@ -10,6 +10,11 @@ namespace OperativeMovementRules
 		return GoalZ > FeetZ + UpperGoalCm && (!bHasPath || bPartial || EndZ < GoalZ - UpperGoalCm);
 	}
 
+	bool IsUpperLevelGoal(float FeetZ, float NavZ)
+	{
+		return NavZ > FeetZ + UpperLevelMinRiseCm;
+	}
+
 	float GetStanceSpeedMultiplier(const FOperativeMovementConfig& Config, EOperativeStance Stance)
 	{
 		switch (Stance)
