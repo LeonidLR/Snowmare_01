@@ -57,7 +57,9 @@
    "owner": "worker: C:/Work/NightLoop guard, task CodexTactics Night Guard",
    "branch": "",
    "topic": "",
-   "state": "active",
+   "state": "waiting",
+   "reason": "Lead foreground validation 144/155 and post156 play build use both existing worker slots. Night regression loop waits for foreground work; weight trainer remains deferred by designer until next week. Scheduled night-sweep passed 2026-11-27 16:52.",
+   "max_wait_min": 240,
    "max_quiet_min": 60,
    "window": "17:10-07:40",
    "ssh_heartbeat": {
