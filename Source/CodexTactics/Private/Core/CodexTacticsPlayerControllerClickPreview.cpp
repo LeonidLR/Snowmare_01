@@ -177,9 +177,18 @@ bool ACodexTacticsPlayerController::IsClickPreviewBypass(const FHitResult& Hit) 
 	{
 		return true; // 155: the roof's edge from below orders the roof, never a ground cover preview.
 	}
-	if (!GetActiveTurnBased() && WindowBreakage::FindWindowSillAt(*GetWorld(), Hit))
+	// 144: when hugging that wall (in cover or Alt+cover), keep the click on the wall-hug side as cover / shimmy; formation wall-slide bypasses preview to HandleWorldHit.
+	if (!GetActiveTurnBased())
 	{
-		return true;
+		AActor* Sill = nullptr;
+		FVector SideNormal;
+		bool bFormSlide = false;
+		if (WindowBreakage::FindWindowSillAt(*GetWorld(), Hit)
+			&& (!ControllerWindowCover::ShouldTakeWindowClickAsCover(GetWorld(), Squad, Leader, Hit, IsSquadWideModifierDown(), Sill, SideNormal, bFormSlide)
+				|| bFormSlide))
+		{
+			return true;
+		}
 	}
 	// A flight with a stair-up hover is the same single-click move as its landing, before building cover previews.
 	FVector StairFeet;
@@ -214,15 +223,31 @@ bool ACodexTacticsPlayerController::ResolveClickCoverSlot(AOperativeCharacter& L
 	{
 		return false;
 	}
+	AActor* WindowSill = nullptr;
+	FVector WindowSideNormal;
+	bool bWindowFormSlide = false;
+	const bool bWindowCover = !GetActiveTurnBased()
+		&& ControllerWindowCover::ShouldTakeWindowClickAsCover(GetWorld(), GetSquad(), &Leader, Hit, IsSquadWideModifierDown(), WindowSill, WindowSideNormal, bWindowFormSlide);
+	if (bWindowCover && bWindowFormSlide)
+	{
+		return false;
+	}
 	FCoverSlot SideSlot;
 	EWallClickSide WallSide = EWallClickSide::None;
-	const bool bSideSlot = !bVehicle && ResolveWallSideSlot(Hit, SideSlot, WallSide);
-	if (!bSideSlot && FMath::Abs(Hit.ImpactNormal.Z) > 0.3f && !bVehicle)
+	const bool bSideSlot = !bVehicle && !bWindowCover && ResolveWallSideSlot(Hit, SideSlot, WallSide);
+	if (!bSideSlot && !bWindowCover && FMath::Abs(Hit.ImpactNormal.Z) > 0.3f && !bVehicle)
 	{
 		return false;
 	}
 	FCoverSlot Slot = SideSlot;
-	if (!bSideSlot && !FindCoverSlotForHit(Hit, Slot))
+	if (bWindowCover && WindowSill)
+	{
+		if (!ControllerWindowCover::ResolveWindowCoverSlot(GetWorld(), *WindowSill, WindowSideNormal, Slot))
+		{
+			return false;
+		}
+	}
+	else if (!bSideSlot && !FindCoverSlotForHit(Hit, Slot))
 	{
 		return false;
 	}
@@ -246,7 +271,7 @@ bool ACodexTacticsPlayerController::ResolveClickCoverSlot(AOperativeCharacter& L
 		if (CoverTraceRules::IsSameWall(Own, Slot))
 		{
 			FCoverSlot Shimmy;
-			OutSlot = CoverTraceRules::FindShimmySlot(GetWorld(), Own, bSideSlot ? Slot.WallPoint : FVector(Hit.ImpactPoint), Shimmy) ? Shimmy : Slot;
+			OutSlot = CoverTraceRules::FindShimmySlot(GetWorld(), Own, (bSideSlot || bWindowCover) ? Slot.WallPoint : FVector(Hit.ImpactPoint), Shimmy) ? Shimmy : Slot;
 			bOutConfirm = true; // commit directly; redispatching a click can merely arm another preview
 			return true;
 		}

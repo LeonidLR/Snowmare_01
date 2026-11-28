@@ -3,6 +3,8 @@
 
 #include "Interactables/WindowBreakage.h"
 #include "Interactables/WindowOrderRules.h"
+#include "Tactics/CoverFacingRules.h"
+#include "Tactics/CoverRules.h"
 #include "Tactics/WindowCoverRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -194,6 +196,65 @@ bool FWindowCoverShotTest::RunTest(const FString& Parameters)
 		WindowOrderRules::MayTakeWholeWindow(false, false, WindowOrderRules::Get()));
 	TestFalse(TEXT("a follower still does not take a whole window"),
 		WindowOrderRules::MayTakeWholeWindow(true, true, WindowOrderRules::Get()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWindowWallHugRulesTest, "CodexTactics.Tactics.WindowCover.WallHugEdgeAndBlindFire",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWindowWallHugRulesTest::RunTest(const FString& Parameters)
+{
+	using namespace WindowCoverRules;
+
+	// 1. Shimmy / walk past two windows on one wall: crouch under each (+ margin), stand in solid gaps.
+	const FWindowCrouchSpan Win1 = CrouchSpanForOpening(100.f, 220.f, 40.f, 95.f, 230.f);
+	const FWindowCrouchSpan Win2 = CrouchSpanForOpening(400.f, 520.f, 40.f, 95.f, 230.f);
+	const TArray<FWindowCrouchSpan> Spans = { Win1, Win2 };
+	TestFalse(TEXT("before window 1 margin: standing"), WantsPathCrouch(50.f, Spans));
+	TestTrue(TEXT("entering window 1 margin: crouch"), WantsPathCrouch(65.f, Spans));
+	TestTrue(TEXT("middle of window 1: crouch"), WantsPathCrouch(160.f, Spans));
+	TestTrue(TEXT("leaving window 1 margin: crouch"), WantsPathCrouch(255.f, Spans));
+	TestFalse(TEXT("between windows: stand back up"), WantsPathCrouch(310.f, Spans));
+	TestTrue(TEXT("under window 2: crouch"), WantsPathCrouch(460.f, Spans));
+	TestFalse(TEXT("past window 2: stand up"), WantsPathCrouch(570.f, Spans));
+
+	// High transom above standing head or floor-level gap below crouch does not trigger crouch.
+	const FWindowCrouchSpan Transom = CrouchSpanForOpening(100.f, 200.f, 40.f, 190.f, 250.f);
+	TestFalse(TEXT("transom above standing head does not force crouch"), WantsPathCrouch(150.f, { Transom }));
+
+	// 2. Window edge = corner: left and right frame edges, standing vs crouched sill limit.
+	FWindowEdgeOpening EdgeWin;
+	EdgeWin.AlongMinCm = 100.f;
+	EdgeWin.AlongMaxCm = 220.f;
+	EdgeWin.SillTopCm = 95.f;
+	EdgeWin.OpeningTopCm = 230.f;
+	const FWindowEdgeCorner LeftStand = FindWindowEdgeCorner(66.f, false, { EdgeWin }, 200.f);
+	TestTrue(TEXT("standing left of window exposes right frame edge"), LeftStand.bRightExposed && !LeftStand.bLeftExposed);
+	TestTrue(TEXT("distance to left frame edge is 34 cm"), FMath::IsNearlyEqual(LeftStand.RightDistanceCm, 34.f, 0.1f));
+
+	const FWindowEdgeCorner RightStand = FindWindowEdgeCorner(254.f, false, { EdgeWin }, 200.f);
+	TestTrue(TEXT("standing right of window exposes left frame edge"), RightStand.bLeftExposed && !RightStand.bRightExposed);
+	TestTrue(TEXT("distance to right frame edge is 34 cm"), FMath::IsNearlyEqual(RightStand.LeftDistanceCm, 34.f, 0.1f));
+
+	const FWindowEdgeCorner HighSillCrouch = FindWindowEdgeCorner(66.f, true, { EdgeWin }, 200.f);
+	TestFalse(TEXT("crouched beside a 95 cm sill cannot peek round the frame"), HighSillCrouch.bRightExposed || HighSillCrouch.bLeftExposed);
+
+	FWindowEdgeOpening LowSillWin = EdgeWin;
+	LowSillWin.SillTopCm = 70.f;
+	const FWindowEdgeCorner LowSillCrouch = FindWindowEdgeCorner(66.f, true, { LowSillWin }, 200.f);
+	TestTrue(TEXT("crouched beside a 70 cm sill allows frame corner peek"), LowSillCrouch.bRightExposed);
+
+	// 3. Under-sill blind fire & window click / arc rules.
+	TestEqual(TEXT("effective sill uses measured height"), EffectiveSillTopCm(98.f), 98.f);
+	TestEqual(TEXT("effective sill falls back when unset"), EffectiveSillTopCm(0.f), DefaultSillTopCm);
+	const FVector BlindOrigin = CoverFacingRules::OverTopFirePoint(FVector::ZeroVector, FVector::XAxisVector, EffectiveSillTopCm(98.f));
+	TestTrue(TEXT("under-sill fire origin clears 98 cm sill lip"), BlindOrigin.Z > 98.f);
+	TestTrue(TEXT("enemy outside in window arc"), IsInWindowArc(FVector::XAxisVector, FVector::ZeroVector, FVector(-300.f, 50.f, 0.f), 160.f));
+	TestFalse(TEXT("enemy behind operative on wall-hug side is outside window arc"),
+		IsInWindowArc(FVector::XAxisVector, FVector::ZeroVector, FVector(300.f, 0.f, 0.f), 160.f));
+	TestTrue(TEXT("clicking window while hugging same wall on same side takes cover"), CanClickWindowAsCover(true, false, true));
+	TestTrue(TEXT("Alt+clicking window takes cover"), CanClickWindowAsCover(false, true, false));
+	TestFalse(TEXT("plain click when not hugging wall keeps climb order"), CanClickWindowAsCover(false, false, true));
 	return true;
 }
 

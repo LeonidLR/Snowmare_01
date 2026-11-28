@@ -209,6 +209,10 @@ public:
 	/** Headless checks: Ctrl counts as held (IsAttackModifierDown) - the real Ctrl + click path through HandleWorldHit. */
 	void SetSimulatedAttackModifier(bool bDown) { bSimulatedAttackModifier = bDown; }
 
+	/** True when clicking a window hit resolves to cover / shimmy / wall-slide on the operative's hug side. */
+	static bool ResolveWindowClickAsCover(UWorld* World, const USquadSubsystem* Squad, const AOperativeCharacter* Leader,
+		const FHitResult& Hit, bool bAlt, AActor*& OutSill, FVector& OutSideNormal, bool& bOutFormationSlide);
+
 	/** Action bar stance slot: Standing -> Crouching -> Prone (prone skipped while moving); the squad follows outside the
 	 * preparation unless in solo mode (Godot _cycle_leader_stance). */
 	void CycleLeaderStance();

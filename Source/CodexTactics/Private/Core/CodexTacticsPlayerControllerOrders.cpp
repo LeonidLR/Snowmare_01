@@ -564,6 +564,26 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			UE_LOG(LogCodexTactics, Display, TEXT("Click on a stair flight: up to the hidden storey's landing at %s"), *StairFeet.ToCompactString());
 		}
 	}
+	AActor* WindowCoverSill = nullptr;
+	FVector WindowCoverNormal;
+	bool bWindowFormationSlide = false;
+	const bool bWindowAsCover = !GetActiveTurnBased()
+		&& ControllerWindowCover::ShouldTakeWindowClickAsCover(GetWorld(), Squad, Leader, Hit, IsSquadWideModifierDown(),
+			WindowCoverSill, WindowCoverNormal, bWindowFormationSlide);
+	if (bWindowAsCover && bWindowFormationSlide && WindowCoverSill)
+	{
+		const FBox SillBox = WindowCoverSill->GetComponentsBoundingBox(true);
+		const FVector SillCenter = SillBox.GetCenter();
+		const float Half = static_cast<float>(FMath::Abs(FVector::DotProduct(SillBox.GetExtent(), WindowCoverNormal)));
+		const FVector SlidePoint(SillCenter.X + WindowCoverNormal.X * (Half + 45.f), SillCenter.Y + WindowCoverNormal.Y * (Half + 45.f),
+			Leader->GetActorLocation().Z - Leader->GetSimpleCollisionHalfHeight());
+		const FVector TraceStart = Hit.TraceStart;
+		Hit = FHitResult();
+		Hit.bBlockingHit = true;
+		Hit.ImpactPoint = Hit.Location = SlidePoint;
+		Hit.ImpactNormal = Hit.Normal = FVector::UpVector;
+		Hit.TraceStart = TraceStart;
+	}
 	FVector WindowFeet;
 	// 155: a parapet viewed from below is the roof destination. Keep the requested floor
 	// through window / cover dispatch; a broken route is refused by OrderMoveTo on that floor.
@@ -579,7 +599,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	float WindowYaw = 0.f;
 	FVector WindowApproach = FVector::ZeroVector;
 	bool bWindowApproachOnNav = false;
-	if (AActor* Sill = GetActiveTurnBased() ? nullptr : WindowBreakage::FindWindowSillAt(*GetWorld(), Hit); Sill
+	if (AActor* Sill = (GetActiveTurnBased() || bWindowAsCover) ? nullptr : WindowBreakage::FindWindowSillAt(*GetWorld(), Hit); Sill
 		&& FindWindowSillTarget(*Sill, *Leader, WindowFeet, WindowYaw, &WindowApproach, &bWindowApproachOnNav))
 	{
 		UpdateWindowHover(nullptr, nullptr);
@@ -1091,7 +1111,14 @@ bool ACodexTacticsPlayerController::IsWindowHighlightShown() const
 bool ACodexTacticsPlayerController::UpdateWindowHover(AOperativeCharacter* Operative, const FHitResult* Hit)
 {
 	const bool bLegacySilhouette = WindowHoverLocal::CVarHoverStyle.GetValueOnGameThread() == 1;
-	AActor* Sill = Hit && Hit->bBlockingHit && Operative && !IsClickPreviewArmed() ? WindowBreakage::FindWindowSillAt(*GetWorld(), *Hit) : nullptr;
+	AActor* DummyWindowSill = nullptr;
+	FVector DummyWindowNormal;
+	bool bDummyWindowSlide = false;
+	const bool bWindowAsCoverHover = !GetActiveTurnBased() && Operative && Hit && Hit->bBlockingHit
+		&& ControllerWindowCover::ShouldTakeWindowClickAsCover(GetWorld(), GetSquad(), Operative, *Hit, IsSquadWideModifierDown(),
+			DummyWindowSill, DummyWindowNormal, bDummyWindowSlide);
+	AActor* Sill = Hit && Hit->bBlockingHit && Operative && !IsClickPreviewArmed() && !bWindowAsCoverHover
+		? WindowBreakage::FindWindowSillAt(*GetWorld(), *Hit) : nullptr;
 	FVector Feet;
 	float Yaw = 0.f;
 	const bool bWanted = Operative && Sill && !IsAttackModifierDown() && !GetActiveTurnBased()

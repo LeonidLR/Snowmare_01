@@ -323,9 +323,15 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	}
 	// Game designer 2026-11-01 (fix a): the side of a high wall is decided by the cursor - its top beyond the middle / the ground right
 	// behind it = the FAR face, the top's near half = the near face (ResolveWallSideSlot). Not on the turn-based grid (its own click rules).
+	AActor* WindowCoverSill = nullptr;
+	FVector WindowCoverNormal;
+	bool bWindowFormationSlide = false;
+	const bool bWindowCover = !TurnBased
+		&& ControllerWindowCover::ShouldTakeWindowClickAsCover(GetWorld(), Squad, Operative, Hit, bAlt,
+			WindowCoverSill, WindowCoverNormal, bWindowFormationSlide);
 	FCoverSlot SideSlot;
 	EWallClickSide WallSide = EWallClickSide::None;
-	const bool bSideSlot = !TurnBased && !bAlt && !bVehicle && ResolveWallSideSlot(Hit, SideSlot, WallSide);
+	const bool bSideSlot = !TurnBased && !bAlt && !bVehicle && !bWindowCover && ResolveWallSideSlot(Hit, SideSlot, WallSide);
 	if (bSideSlot)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] click at (%.0f, %.0f, %.0f) on %s: the %s face (slot at (%.0f, %.0f), outward yaw %.0f)"), Hit.ImpactPoint.X,
@@ -334,13 +340,13 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	}
 	// A floor / ramp is a move target, not a wall (Alt + click probes anyway: a wall edge may have been clicked); the
 	// vehicle's roof is always its hull.
-	if (!bSideSlot && FMath::Abs(Hit.ImpactNormal.Z) > 0.3f && !bAlt && !bVehicle)
+	if (!bSideSlot && !bWindowCover && FMath::Abs(Hit.ImpactNormal.Z) > 0.3f && !bAlt && !bVehicle)
 	{
 		return false;
 	}
 	// Another face of his own cover object (2026-10-20): round it along its wall, in cover all the way (no preview; the hover shows it). His
 	// own face stays the shimmy below.
-	if (!TurnBased && !bAlt && Operative->bInCover)
+	if (!TurnBased && !bAlt && !bWindowCover && Operative->bInCover)
 	{
 		const FCoverSlot& Own = Operative->GetCoverSlot();
 		const bool bOwnObject = Own.WallComponent.IsValid() ? Hit.GetComponent() == Own.WallComponent.Get() : HitActor == Own.WallActor.Get();
@@ -353,7 +359,14 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 		}
 	}
 	FCoverSlot Slot = SideSlot;
-	if (!bSideSlot && !FindCoverSlotForHit(Hit, Slot))
+	if (bWindowCover && WindowCoverSill)
+	{
+		if (!ControllerWindowCover::ResolveWindowCoverSlot(GetWorld(), *WindowCoverSill, WindowCoverNormal, Slot))
+		{
+			return false;
+		}
+	}
+	else if (!bSideSlot && !FindCoverSlotForHit(Hit, Slot))
 	{
 		if (bAlt)
 		{
@@ -405,7 +418,7 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 	{
 		HideCoverPreview();
 		FCoverSlot Shimmy;
-		if (CoverTraceRules::FindShimmySlot(GetWorld(), Operative->GetCoverSlot(), bSideSlot ? Slot.WallPoint : FVector(Hit.ImpactPoint), Shimmy))
+		if (CoverTraceRules::FindShimmySlot(GetWorld(), Operative->GetCoverSlot(), (bSideSlot || bWindowCover) ? Slot.WallPoint : FVector(Hit.ImpactPoint), Shimmy))
 		{
 			Operative->OrderShimmyTo(Shimmy);
 		}
@@ -437,7 +450,7 @@ bool ACodexTacticsPlayerController::FindCornerPeekForHit(const AOperativeCharact
 	{
 		return false;
 	}
-	return FindCornerPeekForSlot(Operative->GetCoverSlot(), Hit, OutSide, OutEdgeAlongCm);
+	return FindCornerPeekForSlot(Operative->GetEffectiveCoverSlotForCorner(), Hit, OutSide, OutEdgeAlongCm);
 }
 
 bool ACodexTacticsPlayerController::PlanGroupCornerPeek(AOperativeCharacter* Operative, const FHitResult& Hit, AOperativeCharacter*& OutPeeker, ECoverFacing& OutSide,
@@ -1882,6 +1895,12 @@ void ACodexTacticsPlayerController::ToggleCoverFireModeKey()
 			? LOCTEXT("CoverBlind", "🙈 From cover - blind fire (accuracy −40%, head stays down).")
 			: LOCTEXT("CoverLean", "👁️ From cover - aimed fire around the corner."));
 	}
+}
+
+bool ACodexTacticsPlayerController::ResolveWindowClickAsCover(UWorld* World, const USquadSubsystem* Squad, const AOperativeCharacter* Leader,
+	const FHitResult& Hit, bool bAlt, AActor*& OutSill, FVector& OutSideNormal, bool& bOutFormationSlide)
+{
+	return ControllerWindowCover::ShouldTakeWindowClickAsCover(World, Squad, Leader, Hit, bAlt, OutSill, OutSideNormal, bOutFormationSlide);
 }
 
 #undef LOCTEXT_NAMESPACE

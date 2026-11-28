@@ -539,6 +539,11 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 	if (bInCover && bUseNativeCoverClips && !bIsProne && !bIsReloading)
 	{
 		const bool bBlindShot = Shooter && Shooter->bIsBlindFiring;
+		if (bBlindShot && IsPlayingStanceTransition())
+		{
+			++FireClipsSkippedForStance;
+			return;
+		}
 		if (!bCoverInFirePose && CoverOverTopPhase != ECoverOverTopPhase::Idle)
 		{
 			// A shot can arrive during either switch or while Aim/2 is lowering. Let the layer finish the transition first.
@@ -546,6 +551,22 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 			return;
 		}
 		UAnimSequenceBase* Clip = bBlindShot ? PickCoverClip(CoverBlindFire) : nullptr;
+		if (bBlindShot && !Clip && !ActiveCoverAnimSet.IsEmpty())
+		{
+			static const FName CoverBlindFireName(TEXT("CoverBlindFire"));
+			if (const FCoverSetAssets* NativeBlind = NativeCoverArrays.Find(CoverBlindFireName))
+			{
+				const int32 BlindIdx = CoverFacingRules::ClipIndex(CoverFacing);
+				if (NativeBlind->Assets.IsValidIndex(BlindIdx) && NativeBlind->Assets[BlindIdx])
+				{
+					Clip = Cast<UAnimSequenceBase>(NativeBlind->Assets[BlindIdx].Get());
+				}
+				else if (NativeBlind->Assets.IsValidIndex(1 - BlindIdx) && NativeBlind->Assets[1 - BlindIdx])
+				{
+					Clip = Cast<UAnimSequenceBase>(NativeBlind->Assets[1 - BlindIdx].Get());
+				}
+			}
+		}
 		if (!Clip)
 		{
 			Clip = PickCoverClip(bIsCrouching ? CoverCrouchFire : CoverStandFire);

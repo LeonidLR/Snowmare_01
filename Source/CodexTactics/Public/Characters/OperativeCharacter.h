@@ -1905,7 +1905,23 @@ public:
 
 	int32 GetWindowCoverGlassRounds() const { return WindowCover.GlassRounds; }
 
-	/** The aim from the muzzle passes through the bound opening. */
+	/** 144: Sill top height above the slot's feet (cm) when under a confirmed window. */
+	float GetWindowCoverSillTopCm() const;
+
+	/** 144: Cover slot with any adjacent window-frame edge merged in (for corner aim/hold, without mutating CoverSlot.IsSameWall). */
+	FCoverSlot GetEffectiveCoverSlotForCorner() const;
+
+	bool HasAnyExposedCoverEdge() const;
+	bool IsExposedCoverEdge(ECoverFacing Facing) const;
+	float GetExposedCoverEdgeDistanceCm(ECoverFacing Facing) const;
+
+	/** 144: Returns true if the current cover shot crosses a confirmed window or adjacent frame-edge window opening. */
+	bool GetActiveWindowForShot(const FVector& AimAt, WindowCoverRules::FWindowCoverBinding& OutBinding) const;
+
+	/** 144: Updates crouch state when sliding along a wall in the formation wall layout past windows. */
+	void UpdateWallSlideWindowCrouch(const FVector& WallOrigin, const FVector& WallNormal, bool bActive);
+
+	/** The aim from the cover fire origin passes through the bound opening (or adjacent frame-edge window). */
 	bool IsWindowCoverShot(const FVector& AimAt) const;
 
 	/** The current shimmy goes towards the facing side (forward clip), else backwards. */
@@ -3084,10 +3100,38 @@ private:
 	/** G016: this operative's window, dropped on leave. Not copied with the slot and not moved when the leader changes. */
 	WindowCoverRules::FWindowCoverBinding WindowCover;
 	bool bWindowCoverForcedCrouch = false;
+	bool bWallSlideWindowCrouch = false;
+	bool bWindowCoverLastAtCorner = false;
+	ECoverFacing WindowCoverLastFacing = ECoverFacing::Right;
+	EOperativeStance WindowCoverLastEdgeStance = EOperativeStance::Standing;
 	FVector WindowCoverSearchedAt = FVector(FLT_MAX);
 	WindowCoverRules::EWindowIntervalPlace WindowCoverLastPlace = WindowCoverRules::EWindowIntervalPlace::Outside;
 	FVector WindowCoverSegment = FVector(FLT_MAX);
 	TWeakObjectPtr<UPrimitiveComponent> WindowCoverWall;
+	/** 144: Wall-plane crouch spans kept outside FWindowCoverBinding so GetActiveWindowForShot has zero heap copies. */
+	TArray<WindowCoverRules::FWindowCrouchSpan> WindowCoverWallSpans;
+	FVector WindowCoverSpanOrigin = FVector::ZeroVector;
+	/** 144: Cached same-wall/floor window sills (geometry + floor) to avoid rescanning world actors during shimmy. */
+	struct FCachedWindowSill
+	{
+		TWeakObjectPtr<AActor> Sill;
+		FBox SillBox = FBox(ForceInit);
+		FBox OpeningBox = FBox(ForceInit);
+		FString Building;
+		int32 Floor = INDEX_NONE;
+	};
+	TArray<FCachedWindowSill> CachedWindowWallSills;
+	FVector CachedWindowWallSillsAt = FVector(FLT_MAX);
+	TWeakObjectPtr<UPrimitiveComponent> CachedWindowWallComp;
+	int32 CachedWindowWallFloor = INDEX_NONE;
+	/** 144: Cached crouch spans for wall-slide formation walk (invalidated on wall/floor/distance/time). */
+	TArray<WindowCoverRules::FWindowCrouchSpan> CachedWallSlideSpans;
+	FVector CachedWallSlideOrigin = FVector(FLT_MAX);
+	FVector CachedWallSlideNormal = FVector::ZeroVector;
+	FVector CachedWallSlideAlongAxis = FVector::RightVector;
+	FVector CachedWallSlideAt = FVector(FLT_MAX);
+	float CachedWallSlideFeetZ = 0.f;
+	double CachedWallSlideTime = -1000.0;
 	FCoverSlot PendingCoverSlot;
 	bool bHasPendingCover = false;
 	/** Set while OrderTakeCover / OrderShimmyTo issue their move: the move does not leave the cover. */

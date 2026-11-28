@@ -495,6 +495,10 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	StartRunCornerPeekOnEntry(Slot);
 	RefreshWindowCover(true);
 	ApplyWindowCoverStance();
+	if (HasAnyExposedCoverEdge() && !CoverSlot.HasExposedEdge())
+	{
+		UpdateCoverFacing(/*bAllowSnap*/ false);
+	}
 }
 
 void AOperativeCharacter::UpdateCoverEnteredEvent(float DeltaTime)
@@ -701,6 +705,10 @@ EOperativeOrderResult AOperativeCharacter::OrderShimmyTo(const FCoverSlot& Targe
 void AOperativeCharacter::SetCoverFireMode(ECoverFireMode Mode)
 {
 	CoverFireMode = Mode == ECoverFireMode::Normal ? ECoverFireMode::CornerLean : Mode;
+	if (CoverFireMode == ECoverFireMode::BlindFire && bCornerAimActive)
+	{
+		EndCornerAim(ECornerAimDecision::DuckForSafety, TEXT("blind fire: head down"));
+	}
 }
 
 ECoverFireMode AOperativeCharacter::ToggleCoverFireMode()
@@ -725,13 +733,19 @@ bool AOperativeCharacter::CanFireFromCover() const
 	{
 		return true; // over the top
 	}
-	return CoverSlot.HasExposedEdge();
+	return HasAnyExposedCoverEdge();
 }
 
 FVector AOperativeCharacter::GetCoverFireOrigin() const
 {
 	const FVector Muzzle = GetMuzzleLocation();
-	if (IsWindowCoverConfirmed())
+	if (IsWindowCoverConfirmed() && !IsManualCornerPeekSpot() && Stance != EOperativeStance::Prone)
+	{
+		// 144: under-window slot behaves as low cover with the sill as its top (aimed over-sill & BlindFire over-sill).
+		const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+		return CoverFacingRules::OverTopFirePoint(Feet, CoverSlot.WallNormal, GetWindowCoverSillTopCm());
+	}
+	if (IsWindowCoverConfirmed() && !IsManualCornerPeekSpot())
 	{
 		return Muzzle; // through the opening, not round a corner
 	}
@@ -745,7 +759,7 @@ FVector AOperativeCharacter::GetCoverFireOrigin() const
 	{
 		return Muzzle;
 	}
-	return CornerFireOriginFor(CoverSlot, CoverFacing, Muzzle);
+	return CornerFireOriginFor(GetEffectiveCoverSlotForCorner(), CoverFacing, Muzzle);
 }
 
 FVector AOperativeCharacter::CornerFireOriginFor(const FCoverSlot& Slot, ECoverFacing Facing, const FVector& Muzzle)
@@ -886,6 +900,8 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 		ShimmyDirection = 0.f;
 		bCoverAutoSnap = false;
 	}
+	RefreshWindowCover(false);
+	ApplyWindowCoverStance();
 	// Facing along the wall towards the last known threat (user design rule 2026-10-06).
 	CoverThreatTimer -= DeltaTime;
 	if (CoverThreatTimer <= 0.f)
@@ -897,8 +913,6 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 	{
 		TrySnapToCoverCorner();
 	}
-	RefreshWindowCover(false);
-	ApplyWindowCoverStance();
 }
 
 float AOperativeCharacter::GetCoverFacingYaw() const
@@ -1038,10 +1052,11 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 	// Corner hold (user decision 2026-10-07: no side flips at that corner): at the one exposed edge of a high wall he faces
 	// that edge whatever the threat side - the closed side has nothing to fire round (CornerHoldSmoke 2026-10-07: back at
 	// the wall after an open shot he turned to the closed side for a threat there and never leaned out again).
-	if (bCornerHoldAtEdge && !bShimmying && CoverSlot.Height == ECoverHeight::HighCover && CoverSlot.bLeftEdgeExposed != CoverSlot.bRightEdgeExposed)
+	const FCoverSlot EffectiveSlot = GetEffectiveCoverSlotForCorner();
+	if (bCornerHoldAtEdge && !bShimmying && CoverSlot.Height == ECoverHeight::HighCover && EffectiveSlot.bLeftEdgeExposed != EffectiveSlot.bRightEdgeExposed)
 	{
-		const ECoverFacing Edge = CoverSlot.bLeftEdgeExposed ? ECoverFacing::Left : ECoverFacing::Right;
-		if (CoverFacingRules::IsAtCorner(CoverSlot, Edge, Config))
+		const ECoverFacing Edge = EffectiveSlot.bLeftEdgeExposed ? ECoverFacing::Left : ECoverFacing::Right;
+		if (CoverFacingRules::IsAtCorner(EffectiveSlot, Edge, Config))
 		{
 			CoverFacing = Edge;
 		}
@@ -1072,14 +1087,14 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 		}
 	}
 	const bool bWasAtCorner = bAtCoverCorner;
-	bAtCoverCorner = CoverFacingRules::IsAtCorner(CoverSlot, CoverFacing, Config);
+	bAtCoverCorner = CoverFacingRules::IsAtCorner(EffectiveSlot, CoverFacing, Config);
 	// The look may name the other hand. The body stays at the ordered edge, so the corner flag stays too.
 	if (!bAtCoverCorner && WantsCornerLookPose())
 	{
 		bAtCoverCorner = bManualCornerPeek
-			? CoverFacingRules::IsAtCorner(CoverSlot, ManualCornerPeekSide, Config)
-			: (CoverFacingRules::IsAtCorner(CoverSlot, ECoverFacing::Left, Config)
-				|| CoverFacingRules::IsAtCorner(CoverSlot, ECoverFacing::Right, Config));
+			? CoverFacingRules::IsAtCorner(EffectiveSlot, ManualCornerPeekSide, Config)
+			: (CoverFacingRules::IsAtCorner(EffectiveSlot, ECoverFacing::Left, Config)
+				|| CoverFacingRules::IsAtCorner(EffectiveSlot, ECoverFacing::Right, Config));
 	}
 	if (bAtCoverCorner && !bWasAtCorner && bInCover && !bShimmying)
 	{
@@ -1138,7 +1153,7 @@ bool AOperativeCharacter::IsCoverThreatActive() const
 bool AOperativeCharacter::IsCoverFireReady() const
 {
 	const UWorld* World = GetWorld();
-	if (!bInCover || !World || bIsReloading)
+	if (!bInCover || !World || bIsReloading || (IsWindowCoverConfirmed() && IsCoverShotBlind()))
 	{
 		return false;
 	}

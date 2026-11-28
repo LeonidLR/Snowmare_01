@@ -156,8 +156,8 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	EShotLineHit Kind = EShotLineHit::Clear;
 	AActor* HitEnemy = Enemy;
 	FHitResult Hit;
-	const FVector LineFrom = (bCornerShot || (bInCover && CurrentCoverHeight == ECoverHeight::LowCover)) ? GetCoverFireOrigin() : GetMuzzleLocation();
 	const FVector LineTo = EnemyFeet + FVector(0.f, 0.f, 80.f);
+	const FVector LineFrom = (bCornerShot || (bInCover && (CurrentCoverHeight == ECoverHeight::LowCover || (IsWindowCoverConfirmed() && IsWindowCoverShot(LineTo))))) ? GetCoverFireOrigin() : GetMuzzleLocation();
 	const bool bLineHit = World->LineTraceSingleByChannel(Hit, LineFrom, LineTo, ECC_Visibility, Params);
 	if (OutDetail)
 	{
@@ -187,11 +187,12 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	Out.bExposedAim = false;
 	Out.bWindowGlass = false;
 	Out.WindowGlassPoint = FVector::ZeroVector;
-	// G016: a confirmed window uses the opening. Intact glass is a clear round that breaks the pane. The frame stays blocked.
+	// G016 / 144: a confirmed window or adjacent window-frame corner peek uses the opening. Intact glass is a clear round that breaks the pane. The frame stays blocked.
 	bool bWindowLineDecided = false;
-	if (IsWindowCoverConfirmed() && IsWindowCoverShot(LineTo))
+	WindowCoverRules::FWindowCoverBinding ActiveWindow;
+	if (GetActiveWindowForShot(LineTo, ActiveWindow))
 	{
-		const WindowCoverRules::FWindowLineView View = WindowCoverRules::TraceThroughWindow(*World, this, GetWindowCover(), LineFrom, LineTo, Params);
+		const WindowCoverRules::FWindowLineView View = WindowCoverRules::TraceThroughWindow(*World, this, ActiveWindow, LineFrom, LineTo, Params);
 		bWindowLineDecided = true;
 		AActor* Blocker = View.Actor.Get();
 		if (View.bIntactGlass)
@@ -330,7 +331,8 @@ bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShoo
 	}
 	EShotLineHit Kind = EShotLineHit::Clear;
 	FHitResult Hit;
-	if (World->LineTraceSingleByChannel(Hit, (bCornerShot || (bInCover && CurrentCoverHeight == ECoverHeight::LowCover)) ? GetCoverFireOrigin() : GetMuzzleLocation(), Ghost.GetAimPoint(), ECC_Visibility, Params) && Hit.GetActor())
+	const FVector GhostAim = Ghost.GetAimPoint();
+	if (World->LineTraceSingleByChannel(Hit, (bCornerShot || (bInCover && (CurrentCoverHeight == ECoverHeight::LowCover || (IsWindowCoverConfirmed() && IsWindowCoverShot(GhostAim))))) ? GetCoverFireOrigin() : GetMuzzleLocation(), GhostAim, ECC_Visibility, Params) && Hit.GetActor())
 	{
 		Kind = Hit.GetActor()->IsA<ABarricadeActor>() ? EShotLineHit::Barricade : EShotLineHit::Blocked;
 	}
@@ -1131,7 +1133,9 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 				GlassSight->NotifyFired(this);
 			}
 			AEnemyCharacter::NotifySquadNoise(GetWorld(), GetActorLocation(), ESquadNoise::Gunshot);
-			BreakWindowGlassFromShot(WindowCover.Sill.Get());
+			WindowCoverRules::FWindowCoverBinding ActiveGlassWindow;
+			GetActiveWindowForShot(GlassAim, ActiveGlassWindow);
+			BreakWindowGlassFromShot(ActiveGlassWindow.Sill.IsValid() ? ActiveGlassWindow.Sill.Get() : WindowCover.Sill.Get());
 			OnWeaponFired.Broadcast(this, Target, false);
 			OnWeaponFiredNative.Broadcast(this, Target, false);
 			if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)

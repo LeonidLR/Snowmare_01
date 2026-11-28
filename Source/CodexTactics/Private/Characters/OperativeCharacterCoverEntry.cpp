@@ -415,19 +415,20 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 	// Measure outer clavicle (clavicle_l / clavicle_r) against the exposed corner edge without any corner-along offset
 	// so active corner peeks (-21 cm past edge) and idle/return corner poses (+14 cm inward) stay symmetric across L/R, stand/crouch, and both 'm4' & 'riffle' sets.
 	const UOperativeAnimInstance* CornerAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	const FCoverSlot EffectiveCornerSlot = GetEffectiveCoverSlotForCorner();
 	ECoverFacing CornerEdgeSide = CoverFacing;
-	if (bInCover && !CoverSlot.IsEdgeExposed(CornerEdgeSide))
+	if (bInCover && !EffectiveCornerSlot.IsEdgeExposed(CornerEdgeSide))
 	{
-		if (bManualCornerPeek && CoverSlot.IsEdgeExposed(ManualCornerPeekSide))
+		if (bManualCornerPeek && EffectiveCornerSlot.IsEdgeExposed(ManualCornerPeekSide))
 		{
 			CornerEdgeSide = ManualCornerPeekSide;
 		}
-		else if (CoverSlot.bLeftEdgeExposed != CoverSlot.bRightEdgeExposed)
+		else if (EffectiveCornerSlot.bLeftEdgeExposed != EffectiveCornerSlot.bRightEdgeExposed)
 		{
-			CornerEdgeSide = CoverSlot.bLeftEdgeExposed ? ECoverFacing::Left : ECoverFacing::Right;
+			CornerEdgeSide = EffectiveCornerSlot.bLeftEdgeExposed ? ECoverFacing::Left : ECoverFacing::Right;
 		}
 	}
-	const float CornerEdgeDist = bInCover ? CoverFacingRules::EdgeDistance(CoverSlot, CornerEdgeSide) : -1.f;
+	const float CornerEdgeDist = bInCover ? CoverFacingRules::EdgeDistance(EffectiveCornerSlot, CornerEdgeSide) : -1.f;
 	const bool bHasExposedCornerEdge = bInCover && bAtCoverCorner && CornerEdgeDist >= 0.f && CornerEdgeDist <= GetCoverFacingConfig().CornerReachCm;
 	auto MeasureOuterClavicleInwardCm = [&](bool bIncludeEntryOffset, float& OutInwardCm) -> bool
 	{
@@ -463,7 +464,7 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 	{
 		float Clamped = FMath::Clamp(DesiredShiftCm, CornerEdgeAlignMinShiftCm, CornerEdgeAlignMaxShiftCm);
 		const ECoverFacing OppSide = CornerEdgeSide == ECoverFacing::Right ? ECoverFacing::Left : ECoverFacing::Right;
-		const float OppDist = CoverFacingRules::EdgeDistance(CoverSlot, OppSide);
+		const float OppDist = CoverFacingRules::EdgeDistance(EffectiveCornerSlot, OppSide);
 		if (OppDist >= 0.f)
 		{
 			Clamped = FMath::Max(Clamped, FMath::Min(0.f, -(OppDist - CornerEdgeAlignOppositeMarginCm)));

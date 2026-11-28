@@ -3,6 +3,7 @@
 #include "Characters/OperativeCharacter.h"
 
 #include "Camera/RoofCutawaySubsystem.h"
+#include "Characters/OperativeMovementRules.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
 #include "CollisionQueryParams.h"
@@ -16,6 +17,7 @@
 #include "Interactables/WindowOrderRules.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Tactics/CoverFacingRules.h"
+#include "Tactics/CoverRules.h"
 #include "Tactics/WindowCoverRules.h"
 
 namespace
@@ -52,17 +54,109 @@ namespace
 		}
 		return Floor;
 	}
+	float SlotFeetZ(const AOperativeCharacter& Op)
+	{
+		return static_cast<float>(Op.GetActorLocation().Z) - Op.GetSimpleCollisionHalfHeight();
+	}
+}
+
+float AOperativeCharacter::GetWindowCoverSillTopCm() const
+{
+	return WindowCoverRules::EffectiveSillTopCm(WindowCover.SillTopCm);
+}
+
+FCoverSlot AOperativeCharacter::GetEffectiveCoverSlotForCorner() const
+{
+	FCoverSlot Effective = CoverSlot;
+	if (WindowCover.bLeftEdgeExposed && (!Effective.bLeftEdgeExposed || WindowCover.LeftEdgeDistanceCm < Effective.LeftEdgeDistanceCm))
+	{
+		Effective.bLeftEdgeExposed = true;
+		Effective.LeftEdgeDistanceCm = WindowCover.LeftEdgeDistanceCm;
+	}
+	if (WindowCover.bRightEdgeExposed && (!Effective.bRightEdgeExposed || WindowCover.RightEdgeDistanceCm < Effective.RightEdgeDistanceCm))
+	{
+		Effective.bRightEdgeExposed = true;
+		Effective.RightEdgeDistanceCm = WindowCover.RightEdgeDistanceCm;
+	}
+	return Effective;
+}
+
+bool AOperativeCharacter::HasAnyExposedCoverEdge() const
+{
+	return CoverSlot.HasExposedEdge() || WindowCover.bLeftEdgeExposed || WindowCover.bRightEdgeExposed;
+}
+
+bool AOperativeCharacter::IsExposedCoverEdge(ECoverFacing Facing) const
+{
+	return CoverSlot.IsEdgeExposed(Facing)
+		|| (Facing == ECoverFacing::Left ? WindowCover.bLeftEdgeExposed : WindowCover.bRightEdgeExposed);
+}
+
+float AOperativeCharacter::GetExposedCoverEdgeDistanceCm(ECoverFacing Facing) const
+{
+	const float WallDist = CoverSlot.IsEdgeExposed(Facing)
+		? (Facing == ECoverFacing::Left ? CoverSlot.LeftEdgeDistanceCm : CoverSlot.RightEdgeDistanceCm)
+		: -1.f;
+	const bool bWin = Facing == ECoverFacing::Left ? WindowCover.bLeftEdgeExposed : WindowCover.bRightEdgeExposed;
+	const float WinDist = bWin ? (Facing == ECoverFacing::Left ? WindowCover.LeftEdgeDistanceCm : WindowCover.RightEdgeDistanceCm) : -1.f;
+	if (WallDist < 0.f)
+	{
+		return WinDist;
+	}
+	if (WinDist < 0.f)
+	{
+		return WallDist;
+	}
+	return FMath::Min(WallDist, WinDist);
+}
+
+bool AOperativeCharacter::GetActiveWindowForShot(const FVector& AimAt, WindowCoverRules::FWindowCoverBinding& OutBinding) const
+{
+	if (!bInCover)
+	{
+		return false;
+	}
+	const FVector From = GetCoverFireOrigin();
+	const FVector Delta = AimAt - From;
+	if (Delta.IsNearlyZero())
+	{
+		return false;
+	}
+	if (IsWindowCoverConfirmed() && WindowCover.Opening.IsValid
+		&& WindowCoverRules::IsInWindowArc(CoverSlot.WallNormal, CoverSlot.WorldLocation, AimAt, CoverRules::GetConfig().FrontalArcDeg)
+		&& FMath::LineBoxIntersection(WindowCover.Opening, From, AimAt, Delta))
+	{
+		OutBinding = WindowCover;
+		return true;
+	}
+	if (bAtCoverCorner)
+	{
+		const bool bLeft = CoverFacing == ECoverFacing::Left;
+		const bool bWinEdge = bLeft ? WindowCover.bLeftEdgeExposed : WindowCover.bRightEdgeExposed;
+		const float WinDist = bLeft ? WindowCover.LeftEdgeDistanceCm : WindowCover.RightEdgeDistanceCm;
+		const bool bWallEdge = CoverSlot.IsEdgeExposed(CoverFacing);
+		const float WallDist = bLeft ? CoverSlot.LeftEdgeDistanceCm : CoverSlot.RightEdgeDistanceCm;
+		const FBox& EdgeOpening = bLeft ? WindowCover.LeftEdgeOpening : WindowCover.RightEdgeOpening;
+		AActor* EdgeSill = bLeft ? WindowCover.LeftEdgeSill.Get() : WindowCover.RightEdgeSill.Get();
+		if (bWinEdge && (!bWallEdge || WinDist <= WallDist + WindowCoverRules::WindowFrameEdgeToleranceCm)
+			&& EdgeSill && EdgeOpening.IsValid && FMath::LineBoxIntersection(EdgeOpening, From, AimAt, Delta))
+		{
+			OutBinding = WindowCover;
+			OutBinding.Sill = EdgeSill;
+			OutBinding.Opening = EdgeOpening;
+			OutBinding.Glass = bLeft ? WindowCover.LeftEdgeGlass : WindowCover.RightEdgeGlass;
+			OutBinding.GlassRounds = bLeft ? WindowCover.LeftEdgeGlassRounds : WindowCover.RightEdgeGlassRounds;
+			OutBinding.bConfirmed = true;
+			return true;
+		}
+	}
+	return false;
 }
 
 bool AOperativeCharacter::IsWindowCoverShot(const FVector& AimAt) const
 {
-	if (!IsWindowCoverConfirmed() || !WindowCover.Opening.IsValid)
-	{
-		return false;
-	}
-	const FVector From = GetMuzzleLocation();
-	const FVector Delta = AimAt - From;
-	return !Delta.IsNearlyZero() && FMath::LineBoxIntersection(WindowCover.Opening, From, AimAt, Delta);
+	WindowCoverRules::FWindowCoverBinding Binding;
+	return GetActiveWindowForShot(AimAt, Binding);
 }
 
 bool AOperativeCharacter::TryGetWindowCoverAimPoint(FVector& OutAim) const
@@ -88,7 +182,8 @@ bool AOperativeCharacter::TryGetWindowCoverAimPoint(FVector& OutAim) const
 bool AOperativeCharacter::HasWindowCoverAim() const
 {
 	FVector Aim;
-	return IsWindowCoverConfirmed() && !bShimmying && !bAtCoverCorner && TryGetWindowCoverAimPoint(Aim) && IsWindowCoverShot(Aim);
+	return IsWindowCoverConfirmed() && !bShimmying && !bAtCoverCorner && !IsCoverShotBlind()
+		&& TryGetWindowCoverAimPoint(Aim) && IsWindowCoverShot(Aim);
 }
 
 bool AOperativeCharacter::IsCoverBodyAligned() const
@@ -124,19 +219,40 @@ void AOperativeCharacter::ClearWindowCover()
 	WindowCoverLastPlace = WindowCoverRules::EWindowIntervalPlace::Outside;
 	WindowCoverSegment = FVector(FLT_MAX);
 	WindowCoverWall.Reset();
+	WindowCoverWallSpans.Reset();
+	WindowCoverSpanOrigin = FVector::ZeroVector;
+	CachedWindowWallSills.Reset();
+	CachedWindowWallSillsAt = FVector(FLT_MAX);
+	CachedWindowWallComp.Reset();
+	CachedWindowWallFloor = INDEX_NONE;
 }
 
 void AOperativeCharacter::ApplyWindowCoverStance()
 {
-	const bool bWant = WindowCoverRules::WantsCrouch(WindowCover.bConfirmed, bShimmying, bAtCoverCorner, IsWindowCoverStopped());
+	const float AlongFromOrigin = WindowCover.AlongAxis.IsNearlyZero()
+		? 0.f
+		: static_cast<float>(FVector::DotProduct(GetActorLocation() - WindowCoverSpanOrigin, WindowCover.AlongAxis));
+	const bool bShimmyWindowCrouch = bShimmying && CurrentCoverHeight == ECoverHeight::HighCover
+		&& WindowCoverRules::WantsPathCrouch(AlongFromOrigin, WindowCoverWallSpans);
+	const bool bWant = WindowCoverRules::WantsCrouch(WindowCover.bConfirmed, bShimmying, bAtCoverCorner, IsWindowCoverStopped())
+		|| bShimmyWindowCrouch;
 	const bool bLocked = Stance == EOperativeStance::Prone || (ColdSurvival && ColdSurvival->IsFrostbitten());
+	const auto RestoreShimmySpeed = [this](EOperativeStance TargetStance)
+	{
+		if (bShimmying)
+		{
+			ApplyMovementParams(OperativeMovementRules::ComputeMaxSpeed(MovementConfig, TargetStance, false, IsWounded(), bCarrying) * ColdSpeedMultiplier);
+		}
+	};
 	if (bWant)
 	{
 		if (!bLocked && Stance != EOperativeStance::Crouching)
 		{
 			SetStance(EOperativeStance::Crouching);
+			RestoreShimmySpeed(EOperativeStance::Crouching);
 			bWindowCoverForcedCrouch = CurrentCoverHeight == ECoverHeight::HighCover;
-			UE_LOG(LogCodexTactics, Display, TEXT("[WindowCover] %s: crouched at the window"), *DisplayName.ToString());
+			UE_LOG(LogCodexTactics, Display, TEXT("[WindowCover] %s: crouched %s"), *DisplayName.ToString(),
+				bShimmyWindowCrouch ? TEXT("under the window while shimmying") : TEXT("at the window"));
 		}
 		return;
 	}
@@ -145,8 +261,120 @@ void AOperativeCharacter::ApplyWindowCoverStance()
 		if (!bLocked && CurrentCoverHeight == ECoverHeight::HighCover && Stance == EOperativeStance::Crouching)
 		{
 			SetStance(EOperativeStance::Standing);
+			RestoreShimmySpeed(EOperativeStance::Standing);
+			if (bShimmying)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[WindowCover] %s: stood back up past the window"), *DisplayName.ToString());
+			}
 		}
 		bWindowCoverForcedCrouch = false;
+	}
+}
+
+void AOperativeCharacter::UpdateWallSlideWindowCrouch(const FVector& WallOrigin, const FVector& WallNormal, bool bActive)
+{
+	UWorld* World = GetWorld();
+	const bool bLocked = Stance == EOperativeStance::Prone || (ColdSurvival && ColdSurvival->IsFrostbitten()) || bCarrying || bInCover;
+	if (!bActive || !World || bLocked)
+	{
+		CachedWallSlideSpans.Reset();
+		CachedWallSlideAt = FVector(FLT_MAX);
+		if (bWallSlideWindowCrouch)
+		{
+			bWallSlideWindowCrouch = false;
+			if (!bLocked && Stance == EOperativeStance::Crouching && IsStanceFromSquad())
+			{
+				SetStance(EOperativeStance::Standing);
+				MarkStanceFromSquad();
+			}
+		}
+		return;
+	}
+	const FVector Normal = WallNormal.GetSafeNormal2D();
+	const FVector AlongAxis = FVector::CrossProduct(FVector::UpVector, Normal).GetSafeNormal();
+	if (Normal.IsNearlyZero() || AlongAxis.IsNearlyZero())
+	{
+		return;
+	}
+	const FVector Here = GetActorLocation();
+	const float FeetZ = SlotFeetZ(*this);
+	const double Now = World->GetTimeSeconds();
+	const bool bCacheValid = CachedWallSlideAt.X < 1.0e30f
+		&& FVector::DistSquared2D(Here, CachedWallSlideAt) <= FMath::Square(1500.f)
+		&& CachedWallSlideNormal.Equals(Normal, 0.05f)
+		&& WindowCoverRules::OnSameWallPlane(WallOrigin, CachedWallSlideOrigin, Normal, 25.f)
+		&& FMath::Abs(FeetZ - CachedWallSlideFeetZ) <= 80.f
+		&& (Now - CachedWallSlideTime) <= 2.0;
+	if (!bCacheValid)
+	{
+		CachedWallSlideSpans.Reset();
+		CachedWallSlideOrigin = WallOrigin;
+		CachedWallSlideNormal = Normal;
+		CachedWallSlideAlongAxis = AlongAxis;
+		CachedWallSlideAt = Here;
+		CachedWallSlideFeetZ = FeetZ;
+		CachedWallSlideTime = Now;
+		static const FName SillTag(TEXT("window_sill"));
+		const float Limit = WindowBreakage::FaceMarginCm + WindowBreakage::OpeningPadCm;
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			AActor* Sill = *It;
+			if (!Sill->ActorHasTag(SillTag))
+			{
+				continue;
+			}
+			const FBox SillBox = Sill->GetComponentsBoundingBox(true);
+			if (!SillBox.IsValid)
+			{
+				continue;
+			}
+			const FVector Center = SillBox.GetCenter();
+			if (FVector::Dist2D(Center, Here) > 2500.f
+				|| !WindowCoverRules::SharesFloor(INDEX_NONE, INDEX_NONE, FeetZ + 90.f, Center.Z)
+				|| !WindowCoverRules::OnSameWallPlane(Center, WallOrigin, Normal, Limit))
+			{
+				continue;
+			}
+			const FBox Opening = WindowBreakage::MakeOpeningBox(SillBox);
+			float MinAlong = TNumericLimits<float>::Max();
+			float MaxAlong = TNumericLimits<float>::Lowest();
+			const FVector Corners[] = {
+				FVector(Opening.Min.X, Opening.Min.Y, Center.Z),
+				FVector(Opening.Max.X, Opening.Min.Y, Center.Z),
+				FVector(Opening.Min.X, Opening.Max.Y, Center.Z),
+				FVector(Opening.Max.X, Opening.Max.Y, Center.Z)
+			};
+			for (const FVector& Corner : Corners)
+			{
+				const float Along = static_cast<float>(FVector::DotProduct(Corner - WallOrigin, AlongAxis));
+				MinAlong = FMath::Min(MinAlong, Along);
+				MaxAlong = FMath::Max(MaxAlong, Along);
+			}
+			CachedWallSlideSpans.Add(WindowCoverRules::CrouchSpanForOpening(MinAlong, MaxAlong, WindowCoverRules::ShimmyCrouchMarginCm,
+				static_cast<float>(SillBox.Max.Z) - FeetZ, static_cast<float>(Opening.Max.Z) - FeetZ));
+		}
+	}
+	const float HereAlong = static_cast<float>(FVector::DotProduct(Here - CachedWallSlideOrigin, CachedWallSlideAlongAxis));
+	const bool bWant = WindowCoverRules::WantsPathCrouch(HereAlong, CachedWallSlideSpans);
+	if (bWant)
+	{
+		if (Stance != EOperativeStance::Crouching)
+		{
+			SetStance(EOperativeStance::Crouching);
+			MarkStanceFromSquad();
+			bWallSlideWindowCrouch = true;
+			UE_LOG(LogCodexTactics, Display, TEXT("[WindowCover] %s: crouched under the window during wall walk"), *DisplayName.ToString());
+		}
+	}
+	else if (bWallSlideWindowCrouch)
+	{
+		bWallSlideWindowCrouch = false;
+		if (Stance == EOperativeStance::Crouching && IsStanceFromSquad())
+		{
+			SetStance(EOperativeStance::Standing);
+			MarkStanceFromSquad();
+			UE_LOG(LogCodexTactics, Display, TEXT("[WindowCover] %s: stood up after the window during wall walk"), *DisplayName.ToString());
+		}
 	}
 }
 
@@ -165,7 +393,21 @@ void AOperativeCharacter::BreakWindowGlassFromShot(AActor* Sill)
 	WindowBreakage::HideBrokenWindow(*Sill);
 	VaultNavigation::SetWindowBroken(*Sill);
 	GameplayEvents::Raise(this, FName(TEXT("WindowBroken")), Sill);
-	++WindowCover.GlassRounds;
+	if (WindowCover.Sill.Get() == Sill)
+	{
+		++WindowCover.GlassRounds;
+		WindowCover.Glass = WindowCoverRules::EWindowGlassState::Broken;
+	}
+	if (WindowCover.LeftEdgeSill.Get() == Sill)
+	{
+		++WindowCover.LeftEdgeGlassRounds;
+		WindowCover.LeftEdgeGlass = WindowCoverRules::EWindowGlassState::Broken;
+	}
+	if (WindowCover.RightEdgeSill.Get() == Sill)
+	{
+		++WindowCover.RightEdgeGlassRounds;
+		WindowCover.RightEdgeGlass = WindowCoverRules::EWindowGlassState::Broken;
+	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[WindowCover] %s: the round is spent on %s, the target is not hit"), *DisplayName.ToString(), *Sill->GetName());
 }
 
@@ -173,7 +415,8 @@ void AOperativeCharacter::ResolveWindowGlassRound(const FVector& AimAt)
 {
 	// The flag is this shot's result, not a latch. A leftover true from the glass cartridge would swallow the next round.
 	bWindowGlassShot = false;
-	if (!IsWindowCoverConfirmed() || !IsWindowCoverShot(AimAt))
+	WindowCoverRules::FWindowCoverBinding Active;
+	if (!GetActiveWindowForShot(AimAt, Active))
 	{
 		return;
 	}
@@ -183,7 +426,7 @@ void AOperativeCharacter::ResolveWindowGlassRound(const FVector& AimAt)
 		return;
 	}
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(WindowCoverGlass), false, this);
-	const WindowCoverRules::FWindowLineView View = WindowCoverRules::TraceThroughWindow(*World, this, WindowCover, GetCoverFireOrigin(), AimAt, Params);
+	const WindowCoverRules::FWindowLineView View = WindowCoverRules::TraceThroughWindow(*World, this, Active, GetCoverFireOrigin(), AimAt, Params);
 	if (View.bIntactGlass)
 	{
 		bWindowGlassShot = true;
@@ -217,8 +460,10 @@ void AOperativeCharacter::RefreshWindowCover(bool bForce)
 	}
 	const bool bCrossed = WindowCover.bHasInterval && Place != WindowCoverLastPlace;
 	const bool bWallChanged = WindowCoverWall.Get() != CoverSlot.WallComponent.Get();
-	const bool bSameSpot = FVector::DistSquared2D(Here, WindowCoverSearchedAt) <= FMath::Square(5.f);
-	if (!bForce && !bLostSill && !bCrossed && !bWallChanged && !bFloorChanged && !bNewSegment && (bSameSpot || bShimmying))
+	const bool bSameSpot = FVector::DistSquared2D(Here, WindowCoverSearchedAt) <= FMath::Square(bShimmying ? 25.f : 5.f);
+	const bool bStanceChanged = WindowCoverLastEdgeStance != Stance;
+	const bool bCornerChanged = bWindowCoverLastAtCorner != bAtCoverCorner || WindowCoverLastFacing != CoverFacing;
+	if (!bForce && !bLostSill && !bCrossed && !bWallChanged && !bFloorChanged && !bNewSegment && !bStanceChanged && !bCornerChanged && bSameSpot)
 	{
 		WindowCoverLastPlace = Place;
 		return;
@@ -229,49 +474,129 @@ void AOperativeCharacter::RefreshWindowCover(bool bForce)
 	const uint32 SlotWallId = CoverSlot.WallComponent.IsValid() ? CoverSlot.WallComponent->GetUniqueID() : 0;
 	const FVector AlongAxis = FVector::CrossProduct(FVector::UpVector, CoverSlot.WallNormal).GetSafeNormal();
 	static const FName SillTag(TEXT("window_sill"));
+	const float FeetZ = SlotFeetZ(*this);
 
 	WindowCoverRules::FWindowCoverBinding Best;
 	Best.Reject = WindowCoverRules::EWindowCoverReject::SolidWall;
 	bool bFound = false;
 	float BestDistance = TNumericLimits<float>::Max();
+	TArray<WindowCoverRules::FWindowCrouchSpan> CollectedSpans;
+	TArray<WindowCoverRules::FWindowEdgeOpening> EdgeOpenings;
+	TArray<AActor*> EdgeSills;
+	TArray<FBox> EdgeBoxes;
+	const float EdgeReachCm = GetCoverFacingConfig().AutoCornerSnapCm;
 
-	for (TActorIterator<AActor> It(World); It; ++It)
+	const bool bRescanSills = bForce || bLostSill || bWallChanged || bFloorChanged
+		|| CachedWindowWallComp.Get() != CoverSlot.WallComponent.Get()
+		|| CachedWindowWallFloor != SlotFloor
+		|| CachedWindowWallSillsAt.X > 1.0e30f
+		|| FVector::DistSquared2D(Here, CachedWindowWallSillsAt) > FMath::Square(1500.f);
+	if (bRescanSills)
 	{
-		AActor* Sill = *It;
-		if (!Sill->ActorHasTag(SillTag))
+		CachedWindowWallSills.Reset();
+		CachedWindowWallSillsAt = Here;
+		CachedWindowWallComp = CoverSlot.WallComponent;
+		CachedWindowWallFloor = SlotFloor;
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			AActor* Sill = *It;
+			if (!Sill->ActorHasTag(SillTag))
+			{
+				continue;
+			}
+			const FBox SillBox = Sill->GetComponentsBoundingBox(true);
+			if (!SillBox.IsValid)
+			{
+				continue;
+			}
+			const FVector Center = SillBox.GetCenter();
+			if (FVector::Dist2D(Center, Here) > 3000.f)
+			{
+				continue;
+			}
+			FString SillBuilding;
+			const int32 SillFloor = FloorOf(Sill, nullptr, SillBuilding);
+			if (!WindowCoverRules::SharesFloor(SlotFloor, SillFloor, CoverSlot.WallPoint.Z, Center.Z))
+			{
+				continue;
+			}
+			if (!SlotBuilding.IsEmpty() && !SillBuilding.IsEmpty() && SlotBuilding != SillBuilding)
+			{
+				continue;
+			}
+			FCachedWindowSill Entry;
+			Entry.Sill = Sill;
+			Entry.SillBox = SillBox;
+			Entry.OpeningBox = WindowBreakage::MakeOpeningBox(SillBox);
+			Entry.Building = MoveTemp(SillBuilding);
+			Entry.Floor = SillFloor;
+			CachedWindowWallSills.Add(MoveTemp(Entry));
+		}
+	}
+
+	const float PlaneLimit = CoverSlot.WallComponent.IsValid()
+		? WindowCoverRules::PlaneLimitCm(CoverSlot.WallComponent->Bounds.BoxExtent, CoverSlot.WallNormal)
+		: (WindowBreakage::FaceMarginCm + WindowBreakage::OpeningPadCm);
+	for (const FCachedWindowSill& Cached : CachedWindowWallSills)
+	{
+		AActor* Sill = Cached.Sill.Get();
+		if (!Sill)
 		{
 			continue;
 		}
-		const FBox SillBox = Sill->GetComponentsBoundingBox(true);
-		if (!SillBox.IsValid)
-		{
-			continue;
-		}
+		const FBox& SillBox = Cached.SillBox;
+		const FBox& OpeningBox = Cached.OpeningBox;
 		const FVector Center = SillBox.GetCenter();
+		const FString& SillBuilding = Cached.Building;
+		const int32 SillFloor = Cached.Floor;
+		const bool bPlane = WindowCoverRules::OnSameWallPlane(Center, CoverSlot.WallPoint, CoverSlot.WallNormal, PlaneLimit);
+
+		// Collect all windows on the current wall plane for shimmy ducking and window-edge corner detection (origin = CoverSlot.WallPoint).
+		if (bPlane && FVector::Dist2D(Center, Here) <= 3000.f)
+		{
+			float SpanMin = TNumericLimits<float>::Max();
+			float SpanMax = TNumericLimits<float>::Lowest();
+			const FVector SpanCorners[] = {
+				FVector(OpeningBox.Min.X, OpeningBox.Min.Y, Center.Z),
+				FVector(OpeningBox.Max.X, OpeningBox.Min.Y, Center.Z),
+				FVector(OpeningBox.Min.X, OpeningBox.Max.Y, Center.Z),
+				FVector(OpeningBox.Max.X, OpeningBox.Max.Y, Center.Z)
+			};
+			for (const FVector& Corner : SpanCorners)
+			{
+				const float AlongFromWall = static_cast<float>(FVector::DotProduct(Corner - CoverSlot.WallPoint, AlongAxis));
+				SpanMin = FMath::Min(SpanMin, AlongFromWall);
+				SpanMax = FMath::Max(SpanMax, AlongFromWall);
+			}
+			const float SillAboveFeet = static_cast<float>(SillBox.Max.Z) - FeetZ;
+			const float TopAboveFeet = static_cast<float>(OpeningBox.Max.Z) - FeetZ;
+			CollectedSpans.Add(WindowCoverRules::CrouchSpanForOpening(SpanMin, SpanMax, WindowCoverRules::ShimmyCrouchMarginCm,
+				SillAboveFeet, TopAboveFeet));
+			// Only windows outside the operative's own slot (not past a real wall end) act as corner frame edges.
+			const float Tol = WindowCoverRules::WindowFrameEdgeToleranceCm;
+			const bool bOutside = (SpanMin >= -Tol && SpanMax > Tol && (!CoverSlot.bRightEdgeExposed || SpanMin < CoverSlot.RightEdgeDistanceCm))
+				|| (SpanMax <= Tol && SpanMin < -Tol && (!CoverSlot.bLeftEdgeExposed || -SpanMax < CoverSlot.LeftEdgeDistanceCm));
+			if (bOutside && FVector::Dist2D(Center, CoverSlot.WallPoint) <= WindowBreakage::ThroughLandingCm + EdgeReachCm)
+			{
+				WindowCoverRules::FWindowEdgeOpening EdgeOp;
+				EdgeOp.AlongMinCm = SpanMin;
+				EdgeOp.AlongMaxCm = SpanMax;
+				EdgeOp.SillTopCm = SillAboveFeet;
+				EdgeOp.OpeningTopCm = TopAboveFeet;
+				EdgeOpenings.Add(EdgeOp);
+				EdgeSills.Add(Sill);
+				EdgeBoxes.Add(OpeningBox);
+			}
+		}
+
 		if (!WindowCoverRules::IsNeighborSill(Center, CoverSlot.WallPoint))
 		{
 			continue;
 		}
-		FString SillBuilding;
-		const int32 SillFloor = FloorOf(Sill, nullptr, SillBuilding);
-		if (!WindowCoverRules::SharesFloor(SlotFloor, SillFloor, CoverSlot.WallPoint.Z, Center.Z))
-		{
-			continue;
-		}
-		if (!SlotBuilding.IsEmpty() && !SillBuilding.IsEmpty() && SlotBuilding != SillBuilding)
-		{
-			continue;
-		}
-		float Limit = WindowBreakage::FaceMarginCm + WindowBreakage::OpeningPadCm;
-		if (const UPrimitiveComponent* Wall = CoverSlot.WallComponent.Get())
-		{
-			Limit = WindowCoverRules::PlaneLimitCm(Wall->Bounds.BoxExtent, CoverSlot.WallNormal);
-		}
-		const bool bPlane = WindowCoverRules::OnSameWallPlane(Center, CoverSlot.WallPoint, CoverSlot.WallNormal, Limit);
 
 		WindowCoverRules::FWindowCoverOpening Opening;
 		Opening.bPresent = true;
-		Opening.Opening = WindowBreakage::MakeOpeningBox(SillBox);
+		Opening.Opening = OpeningBox;
 		Opening.Floor = SillFloor == INDEX_NONE ? SlotFloor : SillFloor;
 		Opening.WallNormal = CoverSlot.WallNormal;
 		Opening.WallId = bPlane ? SlotWallId : (SlotWallId + 1);
@@ -298,7 +623,7 @@ void AOperativeCharacter::RefreshWindowCover(bool bForce)
 		Facts.WallId = SlotWallId;
 		Facts.WallNormal = CoverSlot.WallNormal;
 		Facts.AlongCm = FVector::DotProduct(Here - Center, AlongAxis);
-		Facts.bAtCorner = bAtCoverCorner;
+		Facts.bAtCorner = CoverSlot.IsEdgeExposed(CoverFacing) && CoverFacingRules::IsAtCorner(CoverSlot, CoverFacing, GetCoverFacingConfig());
 		Facts.BuildingId = SlotBuilding;
 		const float MidZ = (Opening.Opening.Min.Z + Opening.Opening.Max.Z) * 0.5f;
 		const FVector Probe(CoverSlot.WorldLocation.X, CoverSlot.WorldLocation.Y, MidZ);
@@ -347,6 +672,7 @@ void AOperativeCharacter::RefreshWindowCover(bool bForce)
 		Best.IntervalOrigin = Center;
 		Best.AlongMinCm = Opening.AlongMinCm;
 		Best.AlongMaxCm = Opening.AlongMaxCm;
+		Best.SillTopCm = FMath::Max(0.f, static_cast<float>(SillBox.Max.Z) - FeetZ);
 		Best.Opening = Opening.Opening;
 		Best.bConfirmed = Match.bConfirmed;
 		Best.bInsideInterval = Match.bInsideInterval;
@@ -365,9 +691,39 @@ void AOperativeCharacter::RefreshWindowCover(bool bForce)
 	{
 		WindowCover.Reject = WindowCoverRules::EWindowCoverReject::SolidWall;
 	}
+	WindowCover.AlongAxis = AlongAxis;
+	WindowCoverSpanOrigin = CoverSlot.WallPoint;
+	WindowCoverWallSpans = MoveTemp(CollectedSpans);
+
+	// Adjacent window frame edges (window edge = a corner for standing, or crouched where sill allows).
+	if (!WindowCover.bConfirmed && Stance != EOperativeStance::Prone && !EdgeOpenings.IsEmpty())
+	{
+		const WindowCoverRules::FWindowEdgeCorner Edge = WindowCoverRules::FindWindowEdgeCorner(
+			0.f, Stance == EOperativeStance::Crouching, EdgeOpenings, EdgeReachCm);
+		if (Edge.bLeftExposed && EdgeSills.IsValidIndex(Edge.LeftOpeningIndex) && EdgeSills[Edge.LeftOpeningIndex])
+		{
+			WindowCover.bLeftEdgeExposed = true;
+			WindowCover.LeftEdgeDistanceCm = Edge.LeftDistanceCm;
+			WindowCover.LeftEdgeSill = EdgeSills[Edge.LeftOpeningIndex];
+			WindowCover.LeftEdgeOpening = EdgeBoxes[Edge.LeftOpeningIndex];
+			WindowCover.LeftEdgeGlass = WindowCoverRules::GlassOver(*WindowCover.LeftEdgeSill.Get());
+		}
+		if (Edge.bRightExposed && EdgeSills.IsValidIndex(Edge.RightOpeningIndex) && EdgeSills[Edge.RightOpeningIndex])
+		{
+			WindowCover.bRightEdgeExposed = true;
+			WindowCover.RightEdgeDistanceCm = Edge.RightDistanceCm;
+			WindowCover.RightEdgeSill = EdgeSills[Edge.RightOpeningIndex];
+			WindowCover.RightEdgeOpening = EdgeBoxes[Edge.RightOpeningIndex];
+			WindowCover.RightEdgeGlass = WindowCoverRules::GlassOver(*WindowCover.RightEdgeSill.Get());
+		}
+	}
+
 	WindowCoverSearchedAt = Here;
 	WindowCoverWall = CoverSlot.WallComponent;
 	WindowCoverSegment = Segment;
+	WindowCoverLastEdgeStance = Stance;
+	bWindowCoverLastAtCorner = bAtCoverCorner;
+	WindowCoverLastFacing = CoverFacing;
 	if (WindowCover.bHasInterval)
 	{
 		const float Along = FVector::DotProduct(Here - WindowCover.IntervalOrigin, WindowCover.AlongAxis);

@@ -13,6 +13,94 @@
 #include "Core/PlayerCommands.h"
 #include "Engine/World.h"
 #include "Interactables/DeployableRules.h"
+#include "Interactables/WindowBreakage.h"
+#include "Tactics/CoverTraceRules.h"
+#include "Tactics/WindowCoverRules.h"
+
+namespace ControllerWindowCover
+{
+	/**
+	 * 144: True when a click on a window sill should target cover / shimmy / wall-slide on the operative's wall-hug side
+	 * rather than climbing through to the far side.
+	 */
+	inline bool ShouldTakeWindowClickAsCover(UWorld* World, const USquadSubsystem* Squad, const AOperativeCharacter* Leader,
+		const FHitResult& Hit, bool bAlt, AActor*& OutSill, FVector& OutSideNormal, bool& bOutFormationSlide)
+	{
+		OutSill = nullptr;
+		OutSideNormal = FVector::ForwardVector;
+		bOutFormationSlide = false;
+		if (!World || !Leader || !Hit.bBlockingHit)
+		{
+			return false;
+		}
+		AActor* Sill = WindowBreakage::FindWindowSillAt(*World, Hit);
+		if (!Sill)
+		{
+			return false;
+		}
+		const FBox SillBox = Sill->GetComponentsBoundingBox(true);
+		if (!SillBox.IsValid)
+		{
+			return false;
+		}
+		const FVector SillCenter = SillBox.GetCenter();
+		const float Limit = WindowBreakage::FaceMarginCm + WindowBreakage::OpeningPadCm;
+		if (Leader->bInCover)
+		{
+			const FCoverSlot& Own = Leader->GetCoverSlot();
+			const bool bSameWall = WindowCoverRules::OnSameWallPlane(SillCenter, Own.WallPoint, Own.WallNormal, Limit);
+			const bool bSameSide = FVector::DotProduct(Leader->GetActorLocation() - SillCenter, Own.WallNormal) >= -WindowBreakage::FaceMarginCm;
+			if (bSameWall && WindowCoverRules::CanClickWindowAsCover(bSameWall, bAlt, bSameSide))
+			{
+				OutSill = Sill;
+				OutSideNormal = Own.WallNormal.GetSafeNormal2D();
+				return true;
+			}
+		}
+		float WallYaw = 0.f;
+		if (Squad && Squad->HasFormationWallOrder() && Squad->GetFormationWallNormalYaw(WallYaw))
+		{
+			const FVector WallNormal = FRotator(0.f, WallYaw, 0.f).Vector().GetSafeNormal2D();
+			const bool bSameWall = WindowCoverRules::OnSameWallPlane(SillCenter, Leader->GetActorLocation() - WallNormal * 45.f, WallNormal, Limit);
+			if (bSameWall && WindowCoverRules::CanClickWindowAsCover(bSameWall, bAlt, bSameWall))
+			{
+				OutSill = Sill;
+				OutSideNormal = WallNormal;
+				bOutFormationSlide = !bAlt;
+				return true;
+			}
+		}
+		if (bAlt)
+		{
+			const FVector Extent = SillBox.GetExtent();
+			FVector Normal = Extent.X <= Extent.Y ? FVector(1.f, 0.f, 0.f) : FVector(0.f, 1.f, 0.f);
+			if (FVector::DotProduct(Leader->GetActorLocation() - SillCenter, Normal) < 0.f)
+			{
+				Normal = -Normal;
+			}
+			OutSill = Sill;
+			OutSideNormal = Normal;
+			return true;
+		}
+		return false;
+	}
+
+	/** 144: Probes the cover slot on SideNormal's face of Sill (even if the cursor hit the glass or the floor past the opening). */
+	inline bool ResolveWindowCoverSlot(UWorld* World, const AActor& Sill, const FVector& SideNormal, FCoverSlot& OutSlot)
+	{
+		OutSlot = FCoverSlot();
+		const FBox SillBox = Sill.GetComponentsBoundingBox(true);
+		const FVector Normal = SideNormal.GetSafeNormal2D();
+		if (!World || !SillBox.IsValid || Normal.IsNearlyZero())
+		{
+			return false;
+		}
+		const FVector Center = SillBox.GetCenter();
+		const float Half = static_cast<float>(FMath::Abs(FVector::DotProduct(SillBox.GetExtent(), Normal)));
+		const FVector Probe(Center.X + Normal.X * (Half + 15.f), Center.Y + Normal.Y * (Half + 15.f), SillBox.Max.Z - 20.f);
+		return CoverTraceRules::FindCoverSlotAt(World, Probe, -Normal, OutSlot) && OutSlot.IsValid();
+	}
+}
 
 namespace ControllerGroupCover
 {
