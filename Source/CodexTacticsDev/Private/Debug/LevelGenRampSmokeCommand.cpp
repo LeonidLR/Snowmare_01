@@ -35,6 +35,8 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "Components/PrimitiveComponent.h"
 #include "Formation/RampFileRules.h"
 #include "GameFlow/LevelExitSubsystem.h"
 #include "HAL/IConsoleManager.h"
@@ -44,6 +46,7 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
+#include "Tactics/CoverTraceRules.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
@@ -79,6 +82,7 @@ namespace LevelGenRampSmoke
 
 	struct FLeg
 	{
+		FHitResult EdgeHit;
 		ELegKind Kind = ELegKind::Squad;
 		int32 Stair = 0;
 		FVector Goal = FVector::ZeroVector;
@@ -109,6 +113,10 @@ namespace LevelGenRampSmoke
 		TArray<FString> Summary;
 		FString Only;
 		bool bStrictNav = false;
+		bool bRoofEdge = false;
+		bool bDesigner155 = false;
+		bool bDesignerSwitched = false;
+		bool bLoggedNavWait = false;
 		bool bTrace = false;
 		float TraceClock = 0.f;
 		/** Own-order bit last sample, so a trace run can name the moment it drops. */
@@ -363,6 +371,22 @@ namespace LevelGenRampSmoke
 			Check(State, false, Error);
 			return Finish(State, false);
 		}
+		if (State.bDesigner155)
+		{
+			// Recorded scenario is independent of layout filtering and ramp probe success.
+			FStair Stair;
+			Stair.Id = TEXT("B_x1_10_t7_store_stair_0");
+			Stair.Kind = TEXT("recorded round 4");
+			Stair.LevelTo = 3;
+			State.Stairs.Add(Stair);
+			FLeg Leg;
+			Leg.Kind = ELegKind::Solo;
+			Leg.Goal = FVector(-9111.f, -11096.f, 900.f);
+			Leg.Limit = 150.f;
+			State.Legs.Add(Leg);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: designer155 directly staged: 1 recorded leg, no stair eligibility filter"));
+			return true;
+		}
 		State.GroundZ = Layout->HasField(TEXT("ground_z")) ? static_cast<float>(Layout->GetNumberField(TEXT("ground_z"))) : 0.f;
 		for (const TSharedPtr<FJsonValue>& BV : Layout->GetArrayField(TEXT("buildings")))
 		{
@@ -467,6 +491,37 @@ namespace LevelGenRampSmoke
 					// a switchback below the roof arrives on a floor landing between closed flat doors: the goal is that landing, never a roof-style goal
 					Leg.Goal = Stair.LevelFrom > 0 || (Stair.bSwitchback && Stair.LevelTo < Floors) ? TopOnNav
 						: RoofGoal(State, State.Stairs[Index], Kind == ELegKind::Group ? 250.f : 600.f);
+					// 155: optionally replay a real parapet face hit, including the click-preview entry point.
+					// A constructed floor hit alone cannot catch a roof click being lowered to ground cover/window.
+					if (State.bRoofEdge && Stair.LevelTo == Floors)
+					{
+						double Best = TNumericLimits<double>::Max();
+						const FName BuildingTag(*FString::Printf(TEXT("building=%s"), *B->GetStringField(TEXT("id"))));
+						for (TActorIterator<AActor> It(World); It; ++It)
+						{
+							if (!It->ActorHasTag(BuildingTag) || !It->ActorHasTag(TEXT("parapet"))) { continue; }
+							const FBox Box = It->GetComponentsBoundingBox(true);
+							const FVector Center = Box.GetCenter();
+							const FVector2D RoofCenter = Roof.GetCenter();
+							const FVector Normal = Box.GetSize().X < Box.GetSize().Y
+								? FVector(Center.X > RoofCenter.X ? 1.f : -1.f, 0.f, 0.f)
+								: FVector(0.f, Center.Y > RoofCenter.Y ? 1.f : -1.f, 0.f);
+							const FVector Point = Box.GetClosestPointTo(FVector(Stair.Top, Center.Z));
+							const FVector Goal(Point.X - Normal.X * 100.f, Point.Y - Normal.Y * 100.f, Box.Min.Z);
+							const double Distance = FVector::DistSquared2D(Goal, FVector(Stair.Top, Goal.Z));
+							if (Distance < Best)
+							{
+								Best = Distance;
+								Leg.Goal = Goal;
+								Leg.EdgeHit = FHitResult(*It, It->FindComponentByClass<UPrimitiveComponent>(), Point, Normal);
+								Leg.EdgeHit.bBlockingHit = true;
+							}
+						}
+					}
+					if (State.bDesigner155)
+					{
+						Leg.Goal = FVector(-9111.f, -11096.f, 900.f); // recorded FIRST roof order, t876.0885
+					}
 					Leg.Limit = 60.f + Rise / 10.f;
 					State.Legs.Add(Leg);
 				}
@@ -604,10 +659,10 @@ namespace LevelGenRampSmoke
 		Hit.ImpactNormal = FVector::UpVector;
 		Hit.Normal = FVector::UpVector;
 		Hit.bBlockingHit = true;
-		PC->HandleWorldHit(Hit);
+		PC->HandlePlayerClick(Hit);
 		if (bDouble)
 		{
-			PC->HandleWorldHit(Hit); // the second click within the double-click time (same frame, same mouse position): sprint
+			PC->HandlePlayerClick(Hit); // the second click within the double-click time (same frame, same mouse position): sprint
 		}
 	}
 
@@ -649,7 +704,31 @@ namespace LevelGenRampSmoke
 		// Keep the staged squad in place while the teleport settles between legs.
 		Squad->SetFollowersHolding(true);
 		Squad->SetSelectedGroup(TArray<AOperativeCharacter*>{ Squad->GetLeader() }, false);
-		State.Ordered = PlaceSquad(World, *Squad, Stair, State.GroundZ + Stair.LevelFrom * LevelHeightCm);
+		if (!State.bDesigner155) { State.Ordered = PlaceSquad(World, *Squad, Stair, State.GroundZ + Stair.LevelFrom * LevelHeightCm); }
+		if (State.bDesigner155)
+		{
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				Member->ColdLevel = 0.f;
+				if (Member->ColdSurvival) { Member->ColdSurvival->SetComponentTickEnabled(false); }
+				if (Member->bInCover) { Member->LeaveCover(TEXT("155 staging")); }
+				Member->StopOperative();
+				const float X = Member->SquadRole == EOperativeRole::Commander ? -7398.f
+					: Member->SquadRole == EOperativeRole::Engineer ? -7587.f : -7487.f;
+				Member->TeleportTo(FVector(X, -12825.f, 12.f + Member->GetSimpleCollisionHalfHeight()), FRotator(0.f,-90.f,0.f), false, true);
+				FCoverSlot Cover;
+				if (CoverTraceRules::FindCoverSlotAt(World, FVector(X,-12780.f,90.f), FVector(0.f,1.f,0.f), Cover))
+				{
+					Member->EnterCover(Cover);
+				}
+				if (Member->SquadRole == EOperativeRole::Commander)
+				{
+					State.Ordered = Member;
+					Check(State, Member->bInCover, TEXT("155: Commander staged in recorded cover at (-7398,-12825)"));
+				}
+			}
+			State.bDesignerSwitched = false;
+		}
 		State.PhaseTime = 0.f;
 		State.DoneFor = 0.f;
 		State.OrderedUpFor = 0.f;
@@ -698,10 +777,22 @@ namespace LevelGenRampSmoke
 		case EPhase::Settle:
 		{
 			const ULevelExitSubsystem* Exit = World->GetSubsystem<ULevelExitSubsystem>();
-			if (!Leader || State.PhaseTime < 3.5f || (Exit && Exit->IsStartFadeResolved() && Exit->GetStartFadeAlpha() > 0.f && State.PhaseTime < 15.f))
+			UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+			if (Nav && Nav->IsNavigationBuildInProgress() && !State.bLoggedNavWait)
+			{
+				State.bLoggedNavWait = true;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: waiting for dynamic navigation before ramp probes / recorded roof order"));
+			}
+			if (!Leader || (Nav && Nav->IsNavigationBuildInProgress() && State.PhaseTime < 120.f) || State.PhaseTime < 3.5f || (Exit && Exit->IsStartFadeResolved() && Exit->GetStartFadeAlpha() > 0.f && State.PhaseTime < 15.f))
 			{
 				return true;
 			}
+			if (!Nav || Nav->IsNavigationBuildInProgress())
+			{
+				Check(State, false, TEXT("navigation did not finish building"));
+				return Finish(State, false);
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: dynamic navigation ready after %.2f smoke seconds"), State.PhaseTime);
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				if (Member)
@@ -754,7 +845,17 @@ namespace LevelGenRampSmoke
 			}
 			Squad->ResetFormationState(FVector(State.Stairs[Leg.Stair].Dir, 0.0));
 			Squad->SetFollowersHolding(Leg.Kind == ELegKind::Solo);
-			Click(World, Leg.Goal, Leg.Kind == ELegKind::Group);
+			if (Leg.EdgeHit.bBlockingHit)
+			{
+				if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController()))
+				{
+					PC->HandlePlayerClick(Leg.EdgeHit); // one roof order; no retry
+				}
+			}
+			else
+			{
+				Click(World, Leg.Goal, Leg.Kind == ELegKind::Group);
+			}
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: leg %d / %d - %s %s: %s (selected, %d in the selection) clicked to %s"), State.Leg + 1, State.Legs.Num(),
 				*State.Stairs[Leg.Stair].Id, KindName(Leg.Kind), *Ordered->DisplayName.ToString(), Squad->GetSelectedGroup().Num(), *Leg.Goal.ToCompactString());
 			State.PhaseTime = 0.f;
@@ -763,6 +864,17 @@ namespace LevelGenRampSmoke
 		}
 		case EPhase::Run:
 		{
+			if (State.bDesigner155 && !State.bDesignerSwitched && State.PhaseTime >= 10.f)
+			{
+				Check(State, State.Ordered.IsValid() && State.Ordered->HasOwnMoveOrder(),
+					TEXT("155: original roof order still owns movement after traversal, before selection switch"));
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					if (Member != State.Ordered.Get()) { Squad->SetLeader(Member); break; }
+				}
+				State.bDesignerSwitched = true;
+			}
+
 			const FLeg& Leg = State.Legs[State.Leg];
 			const FStair& Stair = State.Stairs[Leg.Stair];
 			const float StartZ = State.GroundZ + Stair.LevelFrom * LevelHeightCm;
@@ -868,7 +980,14 @@ namespace LevelGenRampSmoke
 				State->LegFilter.Append(Parts);
 			}
 			State->bStrictNav |= Arg == TEXT("strictnav");
+			State->bRoofEdge |= Arg == TEXT("roofedge");
+			State->bDesigner155 |= Arg == TEXT("designer155");
 			State->bTrace |= Arg == TEXT("trace");
+		}
+		if (State->bDesigner155)
+		{
+			State->Only = TEXT("B_x1_10_t7_store_stair_0");
+			State->LegFilter = { TEXT("solo") };
 		}
 		if (IConsoleVariable* Pressure = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.Enabled")))
 		{

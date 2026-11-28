@@ -96,6 +96,20 @@ FHitResult ACodexTacticsPlayerController::LowerBuildingHit(const FHitResult& Hit
 		return Hit;
 	}
 	const float FeetZ = static_cast<float>(Leader->GetActorLocation().Z) - Leader->GetSimpleCollisionHalfHeight();
+	if (FMath::Abs(HitActor->GetActorRotation().Pitch) > 5.f)
+	{
+		return Hit; // legacy untagged sloped ramp slabs also keep their height.
+	}
+	// 155: a parapet / ramp face is its own elevated target. Lowering it can hit an unrelated
+	// ground sill or fence, turning a roof order into window traversal / low cover.
+	for (const FName& Tag : HitActor->Tags)
+	{
+		const FString Value = Tag.ToString();
+		if (Value == TEXT("parapet") || Value == TEXT("roof_slab") || Value == TEXT("floor_slab") || Value == TEXT("window_sill") || Value.StartsWith(TEXT("stair=")))
+		{
+			return Hit;
+		}
+	}
 	if (!ClickPreviewRules::ShouldLowerWallHit(static_cast<float>(Hit.ImpactPoint.Z), static_cast<float>(Hit.ImpactNormal.Z), FeetZ))
 	{
 		return Hit;
@@ -119,6 +133,19 @@ FHitResult ACodexTacticsPlayerController::LowerBuildingHit(const FHitResult& Hit
 	if (World->LineTraceSingleByChannel(Low, Start, Start - Normal * ClickPreviewRules::LowHitReachCm, ECC_Visibility, Params) && !Low.bStartPenetrating
 		&& ClickPreviewRules::IsSameFaceLower(FVector2D(Normal), FVector2D(Low.ImpactNormal), static_cast<float>(Low.ImpactNormal.Z)))
 	{
+		// Matching normals alone do not make two pieces the same wall. Keep unindexed ramps,
+		// roofs and obstacles from being reassigned to a different actor below them.
+		const FClickPreviewPiece HighPiece = MakeClickPiece(Hit);
+		const FClickPreviewPiece LowPiece = MakeClickPiece(Low);
+		if (Low.GetActor() && Low.GetActor()->ActorHasTag(TEXT("window_sill")))
+		{
+			return Hit; // a high face is never a click on a different window below it.
+		}
+		if (Hit.GetComponent() != Low.GetComponent()
+			&& (HighPiece.Building.IsNone() || HighPiece.Building != LowPiece.Building))
+		{
+			return Hit;
+		}
 		return Low;
 	}
 	return Hit;
@@ -145,6 +172,11 @@ bool ACodexTacticsPlayerController::IsClickPreviewBypass(const FHitResult& Hit) 
 		return true;
 	}
 	// Designer 2026-11-22: a click on a ground-floor window (its face; the silhouette shows past it) is the window order, not a cover ghost.
+	if (HitActor->ActorHasTag(TEXT("parapet"))
+		&& HitActor->GetComponentsBoundingBox(true).Min.Z > Leader->GetFloorReferenceLocation().Z + 150.f)
+	{
+		return true; // 155: the roof's edge from below orders the roof, never a ground cover preview.
+	}
 	if (!GetActiveTurnBased() && WindowBreakage::FindWindowSillAt(*GetWorld(), Hit))
 	{
 		return true;
@@ -726,7 +758,7 @@ void ACodexTacticsPlayerController::HandlePlayerClick(const FHitResult& InHit)
 			return;
 		}
 	}
-	const FHitResult Hit = LowerBuildingHit(InHit);
+	const FHitResult Hit = IsClickPreviewBypass(InHit) ? InHit : LowerBuildingHit(InHit);
 	const USquadSubsystem* Squad = GetSquad();
 	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	FClickPreviewClickFacts Facts;
