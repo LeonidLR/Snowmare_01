@@ -168,8 +168,10 @@ namespace LookHoldSmoke
 
 			FVector ActiveAnchor = FVector::ZeroVector;
 			const bool bHasAnchor = Op->GetManualLookPoint(ActiveAnchor);
-			Check(State, bHasAnchor && FVector::Dist2D(ActiveAnchor, State.LookPoint) < 10.f,
-				TEXT("Shift + LMB on ground sets ManualLookPoint outside stealth"));
+			const float ExpectedYaw = static_cast<float>((State.LookPoint - Op->GetActorLocation()).Rotation().Yaw);
+			const float GotYaw = static_cast<float>((ActiveAnchor - Op->GetActorLocation()).Rotation().Yaw);
+			Check(State, bHasAnchor && FMath::Abs(FMath::FindDeltaAngleDegrees(GotYaw, ExpectedYaw)) < 1.f,
+				TEXT("Shift + LMB on ground sets locked look direction outside stealth"));
 
 			Next(State, 2);
 			break;
@@ -196,9 +198,9 @@ namespace LookHoldSmoke
 			if (Speed > 20.f)
 			{
 				++State.WalkSamples;
-				const float ExpectedYaw = static_cast<float>((State.LookPoint - Op->GetActorLocation()).Rotation().Yaw);
+				const float ExpectedYaw = Op->GetManualLookYawDeg();
 				const float DeltaYaw = FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), ExpectedYaw));
-				if (DeltaYaw > 15.f)
+				if (DeltaYaw > 10.f)
 				{
 					++State.WalkWrongYaw;
 				}
@@ -221,8 +223,8 @@ namespace LookHoldSmoke
 				FString::Printf(TEXT("Walk strafe: velocity heading ~90 deg from body (good=%d/%d)"),
 					State.WalkGoodHeading, State.WalkSamples));
 
-			// Order jog back to origin (with real jog speed 400 cm/s)
-			State.MoveDest = State.Origin;
+			// Order L-shaped leg 2 (perpendicular to leg 1, toward the locked look direction) at jog speed 400 cm/s
+			State.MoveDest = Op->GetActorLocation() + (State.LookPoint - State.Origin).GetSafeNormal2D() * 400.f;
 			State.JogSamples = State.JogWrongYaw = State.JogGoodHeading = 0;
 			State.JogMaxSpeed = 0.f;
 			Op->OrderMoveTo(State.MoveDest, false);
@@ -250,14 +252,14 @@ namespace LookHoldSmoke
 			if (Speed > 20.f)
 			{
 				++State.JogSamples;
-				const float ExpectedYaw = static_cast<float>((State.LookPoint - Op->GetActorLocation()).Rotation().Yaw);
+				const float ExpectedYaw = Op->GetManualLookYawDeg();
 				const float DeltaYaw = FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), ExpectedYaw));
-				if (DeltaYaw > 15.f)
+				if (DeltaYaw > 10.f)
 				{
 					++State.JogWrongYaw;
 				}
 				const float RelHeading = FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), Vel.Rotation().Yaw));
-				if (FMath::Abs(RelHeading - 90.f) <= 30.f)
+				if (RelHeading <= 30.f)
 				{
 					++State.JogGoodHeading;
 				}

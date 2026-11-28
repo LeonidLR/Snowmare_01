@@ -1,0 +1,284 @@
+[2026.11.27-08.55.02:845][588]LogCodexTactics: Display: [Commander] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-08.55.03:015][601]LogCodexTactics: Display: [Cover] Commander: double-click on another cover - switch -> the cover switch
+[2026.11.27-08.55.03:015][601]LogCodexTactics: Display: [Cover] Commander: left the cover (another cover)
+[2026.11.27-08.55.03:015][601]LogCodexTactics: Display: Commander: move to (-9674, 16141) sprint -> accepted
+[2026.11.27-08.55.03:016][601]LogCodexTactics: Display: [Cover] Commander: to the low cover at (-9674, 16141) at a sprint
+[2026.11.27-08.55.03:016][601]LogCodexTactics: Display: [Cover] Commander: cover switch - dashes 646 cm to the other cover's corner (switch, approach 0), arrives facing left
+[2026.11.27-08.55.03:016][601]LogCodexTactics: Display: [Commander] 🏃 Dash to the other cover!
+[2026.11.27-08.55.04:175][689]LogCodexTactics: Display: Commander: stance STANDING -> CROUCHED
+[2026.11.27-08.55.04:175][689]LogCodexTactics: Display: [Cover] Commander: entered the low cover at (-9674, 16141), facing left, corners L 1 R 1
+[2026.11.27-08.55.04:175][689]LogCodexTactics: Display: [Commander] 🧱 Behind cover!
+[2026.11.27-08.55.04:175][689]LogCodexTactics: Display: [Cover] Commander: cover switch run-in anim_M4_std_sprint_fwd_to_cvr_crch_idle_R from 0.53 s (209 cm out, speed 725, clip body 26 cm off the runner)
+[2026.11.27-08.55.04:187][690]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-9674.00, Y=16096.00, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-08.55.04:187][690]LogCodexTactics: Display: [CoverAnim] Commander: cover switch run-in anim_M4_std_sprint_fwd_to_cvr_crch_idle_R from 0.53 s (of 1.33)
+[2026.11.27-08.55.04:580][720]LogCodexTactics: Display: [Cover] Commander: settled in the cover after 0.42 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.27-08.55.05:829][816]LogCodexTactics: Display: [Regroup] Engineer is 6100 cm from Commander - fast regroup armed (stands up to run, takes the leader's stance on joining)
+[2026.11.27-08.55.05:829][816]LogCodexTactics: Display: [Regroup] Medic-Sapper is 6814 cm from Commander - fast regroup armed (stands up to run, takes the leader's stance on joining)
+[2026.11.27-08.55.05:829][816]LogCodexTactics: Display: [Commander] 👥 [SOLO MODE: OFF] Teammates leave cover and regroup!
+[2026.11.27-08.55.05:834][816]LogCodexTactics: Display: [Regroup] Engineer: 6100 cm from the formation - runs to Commander first
+[2026.11.27-08.55.05:834][816]LogCodexTactics: Display: [Regroup] Engineer: run to Commander (6100 cm from the formation, combat)
+[2026.11.27-08.55.05:834][816]LogCodexTactics: Display: [Regroup] Medic-Sapper: 6814 cm from the formation - runs to Commander first
+[2026.11.27-08.55.05:834][816]LogCodexTactics: Display: [Regroup] Medic-Sapper: run to Commander (6814 cm from the formation, combat)
+[2026.11.27-08.55.17:275][652]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.17:287][653]LogCodexTactics: Display: [CornerAim] Commander: StayAndFire: targets, no reason to break | legacy StayAndFire: targets, no reason to break | hp 88% rngDmg 0 allDmg 0 | press 0.00 (rng aimers 0, all 0) | melee<5m 0 | laser 0 | grenade -1 | openSide -1 | noTarget 0.0s | clip 53%
+[2026.11.27-08.55.17:911][695]LogCodexTactics: Display: [Cover] Commander: steps off the wall for an open shot at BP_Operative_C_11 (in front of the cover)
+[2026.11.27-08.55.17:911][695]LogCodexTactics: Display: [Cover] Commander: left the cover (open shot: target in front of the cover)
+[2026.11.27-08.55.17:911][695]LogCodexTactics: Warning: Commander: mesh 39 cm / 0.0 deg off its place on the capsule (untracked) - put back
+[2026.11.27-08.55.20:938][903]LogCodexTactics: Display: Commander: move to (-8767, 15648) -> accepted
+[2026.11.27-08.55.21:126][916]LogCodexTactics: Display: [Commander] 🏃 Run to position!
+[2026.11.27-08.55.21:126][916]LogCodexTactics: Display: Commander: move to (-8771, 15640) sprint -> accepted
+[2026.11.27-08.55.21:527][944]LogCodexTactics: Display: [Commander] 🧱 Cover: wall. Click again to take it.
+[2026.11.27-08.55.21:684][955]LogCodexTactics: Display: [Cover] Commander: double-click on another cover - not in cover -> the ordinary cover order
+[2026.11.27-08.55.21:687][955]LogCodexTactics: Display: Commander: move to (-8810, 15697) sprint -> accepted
+[2026.11.27-08.55.21:687][955]LogCodexTactics: Display: [Formation] wall order: Commander + 2 along the wall (outward yaw 180)
+[2026.11.27-08.55.21:688][955]LogCodexTactics: Display: [WallGroup] Commander: the group cover order: the formation wall layout - the wall layout's looks (the user's wall rule)
+[2026.11.27-08.55.22:712][ 30]LogCodexTactics: Display: Commander: stance STANDING -> CROUCHED
+[2026.11.27-08.55.22:712][ 30]LogCodexTactics: Display: [Formation] Commander: at the wall, crouched facing out (yaw -30)
+[2026.11.27-08.55.22:727][ 31]LogCodexTactics: Display: [Formation] Commander: the final approach into his wall place (26 cm, steered)
+[2026.11.27-08.55.23:316][ 74]LogCodexTactics: Display: Commander: stance CROUCHED -> STANDING
+[2026.11.27-08.55.23:316][ 74]LogCodexTactics: Display: [Cover] Commander: entered the high cover at (-8816, 15716), facing left, corners L 0 R 0
+[2026.11.27-08.55.23:316][ 74]LogCodexTactics: Display: [Commander] 🧱 Hugging the wall, holding the corner!
+[2026.11.27-08.55.23:317][ 74]LogCodexTactics: Display: Commander: move to (-8816, 15716) -> accepted
+[2026.11.27-08.55.23:317][ 74]LogCodexTactics: Display: [Cover] Commander: to the high cover at (-8816, 15716) at a sprint
+[2026.11.27-08.55.23:317][ 74]LogCodexTactics: Display: [UnderFire] Commander (team 0): takes cover against the flash 30 m off (line blocked)
+[2026.11.27-08.55.23:319][ 74]LogCodexTactics: Display: [Formation] leader corner: Commander's cover slot (-8816, 15716) claims the free wall end (-8750, 15848) - its corner watch is his, the followers keep behind him
+[2026.11.27-08.55.23:329][ 75]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-8765.00, Y=15715.74, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-08.55.23:343][ 76]LogCodexTactics: Display: [Cover] Commander: settled in the cover after 0.04 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.27-08.55.27:090][338]LogCodexTactics: Display: [Commander] 🎯 Corner: click again to peek round it (double click: at a run).
+[2026.11.27-08.55.28:663][453]LogCodexTactics: Display: [Cover] Commander: shimmies 279 cm to the right (forward, facing right)
+[2026.11.27-08.55.28:663][453]LogCodexTactics: Display: [Cover] Commander: corner peek ordered at the right corner (edge 313 cm along the wall, stand 279, shimmies there)
+[2026.11.27-08.55.28:663][453]LogCodexTactics: Display: [Commander] 🎯 Covering the corner.
+[2026.11.27-08.55.31:100][633]LogCodexTactics: Display: [Cover] Commander: shimmied along the high cover at (-8816, 15437), facing right, corners L 0 R 1
+[2026.11.27-08.55.31:103][633]LogCodexTactics: Display: [Formation] leader corner: Commander's cover slot (-8816, 15437) claims the corner he peeks round (B17-1) (-8765, 15403) - its corner watch is his, the followers keep behind him
+[2026.11.27-08.55.31:113][634]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-8765.00, Y=15436.75, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-08.55.31:114][634]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.31:114][634]LogCodexTactics: Display: [Cover] Commander: corner peek - leaning out at the right corner, holding the aim
+[2026.11.27-08.55.34:413][866]LogCodexTactics: Display: [Commander] 🧱 Cover: wall, corner to fire from. Click again to take it.
+[2026.11.27-08.55.34:603][878]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (shimmy ordered)
+[2026.11.27-08.55.34:603][878]LogCodexTactics: Display: [Cover] Commander: shimmies 147 cm to the left (backwards, facing right)
+[2026.11.27-08.55.35:938][968]LogCodexTactics: Display: [Cover] Commander: shimmied along the high cover at (-8816, 15584), facing right, corners L 0 R 1
+[2026.11.27-08.55.35:951][969]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.35:965][970]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.35:966][970]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.35:981][971]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.35:981][971]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.35:993][972]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.35:993][972]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:005][973]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:005][973]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:018][974]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:018][974]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:032][975]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:032][975]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:051][976]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:051][976]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:064][977]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:064][977]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:076][978]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:077][978]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:089][979]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:089][979]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:103][980]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:103][980]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:119][981]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:120][981]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:134][982]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:134][982]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:152][983]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:153][983]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:168][984]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:169][984]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:183][985]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:183][985]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:194][986]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:194][986]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:210][987]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:211][987]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:224][988]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:225][988]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:254][989]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:255][989]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:268][990]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:268][990]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:281][991]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:282][991]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:296][992]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:296][992]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:310][993]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:310][993]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:322][994]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:323][994]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:341][995]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:341][995]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:356][996]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:357][996]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:369][997]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:369][997]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:382][998]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:382][998]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:396][999]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:396][999]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:409][  0]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:409][  0]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:423][  1]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:424][  1]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:439][  2]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:439][  2]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:452][  3]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:453][  3]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:463][  4]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:465][  4]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:478][  5]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:478][  5]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:492][  6]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:492][  6]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:506][  7]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:507][  7]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:521][  8]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:522][  8]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:536][  9]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:536][  9]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:558][ 10]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:558][ 10]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:570][ 11]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:571][ 11]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:585][ 12]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:587][ 12]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:598][ 13]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:599][ 13]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:612][ 14]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:613][ 14]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:625][ 15]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:626][ 15]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:640][ 16]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:640][ 16]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:652][ 17]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:653][ 17]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:667][ 18]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:667][ 18]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:679][ 19]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:679][ 19]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:691][ 20]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:692][ 20]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:714][ 21]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:714][ 21]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:728][ 22]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:728][ 22]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:741][ 23]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.55.36:742][ 23]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.55.36:754][ 24]LogCodexTactics: Display: [Cover] Commander: breaks the corner aim: ReturnNoTargets (no longer at the exposed edge)
+[2026.11.27-08.56.16:964][828]LogCodexTactics: Display: [Formation] new leader Commander looks -114 (facing 0; walk -, order -, as leader -, squad -114)
+[2026.11.27-08.56.16:964][828]LogCodexTactics: Squad leader: Commander
+[2026.11.27-08.56.17:215][841]LogCodexTactics: Display: Commander: move to (-9222, 12760) -> accepted
+[2026.11.27-08.56.17:357][850]LogCodexTactics: Display: [Commander] 🏃 Run to position!
+[2026.11.27-08.56.17:359][850]LogCodexTactics: Display: Commander: move to (-10451, 13299) sprint -> accepted
+[2026.11.27-08.56.20:459][ 58]LogCodexTactics: Display: [Regroup] Engineer is 1378 cm from Commander - fast regroup armed
+[2026.11.27-08.56.20:459][ 58]LogCodexTactics: Display: [Regroup] Medic-Sapper is 1607 cm from Commander - fast regroup armed
+[2026.11.27-08.56.20:459][ 58]LogCodexTactics: Display: [Commander] 👥 [SOLO MODE: OFF] Teammates leave cover and regroup!
+[2026.11.27-08.56.20:466][ 58]LogCodexTactics: Display: [Regroup] Medic-Sapper: 1427 cm from the formation - runs to Commander first
+[2026.11.27-08.56.20:466][ 58]LogCodexTactics: Display: [Regroup] Medic-Sapper: run to Commander (1427 cm from the formation, combat)
+[2026.11.27-08.56.20:890][ 86]LogCodexTactics: Display: Commander: move to (-10487, 12858) -> accepted
+[2026.11.27-08.56.22:858][211]LogCodexTactics: Display: Commander: move to (-9566, 12184) -> accepted
+[2026.11.27-08.56.23:798][271]LogCodexTactics: Display: Commander: move to (-8707, 12223) -> accepted
+[2026.11.27-08.56.26:945][471]LogCodexTactics: Display: Commander: move to (-7985, 13436) -> accepted
+[2026.11.27-08.56.30:103][660]LogCodexTactics: Display: Commander: move to (-8027, 12943) -> accepted
+[2026.11.27-08.56.33:244][862]LogCodexTactics: Display: Commander: move to (-7287, 12427) -> accepted
+[2026.11.27-08.56.34:916][971]LogCodexTactics: Display: [Commander] 👁️ [Commander]: Watch sector locked!
+[2026.11.27-08.56.36:077][ 47]LogCodexTactics: Display: [RpgChoice] Commander (team 0): keeps the m16 for BP_Operative_C_16 (40 m): none, score 0.00 < 0.50, veto none (cluster 1, group 1, cover 0)
+[2026.11.27-08.56.37:104][106]LogCodexTactics: Display: [Commander] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-08.56.37:116][106]LogCodexTactics: Display: [RpgChoice] Commander (team 0): draws the rpg7 for BP_Operative_C_15 (39 m): suppress the group, score 0.70 (cluster 2, group 2 threat, cover 0, heavy 0, rockets 2)
+[2026.11.27-08.56.37:269][115]LogCodexTactics: Display: [Cover] Commander: double-click on another cover - not in cover -> the ordinary cover order
+[2026.11.27-08.56.37:275][115]LogCodexTactics: Display: Commander: move to (-7631, 12995) sprint -> accepted
+[2026.11.27-08.56.37:276][115]LogCodexTactics: Display: [Formation] wall order: Commander + 2 along the wall (outward yaw -90)
+[2026.11.27-08.56.37:276][115]LogCodexTactics: Display: [WallGroup] Commander: the group cover order: the formation wall layout - the wall layout's looks (the user's wall rule)
+[2026.11.27-08.56.38:327][182]LogCodexTactics: Display: Commander: stance STANDING -> CROUCHED
+[2026.11.27-08.56.38:327][182]LogCodexTactics: Display: [Formation] Commander: at the wall, crouched facing out (yaw 35)
+[2026.11.27-08.56.38:371][183]LogCodexTactics: Display: [Formation] Commander: the final approach into his wall place (21 cm, steered)
+[2026.11.27-08.56.38:578][197]LogCodexTactics: Display: Commander: stance CROUCHED -> STANDING
+[2026.11.27-08.56.38:580][197]LogCodexTactics: Display: Commander: stance STANDING -> CROUCHED
+[2026.11.27-08.56.38:580][197]LogCodexTactics: Display: [Cover] Commander: entered the low cover at (-7634, 12995), facing left, corners L 1 R 1
+[2026.11.27-08.56.38:580][197]LogCodexTactics: Display: [Commander] 🧱 Behind cover!
+[2026.11.27-08.56.38:580][197]LogCodexTactics: Display: Commander: move to (-7634, 12995) -> accepted
+[2026.11.27-08.56.38:580][197]LogCodexTactics: Display: [Cover] Commander: to the low cover at (-7634, 12995) at a sprint
+[2026.11.27-08.56.38:580][197]LogCodexTactics: Display: [UnderFire] Commander (team 0): takes cover against the flash 34 m off (line blocked)
+[2026.11.27-08.56.38:596][198]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-7633.83, Y=13040.00, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-08.56.38:599][198]LogCodexTactics: Display: [Cover] Commander: turns along the wall to the right (threat known)
+[2026.11.27-08.56.38:599][198]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.56.38:615][199]LogCodexTactics: Display: [Cover] Commander: settled in the cover after 0.04 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.27-08.56.38:615][199]LogCodexTactics: Display: [CornerAim] Commander: StayAndFire: targets, no reason to break | legacy StayAndFire: targets, no reason to break | hp 85% rngDmg 0 allDmg 0 | press 0.00 (rng aimers 0, all 0) | melee<5m 0 | laser 0 | grenade -1 | openSide -1 | noTarget 0.0s | clip 100%
+[2026.11.27-08.56.38:630][200]LogCodexTactics: Display: [RpgChoice] Commander (team 0): back to the m16 (a rifle target, no rocket target)
+[2026.11.27-08.56.39:206][237]LogCodexTactics: Display: [Cover] Commander: steps off the wall for an open shot at BP_Operative_C_15 (in front of the cover)
+[2026.11.27-08.56.39:206][237]LogCodexTactics: Display: [Cover] Commander: left the cover (open shot: target in front of the cover)
+[2026.11.27-08.56.39:507][254]LogCodexTactics: Display: Commander: stance STANDING -> CROUCHED
+[2026.11.27-08.56.39:507][254]LogCodexTactics: Display: [Cover] Commander: entered the low cover at (-7615, 12995), facing left, corners L 1 R 1
+[2026.11.27-08.56.39:507][254]LogCodexTactics: Display: [Commander] 🧱 Behind cover!
+[2026.11.27-08.56.39:508][254]LogCodexTactics: Display: Commander: move to (-7615, 12995) -> accepted
+[2026.11.27-08.56.39:508][254]LogCodexTactics: Display: [Cover] Commander: to the low cover at (-7615, 12995) at a sprint
+[2026.11.27-08.56.39:508][254]LogCodexTactics: Display: [UnderFire] Commander (team 0): takes cover against the flash 35 m off (line blocked)
+[2026.11.27-08.56.39:521][255]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-7615.19, Y=13040.00, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-08.56.39:524][255]LogCodexTactics: Display: [Cover] Commander: turns along the wall to the right (threat known)
+[2026.11.27-08.56.39:524][255]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.56.39:537][256]LogCodexTactics: Display: [Cover] Commander: settled in the cover after 0.04 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.27-08.56.40:135][295]LogCodexTactics: Display: [Cover] Commander: steps off the wall for an open shot at BP_Operative_C_15 (in front of the cover)
+[2026.11.27-08.56.40:136][295]LogCodexTactics: Display: [Cover] Commander: left the cover (open shot: target in front of the cover)
+[2026.11.27-08.56.40:431][312]LogCodexTactics: Display: Commander: stance STANDING -> CROUCHED
+[2026.11.27-08.56.40:431][312]LogCodexTactics: Display: [Cover] Commander: entered the low cover at (-7597, 12995), facing right, corners L 1 R 1
+[2026.11.27-08.56.40:431][312]LogCodexTactics: Display: [Commander] 🧱 Behind cover!
+[2026.11.27-08.56.40:432][312]LogCodexTactics: Display: Commander: move to (-7597, 12995) -> accepted
+[2026.11.27-08.56.40:432][312]LogCodexTactics: Display: [Cover] Commander: to the low cover at (-7597, 12995) at a sprint
+[2026.11.27-08.56.40:432][312]LogCodexTactics: Display: [UnderFire] Commander (team 0): takes cover against the flash 32 m off (line blocked)
+[2026.11.27-08.56.40:449][313]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-7596.55, Y=13040.00, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-08.56.40:453][313]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.56.40:467][314]LogCodexTactics: Display: [Cover] Commander: settled in the cover after 0.04 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.27-08.56.41:064][349]LogCodexTactics: Display: [Cover] Commander: steps off the wall for an open shot at BP_Operative_C_15 (in front of the cover)
+[2026.11.27-08.56.41:064][349]LogCodexTactics: Display: [Cover] Commander: left the cover (open shot: target in front of the cover)
+[2026.11.27-08.56.41:367][369]LogCodexTactics: Display: Commander: stance STANDING -> CROUCHED
+[2026.11.27-08.56.41:367][369]LogCodexTactics: Display: [Cover] Commander: entered the low cover at (-7578, 12995), facing right, corners L 1 R 1
+[2026.11.27-08.56.41:367][369]LogCodexTactics: Display: [Commander] 🧱 Behind cover!
+[2026.11.27-08.56.41:367][369]LogCodexTactics: Display: Commander: move to (-7578, 12995) -> accepted
+[2026.11.27-08.56.41:367][369]LogCodexTactics: Display: [Cover] Commander: to the low cover at (-7578, 12995) at a sprint
+[2026.11.27-08.56.41:367][369]LogCodexTactics: Display: [UnderFire] Commander (team 0): takes cover against the flash 35 m off (line blocked)
+[2026.11.27-08.56.41:380][370]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-7577.91, Y=13040.00, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-08.56.41:384][370]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.56.41:422][371]LogCodexTactics: Display: [Cover] Commander: settled in the cover after 0.06 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.27-08.56.41:699][389]LogCodexTactics: Display: [Formation] wound pace: the squad walks at 65 cm/s - Commander (28 % HP, allowed walk 81 cm/s) x pace_share 0.80
+[2026.11.27-08.56.41:739][392]LogCodexTactics: Display: [CornerAim] Commander: StayAndFire: targets, no reason to break | legacy DuckForSafety: badly wounded | hp 28% rngDmg 0 allDmg 0 | press 0.00 (rng aimers 0, all 0) | melee<5m 0 | laser 0 | grenade -1 | openSide -1 | noTarget 0.0s | clip 93%
+[2026.11.27-08.56.41:882][402]LogCodexTactics: Display: [RpgChoice] Commander (team 0): keeps the m16 for BP_Operative_C_15 (32 m): suppress the group, score 0.70 < 0.50, veto the line is blocked short of the target (cluster 1, group 3, cover 0)
+[2026.11.27-08.56.41:988][408]LogCodexTactics: Display: [Cover] Commander: steps off the wall for an open shot at BP_Operative_C_15 (in front of the cover)
+[2026.11.27-08.56.41:988][408]LogCodexTactics: Display: [Cover] Commander: left the cover (open shot: target in front of the cover)
+[2026.11.27-08.56.42:130][418]LogCodexTactics: Display: [RpgChoice] Commander (team 0): draws the rpg7 for BP_Operative_C_15 (32 m): suppress the group, score 0.70 (cluster 1, group 2 threat, cover 0, heavy 0, rockets 2)
+[2026.11.27-08.56.42:280][428]LogCodexTactics: Display: [Cover] Commander: entered the low cover at (-7597, 12995), facing right, corners L 1 R 1
+[2026.11.27-08.56.42:280][428]LogCodexTactics: Display: [Commander] 🧱 Behind cover!
+[2026.11.27-08.56.42:281][428]LogCodexTactics: Display: Commander: move to (-7597, 12995) -> accepted
+[2026.11.27-08.56.42:281][428]LogCodexTactics: Display: [Cover] Commander: to the low cover at (-7597, 12995) at a sprint
+[2026.11.27-08.56.42:281][428]LogCodexTactics: Display: [UnderFire] Commander (team 0): takes cover against the flash 30 m off (line blocked)
+[2026.11.27-08.56.42:292][429]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-7596.55, Y=13040.00, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-08.56.42:295][429]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.56.42:308][430]LogCodexTactics: Display: [Cover] Commander: settled in the cover after 0.03 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.27-08.56.42:310][430]LogCodexTactics: Display: [RpgChoice] Commander (team 0): back to the m16 (a rifle target, no rocket target)
+[2026.11.27-08.56.42:897][468]LogCodexTactics: Display: [Cover] Commander: steps off the wall for an open shot at BP_Operative_C_15 (in front of the cover)
+[2026.11.27-08.56.42:897][468]LogCodexTactics: Display: [Cover] Commander: left the cover (open shot: target in front of the cover)
+[2026.11.27-08.56.43:198][487]LogCodexTactics: Display: [Cover] Commander: entered the low cover at (-7578, 12995), facing right, corners L 1 R 1
+[2026.11.27-08.56.43:198][487]LogCodexTactics: Display: [Commander] 🧱 Behind cover!
+[2026.11.27-08.56.43:198][487]LogCodexTactics: Display: Commander: move to (-7578, 12995) -> accepted
+[2026.11.27-08.56.43:198][487]LogCodexTactics: Display: [Cover] Commander: to the low cover at (-7578, 12995) at a sprint
+[2026.11.27-08.56.43:198][487]LogCodexTactics: Display: [UnderFire] Commander (team 0): takes cover against the flash 35 m off (line blocked)
+[2026.11.27-08.56.43:209][488]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-7577.91, Y=13040.00, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-08.56.43:212][488]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.56.43:227][489]LogCodexTactics: Display: [Cover] Commander: settled in the cover after 0.04 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.27-08.56.43:508][507]LogCodexTactics: Display: [Cover] Commander: left the cover (critically wounded)
+[2026.11.27-08.56.43:508][507]LogCodexTactics: Warning: Commander: mesh 3 cm / 0.0 deg off its place on the capsule (untracked) - put back
+[2026.11.27-08.56.43:509][507]LogCodexTactics: Display: Commander: stance CROUCHED -> PRONE
+[2026.11.27-08.56.43:509][507]LogCodexTactics: Display: [CriticalWound] Commander goes down (HP 24 / 140 < 20 %): crawling only until healed
+[2026.11.27-08.56.43:509][507]LogCodexTactics: Display: [Commander] 🩸 Commander is critically wounded and goes down! He can only crawl - heal him.
+[2026.11.27-08.56.43:806][527]LogCodexTactics: Display: [Cover] Commander: to the low cover at (-7597, 12995) at a sprint
+[2026.11.27-08.56.43:806][527]LogCodexTactics: Display: [UnderFire] Commander (team 0): takes cover against the flash 29 m off (line blocked)
+[2026.11.27-08.56.45:057][602]LogCodexTactics: Display: [Cover] Commander: entered the low cover at (-7597, 12995), facing right, corners L 1 R 1
+[2026.11.27-08.56.45:057][602]LogCodexTactics: Display: [Commander] 🧱 Behind cover!
+[2026.11.27-08.56.45:058][602]LogCodexTactics: Display: Commander: move to (-7597, 12995) -> accepted
+[2026.11.27-08.56.45:071][603]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-7596.55, Y=13040.00, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-08.56.45:094][604]LogCodexTactics: Display: [Cover] Commander: settled in the cover after 0.04 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.27-08.56.45:558][629]LogCodexTactics: Display: [RpgChoice] Commander (team 0): draws the rpg7 for BP_Operative_C_15 (28 m): suppress the group, score 0.70 (cluster 1, group 2 threat, cover 0, heavy 0, rockets 2)
+[2026.11.27-08.56.45:576][630]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+[2026.11.27-08.56.47:826][755]LogCodexTactics: Display: [RpgChoice] Commander (team 0): back to the m16 (no rocket target)
+[2026.11.27-08.56.47:884][759]LogCodexTactics: Display: [CornerAim] Commander: ReturnNoTargets: no target for the grace period | legacy DuckForSafety: badly wounded | hp 17% rngDmg 0 allDmg 0 | press 0.00 (rng aimers 0, all 0) | melee<5m 0 | laser 0 | grenade -1 | openSide -1 | noTarget 2.1s | clip 93%

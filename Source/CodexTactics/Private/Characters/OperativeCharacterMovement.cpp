@@ -15,6 +15,7 @@
 #include "Characters/CriticalWoundRules.h"
 #include "Characters/OperativeAIController.h"
 #include "Characters/OperativeAnimInstance.h"
+#include "Characters/OperativeCharacterInternal.h"
 #include "Characters/SquadGiveWayRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "Characters/StealthModeRules.h"
@@ -34,6 +35,7 @@
 #include "Level/CrawlGapActor.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationData.h"
+#include "NavigationSystem.h"
 #include "NavMesh/NavMeshPath.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Tactics/LookHoldRules.h"
@@ -91,6 +93,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	{
 		return EOperativeOrderResult::Refused;
 	}
+	bOrderSprint = bSprint; // intent, including while running is temporarily forbidden
 	// Sprint 14: knocked down — the order waits and runs once he is up (the latest one wins).
 	if (IsKnockedDown())
 	{
@@ -113,7 +116,8 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	}
 	// Sprint 12: a move order away from the wall leaves the cover (a cover / shimmy order keeps it; so does the planned
 	// walk to the pending slot that the tactical pause releases).
-	const bool bToPendingSlot = bHasPendingCover && FVector::Dist2D(Destination, PendingCoverSlot.WorldLocation) <= 60.f;
+	const bool bToPendingSlot = bHasPendingCover && FVector::Dist2D(Destination, PendingCoverSlot.WorldLocation) <= 60.f
+		&& FMath::Abs(Destination.Z - PendingCoverSlot.WorldLocation.Z) <= 120.f;
 	if (!bCoverMoveOrder && !bPendingMoveReplay && !bToPendingSlot)
 	{
 		if (bInCover)
@@ -121,13 +125,16 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 			LeaveCover(TEXT("move order"));
 		}
 		bHasPendingCover = false;
+		bPlayerCoverOrderActive = false;
 		bRunCornerPeekPending = false; // any other order replaces a run-and-peek (#55)
 	}
 	else if (bToPendingSlot && bInCover && !bCoverMoveOrder && !CoverTraceRules::IsSameWall(CoverSlot, PendingCoverSlot))
 	{
 		// The pause's release of a planned walk to ANOTHER cover (2026-10-20, found with the cover switch): he leaves this wall and runs
 		// (before, he crossed to the other wall still "in cover" here: the cover pose slid along and the arrival played no enter clip).
+		const bool bPlayerCover = bPlayerCoverOrderActive;
 		LeaveCover(TEXT("another cover"));
+		bPlayerCoverOrderActive = bPlayerCover; // the planned cover order continues at its destination
 	}
 	// A player's own order (not a formation follow, not the deferred replay of a rise) puts a leftover torso back on the move.
 	// The scan pitch stays while a formation look is set: slot updates must not zero it.
@@ -140,11 +147,43 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	{
 		TacticalAnchor = SquadAutonomyRules::MakeAnchor(SquadROE::Get(), GetActorLocation(), Destination, GetActorRotation());
 	}
+	bPendingArrivalFacingLog = false;
+	if (!bPendingMoveReplay)
+	{
+		// Clear stale facing / look state on the move order itself (so deferred / climbing orders never keep old idle/ordered/look yaws).
+		ClearIdleFacing();
+		bExplicitFacing = false;
+		if (!bAutonomousOrder)
+		{
+			const bool bWillSprintOnOrder = !IsInStealthMode() && bSprint
+				&& (CanSprint() || (Stance == EOperativeStance::Prone && !bCarrying && !IsCriticallyWounded()
+					&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded())));
+			if (bWillSprintOnOrder && HasManualLookPoint())
+			{
+				const bool bNotifyLookCleared = IsLookHoldEligible();
+				ClearManualLookPoint();
+				if (bNotifyLookCleared)
+				{
+					UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+				}
+			}
+			AOperativeCharacter* ActiveUnderFireShooter = nullptr;
+			FVector ActiveUnderFirePoint = FVector::ZeroVector;
+			const double NowSec = GetWorld() ? GetWorld()->GetTimeSeconds() : -1.0e9;
+			const bool bInContact = (CurrentCombatTarget.IsValid() && OperativeCharacterInternal::IsLiveTargetOf(*this, CurrentCombatTarget.Get()))
+				|| GetUnderFireThreat(ActiveUnderFireShooter, ActiveUnderFirePoint)
+				|| (NowSec - LastShotTime <= 5.0) || (NowSec - LastThreatContactTime <= 5.0);
+			if (!bInContact && bFoughtThisFight)
+			{
+				bFoughtThisFight = false;
+				LastThreat.Reset();
+			}
+		}
+	}
 	// User decision 2026-10-01: a sprint order (double click) stands a prone operative up — he rises in place, then runs;
 	// any move ordered while he is getting up starts once he is up. SetStance arms the settle time, so the hold below covers
 	// both this stand-up and a stance clip that is already playing (bug 2026-10-11: a move must never slide a rooted body).
-	if (bSprint && Stance == EOperativeStance::Prone && !bCarrying
-		&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded()))
+	if (bSprint && Stance == EOperativeStance::Prone && CanSprintIfStanding())
 	{
 		SetStance(EOperativeStance::Standing);
 	}
@@ -164,6 +203,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 			SetStance(EOperativeStance::Standing);
 		}
 	}
+	bOrderSprint = bSprint; // a stand-up may have stopped the previous path
 	const float RiseDelay = GetMoveHoldSeconds();
 	if (OperativeMovementRules::ShouldDeferMove(RiseDelay) && GetWorld())
 	{
@@ -195,8 +235,12 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	{
 		if (HasManualLookPoint())
 		{
+			const bool bNotifyLookCleared = IsLookHoldEligible();
 			ClearManualLookPoint();
-			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+			if (bNotifyLookCleared)
+			{
+				UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+			}
 		}
 		// A sprint order stands a crouching operative up (Godot set_target).
 		if (Stance == EOperativeStance::Crouching)
@@ -215,7 +259,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	ApplyMovementParams();
 	// The order's destination is always the click (the far landing). A walk to his own side must not replace it.
 	// A different click drops the window file. The climb leg orders the landing again and keeps it.
-	if (bWindowFileActive && FVector::Dist2D(Destination, WindowApproachLanding) > WindowOrderRules::Get().ApproachMatchCm)
+	if (bWindowFileActive && FVector::Dist(Destination, WindowApproachLanding) > WindowOrderRules::Get().ApproachMatchCm)
 	{
 		bWindowFileActive = false;
 	}
@@ -227,7 +271,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		// this window. Automatic routing never arms the via, so it keeps the open path. Followers file through once he
 		// is on the far side (QueueThroughWindow); they do not take a whole window themselves.
 		const FWindowOrderTuning& WindowTuning = WindowOrderRules::Get();
-		const bool bThisWindow = FVector::Dist2D(Destination, WindowApproachLanding) <= WindowTuning.ApproachMatchCm;
+		const bool bThisWindow = FVector::Dist(Destination, WindowApproachLanding) <= WindowTuning.ApproachMatchCm;
 		if (Result == EOperativeOrderResult::Accepted && bHasMoveOrder && bThisWindow)
 		{
 			// This leg only walks to his own side, and must not enter another opening. SteerOwnMoveVia keeps the landing.
@@ -365,6 +409,7 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 	}
 	if (bFormationMove)
 	{
+		bOrderSprint = false; // formation gait belongs to UpdateFollower / SetSprinting
 		bMantlePathAllowed = false; // formation moves keep today's paths (no mantle links)
 		bWindowPathAllowed = false; // ... and no whole windows (rule 2: a follower goes through once it is broken)
 		bMantleOrderPending = false;
@@ -390,6 +435,7 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 		{
 			VaultResumeTarget = InDestination;
 			bVaultResume = true;
+			bVaultResumeOwnOrder = !bFormationMove;
 			LastMoveDestination = InDestination;
 			bHasMoveOrder = true;
 		}
@@ -472,9 +518,39 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 	{
 		return EOperativeOrderResult::NoController;
 	}
+	// 139 + 155: strict upper-floor routing, with legacy standing-centre goals allowed in every stance.
+	const float FeetZ = GetActorLocation().Z - GetSimpleCollisionHalfHeight();
+	const float GoalHalfHeight = FMath::Max(GetSimpleCollisionHalfHeight(),
+		GetClass()->GetDefaultObject<AOperativeCharacter>()->GetSimpleCollisionHalfHeight() * GetActorScale3D().Z);
+	const bool bElevatedOrder = IsPlayerTeam() && !bFormationMove && !bAutonomousOrder
+		&& OperativeMovementRules::HasNoWayUp(FeetZ, Destination.Z, GoalHalfHeight, false, false, FeetZ);
+	const auto RefuseNoWayUp = [&]()
+	{
+		AIController->StopMovement();
+		bHasMoveOrder = false;
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("NO WAY UP - CHECK RAMP / LADDER"), FLinearColor(1.f, 0.4f, 0.1f));
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(DisplayName, NSLOCTEXT("OperativeMovement", "NoWayUp", "No way up: no complete path to that roof or upper floor. Check the ramp or ladder landing."));
+		}
+		return EOperativeOrderResult::Unreachable;
+	};
+	FVector PathGoal = Destination;
+	if (bElevatedOrder)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+		const ANavigationData* NavData = Nav ? Nav->GetNavDataForProps(GetNavAgentPropertiesRef(), GetNavAgentLocation()) : nullptr;
+		FNavLocation OnNav;
+		if (!NavData || !Nav->ProjectPointToNavigation(Destination, OnNav, FVector(80.f, 80.f, FMath::Max(80.f, GoalHalfHeight + 20.f)), NavData))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[RoofOrder] %s refused %s: no landing navmesh within capsule allowance of requested height"), *DisplayName.ToString(), *Destination.ToCompactString());
+			return RefuseNoWayUp();
+		}
+		PathGoal = OnNav.Location;
+	}
 	EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(
-		Destination, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true,
-		/*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false, ChooseMoveFilter());
+		PathGoal, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true,
+		/*bProjectDestinationToNavigation*/ !bElevatedOrder, /*bCanStrafe*/ false, ChooseMoveFilter(), /*bAllowPartialPath*/ !bElevatedOrder);
 	// Mantling: on a mantle top whose path off it does not start (no navmesh on the top) or ends short of the goal (an island, a partial
 	// path: MantlingProblem_06 "stuck on top"), he comes down over the face nearest the goal and walks on from there (batch 2).
 	// (The player's operatives only: the PMC's own operatives keep their paths - their AI is not touched by batch 2.)
@@ -512,35 +588,23 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 	// the nearest navmesh point that reaches the main area and the order is asked again.
 	if (Result == EPathFollowingRequestResult::Failed && LedgeFall && LedgeFall->RescueIfOffNavmesh(TEXT("an order could not start"), /*bResumeOrder*/ false))
 	{
-		Result = AIController->MoveToLocation(Destination, MovementConfig.AcceptanceRadius, false, true, true, false, ChooseMoveFilter());
+		Result = AIController->MoveToLocation(PathGoal, MovementConfig.AcceptanceRadius, false, true, !bElevatedOrder, false, ChooseMoveFilter(), !bElevatedOrder);
 	}
-	// Task139: partial paths and lower-ground projection must not silently accept an upper roof click.
-	// Door approaches are redirected by the click handler; same-level partial paths stay valid.
-	if (IsPlayerTeam() && !bAutonomousOrder && !bFormationMove)
+	// One refusal path also catches a complete path ending below the requested level.
+	if (bElevatedOrder)
 	{
 		const UPathFollowingComponent* Following = AIController->GetPathFollowingComponent();
 		const FNavPathSharedPtr Path = Following ? Following->GetPath() : nullptr;
 		const bool bHasPath = Result == EPathFollowingRequestResult::RequestSuccessful && Path.IsValid() && Path->IsValid()
 			&& !Path->GetPathPoints().IsEmpty();
-		const float FeetZ = GetActorLocation().Z - GetSimpleCollisionHalfHeight();
 		const bool bAtGoal = Result == EPathFollowingRequestResult::AlreadyAtGoal;
-		// Legacy callers can supply a standing capsule-centre goal while this man is crouched.
-		// The authored capsule (including BP overrides) keeps that API convention independent of stance.
-		const float GoalHalfHeight = FMath::Max(GetSimpleCollisionHalfHeight(),
-			GetClass()->GetDefaultObject<AOperativeCharacter>()->GetSimpleCollisionHalfHeight() * GetActorScale3D().Z);
 		if (OperativeMovementRules::HasNoWayUp(FeetZ, Destination.Z, GoalHalfHeight, bHasPath || bAtGoal,
 			bHasPath && Path->IsPartial(), bHasPath ? Path->GetEndLocation().Z : FeetZ))
 		{
-			AIController->StopMovement();
-			bHasMoveOrder = false;
-			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
-			{
-				Messages->PostMessage(DisplayName, NSLOCTEXT("OperativeMovement", "NoWayUp", "No way up to that point."));
-			}
 			UE_LOG(LogCodexTactics, Display, TEXT("[Move] %s: no way up to %s (path=%d partial=%d end-z=%.1f)"),
 				*DisplayName.ToString(), *Destination.ToCompactString(), bHasPath, bHasPath && Path->IsPartial(),
 				bHasPath ? Path->GetEndLocation().Z : FeetZ);
-			return EOperativeOrderResult::Unreachable;
+			return RefuseNoWayUp();
 		}
 	}
 	if (Result == EPathFollowingRequestResult::Failed)
@@ -569,6 +633,7 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 		}
 	}
 	bHasMoveOrder = Result == EPathFollowingRequestResult::RequestSuccessful;
+	RefreshOrderSprint(); // every traversal / bypass resume requests its next path here
 	// Doors R2 (designer 2026-11-22): a hostile fighter whose path stops at a LOCKED door breaches it (kick / shot / key / grenade by his
 	// archetype in doors.json) instead of standing there. No-op while the doors switch is off.
 	if (bHasMoveOrder && !IsPlayerTeam())
@@ -695,6 +760,27 @@ bool AOperativeCharacter::IsTrafficHeld() const
 	return TrafficHoldSources.Num() > 0;
 }
 
+void AOperativeCharacter::PauseMoveForTraversal()
+{
+	const bool bKeepSprint = bOrderSprint;
+	StopOperative();
+	bOrderSprint = bKeepSprint;
+}
+
+void AOperativeCharacter::RefreshOrderSprint()
+{
+	if (!bOrderSprint || !bHasMoveOrder)
+	{
+		return;
+	}
+	const bool bAllowed = CanSprint() && !IsInStealthMode() && Stance == EOperativeStance::Standing;
+	if (bSprinting != bAllowed)
+	{
+		bSprinting = bAllowed;
+		ApplyMovementParams();
+	}
+}
+
 void AOperativeCharacter::StopOperative()
 {
 	if (bHasMoveOrder && CVarOperativeMoveTrace.GetValueOnGameThread() != 0)
@@ -713,6 +799,8 @@ void AOperativeCharacter::StopOperative()
 	bSteeringOwnMove = false;
 	bStealthFast = false;
 	bSprinting = false;
+	bOrderSprint = false;
+	bPendingArrivalFacingLog = false;
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(PendingMoveTimer);
@@ -722,8 +810,8 @@ void AOperativeCharacter::StopOperative()
 
 void AOperativeCharacter::SetSprinting(bool bNewSprinting)
 {
-	if (bNewSprinting && IsInStealthMode() && !bCarrying && !IsCriticallyWounded()
-		&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded()))
+	bOrderSprint = false; // an explicit gait override (formation / wound pace) replaces order intent
+	if (bNewSprinting && IsInStealthMode() && CanSprintIfStanding())
 	{
 		SetStealthMode(false);
 		SetStance(EOperativeStance::Standing);
@@ -731,8 +819,12 @@ void AOperativeCharacter::SetSprinting(bool bNewSprinting)
 	const bool bAllowed = bNewSprinting && CanSprint() && Stance == EOperativeStance::Standing;
 	if (LookHoldRules::ShouldClearOnSprint(bAllowed) && HasManualLookPoint())
 	{
+		const bool bNotifyLookCleared = IsLookHoldEligible();
 		ClearManualLookPoint();
-		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+		if (bNotifyLookCleared)
+		{
+			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+		}
 	}
 	if (bSprinting != bAllowed)
 	{
@@ -790,7 +882,7 @@ void AOperativeCharacter::HandleMoveFinished()
 		const FWindowOrderTuning& WindowTuning = WindowOrderRules::Get();
 		const float Off = FVector::Dist2D(GetActorLocation(), WindowApproachPoint);
 		const bool bAtFace = Off <= WindowTuning.ApproachArriveCm;
-		const bool bRun = bSprinting;
+		const bool bRun = bOrderSprint;
 		const FVector Landing = WindowApproachLanding;
 		const FVector Dir = (Landing - GetActorLocation()).GetSafeNormal2D();
 		bWindowApproachPending = false;
@@ -822,6 +914,8 @@ void AOperativeCharacter::HandleMoveFinished()
 	bOwnMoveOrder = false;
 	bStealthFast = false;
 	bSprinting = false;
+	ArrivalTravelYaw = static_cast<float>(SmoothedVelocity.SizeSquared2D() > 10.f * 10.f ? SmoothedVelocity.Rotation().Yaw : GetActorRotation().Yaw);
+	bPendingArrivalFacingLog = true;
 	ApplyMovementParams();
 
 	// Sprint 12: arrived at the cover slot ordered -> press against the wall.
@@ -898,10 +992,15 @@ bool AOperativeCharacter::IsWounded() const
 		&& HealthComponent->GetCurrentHealth() / HealthComponent->GetMaxHealth() < MovementConfig.WoundedHealthThreshold);
 }
 
+bool AOperativeCharacter::CanSprintIfStanding() const
+{
+	return !bCarrying && CriticalWoundRules::AllowsSprint(IsCriticallyWounded())
+		&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded());
+}
+
 bool AOperativeCharacter::CanSprint() const
 {
-	return !bCarrying && OperativeMovementRules::CanSprint(MovementConfig, Stance, ColdLevel, IsWounded())
-		&& CriticalWoundRules::AllowsSprint(IsCriticallyWounded()); // the critical wound: down, crawling only
+	return Stance != EOperativeStance::Prone && CanSprintIfStanding();
 }
 
 float AOperativeCharacter::GetMaxSpeed() const

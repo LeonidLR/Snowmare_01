@@ -110,4 +110,32 @@ namespace LookHoldRules
 		const float Limit = LimitDeg >= 0.f ? LimitDeg : GetConfig().StandingMaxTwistDeg;
 		return FMath::Clamp(FRotator::NormalizeAxis(TwistDeg), -Limit, Limit);
 	}
+
+	FVector AdjustClickForFlatGround(const FVector& OperativeLocation, float HalfHeightCm, const FVector& ClickPoint, float FlatBandCm)
+	{
+		const double FeetZ = OperativeLocation.Z - static_cast<double>(FMath::Max(0.f, HalfHeightCm));
+		if (FMath::Abs(ClickPoint.Z - FeetZ) <= static_cast<double>(FMath::Max(0.f, FlatBandCm)))
+		{
+			return FVector(ClickPoint.X, ClickPoint.Y, OperativeLocation.Z);
+		}
+		return ClickPoint;
+	}
+
+	FLookDirection DirectionFromClick(const FVector& OperativeLocation, const FVector& ClickPoint)
+	{
+		const FVector Delta = ClickPoint - OperativeLocation;
+		if (Delta.IsNearlyZero())
+		{
+			return FLookDirection{};
+		}
+		const FRotator Rot = Delta.Rotation();
+		return FLookDirection{ static_cast<float>(FRotator::NormalizeAxis(Rot.Yaw)),
+			FMath::Clamp(static_cast<float>(FRotator::NormalizeAxis(Rot.Pitch)), -89.f, 89.f) };
+	}
+
+	FVector ProjectLookPoint(const FVector& OperativeLocation, float YawDeg, float PitchDeg, float DistanceCm)
+	{
+		const FVector Dir = FRotator(FMath::Clamp(PitchDeg, -89.f, 89.f), YawDeg, 0.f).Vector();
+		return OperativeLocation + Dir * FMath::Max(DistanceCm, 100.f);
+	}
 }

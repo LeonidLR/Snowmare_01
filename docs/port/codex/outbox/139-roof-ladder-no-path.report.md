@@ -1,3 +1,38 @@
+# 139 integration ? MERGE-READY, 2026-11-28
+
+This section supersedes all older map-fix-pending instructions and worker-only results below. Designer decision: B_x1_3_1_t1004_gallery / LadderActor_22 and old X6 blockouts will be replaced by proper Soviet buildings. No saved-map49->125 fix will come; it is not a merge prerequisite.
+
+- Merged origin/main351e114b (155 included) into this existing lane. Conflicts in test_map / handoff / changelog / tandem reconciled; Movement.NoWayUp and155 RoofLanding155 tests retained and both PASS.
+- RequestMove owns one no-way-up refusal handler for projection failure or incomplete/wrong-level path, emitting exactly one floating notification and one feed entry. OrderMoveTo no longer duplicates feedback. 155 bounded landing projection / no-partial routing retained with139 authored standing-capsule allowance for legacy centre goals in every stance. Ladder smoke now requires exactly one feed message for the impossible upper order.
+- RoofLadderSmoke knownFail reason: "designer 2026-11-28: building replaced by Soviet buildings, no map fix". Its feet>=290 / actual ladder-climb assertions remain strict. RepairProbe still tests transient125cm targets without saving data.
+- First local build PASS443.41s, after waiting for Audit-1128's Build.bat mutex. First Smart332/332 PASS. Initial RoofAccessAudit caught missing155 floating feedback (one feed entry alone was insufficient); stopped only our batch runner and its active WindowDetour child, restored floating text in the shared handler, rebuilt locally PASS21.24s. No smoke assertions weakened.
+- Final `Scripts/test.ps1 -Smart -SkipSmokes -Base origin/main`: PASS332/332,0 failures,39s. Process-local git core.excludesFile under Saved excluded only untracked Content/Config pack entries; tracked files and all Source remained included. Initial unfiltered dry run stopped due to huge pack inventory; filtered dry run and final impact coverage PASS, no unmapped Source.
+- Final smoke command: `powershell -ExecutionPolicy Bypass -File Scripts/smoke_parallel.ps1 -Commands RoofAccessAuditSmoke,LevelGenRampSmoke,WindowDetourSmoke,WindowCoverFireSmoke,CutawayClickSmoke,FormationRunStanceSmoke,CoverIndoorSmoke,LowCoverMoveLakeSmoke,FormationWallHugSmoke,FormationStairSmoke,RoofLadderSmoke,RoofLadderRepairProbe -Remote off -Jobs 1 -ResultJson Saved/Logs/139-finish-smokes.json`.
+- Final batch exit0, wall571s:11 PASS /12 run,1 KNOWN-FAIL,0 unexpected failures,0 retries/PASS*. This is the full mapped union. FormationScanPitch / FormationFenceCross / TorsoDrift were not selected by this diff's rules.
+
+| Smoke | Result | Seconds |
+| --- | --- | --- |
+| RoofAccessAuditSmoke | PASS | 39.5 |
+| LevelGenRampSmoke | PASS | 45.2 |
+| WindowDetourSmoke | PASS | 39.9 |
+| WindowCoverFireSmoke | PASS | 41.9 |
+| CutawayClickSmoke | PASS | 48.8 |
+| FormationRunStanceSmoke | PASS | 39.5 |
+| CoverIndoorSmoke | PASS | 43.5 |
+| LowCoverMoveLakeSmoke | PASS | 43.6 |
+| FormationWallHugSmoke | PASS | 61.9 |
+| FormationStairSmoke | PASS | 70 |
+| RoofLadderSmoke | KNOWN-FAIL | 45.2 |
+| RoofLadderRepairProbe | PASS | 40.7 |
+
+- RoofAccessAudit:50 placed accesses inspected,7 data issues preserved in `Saved/Logs/155-roof-access-audit.md`; code checks PASS, including live floating and feed feedback. All103 elevated parapet faces preserve raw hit height. Known old-blockout data issues are recorded, not repaired.
+- FormationStair:6/6 stair legs PASS, including the locked-door legacy centre goal Z92.15. LowCoverMoveLake PASS. WindowDetour PASS first attempt despite the local baseline flake warning.
+- Strict RoofLadderSmoke: impossible upper goal passes exactly-one feedback check; saved roof route remains partial ending on ground and actual order refused. At60s feet2.2,climbs0: KNOWN-FAIL as designed.
+- RepairProbe: complete formation route ends at roof navZ310, log confirms reached LadderActor_22 link going up and strict feet/climb assertion PASS. Runtime link edit only.
+- Artifacts: `Saved/Logs/139-finish-smokes.json`, `Saved/Logs/Smoke-<Name>.log`, `Saved/Logs/AutomationTests.log`, `Saved/TestReport/`, `Saved/Logs/Build.log` (final incremental build), `Saved/Logs/155-roof-access-audit.md`.
+- Build warnings: existing unity-name collision warnings and C4701 Feet warnings in155 PlayerControllerOrders; build succeeded. No unrelated cover/window/orders features added.
+- TypeSafe staged boundary audit PASS; diff/check and protected-boundary audit PASS. No Content/Config/map/designer JSON edits or deletion, no push or main checkout edits. Old worker_sync divergence removed to match main infrastructure.
+
 # 139 — диагностика лестницы на крышу / No way up
 
 ## Fresh headless run 2026-11-27 - MERGE-READY (map fix pending)

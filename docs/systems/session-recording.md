@@ -40,3 +40,20 @@ UTF-8 JSON объект. После заголовка события идут �
 
 Hold выводится из состояния. Схема сохраняет пространственный контекст для будущего конвертера.
 Приказы про окна, перелезание, наблюдение за сектором и смену формации не записываются в v1.
+
+
+## 121 additive tactics evidence (2026-11-27)
+
+Version remains 1. Additive events: shot_hit, damage, kill, down, stealth_on/off, cover_enter/leave and climb (ladder/roof/mantle, height in cm). Down means a critical-health threshold crossing; zero-health deaths are kills for either side. Kill context is tied to a matching synchronous hit, and unresolved awareness/support is null. Support means a living ally has optical sight of the attacker, not mere proximity.
+
+Snapshots add stealth, in_cover, height (feet above the sight system's ground column), seen_by_enemy (observer-specific optical count), under_fire (seconds since incoming fire, -1 when absent), scan_pitch, and look_yaw (the live sight facing). Threats add yaw and optional in_cover; unavailable cover evidence stays absent.
+
+`python Scripts/Tools/demo_tactics.py <recording.jsonl> [--json]` emits a short tactic table and recorded kill/down list. Rules and thresholds live in that script. Each round is analyzed independently; old cov/clip evidence can recover cover and firing, but missing stealth/visibility/kills never become confirmed tactical success. Pattern evidence and round are included in JSON/table output. The tagger covers fallback, relative high ground, distract/kill flank, rear flank, prone crawl to cover, cover-order overwatch, approach_unseen under elevated overwatch, continuous unwatched sectors, scan pitch range and same-enemy lure/follow/open-ground/distant kill.
+
+A synthetic fixture verifies the offline rules only. A short new PIE recording showing the three core tactics is a separate acceptance gate; it is not replaced by synthetic evidence. See the task121 report for validation status.
+
+- 121 offline edge correction (2026-11-27): round_end sorts after same-timestamp kills, preserving the final kill and completed flank; Python19/19 PASS. Final runtime/PIE validation remains pending (task121 report).
+
+- 121 direct-loss completeness checkpoint (2026-11-27): health recording now observes actual common health decreases (normal/direct/cold/burning/bleeding) exactly once, removing actor callback duplication. Known TakeHit attackers arm a synchronous context; critical down is recorded across the same paths. Added C++ AllHealthLossPaths coverage; final worker checks pending.
+
+**121 BLOCKER (2026-11-27): real PIE acceptance evidence still needed.** C++8de50957: worker build PASS410.31s; Smart848/848 PASS including HitAttribution/AllHealthLossPaths; all16 mapped smokes PASS first try; Python20/20 PASS including actual null-target schema and round-end ties. Recording facts/tagger finished and reviewed, but no real new PIE fight showing all3 core tactics was captured in this headless run. Synthetic fixture is not acceptance evidence. See `docs/port/codex/outbox/121-recording-tactics.report.md`. Stop here; Lead owns the next task.

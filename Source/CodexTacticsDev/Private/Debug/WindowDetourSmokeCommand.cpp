@@ -1,6 +1,7 @@
 // Dev-only repro of G024 (designer, X6 fight 2026-11-25): from outside, a climb-in order must go through THAT window.
 // The operative stands 6 m outside a ground-floor window of a sector building that has another opening nearby. One click on the
 // sill. FAIL if he enters any other opening before this window, or if he ends still outside.
+// 152: the single operative runs through the window to a goal beyond its landing, retaining sprint on the resumed path.
 // G024b: the same window order with 3 operatives box-selected in Solo. FAIL if any of them enters another opening first.
 //   UnrealEditor.exe <uproject> /Game/Maps/Generated/L_Gen_Depot_1_X6 -game -nullrhi -nosound -LevelJson=L_Gen_Depot_1_X6.json
 //     -ExecCmds="CodexTactics.WindowDetourSmoke"
@@ -42,7 +43,7 @@ namespace WindowDetourSmoke
 	constexpr float EnteredCm = 160.f;
 	constexpr float CrossedCm = 300.f;
 
-	enum class EStep : uint8 { Warmup, Place, Settle, Order, Done };
+	enum class EStep : uint8 { Warmup, Place, Settle, Order, RunVault, Done };
 
 	struct FOpening
 	{
@@ -65,6 +66,7 @@ namespace WindowDetourSmoke
 		float StartSide = 1.f;
 		FVector OutsideFeet = FVector::ZeroVector;
 		FVector FarFeet = FVector::ZeroVector;
+		FVector RunGoal = FVector::ZeroVector;
 		bool bCrossed = false;
 		int32 CrossedFrame = -1;
 		TArray<FOpening> Others;
@@ -290,6 +292,15 @@ namespace WindowDetourSmoke
 				{
 					continue;
 				}
+				// Leave a real path leg beyond the vault landing, so arrival cannot hide a lost run gait.
+				FNavLocation RunGoal;
+				if (!ProjectFeet(Nav, Inside.Location - Through * (Side * 400.f), Box.Min.Z, RunGoal)
+					|| SideOf(RunGoal.Location, Center, Through) == Side
+					|| FVector::Dist2D(RunGoal.Location, Inside.Location) < 280.f)
+				{
+					continue;
+				}
+				Runner->RunGoal = RunGoal.Location;
 				Runner->Sill = Sill;
 				Runner->SillCenter = Center;
 				Runner->Through = Through;
@@ -612,19 +623,59 @@ namespace WindowDetourSmoke
 				FVector::Dist2D(Pos, R.SillCenter)));
 			if (R.Failures == 0)
 			{
-				R.bGroupCase = true;
-				R.bCrossed = false;
-				R.CrossedFrame = -1;
-				R.Others.Reset();
-				R.Sill = nullptr;
-				R.Men.Reset();
-				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: single operative passed, next is the box selection of 3"));
-				Go(EStep::Place);
+				Go(EStep::RunVault);
 				return true;
 			}
 			Finish();
 			return true;
 		}
+		case EStep::RunVault:
+			if (R.StepFrame == 1)
+			{
+				const float Yaw = static_cast<float>((-R.Through * R.StartSide).Rotation().Yaw);
+				Put(*Leader, R.OutsideFeet, Yaw);
+				FVector Landing, Approach;
+				float ClickYaw = 0.f;
+				bool bApproachOnNav = false;
+				const bool bTarget = R.Sill.IsValid() && PC->FindWindowSillTarget(*R.Sill.Get(), *Leader, Landing, ClickYaw, &Approach, &bApproachOnNav);
+				Check(bTarget && bApproachOnNav, TEXT("run regression has a window approach on navmesh"));
+				if (!bTarget || !bApproachOnNav)
+				{
+					Finish();
+					return true;
+				}
+				Put(*Leader, Approach, Yaw);
+				Check(Leader->OrderMoveTo(R.RunGoal, true) == EOperativeOrderResult::Accepted && Leader->IsSprinting(),
+					TEXT("run order starts sprinting before the window traversal"));
+				// Ordinary broken-window vault, outside the explicit window approach's completion guard.
+				// This stops the path through HandleMoveFinished, reproducing the lost-gait bug.
+				Check(Leader->TryVault(-R.Through * R.StartSide, true), TEXT("same run order starts the window vault"));
+				if (!Leader->IsVaulting())
+				{
+					Finish();
+				}
+				return true;
+			}
+			if (Leader->IsVaulting() && R.StepFrame < 60 * 10)
+			{
+				return true;
+			}
+			Check(!Leader->IsVaulting() && Leader->IsMoving() && Leader->IsSprinting(),
+				TEXT("same run order is still sprinting on its path after the window vault"));
+			if (R.Failures > 0)
+			{
+				Finish();
+				return true;
+			}
+			R.bGroupCase = true;
+			R.bCrossed = false;
+			R.CrossedFrame = -1;
+			R.Others.Reset();
+			R.Sill = nullptr;
+			R.Men.Reset();
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: single operative and run traversal passed, next is the box selection of 3"));
+			Go(EStep::Place);
+			return true;
 		default:
 			return true;
 		}

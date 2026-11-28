@@ -1426,7 +1426,12 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 	}
 	float YawLimit = AimYawClampDegrees;
 	float PitchLimit = AimPitchClampDegrees;
-	if (bCornerLookPoint && ActiveAimOffset)
+	const TOptional<float> ScanPitch = Operative.GetFormationLookPitch();
+	const bool bScanPitch = bAimOffset && !bAimOffsetTurnBasedOff && !bHasAimTarget
+		&& Operative.IsFacingFormationSector() && ScanPitch.IsSet();
+	const bool bLookHoldPitch = bAimOffset && !bAimOffsetTurnBasedOff && !bHasAimTarget && !bScanPitch && !bCornerLookPoint
+		&& !bInCover && !Operative.IsInStealthMode() && !Operative.HasOwnFacing() && !bIsSprinting && Operative.GetActiveLookPoint(LookPoint);
+	if ((bCornerLookPoint || bLookHoldPitch) && ActiveAimOffset)
 	{
 		const FBlendParameter& YawAxis = ActiveAimOffset->GetBlendParameter(0);
 		const FBlendParameter& PitchAxis = ActiveAimOffset->GetBlendParameter(1);
@@ -1438,7 +1443,9 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 		// Not YawTargetWithinReach: a look past the rifle's 60 deg twist is still inside the CoverIndoor yaw axis, and
 		// a look behind the pose must stay clamped there instead of easing the torso back to 0.
 		float Yaw = AimOffsetRules::YawToTarget(Operative.GetStanceAimOrigin(), Operative.GetStanceAimBaseDirection(), LookPoint, 180.f);
-		float Pitch = AimOffsetRules::PitchToTarget(Operative.GetMuzzleLocation(), LookPoint, PitchLimit);
+		float Pitch = Operative.HasManualLookPoint()
+			? FMath::Clamp(Operative.GetManualLookPitchDeg(), -PitchLimit, PitchLimit)
+			: AimOffsetRules::PitchToTarget(Operative.GetMuzzleLocation(), LookPoint, PitchLimit);
 		CoverLookAoRules::ClampAxes(Yaw, Pitch, YawLimit, PitchLimit);
 		AimYawTarget = Yaw;
 		AimPitchTarget = Pitch;
@@ -1448,12 +1455,18 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 	{
 		// Formation scan pitch (G025): the sector already turns the actor for yaw. The aim offset only nods.
 		// A combat aim and the corner look both win. OrderMoveTo does not clear this pitch while the look is set.
-		const TOptional<float> ScanPitch = Operative.GetFormationLookPitch();
-		const bool bScanPitch = bAimOffset && !bAimOffsetTurnBasedOff && !bHasAimTarget
-			&& Operative.IsFacingFormationSector() && ScanPitch.IsSet();
 		if (bScanPitch)
 		{
 			AimPitchTarget = FMath::Clamp(ScanPitch.GetValue(), -AimPitchClampDegrees, AimPitchClampDegrees);
+			AimYawTarget = 0.f;
+			bAimYawOutOfReach = false;
+		}
+		else if (bLookHoldPitch)
+		{
+			const float LookPitch = (Operative.HasManualLookPoint() && Operative.IsLookHoldEligible())
+				? Operative.GetManualLookPitchDeg()
+				: AimOffsetRules::PitchToTarget(Operative.GetMuzzleLocation(), LookPoint, PitchLimit);
+			AimPitchTarget = FMath::Clamp(LookPitch, -PitchLimit, PitchLimit);
 			AimYawTarget = 0.f;
 			bAimYawOutOfReach = false;
 		}
@@ -1473,7 +1486,7 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 		}
 	}
 	AimPitch = FMath::Clamp(FMath::FInterpTo(AimPitch, AimPitchTarget, DeltaSeconds, AimPitchInterpSpeed), -PitchLimit, PitchLimit);
-	if (!bHasAimTarget && !Operative.IsFacingFormationSector() && FMath::Abs(AimPitch) < 0.05f)
+	if (!bHasAimTarget && !Operative.IsFacingFormationSector() && !bLookHoldPitch && FMath::Abs(AimPitch) < 0.05f)
 	{
 		AimPitch = 0.f;
 	}
@@ -1500,6 +1513,68 @@ void UOperativeAnimInstance::UpdateAimOffset(const AOperativeCharacter& Operativ
 	AimOffsetLinear = AimOffsetRules::StepAlpha(AimOffsetLinear, AimOffsetRules::WantsAimOffset(State), DeltaSeconds, AimOffsetBlendSeconds);
 	AimOffsetAlpha = FMath::SmoothStep(0.f, 1.f, AimOffsetLinear);
 	bAimOffsetActive = AimOffsetAlpha > 0.01f;
+
+	const USceneComponent* WeaponComp = (Operative.WeaponSkeletalMesh && Operative.WeaponSkeletalMesh->IsVisible())
+		? static_cast<const USceneComponent*>(Operative.WeaponSkeletalMesh.Get())
+		: static_cast<const USceneComponent*>(Operative.WeaponMesh.Get());
+	const USkeletalMeshComponent* Mesh = GetSkelMeshComponent();
+	const bool bWantCornerTrim = bInCover && !Operative.bShimmying && bCornerLookPoint && State.bEnabled && State.bRangedWeapon
+		&& WeaponComp && WeaponComp->IsVisible() && Mesh;
+	if (bWantCornerTrim)
+	{
+		const FVector MuzzleWorld = Operative.GetWeaponMuzzleLocation();
+		const FVector BarrelWorld = MuzzleWorld - WeaponComp->GetComponentLocation();
+		const FVector GoalDirWorld = (LookPoint - Operative.GetActorLocation()).GetSafeNormal2D();
+		if (!BarrelWorld.IsNearlyZero() && !GoalDirWorld.IsNearlyZero())
+		{
+			const FVector2D Goal2D(GoalDirWorld.X, GoalDirWorld.Y);
+			if (!bCornerLookDirInitialized)
+			{
+				const FVector InitBarrel2D = BarrelWorld.GetSafeNormal2D();
+				CornerLookDirSmoothed = !InitBarrel2D.IsNearlyZero() ? FVector2D(InitBarrel2D.X, InitBarrel2D.Y) : Goal2D;
+				bCornerLookDirInitialized = true;
+			}
+			else
+			{
+				const float CurYaw = FMath::RadiansToDegrees(FMath::Atan2(CornerLookDirSmoothed.Y, CornerLookDirSmoothed.X));
+				const float GoalYaw = FMath::RadiansToDegrees(FMath::Atan2(Goal2D.Y, Goal2D.X));
+				const float DeltaYaw = FMath::FindDeltaAngleDegrees(CurYaw, GoalYaw);
+				const float StepYaw = DeltaYaw - FMath::FInterpTo(DeltaYaw, 0.f, DeltaSeconds, AimYawInterpSpeed);
+				const float NextRad = FMath::DegreesToRadians(CurYaw + StepYaw);
+				CornerLookDirSmoothed = FVector2D(FMath::Cos(NextRad), FMath::Sin(NextRad));
+			}
+			const FTransform HandRWorld = Mesh->GetSocketTransform(TEXT("hand_r"), RTS_World);
+			CornerLookBarrelInHandR = HandRWorld.InverseTransformVectorNoScale(BarrelWorld).GetSafeNormal();
+			const FVector GoalDirCs = Mesh->GetComponentTransform().InverseTransformVectorNoScale(
+				FVector(CornerLookDirSmoothed.X, CornerLookDirSmoothed.Y, 0.f)).GetSafeNormal2D();
+			CornerLookTargetYawCs = static_cast<float>(GoalDirCs.Rotation().Yaw);
+			CornerLookTrimAlpha = FMath::FInterpTo(CornerLookTrimAlpha, AimOffsetAlpha, DeltaSeconds, AimYawInterpSpeed);
+			bCornerLookTrimActive = !CornerLookBarrelInHandR.IsNearlyZero() && CornerLookTrimAlpha > 0.005f;
+		}
+		else
+		{
+			CornerLookTrimAlpha = FMath::FInterpTo(CornerLookTrimAlpha, 0.f, DeltaSeconds, AimYawInterpSpeed);
+			bCornerLookTrimActive = CornerLookTrimAlpha > 0.005f;
+		}
+	}
+	else
+	{
+		if (!bInCover)
+		{
+			// Stepped out of cover: actor facing now owns aim alignment; drop CS trim immediately to avoid fading toward a stale target.
+			CornerLookTrimAlpha = 0.f;
+		}
+		else
+		{
+			CornerLookTrimAlpha = FMath::FInterpTo(CornerLookTrimAlpha, 0.f, DeltaSeconds, AimYawInterpSpeed);
+		}
+		if (CornerLookTrimAlpha <= 0.005f)
+		{
+			CornerLookTrimAlpha = 0.f;
+			bCornerLookTrimActive = false;
+			bCornerLookDirInitialized = false;
+		}
+	}
 }
 
 UAnimSequence* UOperativeAnimInstance::GetClip(EOperativeClip Clip) const
@@ -1596,6 +1671,11 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	{
 		PeekLockCorrectionDeg = 0.f;
 	}
+	bCornerLookAimTrim = Instance->bCornerLookTrimActive && Instance->CornerLookTrimAlpha > MinSampleWeight;
+	CornerLookBarrelInHandR = Instance->CornerLookBarrelInHandR;
+	CornerLookTargetYawCs = Instance->CornerLookTargetYawCs;
+	CornerLookTrimAlpha = Instance->CornerLookTrimAlpha;
+	CornerLookTrimMaxDeg = Instance->CornerLookTrimMaxDegrees;
 	WeaponClips = Instance->ShotgunClips;
 	CrawlClips = Instance->CrawlClips;
 	CrawlWeight = Instance->CrawlWeight;
@@ -1722,7 +1802,7 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 	const bool bCrawlLayer = CrawlWeight > MinSampleWeight;
 	const bool bInjuredLayer = InjuredWeight > MinSampleWeight || !InjuredLimpAngles.IsNearlyZero(); // the cue alone crouched / in cover
 	const bool bStealthLayer = StealthWeight > MinSampleWeight;
-	if ((!LadderIK.bActive && !bPeekLock && !bWeaponLayer && !bCrawlLayer && !bInjuredLayer && !bStealthLayer) || InRootNode != GetRootNode())
+	if ((!LadderIK.bActive && !bPeekLock && !bCornerLookAimTrim && !bWeaponLayer && !bCrawlLayer && !bInjuredLayer && !bStealthLayer) || InRootNode != GetRootNode())
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
 		return false; // the graph alone
@@ -1761,11 +1841,65 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
 	}
+	if (bCornerLookAimTrim && StealthWeight <= MinSampleWeight)
+	{
+		ApplyCornerLookAimTrim(Output);
+	}
 	if (bPeekLock && StealthWeight <= MinSampleWeight)
 	{
 		ApplyPeekStanceYawLock(Output);
 	}
 	return true;
+}
+
+void FOperativeAnimInstanceProxy::ApplyCornerLookAimTrim(FPoseContext& Output) const
+{
+	const FBoneContainer& Bones = Output.Pose.GetBoneContainer();
+	auto Find = [&Bones](const TCHAR* Name)
+	{
+		const int32 MeshIndex = Bones.GetPoseBoneIndexForBoneName(Name);
+		return MeshIndex != INDEX_NONE ? Bones.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex)) : FCompactPoseBoneIndex(INDEX_NONE);
+	};
+	const FCompactPoseBoneIndex HandR = Find(TEXT("hand_r"));
+	const FCompactPoseBoneIndex Spines[3] = { Find(TEXT("spine_01")), Find(TEXT("spine_02")), Find(TEXT("spine_03")) };
+	if (HandR.GetInt() == INDEX_NONE || Spines[0].GetInt() == INDEX_NONE || CornerLookBarrelInHandR.IsNearlyZero())
+	{
+		return;
+	}
+	FCSPose<FCompactPose> Component;
+	Component.InitPose(Output.Pose);
+	const FVector EvaluatedBarrelCs = Component.GetComponentSpaceTransform(HandR).TransformVectorNoScale(CornerLookBarrelInHandR).GetSafeNormal2D();
+	if (EvaluatedBarrelCs.IsNearlyZero())
+	{
+		return;
+	}
+	const float EvaluatedYawCs = static_cast<float>(EvaluatedBarrelCs.Rotation().Yaw);
+	const float RawDelta = FMath::FindDeltaAngleDegrees(EvaluatedYawCs, CornerLookTargetYawCs);
+	const float Delta = FMath::Clamp(RawDelta, -CornerLookTrimMaxDeg, CornerLookTrimMaxDeg) * FMath::Clamp(CornerLookTrimAlpha, 0.f, 1.f);
+	if (FMath::Abs(Delta) <= 0.1f)
+	{
+		return;
+	}
+	int32 Count = 0;
+	for (const FCompactPoseBoneIndex Spine : Spines)
+	{
+		Count += Spine.GetInt() != INDEX_NONE ? 1 : 0;
+	}
+	const FQuat Step(FVector::UpVector, FMath::DegreesToRadians(Delta / FMath::Max(1, Count)));
+	for (const FCompactPoseBoneIndex Spine : Spines)
+	{
+		if (Spine.GetInt() == INDEX_NONE)
+		{
+			continue;
+		}
+		// Parent's mesh-space rotation (root included): local' = Parent^-1 * Step * Parent * local (hands & LeftHandIK ride rigidly below spine_03).
+		FQuat Parent = FQuat::Identity;
+		for (FCompactPoseBoneIndex Bone = Output.Pose.GetParentBoneIndex(Spine); Bone.GetInt() != INDEX_NONE; Bone = Output.Pose.GetParentBoneIndex(Bone))
+		{
+			Parent = Output.Pose[Bone].GetRotation() * Parent;
+		}
+		Output.Pose[Spine].SetRotation((Parent.Inverse() * Step * Parent * Output.Pose[Spine].GetRotation()).GetNormalized());
+	}
 }
 
 void FOperativeAnimInstanceProxy::ApplyLadderIK(FPoseContext& Output) const
@@ -2346,7 +2480,8 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	// idle -> fire transition, then the fire-ready idle; the exit transition when the threat is gone for the hold time,
 	// he shimmies off the edge or leaves the cover. Without the clips the look-around corner pose stands in.
 	UAnimSequenceBase* FireIdle = PickCoverClip(bIsCrouching ? CoverCrouchFireIdle : CoverStandFireIdle);
-	const bool bWantFirePose = (bCoverFireReady || (bCoverOverTopShotPending && !bIsReloading)) && FireIdle;
+	const bool bWantCornerLookFire = bCornerLookPoseApplied && Operative.IsAtPeekableCorner() && !bShimmying;
+	const bool bWantFirePose = (bCoverFireReady || bWantCornerLookFire || (bCoverOverTopShotPending && !bIsReloading)) && FireIdle;
 	bool bPeekStanceBlend = false;
 	if (bCoverInFirePose && !bShimmying)
 	{

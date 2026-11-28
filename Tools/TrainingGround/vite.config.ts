@@ -1,4 +1,5 @@
 import { defineConfig, Plugin } from 'vite'
+import { setupReplayApi } from './server/replayApi.ts'
 import react from '@vitejs/plugin-react'
 import fs from 'fs'
 import path from 'path'
@@ -41,6 +42,7 @@ const SPATIAL_RUNS_DIR = path.join(TELEMETRY_DIR, 'spatial_runs')
 const GIF_EXPORTS_DIR = path.join(TELEMETRY_DIR, 'exports_gif')
 
 const setupApiMiddlewares = (middlewares: any) => {
+  setupReplayApi((route, handler) => middlewares.use(route, handler), PROJECT_PATH)
   const addCors = (res: any) => {
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
@@ -84,7 +86,7 @@ const setupApiMiddlewares = (middlewares: any) => {
       const files = fs.readdirSync(LEVELS_DIR)
       const rawLevels: RawLevelMeta[] = []
       for (const file of files) {
-        if (file.endsWith('.json') && !file.endsWith('.sectors.json') && file !== 'stage_template.json') {
+        if (file.endsWith('.json') && !file.endsWith('.sectors.json') && !file.endsWith('.buildings_index.json') && file !== 'stage_template.json') {
           const p = path.join(LEVELS_DIR, file)
           try {
             const content = JSON.parse(fs.readFileSync(p, 'utf-8'))

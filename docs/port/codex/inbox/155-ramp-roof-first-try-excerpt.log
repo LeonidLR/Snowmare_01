@@ -1,0 +1,72 @@
+5435:[2026.11.27-07.05.32:563][788]LogCodexTactics: Display: [ArrivalFacing] Commander: rule=combat target yaw=102.4 actor=102.4 travel=52.5 (manualLook=0 explicit=0 idle=0 formation=0 fought=1 cover=0 stealth=0)
+5462:[2026.11.27-07.05.36:765][ 58]LogCodexTactics: Display: [Formation] new leader Commander looks 22 (facing 102; walk -, order -, as leader -, squad 22)
+5463:[2026.11.27-07.05.36:765][ 58]LogCodexTactics: Squad leader: Commander
+5464:[2026.11.27-07.05.36:765][ 58]LogCodexTactics: Display: [SQUAD] 👤 Operative selected: Commander
+5495:[2026.11.27-07.05.39:124][204]LogCodexTactics: Display: [Commander] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+5501:[2026.11.27-07.05.39:290][213]LogCodexTactics: Display: [Cover] Commander: double-click on another cover - not in cover -> the ordinary cover order
+5502:[2026.11.27-07.05.39:290][213]LogCodexTactics: Display: Commander: move to (-2597, -11215) sprint -> accepted
+5503:[2026.11.27-07.05.39:290][213]LogCodexTactics: Display: [Cover] Commander: to the low cover at (-2597, -11215) at a sprint
+5504:[2026.11.27-07.05.39:292][213]LogCodexTactics: Display: [Commander] 🏃 Take cover!
+5538:[2026.11.27-07.05.42:522][420]LogCodexTactics: Display: Commander: stance STANDING -> CROUCHED
+5539:[2026.11.27-07.05.42:522][420]LogCodexTactics: Display: [Cover] Commander: entered the low cover at (-2597, -11215), facing right, corners L 1 R 1
+5540:[2026.11.27-07.05.42:522][420]LogCodexTactics: Display: [Commander] 🧱 Behind cover!
+5541:[2026.11.27-07.05.42:522][420]LogCodexTactics: Display: [Cover] Commander: runs into the cover (217 cm out, speed 725, clip lead 98, glide 120)
+5542:[2026.11.27-07.05.42:522][420]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+5543:[2026.11.27-07.05.42:537][421]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-2596.79, Y=-11170.00, Z=90.00) judged outdoor -> set 'm4'
+5549:[2026.11.27-07.05.42:729][432]LogCodexTactics: Display: [Cover] Commander: turns along the wall to the left (threat known)
+5552:[2026.11.27-07.05.42:935][445]LogCodexTactics: Display: [Cover] Commander: settled in the cover after 0.42 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+5555:[2026.11.27-07.05.43:131][458]LogCodexTactics: Display: [Cover] Commander: steps off the wall for an open shot at BP_Operative_C_16 (in front of the cover)
+5556:[2026.11.27-07.05.43:132][458]LogCodexTactics: Display: [Cover] Commander: left the cover (open shot: target in front of the cover)
+5563:[2026.11.27-07.05.43:806][502]LogCodexTactics: Display: [Commander] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+5567:[2026.11.27-07.05.45:059][584]LogCodexTactics: Display: Commander: move to (-2661, -11215) sprint -> accepted
+5568:[2026.11.27-07.05.45:059][584]LogCodexTactics: Display: [Cover] Commander: to the low cover at (-2661, -11215) at a sprint
+5569:[2026.11.27-07.05.45:059][584]LogCodexTactics: Display: [Commander] 🏃 Take cover!
+5570:[2026.11.27-07.05.45:291][597]LogCodexTactics: Display: Commander: stance STANDING -> CROUCHED
+5571:[2026.11.27-07.05.45:291][597]LogCodexTactics: Display: [Cover] Commander: entered the low cover at (-2661, -11215), facing left, corners L 1 R 1
+5572:[2026.11.27-07.05.45:291][597]LogCodexTactics: Display: [Commander] 🧱 Behind cover!
+5573:[2026.11.27-07.05.45:302][598]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-2660.80, Y=-11170.00, Z=90.00) judged outdoor -> set 'm4'
+5574:[2026.11.27-07.05.45:304][598]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+5575:[2026.11.27-07.05.45:319][599]LogCodexTactics: Display: [Cover] Commander: settled in the cover after 0.03 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+5576:[2026.11.27-07.05.45:476][609]LogCodexTactics: Display: [Cover] Commander: turns along the wall to the right (threat known)
+5582:[2026.11.27-07.05.45:917][635]LogCodexTactics: Display: [Cover] Commander: steps off the wall for an open shot at BP_Operative_C_16 (in front of the cover)
+5583:[2026.11.27-07.05.45:919][635]LogCodexTactics: Display: [Cover] Commander: left the cover (open shot: target in front of the cover)
+5601:[2026.11.27-07.05.48:674][808]LogCodexTactics: Display: [Commander] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+5603:[2026.11.27-07.05.48:916][824]LogCodexTactics: Display: [Cover] Commander: back to the wall after the open shot
+5604:[2026.11.27-07.05.48:916][824]LogCodexTactics: Display: [Cover] Commander: entered the low cover at (-2661, -11215), facing left, corners L 1 R 1
+5605:[2026.11.27-07.05.48:916][824]LogCodexTactics: Display: [Commander] 🧱 Behind cover!
+5606:[2026.11.27-07.05.48:932][825]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-2660.80, Y=-11170.00, Z=90.00) judged outdoor -> set 'm4'
+5610:[2026.11.27-07.05.49:139][838]LogCodexTactics: Display: [Cover] Commander: shimmies 105 cm to the right (forward, facing right)
+5611:[2026.11.27-07.05.49:139][838]LogCodexTactics: Display: [Cover] Commander: corner peek ordered at the right corner (edge 161 cm along the wall, stand 105, shimmies there)
+5612:[2026.11.27-07.05.49:140][838]LogCodexTactics: Display: [Commander] 🎯 Covering the corner.
+5627:[2026.11.27-07.05.50:106][897]LogCodexTactics: Display: [Cover] Commander: shimmied along the low cover at (-2556, -11215), facing right, corners L 1 R 1
+5628:[2026.11.27-07.05.50:120][898]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+5629:[2026.11.27-07.05.50:120][898]LogCodexTactics: Display: [Cover] Commander: corner peek - leaning out at the right corner, holding the aim
+5636:[2026.11.27-07.05.50:754][939]LogCodexTactics: Display: [Cover] Commander: steps off the wall for an open shot at BP_Operative_C_16 (in front of the cover)
+5637:[2026.11.27-07.05.50:754][939]LogCodexTactics: Display: [Cover] Commander: left the cover (open shot: target in front of the cover)
+5638:[2026.11.27-07.05.50:754][939]LogCodexTactics: Warning: Commander: mesh 26 cm / 0.0 deg off its place on the capsule (untracked) - put back
+5653:[2026.11.27-07.05.52:864][ 71]LogCodexTactics: Display: Commander: move to (-2304, -11192) -> accepted
+5659:[2026.11.27-07.05.53:212][ 93]LogCodexTactics: Display: Commander: move to (-2055, -11453) -> accepted
+5681:[2026.11.27-07.05.55:350][227]LogCodexTactics: Display: [Commander] 🔄 Mag empty! Cover the sector!
+5690:[2026.11.27-07.05.56:639][312]LogCodexTactics: Display: [Commander] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+5696:[2026.11.27-07.05.56:868][327]LogCodexTactics: Display: [Cover] Commander: double-click on another cover - not in cover -> the ordinary cover order
+5697:[2026.11.27-07.05.56:868][327]LogCodexTactics: Display: Commander: move to (-2514, -11215) sprint -> accepted
+5698:[2026.11.27-07.05.56:868][327]LogCodexTactics: Display: [Cover] Commander: to the low cover at (-2514, -11215) at a sprint
+5699:[2026.11.27-07.05.56:868][327]LogCodexTactics: Display: [Commander] 🏃 Take cover!
+5703:[2026.11.27-07.05.57:193][348]LogCodexTactics: Display: Commander: stance STANDING -> CROUCHED
+5704:[2026.11.27-07.05.57:193][348]LogCodexTactics: Display: [Cover] Commander: entered the low cover at (-2514, -11215), facing right, corners L 1 R 1
+5705:[2026.11.27-07.05.57:193][348]LogCodexTactics: Display: [Commander] 🧱 Behind cover!
+5706:[2026.11.27-07.05.57:194][348]LogCodexTactics: Display: [Cover] Commander: runs into the cover (49 cm out, speed 453, clip lead 98, glide 84)
+5707:[2026.11.27-07.05.57:208][349]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-2514.47, Y=-11170.00, Z=90.00) judged outdoor -> set 'm4'
+5713:[2026.11.27-07.05.57:592][375]LogCodexTactics: Display: [Cover] Commander: settled in the cover after 0.42 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+5718:[2026.11.27-07.05.58:066][403]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+5729:[2026.11.27-07.05.58:809][448]LogCodexTactics: Display: [Cover] Commander: steps off the wall for an open shot at BP_Operative_C_16 (in front of the cover)
+5730:[2026.11.27-07.05.58:809][448]LogCodexTactics: Display: [Cover] Commander: left the cover (open shot: target in front of the cover)
+5731:[2026.11.27-07.05.58:809][448]LogCodexTactics: Warning: Commander: mesh 70 cm / 0.0 deg off its place on the capsule (untracked) - put back
+5812:[2026.11.27-07.06.05:186][845]LogCodexTactics: Display: [Cover] Commander: back to the wall after the open shot
+5813:[2026.11.27-07.06.05:186][845]LogCodexTactics: Display: [Cover] Commander: entered the low cover at (-2514, -11215), facing right, corners L 1 R 1
+5814:[2026.11.27-07.06.05:186][845]LogCodexTactics: Display: [Commander] 🧱 Behind cover!
+5815:[2026.11.27-07.06.05:200][846]LogCodexTactics: Display: [CoverSet] Commander: cover at V(X=-2514.47, Y=-11170.00, Z=90.00) judged outdoor -> set 'm4'
+5838:[2026.11.27-07.06.08:558][ 65]LogCodexTactics: Display: [Cover] Commander: leans out round the corner and holds the fire stance
+5851:[2026.11.27-07.06.09:321][114]LogCodexTactics: Display: [Cover] Commander: steps off the wall for an open shot at BP_Operative_C_17 (in front of the cover)
+5852:[2026.11.27-07.06.09:321][114]LogCodexTactics: Display: [Cover] Commander: left the cover (open shot: target in front of the cover)
+5853:[2026.11.27-07.06.09:321][114]LogCodexTactics: Warning: Commander: mesh 71 cm / 0.0 deg off its place on the capsule (untracked) - put back

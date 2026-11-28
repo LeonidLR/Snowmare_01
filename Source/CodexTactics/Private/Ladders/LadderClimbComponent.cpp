@@ -26,6 +26,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Ladders/LadderActor.h"
 #include "Ladders/LadderSubsystem.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "NavLinkCustomComponent.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
@@ -647,7 +648,7 @@ void ULadderClimbComponent::StartEntry()
 			{
 				const FVector Keep = PendingDestination;
 				const bool bKeep = bHasPendingDestination;
-				Operative->StopOperative();
+				Operative->PauseMoveForTraversal();
 				PendingDestination = Keep;
 				bHasPendingDestination = bKeep;
 			}
@@ -692,7 +693,7 @@ void ULadderClimbComponent::StartEntry()
 		const bool bKeep = bHasPendingDestination;
 		if (Operative)
 		{
-			Operative->StopOperative();
+			Operative->PauseMoveForTraversal();
 		}
 		else if (Character->GetController())
 		{
@@ -1211,6 +1212,11 @@ void ULadderClimbComponent::FinishClimb()
 		Target->ReleaseLease(GetOwner());
 	}
 	Fire(ELadderClimbEvent::ExitDone);
+	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(Character))
+	{
+		const float ClimbHeightCm = Character ? static_cast<float>(FMath::Abs(Character->GetActorLocation().Z - ClimbStartLocation.Z)) : 0.f;
+		Recorder->RecordClimb(Character, FName(TEXT("ladder")), ClimbHeightCm);
+	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Ladder] %s is off %s at the %s"), *GetNameSafe(Character), *GetNameSafe(Target), bTop ? TEXT("top") : TEXT("bottom"));
 	ResumePath();
 }

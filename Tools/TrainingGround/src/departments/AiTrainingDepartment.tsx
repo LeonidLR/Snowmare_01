@@ -233,9 +233,9 @@ export function AiTrainingDepartment() {
     setLaunchStatus('');
     try {
       const response = await fetch('/api/training/open-editor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ build }) });
-      const result = await response.json() as { pid?: number | null; error?: string };
+      const result = await response.json() as { syncMessage?: string; pid?: number | null; error?: string };
       if (!response.ok) throw new Error(result.error ?? 'Не удалось открыть редактор');
-      setLaunchStatus(result.pid ? `Редактор запущен, pid ${result.pid}` : 'Редактор запущен');
+      setLaunchStatus((result.syncMessage ? result.syncMessage + "; " : "") + (result.pid ? `Редактор запущен, pid ${result.pid}` : 'Редактор запущен'));
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
     } finally {
@@ -252,13 +252,13 @@ export function AiTrainingDepartment() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sector: draft.sector, build }),
       });
-      const result = await response.json() as { pid?: number | null; active?: TrainingSelection; error?: string };
+      const result = await response.json() as { syncMessage?: string; pid?: number | null; active?: TrainingSelection; error?: string };
       if (!response.ok) throw new Error(result.error ?? 'Не удалось запустить игру');
       if (result.active) {
         const active = result.active;
         setData((previous) => previous ? { ...previous, active } : previous);
       }
-      setLaunchStatus(result.pid ? `запущено, pid ${result.pid}` : 'запущено');
+      setLaunchStatus((result.syncMessage ? result.syncMessage + "; " : "") + (result.pid ? `запущено, pid ${result.pid}` : 'запущено'));
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
     } finally {

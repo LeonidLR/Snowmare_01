@@ -31,6 +31,7 @@
 #include "Tactics/CoverLookAoRules.h"
 #include "Tactics/CoverRules.h"
 #include "Tactics/CoverTraceRules.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Tactics/LookHoldRules.h"
 #include "Tactics/RunCornerPeekRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
@@ -83,7 +84,7 @@ namespace
 		TEXT("CornerPeekEntryYawBlendSeconds); 0: the old entry - the enter clip spins him to the wall and back first (the 2026-11-01 bug; A/B)."));
 }
 
-EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& RequestedSlot, bool bSprint)
+EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& RequestedSlot, bool bSprint, bool bPlayerOrder)
 {
 	FCoverSlot Slot = RequestedSlot;
 	if (!Slot.IsValid() || (IsPlayerTeam() && !CoverTraceRules::ResolveLowCoverApproach(GetWorld(), GetActorLocation(), Slot))
@@ -100,18 +101,23 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Requ
 	if (IsKnockedDown())
 	{
 		TWeakObjectPtr<AOperativeCharacter> WeakThis(this);
-		KnockdownComponent->BufferOrder([WeakThis, Slot, bSprint]()
+		KnockdownComponent->BufferOrder([WeakThis, Slot, bSprint, bPlayerOrder]()
 		{
 			if (AOperativeCharacter* Self = WeakThis.Get())
 			{
-				Self->OrderTakeCover(Slot, bSprint);
+				Self->OrderTakeCover(Slot, bSprint, bPlayerOrder);
 			}
 		});
 		return EOperativeOrderResult::Accepted;
 	}
 	if (bInCover && CoverTraceRules::IsSameWall(CoverSlot, Slot))
 	{
-		return OrderShimmyTo(Slot);
+		const EOperativeOrderResult Result = OrderShimmyTo(Slot);
+		if (Result == EOperativeOrderResult::Accepted)
+		{
+			bPlayerCoverOrderActive = bPlayerOrder && IsPlayerTeam();
+		}
+		return Result;
 	}
 	// Rev 5i: a tutorial confinement refuses cover outside its area before he leaves the cover he holds.
 	if (!UTutorialSubsystem::CheckConfinedOrder(this, this, Slot.WorldLocation))
@@ -130,11 +136,13 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Requ
 		ArmRunCornerPeek(RunCornerPeekRequestEdge);
 		MarkCornerPeekArrival();
 	}
+	bPlayerCoverOrderActive = bPlayerOrder && IsPlayerTeam();
 	TGuardValue<bool> CoverOrder(bCoverMoveOrder, true);
 	const EOperativeOrderResult Result = OrderMoveTo(Slot.WorldLocation, bSprint);
 	if (Result != EOperativeOrderResult::Accepted)
 	{
 		bHasPendingCover = false;
+		bPlayerCoverOrderActive = false;
 	}
 	else
 	{
@@ -155,6 +163,7 @@ void AOperativeCharacter::SetPendingCover(const FCoverSlot& Slot)
 	bRunCornerPeekPending = false;
 	PendingCoverSlot = Slot;
 	bHasPendingCover = Slot.IsValid();
+	bPlayerCoverOrderActive = bHasPendingCover && IsPlayerTeam();
 }
 
 void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
@@ -250,6 +259,17 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	StopOperative();
 	CoverSlot = Slot;
 	bInCover = true;
+	if (!bWasInCover && GetWorld())
+	{
+		LastCoverOpenShotTransition = GetWorld()->GetTimeSeconds();
+	}
+	if (!bWasInCover && !bQuietCoverEntryRequest)
+	{
+		if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+		{
+			Recorder->RecordCover(this, true, Slot.Height == ECoverHeight::HighCover ? FName(TEXT("High")) : FName(TEXT("Low")));
+		}
+	}
 	if (LookHoldRules::ShouldClearOnCover(bInCover))
 	{
 		ClearManualLookPoint();
@@ -521,6 +541,7 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 	{
 		return;
 	}
+	bPlayerCoverOrderActive = false;
 	ClearWindowCover();
 	if (bCoverEnteredEventPending)
 	{
@@ -529,6 +550,10 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 	else if (!bQuietCoverLeaveRequest)
 	{
 		RaiseCoverEvent(GameplayEvents::CoverLeft, CoverSlot, CurrentCoverHeight == ECoverHeight::HighCover ? FName(TEXT("High")) : FName(TEXT("Low")));
+		if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+		{
+			Recorder->RecordCover(this, false, CurrentCoverHeight == ECoverHeight::HighCover ? FName(TEXT("High")) : FName(TEXT("Low")));
+		}
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: left the cover (%s)"), *DisplayName.ToString(), *Reason);
 	if ((bCornerAimActive || bIsCornerLeaning || IsPeekingRoundCorner()) && GetWorld())
@@ -1031,12 +1056,17 @@ void AOperativeCharacter::UpdateCoverFacing(bool bAllowSnap)
 		CoverFacing = ManualCornerPeekSide; // the ordered corner, whatever the threat side (until another order)
 	}
 	// A Shift-click look at this peek picks the hand from the look versus the wall normal. It does not walk him to the
-	// other edge (bManualCornerPeek still blocks the snap below).
+	// other edge (bManualCornerPeek still blocks the snap below). Beyond corner AO reach, step out of the wall hug so the actor turns.
 	if (WantsCornerLookPose())
 	{
 		FVector Look = FVector::ZeroVector;
 		if (GetManualLookPoint(Look))
 		{
+			if (!CanReachCornerLookInCover(Look))
+			{
+				LeaveCover(TEXT("corner look beyond aim offset reach"));
+				return;
+			}
 			const float Signed = CoverLookAoRules::SignedYawFromNormal(CoverSlot.WallNormal, Look - GetActorLocation());
 			CoverFacing = CoverLookAoRules::SideFromLook(Signed, CoverFacing, Config.CornerLookSideHysteresisDeg);
 		}

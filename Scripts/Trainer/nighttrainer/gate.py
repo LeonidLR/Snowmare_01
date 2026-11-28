@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .adapter import ArenaAdapter
+from .metrics import damage_dealt
 
 
 def extract_used_metrics(config: dict) -> Set[str]:
@@ -26,6 +27,8 @@ def extract_used_metrics(config: dict) -> Set[str]:
 
     # Fitness bonuses and penalties
     fitness = config.get("fitness") or {}
+    for term in (fitness.get('doctrine') or {}).get('terms', []):
+        metrics.add(term['metric'])
     for block_name in ("bonuses", "penalties"):
         block = fitness.get(block_name) or {}
         for k in block.keys():
@@ -117,6 +120,13 @@ def get_metric_value_from_round(rnd: dict, metric: str, side: str = "A") -> Any:
     """
     if not isinstance(rnd, dict):
         return None
+    if metric == 'damage_dealt' and ('damage_dealt' in rnd or 'opp_hp_lost' in rnd):
+        return damage_dealt(rnd)
+    if metric.startswith('behaviour.'):
+        key = metric.split('.', 1)[1]
+        if 'behaviour_observed' in rnd and key not in rnd['behaviour_observed']:
+            return None
+        return get_metric_value_from_round(rnd, key, side)
 
     # 1. Direct key on canonical row (objective_win derived by adapter, damage_dealt, kills, etc.)
     if metric in rnd and not metric.startswith("_"):
@@ -262,6 +272,8 @@ def check_baseline_sufficiency(baseline_data: Optional[dict], min_rounds_per_sce
     counts: Dict[str, int] = {}
     if rounds:
         for r in rounds:
+            if r.get('crashed'):
+                continue
             scen = r.get("scenario") or "default"
             counts[scen] = counts.get(scen, 0) + 1
     else:

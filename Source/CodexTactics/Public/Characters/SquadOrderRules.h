@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Characters/OperativeMovementRules.h"
 #include "GameFlow/GameFlowTypes.h"
 
 enum class EOperativeOrderResult : uint8;
@@ -152,6 +153,44 @@ namespace SquadOrderRules
 	 * bCanSprint: nothing but the stance keeps him from sprinting (cold, wounds, a carried load).
 	 */
 	CODEXTACTICS_API bool ShouldStandToSprintWithLeader(bool bLeaderSprinting, bool bFollowerCrouching, bool bStanceFromSquad, bool bCanSprint);
+
+	/**
+	 * Inputs for resolving a formation follower's stance and sprint gait from the leader's current order.
+	 * Solo mode sets bInFormation = false so Solo remains completely unaffected.
+	 */
+	struct FFormationFollowOrderFacts
+	{
+		bool bInFormation = true;
+		bool bLeaderSprinting = false;
+		EOperativeStance LeaderStance = EOperativeStance::Standing;
+		EOperativeStance FollowerStance = EOperativeStance::Standing;
+		bool bStanceFromSquad = false;
+		bool bStoodUpForLeaderSprint = false;
+		bool bCanSprintStanding = true;
+		bool bHoldsApproachLook = false;
+		bool bInWallPose = false;
+		bool bInCover = false;
+		bool bInStealth = false;
+		bool bLockedProne = false;
+		bool bTraversalOrSniperHold = false;
+	};
+
+	/** Stance and gait output resolved by ResolveFormationFollowStanceGait. */
+	struct FFormationFollowStanceGait
+	{
+		EOperativeStance DesiredStance = EOperativeStance::Standing;
+		bool bChangeStance = false;
+		bool bMarkStanceFromSquad = false;
+		bool bNextStoodUpForLeaderSprint = false;
+		bool bSprint = false;
+	};
+
+	/**
+	 * In formation, a leader run (double-click / sprint) stands crouched or prone followers up and sprints them as well
+	 * (except followers who cannot sprint once standing or hold cover/wall/approach/stealth states). When the leader returns to walk
+	 * or crouch (single-click or C key), followers stop sprinting and match the leader's stance if the sprint stood them up.
+	 */
+	CODEXTACTICS_API FFormationFollowStanceGait ResolveFormationFollowStanceGait(const FFormationFollowOrderFacts& Facts);
 
 	// Regroup / Solo off ends the followers' own MOVE orders (AOperativeCharacter::ReleaseOwnMoveOrder): the formation takes
 	// everybody back at once; a running use / object task still finishes first.

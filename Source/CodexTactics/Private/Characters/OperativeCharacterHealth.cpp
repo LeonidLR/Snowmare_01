@@ -43,6 +43,7 @@
 #include "Interactables/LootCrateActor.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Subsystems/CodexEventBus.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Tactics/CoverDecisionRules.h"
 #include "Tactics/CoverRules.h"
@@ -60,6 +61,10 @@ void AOperativeCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDama
 
 void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 {
+	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+	{
+		Recorder->RecordKillOrDown(this, AttackerSource, false);
+	}
 	if (bInCover)
 	{
 		LeaveCover(TEXT("died"));
@@ -565,6 +570,12 @@ float AOperativeCharacter::ResolveIncomingHit(EOperativeHitKind Kind, float Amou
 	{
 		RecentRangedDamage += Final; // the corner-aim duck counts only what the corner protects from (2026-10-07 horde fix)
 	}
+	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this); Recorder && AttackerActor)
+	{
+		const AOperativeCharacter* Shooter = Cast<AOperativeCharacter>(AttackerActor);
+		Recorder->RecordDamageContext(AttackerActor, this, Attacker,
+			Shooter && Shooter->CurrentWeapon ? FName(*Shooter->CurrentWeapon->WeaponId) : NAME_None);
+	}
 	HealthComponent->ApplyDirectHealthLoss(Final, Attacker);
 	if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
 	{
@@ -703,12 +714,23 @@ void AOperativeCharacter::ResetTransientStateForLoad()
 	}
 	TacticalAnchor = FTacticalAnchor();
 	SetAutonomyTarget(nullptr);
+	ClearLookAndFacingState();
 	StopOperative();
 	if (UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
 	{
 		Anim->StopAllMontages(0.f); // get-up, interaction, dive, cover, weather pose, fire / reload clips
 	}
 	ResetBodyOffsets();
+}
+
+void AOperativeCharacter::ClearLookAndFacingState()
+{
+	ClearManualLookPoint();
+	ClearIdleFacing();
+	bExplicitFacing = false;
+	bFoughtThisFight = false;
+	LastThreat.Reset();
+	LastThreatContactTime = -1000.0;
 }
 
 void AOperativeCharacter::ReturnToCoverAfterKnockdown()

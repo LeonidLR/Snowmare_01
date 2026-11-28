@@ -27,6 +27,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/MantleNavigation.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "Misc/MemStack.h"
 #include "Interactables/VaultNavigation.h"
 #include "MotionWarpingComponent.h"
@@ -632,6 +633,11 @@ void AOperativeCharacter::FinishMantle()
 	{
 		Mantle->Release(this);
 	}
+	if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+	{
+		Recorder->RecordClimb(this, bMantleOnTop ? FName(TEXT("roof")) : FName(TEXT("mantle")),
+			static_cast<float>(FMath::Abs(MantleLandingFeet.Z - MantleBaseFeet.Z)));
+	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s landed %s (%.0f cm off the plan; the wall guard pushed %.0f cm)"), *DisplayName.ToString(),
 		bMantleOnTop ? TEXT("on top") : TEXT("over"), LastMantleLandingError, MantleGuardPushCm);
 	const FVector ToTarget = MantleResumeTarget - MantleLandingFeet;
@@ -646,6 +652,8 @@ void AOperativeCharacter::FinishMantle()
 	{
 		bMantleResume = false;
 		bHasMoveOrder = false;
+		ClearIdleFacing();
+		bExplicitFacing = false;
 		if (bMantleOnTop)
 		{
 			SetStance(EOperativeStance::Crouching); // designer Q3: on top he crouches
@@ -872,6 +880,8 @@ bool AOperativeCharacter::OrderMantleTop(const FHitResult& TopHit, bool bSprint,
 	if (FVector::Dist2D(GetActorLocation() - FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight()), Plan.Base)
 		<= OperativeMantleInternal::MantleOrderArriveCm + 40.f && TryStartMantle(Plan.Dir, nullptr, true))
 	{
+		ClearIdleFacing();
+		bExplicitFacing = false;
 		return true; // already at the face
 	}
 	// B17-4: over a fence the clip starts at its own start distance (its hand plant on the fence's lip), not at the top's click base.
@@ -965,6 +975,7 @@ bool AOperativeCharacter::StartMantleHop(const FVector& LandingFeet)
 {
 	// The vault's own short arc (UpdateObstacleStepOff's step down): collision off, flown, the walk resumes at the landing.
 	bVaultResume = bMantleResume;
+	bVaultResumeOwnOrder = bMantleResumeOwnOrder;
 	VaultResumeTarget = MantleResumeTarget;
 	bMantleResume = false;
 	if (AController* OwnerController = GetController())

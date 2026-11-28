@@ -264,8 +264,8 @@ carrying of the wounded (the designer: too complex).
 
 
 
-## Upper-goal reachability (139, 2026-11-27)
+## Upper-goal reachability (139 + 155, 2026-11-28)
 
-Explicit player moves to a higher floor require a complete route ending at that floor. The allowance for capsule-centre destinations includes the authored standing capsule even while crouched; existing same-floor low-cover moves keep their full ground routes. Partial upper-floor paths still report "No way up to that point." Formation/autonomous orders retain their own handling. RoofLadderSmoke keeps the saved-map climb assertion; RoofLadderRepairProbe changes only runtime link targets to prove the designer's125cm landing inset. Neither saves the map.
+Explicit player moves to a higher floor require a complete route ending at that floor. The allowance for capsule-centre destinations includes the authored standing capsule even while crouched; existing same-floor low-cover moves keep their ground routes. Elevated goals use bounded landing projection and disallow partial paths. Both projection and path failures use one refusal handler in RequestMove and post one "No way up" floating notification and one feed entry; OrderMoveTo does not duplicate feedback. Formation/autonomous orders retain their own handling.
 
-**139 MERGE-READY (map fix pending), 2026-11-27.** Code f4d0c498: worker build PASS406.18s; Smart927/927 PASS; exact nine mapped smokes8 PASS, only saved-map RoofLadderSmoke FAIL expected (strict retry too). Crouched LowCoverMoveLake and FormationStair PASS; repair probe climbs at feet302.2. Lead still applies LadderActor_22 inset125/125 and saves navmesh. Final artifacts/report: `docs/port/codex/outbox/139-roof-ladder-no-path.report.md`, `Saved/Logs/Worker/139-final/`.
+RoofLadderSmoke keeps its strict saved-map climb assertion, marked knownFail by designer decision 2026-11-28: the gallery and old X6 blockout buildings will be replaced by Soviet buildings; no saved-map inset fix is planned. RoofLadderRepairProbe changes only runtime link targets and proves the code path. Neither saves the map. Current validation is recorded in `docs/port/codex/outbox/139-roof-ladder-no-path.report.md`.

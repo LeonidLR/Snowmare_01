@@ -132,7 +132,7 @@ namespace RoofLadderSmoke
             const int32 BeforeMessages = Messages ? Messages->GetHistory().Num() : 0;
             const EOperativeOrderResult BadOrder = Leader->OrderMoveTo(RoofGoal + FVector(0.f, 0.f, 1000.f), false);
             if (BadOrder != EOperativeOrderResult::Unreachable || Leader->HasOwnMoveOrder() || !Messages
-                || Messages->GetHistory().Num() <= BeforeMessages
+                || Messages->GetHistory().Num() != BeforeMessages + 1
                 || !Messages->GetHistory().Last().Text.ToString().Contains(TEXT("No way up")))
             {
                 return Finish(false, TEXT("impossible upper goal is refused with No way up and no wall walk"));

@@ -1,0 +1,1455 @@
+{
+  "schema": "codex.task149_trial/1",
+  "note": "Real A/A calibration, three 20-second rounds per arm. Not evidence of candidate improvement.",
+  "run_id": "task149-real-trial-fixed",
+  "manifest": {
+    "schema": "codex.weekend_run/1",
+    "mock": false,
+    "trial": 3,
+    "config": {
+      "schema": "codex.weekend_trainer/1",
+      "seed": 20261127,
+      "rounds_per_arm": 204,
+      "sectors": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "map": "/Game/Maps/Generated/L_Gen_Depot_1_X6",
+      "level": "Content/Data/LevelJson/L_Gen_Depot_1_X6.json",
+      "sector_definitions": "Content/Data/LevelJson/L_Gen_Depot_1_X6.sectors.json",
+      "time_limit_s": 20,
+      "timeout_s": 180,
+      "scenario": "random",
+      "note": "204 paired seeds/arm, 34 in each X6 sector. Spawn/objective inclusion box only; Sector=0 disables interactive sector rounds. Frozen approved champion is opponent for both arms. No automatic application."
+    },
+    "trainer_config": {
+      "_comment": "Night trainer config (docs/tools/night-trainer.md). Snapshotted into Saved/Trainer/<run_id>/run.json when a run is created; edit this file for NEW runs.",
+      "seed": 20261103,
+      "baseline_weights": "Content/Data/AI/pmc_commander.json",
+      "bounds": null,
+      "runs_dir": "Saved/Trainer",
+      "search": {
+        "_comment": "G002. ga (default) = the scalar tournament. qd = MAP-Elites; switch it on only after the arena writes behaviour, or a night run bins every candidate at zero. Snapshotted into run.json; a resume keeps the mode it started with.",
+        "mode": "ga"
+      },
+      "qd": {
+        "archive_file": "qd_archive.json",
+        "axes": [
+          {
+            "id": "aggression",
+            "metric": "time_in_contact_s",
+            "bins": 4,
+            "range": [
+              0,
+              80
+            ],
+            "bin_edges": [
+              30.0,
+              45.0,
+              60.0
+            ]
+          },
+          {
+            "id": "mobility",
+            "metrics": [
+              "flanks_completed",
+              "moves"
+            ],
+            "bins": 4,
+            "range": [
+              0,
+              48
+            ],
+            "bin_edges": [
+              16.0,
+              24.0,
+              32.0
+            ]
+          },
+          {
+            "id": "patience",
+            "metric": "ambush_success",
+            "bins": 3,
+            "range": [
+              0,
+              0.5
+            ],
+            "bin_edges": [
+              0.1,
+              0.35
+            ]
+          }
+        ]
+      },
+      "league": {
+        "_comment": "Only when search.mode is qd. archive = one cell's champion weights (the scalar champion until a cell exists). bot = the playtest bot squad. bot jobs play 1 round (rounds_per_job: 1).",
+        "opponents": [
+          {
+            "source": "archive",
+            "jobs": 1
+          },
+          {
+            "source": "bot",
+            "jobs": 1,
+            "rounds_per_job": 1
+          }
+        ]
+      },
+      "evolution": {
+        "population": 8,
+        "elitism": 2,
+        "tournament_k": 3,
+        "crossover_rate": 0.7,
+        "mutation_rate": 0.2,
+        "sigma_scale": 1.0,
+        "initial_mutation_rate": 0.5,
+        "initial_sigma_scale": 1.5,
+        "fresh_top_k": 3,
+        "promotion_margin": 0.0,
+        "max_generations": 1000,
+        "default_bounds_rel": 0.5
+      },
+      "evaluation": {
+        "_comment": "Each candidate plays these jobs per generation (one game process each, rounds_per_job rounds, a different seed per job; all candidates of a generation share the seeds). opponent: champion = PMC vs PMC self-play against the current champion, bot = the player squad driven by the playtest bot.",
+        "rounds_per_job": 3,
+        "matches": [
+          {
+            "opponent": "champion",
+            "jobs": 2
+          }
+        ],
+        "_bot_note": "2026-11-03: the bot match is off - the arena plays only 1 round vs the bot / player squad and the bot does not yet see hostile operatives (docs/systems/pmc-squad-ai.md follow-ups). Add {\"opponent\": \"bot\", \"jobs\": 1} back with rounds_per_job 1 once that lands."
+      },
+      "fitness": {
+        "win": 10.0,
+        "_draw_comment": "2026-11-06: pmc-v2 learnt to avoid fighting (time-limit draws paid ~8). In a draw: no win credit, survivors don't count, HP loss counts half; a time-limit end costs -2; kills pay. Order: win >> a fought draw > hiding ~ a loss.",
+        "draw_value": 0.0,
+        "draw_survivor_factor": 0.0,
+        "draw_hp_factor": 0.5,
+        "timeout_penalty": -3.0,
+        "_no_contact_comment": "fix/pmc-arena-stalemate 2026-11-10 (the designer): a round without contact (result 'contact': false - no shot between the sides) = a draw with no reward: the round scores exactly no_contact_score (no survivors / objective / duration credit); a capture of an empty point is still a win.",
+        "no_contact_score": -3.0,
+        "_ambush_comment": "The user 2026-11-06: hiding is good when it sets up a better ambush. The timeout penalty only hits rounds with no damage on either side; damage dealt (opponent HP lost / HP max) and the kill advantage pay, so waiting then striking beats both pure hiding and a frontal rush.",
+        "damage_dealt": 4.0,
+        "kill_advantage": 1.5,
+        "survivors": 3.0,
+        "hp_lost": -3.0,
+        "hp_per_unit": 100.0,
+        "duration": {
+          "weight": 1.0,
+          "target_s": 150.0,
+          "tolerance_s": 120.0
+        },
+        "bonuses": {
+          "kills": {
+            "weight": 2.5,
+            "cap": 3
+          },
+          "flanks_succeeded": {
+            "weight": 0.8,
+            "cap": 3
+          },
+          "suppression_s": {
+            "weight": 0.5,
+            "cap": 30
+          },
+          "ambushes": {
+            "weight": 0.8,
+            "cap": 2
+          },
+          "retreats_survived": {
+            "weight": 0.4,
+            "cap": 2
+          },
+          "heals": {
+            "weight": 0.3,
+            "cap": 3
+          },
+          "_objective_comment": "Task #53 (objective rounds): an ambush that hurts from concealment (HP dealt while the shooter was not seen by the target's team, cap = one man's HP), the first hit of the round, and winning the objective (captured as the attacker / held to the time limit as the defender) pay a modest extra on top of the win.",
+          "damage_from_concealment": {
+            "weight": 1.5,
+            "cap": 100
+          },
+          "first_strike": {
+            "weight": 0.75,
+            "cap": 1
+          },
+          "objective_win": {
+            "weight": 2.0,
+            "cap": 1
+          },
+          "strikes_unobserved": {
+            "weight": 0.5,
+            "cap": 2
+          }
+        },
+        "penalties": {
+          "friendly_fire": {
+            "weight": -1.5,
+            "cap": 3
+          },
+          "stuck_events": {
+            "weight": -1.0,
+            "cap": 3
+          }
+        },
+        "close_range": {
+          "weight": -4.0,
+          "close_range_m": 10,
+          "shotgun_exempt": true
+        },
+        "crash_penalty": -5.0,
+        "doctrine": {
+          "schema": "codex.doctrine_proxies/1",
+          "weight": 1.0,
+          "terms": [
+            {
+              "tag": "fallback_to_cover_after_contact",
+              "metric": "retreats_survived",
+              "cap": 2.0,
+              "support_fights": 33,
+              "limitation": "surviving a retreat, not contact-to-cover latency",
+              "weight": 0.6875
+            },
+            {
+              "tag": "first_in_cover_overwatch",
+              "metric": "behaviour.suppress_then_move",
+              "cap": 2.0,
+              "support_fights": 15,
+              "limitation": "suppress then move, not cover/height confirmation",
+              "weight": 0.3125
+            }
+          ],
+          "source_recordings": [
+            {
+              "recording": "2026-11-24_L_Gen_Depot_1_X6_152229.jsonl",
+              "sha256": "2d44a4c9e3d56b4d5ff49b6da2052fdff60973a588e188ab48598299ce5680a9",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-24_L_Gen_Depot_1_X6_152658.jsonl",
+              "sha256": "eeb23ff1c5b1276ef835ee225ef438ff2016bba8e8d485f74b57e92d8bf5c78f",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-24_L_Gen_Depot_1_X6_153145.jsonl",
+              "sha256": "fc13a8e071dc530170742dea467ae1ddff9ed36381449d5276f90df1371af861",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-25_L_Gen_Depot_1_X6_094811.jsonl",
+              "sha256": "73296467c97a35be09a5e866eae80f79ad273955756475d4d276e9f61d96afea",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-25_L_Gen_Depot_1_X6_100842.jsonl",
+              "sha256": "25f2015b8b0c08907519d1b112c5f8da36aa32fdfd3db64cedd3f7ee1e6c94bc",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-25_L_Gen_Depot_1_X6_120010.jsonl",
+              "sha256": "7610c96566127fa2a55e8747b90af26467454859745e8e74c3008c2093b15faf",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-25_L_Gen_Depot_1_X6_120852.jsonl",
+              "sha256": "af8c74e0935ae74815179a1438ddcf37da35af18eae69e597de45848a6f34260",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-25_L_Gen_Depot_1_X6_145536.jsonl",
+              "sha256": "5c21822887329f4153ac4e70c7bf959f1ce476896ccba4c3a5df520617916a4e",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-25_L_Gen_Depot_1_X6_153205.jsonl",
+              "sha256": "3b7bb783ac1a09bc4ea4ac43dfed105a6b12d14753979c59a8973a023e61684e",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-25_L_Gen_Depot_1_X6_170128.jsonl",
+              "sha256": "452f58f3a182c9948d168eb5c308576740218188abf130cd7273489431791744",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-25_L_Gen_StoryShowcase_Kit_093131.jsonl",
+              "sha256": "a6a74614ec52a2ba2a2e40c00e4afc1eb2b11d28cef5ce55f0014069c6a3ba96",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-26_L_Gen_Depot_1_X6_091942.jsonl",
+              "sha256": "7ff33977e53db94e652138a49a6f1fb9900f37832bcaf84d3e5306fa5eb17fd3",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-26_L_Gen_Depot_1_X6_112917.jsonl",
+              "sha256": "0c6fe749897776af15196c0ff69d585b3e5dcc6ff89ef61817deacad2132fb44",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-26_L_Gen_Depot_1_X6_143736.jsonl",
+              "sha256": "ec922e1ad6f6cdf3f3583d76732a236130ed5b3ddda033f3c2e24f5bf9e856d0",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-26_L_Gen_Depot_1_X6_145729.jsonl",
+              "sha256": "6d8e7d94de0110a39b9e9bb5a371cec8f7becfacc239a49863f59e2ed5bcf04e",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-26_L_Gen_Depot_1_X6_154423.jsonl",
+              "sha256": "9e20314981dd16061af740e50beb0130df1c5569c2d9bad361765b7fbae8526a",
+              "notes_sha256": null
+            },
+            {
+              "recording": "2026-11-26_L_Gen_Depot_1_X6_165115.jsonl",
+              "sha256": "66937e085ef024c203ef7c5f6914552f5219fa0fe1bd51b741384f9c79a73459",
+              "notes_sha256": null
+            }
+          ],
+          "excluded": [
+            "high_ground",
+            "distract_and_flank",
+            "prone_then_crawl_to_cover",
+            "flank_into_rear",
+            "approach_unseen",
+            "lure_then_snipe",
+            "unwatched_flank_seconds",
+            "scan_pitch_range"
+          ],
+          "note": "Frequency selects priorities; win correlation is not a causal reward. Maximum bonus 1 point."
+        }
+      },
+      "arena": {
+        "_comment": "Adapter contract (nighttrainer/adapter.py). Fit console_command / arg_template / result.* to the real CodexTactics.PmcArena when it lands.",
+        "engine_root": "C:/Program Files/Epic Games/UE_5.8",
+        "uproject": "CodexTactics.uproject",
+        "map": "/Game/Maps/Generated/L_Gen_Depot_1",
+        "console_command": "CodexTactics.PmcArena",
+        "arg_template": [
+          "Map={map}",
+          "Rounds={rounds}",
+          "Seed={seed}",
+          "WeightsA={weights_a}",
+          "Opponent={opponent}",
+          "WeightsB={weights_b}",
+          "TimeLimit={time_limit_s}",
+          "Out={out}",
+          "Spawns=Random",
+          "Objective=1",
+          "Scenario=random"
+        ],
+        "opponent_names": {
+          "bot": "Bot",
+          "champion": "Pmc",
+          "archive": "Pmc"
+        },
+        "engine_args": [
+          "-game",
+          "-nullrhi",
+          "-nosplash",
+          "-nosound",
+          "-unattended",
+          "-windowed",
+          "-NoTelemetry",
+          "-UseFixedTimeStep",
+          "-FPS=60",
+          "-FixedSeed",
+          "-Multiprocess",
+          "-LevelJson=L_PmcArenaDepot.json"
+        ],
+        "time_limit_s": 240,
+        "output_dir": "Saved/Arena",
+        "parallel": 2,
+        "timeout_s": 1800,
+        "retries": 1,
+        "hold_build_lock": true,
+        "record": {
+          "_comment": "Deterministic re-run of one highlight round, rendered: <console_command + arg_template with Rounds=1 Seed=<round seed>> + arg_template_extra, then clip_command chained in -ExecCmds (comma). frames_dir = where the recorder writes f_NNNNN.png (Scripts/Tools/clip_assemble.py watch encodes them).",
+          "arg_template_extra": [
+            "Record=1"
+          ],
+          "clip_command": "CodexTactics.ClipRecorder {clip} seconds={seconds} nodirector waitcamera",
+          "frames_dir": "Saved/Screenshots/Clips/{clip}",
+          "engine_args": [
+            "-game",
+            "-RenderOffscreen",
+            "-ResX=1280",
+            "-ResY=720",
+            "-nosound",
+            "-nosplash",
+            "-unattended",
+            "-NoTelemetry",
+            "-Multiprocess",
+            "-benchmark",
+            "-fps=30",
+            "-FixedSeed",
+            "-LevelJson=L_PmcArenaDepot.json"
+          ]
+        },
+        "result": {
+          "schema": "codex.pmc_arena/1",
+          "strict_schema": true,
+          "rounds_key": "rounds",
+          "winner_key": "winner",
+          "duration_key": "duration_s",
+          "time_limit_key": "time_limit_s",
+          "sides_key": "sides",
+          "candidate_side": "A",
+          "opponent_side": "B",
+          "draw_values": [
+            "draw",
+            "none",
+            ""
+          ],
+          "highlight_key": "highlight_score",
+          "round_seed_key": "seed",
+          "round_index_key": "index",
+          "end_reason_key": "end_reason",
+          "scenario_key": "scenario",
+          "track_key": "track",
+          "contact_key": "contact",
+          "pad_missing_rounds_as_crash": true,
+          "fields": {
+            "survivors": "survivors",
+            "squad_size": "squad_size",
+            "hp_lost": "hp_lost",
+            "hp_max": "hp_max",
+            "kills": "kills",
+            "flanks_attempted": "flanks_attempted",
+            "flanks_succeeded": "flanks_succeeded",
+            "suppression_s": "suppression_s",
+            "ambushes": "ambushes",
+            "retreats": "retreats",
+            "retreats_survived": "retreats_survived",
+            "heals": "heals",
+            "friendly_fire": "friendly_fire",
+            "stuck_events": "stuck_events",
+            "role": "role",
+            "damage_from_concealment": "damage_from_concealment",
+            "first_strike": "first_strike",
+            "objective_hold_s": "objective_hold_s",
+            "median_engagement_m": "median_engagement_m",
+            "strikes_unobserved": "strikes_unobserved"
+          }
+        }
+      },
+      "highlights": {
+        "_comment": "Per night (local date of now - 12 h): top_n rounds by highlight_score + the champion's most decisive win. Clips: width px, crf, <= max_mb; auto_clips = render them when the run ends (or make_highlights.ps1).",
+        "enabled": true,
+        "top_n": 3,
+        "auto_clips": true,
+        "keep_all_tracks": false,
+        "width": 960,
+        "crf": 30,
+        "max_mb": 25,
+        "timeout_s": 3600,
+        "replay_stride": 2
+      },
+      "mock": {
+        "baseline_weights": "Scripts/Trainer/fixtures/pmc_commander.sample.json",
+        "bot_strength": -0.03,
+        "crash_rate": 0.03,
+        "tracks": true,
+        "in_process": false
+      }
+    },
+    "champion_sha256": "55b5a3821b23234d979dfb6ede218a65818a9005f93a3d82c3ceed71d79c6036",
+    "candidate_sha256": "55b5a3821b23234d979dfb6ede218a65818a9005f93a3d82c3ceed71d79c6036",
+    "level_sha256": "cfbfa57e19704206d1d20f92f9ff6ce25d6f61c0699443b893c147c2564e3954",
+    "sectors_sha256": "6a8d8ca8208b5d7f3e34e3f6a33e1de1f4eeaf954e2d9e6a5f2a4465a4d0f6f0",
+    "plan": [
+      {
+        "pair": 0,
+        "sector": 1,
+        "seed": 1599545990,
+        "arms": [
+          "baseline",
+          "candidate"
+        ]
+      },
+      {
+        "pair": 1,
+        "sector": 2,
+        "seed": 232260523,
+        "arms": [
+          "candidate",
+          "baseline"
+        ]
+      },
+      {
+        "pair": 2,
+        "sector": 3,
+        "seed": 1927705920,
+        "arms": [
+          "baseline",
+          "candidate"
+        ]
+      }
+    ]
+  },
+  "summary": {
+    "arms": {
+      "baseline": {
+        "rounds": 3,
+        "crashes": 0,
+        "wins": 0,
+        "draws": 1,
+        "win_rate": 0.0,
+        "captures": 0,
+        "capture_observed": 3,
+        "kills": 1.0,
+        "kills_observed": 3
+      },
+      "candidate": {
+        "rounds": 3,
+        "crashes": 0,
+        "wins": 0,
+        "draws": 1,
+        "win_rate": 0.0,
+        "captures": 0,
+        "capture_observed": 3,
+        "kills": 1.0,
+        "kills_observed": 3
+      }
+    },
+    "complete_pairs": 3,
+    "candidate_only_wins": 0,
+    "baseline_only_wins": 0,
+    "mock": false,
+    "trial": 3,
+    "planned_pairs": 3,
+    "same_weights": true,
+    "complete": true,
+    "fitness": {
+      "baseline": {
+        "fitness": -0.3847,
+        "rounds": 3,
+        "crashes": 0,
+        "win_rate": 0.1667,
+        "survivors_frac": 0.6667,
+        "hp_lost": 214.67,
+        "duration_s": 20.0,
+        "kills": 0.333,
+        "flanks_attempted": 0.0,
+        "flanks_succeeded": 0.0,
+        "suppression_s": 7.4,
+        "ambushes": 1.0,
+        "retreats": 1.0,
+        "retreats_survived": 0.667,
+        "heals": 0.0,
+        "friendly_fire": 0.0,
+        "stuck_events": 0.0,
+        "close_shot_ratio": 0.661,
+        "close_hits_taken": 2.667,
+        "damage_from_concealment": 0.0,
+        "first_strike": 0.333,
+        "objective_hold_s": 5.7,
+        "median_engagement_m": 12.6,
+        "objective_win": 0.0,
+        "strikes_unobserved": 0.0
+      },
+      "candidate": {
+        "fitness": -0.3847,
+        "rounds": 3,
+        "crashes": 0,
+        "win_rate": 0.1667,
+        "survivors_frac": 0.6667,
+        "hp_lost": 214.67,
+        "duration_s": 20.0,
+        "kills": 0.333,
+        "flanks_attempted": 0.0,
+        "flanks_succeeded": 0.0,
+        "suppression_s": 7.4,
+        "ambushes": 1.0,
+        "retreats": 1.0,
+        "retreats_survived": 0.667,
+        "heals": 0.0,
+        "friendly_fire": 0.0,
+        "stuck_events": 0.0,
+        "close_shot_ratio": 0.661,
+        "close_hits_taken": 2.667,
+        "damage_from_concealment": 0.0,
+        "first_strike": 0.333,
+        "objective_hold_s": 5.7,
+        "median_engagement_m": 12.6,
+        "objective_win": 0.0,
+        "strikes_unobserved": 0.0
+      }
+    },
+    "doctrine": [
+      {
+        "pair": 0,
+        "arm": "baseline",
+        "bonus": 0.5,
+        "measured": {
+          "retreats_survived": 1.0,
+          "behaviour.suppress_then_move": 1.0
+        },
+        "missing": []
+      },
+      {
+        "pair": 0,
+        "arm": "candidate",
+        "bonus": 0.5,
+        "measured": {
+          "retreats_survived": 1.0,
+          "behaviour.suppress_then_move": 1.0
+        },
+        "missing": []
+      },
+      {
+        "pair": 1,
+        "arm": "candidate",
+        "bonus": 0.0,
+        "measured": {
+          "retreats_survived": 0.0,
+          "behaviour.suppress_then_move": 0.0
+        },
+        "missing": []
+      },
+      {
+        "pair": 1,
+        "arm": "baseline",
+        "bonus": 0.0,
+        "measured": {
+          "retreats_survived": 0.0,
+          "behaviour.suppress_then_move": 0.0
+        },
+        "missing": []
+      },
+      {
+        "pair": 2,
+        "arm": "baseline",
+        "bonus": 0.34375,
+        "measured": {
+          "retreats_survived": 1.0,
+          "behaviour.suppress_then_move": 0.0
+        },
+        "missing": []
+      },
+      {
+        "pair": 2,
+        "arm": "candidate",
+        "bonus": 0.34375,
+        "measured": {
+          "retreats_survived": 1.0,
+          "behaviour.suppress_then_move": 0.0
+        },
+        "missing": []
+      }
+    ],
+    "examples": [
+      {
+        "won": 0.0,
+        "crashed": false,
+        "duration_s": 20.0,
+        "time_limit_s": 20.0,
+        "survivors": 2.0,
+        "squad_size": 3.0,
+        "hp_lost": 292.0,
+        "hp_max": 450.0,
+        "kills": 0.0,
+        "flanks_attempted": 0.0,
+        "flanks_succeeded": 0.0,
+        "suppression_s": 11.5,
+        "ambushes": 0.0,
+        "retreats": 1.0,
+        "retreats_survived": 1.0,
+        "heals": 0.0,
+        "friendly_fire": 0.0,
+        "stuck_events": 0.0,
+        "damage_from_concealment": 0.0,
+        "first_strike": 0.0,
+        "objective_hold_s": 0.0,
+        "median_engagement_m": 25.299999237060547,
+        "strikes_unobserved": 0.0,
+        "opp_survivors": 2.0,
+        "opp_kills": 0.0,
+        "opp_hp_lost": 163.0,
+        "highlight_score": 3.0,
+        "round_seed": 1599545990,
+        "round_index": 1.0,
+        "contact": true,
+        "end_reason": "time_limit",
+        "role": "attacker",
+        "objective_win": 0.0,
+        "scenario": "skirmish",
+        "behaviour": {
+          "time_in_contact_s": 14.800000190734863,
+          "flanks_completed": 0.0,
+          "moves": 4.0,
+          "suppress_then_move": 1.0,
+          "ambush_success": 0.0,
+          "overwatch_kills": 0.0,
+          "time_in_chokepoint_s": 0.0,
+          "window_positions_used": 0.0,
+          "quiet_spells": 0.0,
+          "order_churn": 7.0,
+          "stalemate_share": 0.0
+        },
+        "behaviour_observed": [
+          "time_in_contact_s",
+          "flanks_completed",
+          "moves",
+          "suppress_then_move",
+          "ambush_success",
+          "overwatch_kills",
+          "time_in_chokepoint_s",
+          "window_positions_used",
+          "quiet_spells",
+          "order_churn",
+          "stalemate_share"
+        ],
+        "track": "C:\\Work\\Lanes\\CodexTactics-149\\Saved\\Trainer\\task149-real-trial-fixed\\jobs\\p0000_candidate.arena\\round_1.track.json",
+        "close_shot_ratio": 0.5,
+        "close_hits_taken": 1.0,
+        "arm": "candidate",
+        "pair": 0,
+        "sector": 1,
+        "seed": 1599545990,
+        "result_file": "Saved/Trainer/task149-real-trial-fixed/jobs/p0000_candidate.rounds.json"
+      },
+      {
+        "won": 0.5,
+        "crashed": false,
+        "duration_s": 20.0,
+        "time_limit_s": 20.0,
+        "survivors": 3.0,
+        "squad_size": 3.0,
+        "hp_lost": 0.0,
+        "hp_max": 450.0,
+        "kills": 0.0,
+        "flanks_attempted": 0.0,
+        "flanks_succeeded": 0.0,
+        "suppression_s": 9.0,
+        "ambushes": 3.0,
+        "retreats": 0.0,
+        "retreats_survived": 0.0,
+        "heals": 0.0,
+        "friendly_fire": 0.0,
+        "stuck_events": 0.0,
+        "damage_from_concealment": 0.0,
+        "first_strike": 1.0,
+        "objective_hold_s": 17.100000381469727,
+        "median_engagement_m": 8.899999618530273,
+        "strikes_unobserved": 0.0,
+        "opp_survivors": 3.0,
+        "opp_kills": 0.0,
+        "opp_hp_lost": 124.0,
+        "highlight_score": 2.5,
+        "round_seed": 232260523,
+        "round_index": 1.0,
+        "contact": true,
+        "end_reason": "time_limit",
+        "role": "defender",
+        "objective_win": 0.0,
+        "scenario": "blizzard",
+        "behaviour": {
+          "time_in_contact_s": 2.799999952316284,
+          "flanks_completed": 0.0,
+          "moves": 0.0,
+          "suppress_then_move": 0.0,
+          "ambush_success": 0.0,
+          "overwatch_kills": 0.0,
+          "time_in_chokepoint_s": 1.7000000476837158,
+          "window_positions_used": 0.0,
+          "quiet_spells": 0.0,
+          "order_churn": 3.0,
+          "stalemate_share": 1.0
+        },
+        "behaviour_observed": [
+          "time_in_contact_s",
+          "flanks_completed",
+          "moves",
+          "suppress_then_move",
+          "ambush_success",
+          "overwatch_kills",
+          "time_in_chokepoint_s",
+          "window_positions_used",
+          "quiet_spells",
+          "order_churn",
+          "stalemate_share"
+        ],
+        "track": "C:\\Work\\Lanes\\CodexTactics-149\\Saved\\Trainer\\task149-real-trial-fixed\\jobs\\p0001_candidate.arena\\round_1.track.json",
+        "close_shot_ratio": 0.4827586206896552,
+        "close_hits_taken": 0.0,
+        "arm": "candidate",
+        "pair": 1,
+        "sector": 2,
+        "seed": 232260523,
+        "result_file": "Saved/Trainer/task149-real-trial-fixed/jobs/p0001_candidate.rounds.json"
+      },
+      {
+        "won": 0.0,
+        "crashed": false,
+        "duration_s": 20.0,
+        "time_limit_s": 20.0,
+        "survivors": 1.0,
+        "squad_size": 3.0,
+        "hp_lost": 352.0,
+        "hp_max": 450.0,
+        "kills": 1.0,
+        "flanks_attempted": 0.0,
+        "flanks_succeeded": 0.0,
+        "suppression_s": 1.7000000476837158,
+        "ambushes": 0.0,
+        "retreats": 2.0,
+        "retreats_survived": 1.0,
+        "heals": 0.0,
+        "friendly_fire": 0.0,
+        "stuck_events": 0.0,
+        "damage_from_concealment": 0.0,
+        "first_strike": 0.0,
+        "objective_hold_s": 0.0,
+        "median_engagement_m": 3.5999999046325684,
+        "strikes_unobserved": 0.0,
+        "opp_survivors": 2.0,
+        "opp_kills": 2.0,
+        "opp_hp_lost": 340.0,
+        "highlight_score": 6.5,
+        "round_seed": 1927705920,
+        "round_index": 1.0,
+        "contact": true,
+        "end_reason": "time_limit",
+        "role": "attacker",
+        "objective_win": 0.0,
+        "scenario": "blizzard",
+        "behaviour": {
+          "time_in_contact_s": 11.300000190734863,
+          "flanks_completed": 0.0,
+          "moves": 6.0,
+          "suppress_then_move": 0.0,
+          "ambush_success": 0.0,
+          "overwatch_kills": 0.0,
+          "time_in_chokepoint_s": 0.0,
+          "window_positions_used": 1.0,
+          "quiet_spells": 0.0,
+          "order_churn": 9.0,
+          "stalemate_share": 0.0
+        },
+        "behaviour_observed": [
+          "time_in_contact_s",
+          "flanks_completed",
+          "moves",
+          "suppress_then_move",
+          "ambush_success",
+          "overwatch_kills",
+          "time_in_chokepoint_s",
+          "window_positions_used",
+          "quiet_spells",
+          "order_churn",
+          "stalemate_share"
+        ],
+        "track": "C:\\Work\\Lanes\\CodexTactics-149\\Saved\\Trainer\\task149-real-trial-fixed\\jobs\\p0002_candidate.arena\\round_1.track.json",
+        "close_shot_ratio": 1.0,
+        "close_hits_taken": 7.0,
+        "arm": "candidate",
+        "pair": 2,
+        "sector": 3,
+        "seed": 1927705920,
+        "result_file": "Saved/Trainer/task149-real-trial-fixed/jobs/p0002_candidate.rounds.json"
+      }
+    ]
+  },
+  "proof": [
+    {
+      "job": "p0000_baseline",
+      "sector": 1,
+      "seed": 1599545990,
+      "weights": {
+        "A": {
+          "file": "C:/Work/Lanes/CodexTactics-149/Saved/Trainer/task149-real-trial-fixed/champion.json",
+          "name": "champion",
+          "loaded": true
+        },
+        "B": {
+          "file": "C:/Work/Lanes/CodexTactics-149/Saved/Trainer/task149-real-trial-fixed/champion.json",
+          "name": "champion",
+          "loaded": true
+        }
+      },
+      "arena_result_sha256": "254c96bf989c1d5cafec2c4ce922f33b16988a0fe6d24bebb08ebdfecdbd909b",
+      "row": {
+        "won": 0.0,
+        "crashed": false,
+        "duration_s": 20.0,
+        "time_limit_s": 20.0,
+        "survivors": 2.0,
+        "squad_size": 3.0,
+        "hp_lost": 292.0,
+        "hp_max": 450.0,
+        "kills": 0.0,
+        "flanks_attempted": 0.0,
+        "flanks_succeeded": 0.0,
+        "suppression_s": 11.5,
+        "ambushes": 0.0,
+        "retreats": 1.0,
+        "retreats_survived": 1.0,
+        "heals": 0.0,
+        "friendly_fire": 0.0,
+        "stuck_events": 0.0,
+        "damage_from_concealment": 0.0,
+        "first_strike": 0.0,
+        "objective_hold_s": 0.0,
+        "median_engagement_m": 25.299999237060547,
+        "strikes_unobserved": 0.0,
+        "opp_survivors": 2.0,
+        "opp_kills": 0.0,
+        "opp_hp_lost": 163.0,
+        "highlight_score": 3.0,
+        "round_seed": 1599545990,
+        "round_index": 1.0,
+        "contact": true,
+        "end_reason": "time_limit",
+        "role": "attacker",
+        "objective_win": 0.0,
+        "scenario": "skirmish",
+        "behaviour": {
+          "time_in_contact_s": 14.800000190734863,
+          "flanks_completed": 0.0,
+          "moves": 4.0,
+          "suppress_then_move": 1.0,
+          "ambush_success": 0.0,
+          "overwatch_kills": 0.0,
+          "time_in_chokepoint_s": 0.0,
+          "window_positions_used": 0.0,
+          "quiet_spells": 0.0,
+          "order_churn": 7.0,
+          "stalemate_share": 0.0
+        },
+        "behaviour_observed": [
+          "time_in_contact_s",
+          "flanks_completed",
+          "moves",
+          "suppress_then_move",
+          "ambush_success",
+          "overwatch_kills",
+          "time_in_chokepoint_s",
+          "window_positions_used",
+          "quiet_spells",
+          "order_churn",
+          "stalemate_share"
+        ],
+        "track": "C:\\Work\\Lanes\\CodexTactics-149\\Saved\\Trainer\\task149-real-trial-fixed\\jobs\\p0000_baseline.arena\\round_1.track.json",
+        "close_shot_ratio": 0.5,
+        "close_hits_taken": 1.0,
+        "arm": "baseline",
+        "pair": 0,
+        "sector": 1,
+        "seed": 1599545990,
+        "result_file": "Saved/Trainer/task149-real-trial-fixed/jobs/p0000_baseline.rounds.json"
+      },
+      "doctrine": {
+        "bonus": 0.5,
+        "measured": {
+          "retreats_survived": 1.0,
+          "behaviour.suppress_then_move": 1.0
+        },
+        "missing": []
+      }
+    },
+    {
+      "job": "p0000_candidate",
+      "sector": 1,
+      "seed": 1599545990,
+      "weights": {
+        "A": {
+          "file": "C:/Work/Lanes/CodexTactics-149/Saved/Trainer/task149-real-trial-fixed/candidate.json",
+          "name": "candidate",
+          "loaded": true
+        },
+        "B": {
+          "file": "C:/Work/Lanes/CodexTactics-149/Saved/Trainer/task149-real-trial-fixed/champion.json",
+          "name": "champion",
+          "loaded": true
+        }
+      },
+      "arena_result_sha256": "d07eafb0a6fec10e0fca7f38b50b639ec3e05cb57c1f36907871c23170b8cb22",
+      "row": {
+        "won": 0.0,
+        "crashed": false,
+        "duration_s": 20.0,
+        "time_limit_s": 20.0,
+        "survivors": 2.0,
+        "squad_size": 3.0,
+        "hp_lost": 292.0,
+        "hp_max": 450.0,
+        "kills": 0.0,
+        "flanks_attempted": 0.0,
+        "flanks_succeeded": 0.0,
+        "suppression_s": 11.5,
+        "ambushes": 0.0,
+        "retreats": 1.0,
+        "retreats_survived": 1.0,
+        "heals": 0.0,
+        "friendly_fire": 0.0,
+        "stuck_events": 0.0,
+        "damage_from_concealment": 0.0,
+        "first_strike": 0.0,
+        "objective_hold_s": 0.0,
+        "median_engagement_m": 25.299999237060547,
+        "strikes_unobserved": 0.0,
+        "opp_survivors": 2.0,
+        "opp_kills": 0.0,
+        "opp_hp_lost": 163.0,
+        "highlight_score": 3.0,
+        "round_seed": 1599545990,
+        "round_index": 1.0,
+        "contact": true,
+        "end_reason": "time_limit",
+        "role": "attacker",
+        "objective_win": 0.0,
+        "scenario": "skirmish",
+        "behaviour": {
+          "time_in_contact_s": 14.800000190734863,
+          "flanks_completed": 0.0,
+          "moves": 4.0,
+          "suppress_then_move": 1.0,
+          "ambush_success": 0.0,
+          "overwatch_kills": 0.0,
+          "time_in_chokepoint_s": 0.0,
+          "window_positions_used": 0.0,
+          "quiet_spells": 0.0,
+          "order_churn": 7.0,
+          "stalemate_share": 0.0
+        },
+        "behaviour_observed": [
+          "time_in_contact_s",
+          "flanks_completed",
+          "moves",
+          "suppress_then_move",
+          "ambush_success",
+          "overwatch_kills",
+          "time_in_chokepoint_s",
+          "window_positions_used",
+          "quiet_spells",
+          "order_churn",
+          "stalemate_share"
+        ],
+        "track": "C:\\Work\\Lanes\\CodexTactics-149\\Saved\\Trainer\\task149-real-trial-fixed\\jobs\\p0000_candidate.arena\\round_1.track.json",
+        "close_shot_ratio": 0.5,
+        "close_hits_taken": 1.0,
+        "arm": "candidate",
+        "pair": 0,
+        "sector": 1,
+        "seed": 1599545990,
+        "result_file": "Saved/Trainer/task149-real-trial-fixed/jobs/p0000_candidate.rounds.json"
+      },
+      "doctrine": {
+        "bonus": 0.5,
+        "measured": {
+          "retreats_survived": 1.0,
+          "behaviour.suppress_then_move": 1.0
+        },
+        "missing": []
+      }
+    },
+    {
+      "job": "p0001_candidate",
+      "sector": 2,
+      "seed": 232260523,
+      "weights": {
+        "A": {
+          "file": "C:/Work/Lanes/CodexTactics-149/Saved/Trainer/task149-real-trial-fixed/candidate.json",
+          "name": "candidate",
+          "loaded": true
+        },
+        "B": {
+          "file": "C:/Work/Lanes/CodexTactics-149/Saved/Trainer/task149-real-trial-fixed/champion.json",
+          "name": "champion",
+          "loaded": true
+        }
+      },
+      "arena_result_sha256": "cfcdf32f2c994a3817e9386af4e6e6c452c756d0c0e7ba178d99e8e398bec47a",
+      "row": {
+        "won": 0.5,
+        "crashed": false,
+        "duration_s": 20.0,
+        "time_limit_s": 20.0,
+        "survivors": 3.0,
+        "squad_size": 3.0,
+        "hp_lost": 0.0,
+        "hp_max": 450.0,
+        "kills": 0.0,
+        "flanks_attempted": 0.0,
+        "flanks_succeeded": 0.0,
+        "suppression_s": 9.0,
+        "ambushes": 3.0,
+        "retreats": 0.0,
+        "retreats_survived": 0.0,
+        "heals": 0.0,
+        "friendly_fire": 0.0,
+        "stuck_events": 0.0,
+        "damage_from_concealment": 0.0,
+        "first_strike": 1.0,
+        "objective_hold_s": 17.100000381469727,
+        "median_engagement_m": 8.899999618530273,
+        "strikes_unobserved": 0.0,
+        "opp_survivors": 3.0,
+        "opp_kills": 0.0,
+        "opp_hp_lost": 124.0,
+        "highlight_score": 2.5,
+        "round_seed": 232260523,
+        "round_index": 1.0,
+        "contact": true,
+        "end_reason": "time_limit",
+        "role": "defender",
+        "objective_win": 0.0,
+        "scenario": "blizzard",
+        "behaviour": {
+          "time_in_contact_s": 2.799999952316284,
+          "flanks_completed": 0.0,
+          "moves": 0.0,
+          "suppress_then_move": 0.0,
+          "ambush_success": 0.0,
+          "overwatch_kills": 0.0,
+          "time_in_chokepoint_s": 1.7000000476837158,
+          "window_positions_used": 0.0,
+          "quiet_spells": 0.0,
+          "order_churn": 3.0,
+          "stalemate_share": 1.0
+        },
+        "behaviour_observed": [
+          "time_in_contact_s",
+          "flanks_completed",
+          "moves",
+          "suppress_then_move",
+          "ambush_success",
+          "overwatch_kills",
+          "time_in_chokepoint_s",
+          "window_positions_used",
+          "quiet_spells",
+          "order_churn",
+          "stalemate_share"
+        ],
+        "track": "C:\\Work\\Lanes\\CodexTactics-149\\Saved\\Trainer\\task149-real-trial-fixed\\jobs\\p0001_candidate.arena\\round_1.track.json",
+        "close_shot_ratio": 0.4827586206896552,
+        "close_hits_taken": 0.0,
+        "arm": "candidate",
+        "pair": 1,
+        "sector": 2,
+        "seed": 232260523,
+        "result_file": "Saved/Trainer/task149-real-trial-fixed/jobs/p0001_candidate.rounds.json"
+      },
+      "doctrine": {
+        "bonus": 0.0,
+        "measured": {
+          "retreats_survived": 0.0,
+          "behaviour.suppress_then_move": 0.0
+        },
+        "missing": []
+      }
+    },
+    {
+      "job": "p0001_baseline",
+      "sector": 2,
+      "seed": 232260523,
+      "weights": {
+        "A": {
+          "file": "C:/Work/Lanes/CodexTactics-149/Saved/Trainer/task149-real-trial-fixed/champion.json",
+          "name": "champion",
+          "loaded": true
+        },
+        "B": {
+          "file": "C:/Work/Lanes/CodexTactics-149/Saved/Trainer/task149-real-trial-fixed/champion.json",
+          "name": "champion",
+          "loaded": true
+        }
+      },
+      "arena_result_sha256": "e730301eb626610d865b03ca3ba707cd6ac1b9e61bcc3d1aa18170042a9008ec",
+      "row": {
+        "won": 0.5,
+        "crashed": false,
+        "duration_s": 20.0,
+        "time_limit_s": 20.0,
+        "survivors": 3.0,
+        "squad_size": 3.0,
+        "hp_lost": 0.0,
+        "hp_max": 450.0,
+        "kills": 0.0,
+        "flanks_attempted": 0.0,
+        "flanks_succeeded": 0.0,
+        "suppression_s": 9.0,
+        "ambushes": 3.0,
+        "retreats": 0.0,
+        "retreats_survived": 0.0,
+        "heals": 0.0,
+        "friendly_fire": 0.0,
+        "stuck_events": 0.0,
+        "damage_from_concealment": 0.0,
+        "first_strike": 1.0,
+        "objective_hold_s": 17.100000381469727,
+        "median_engagement_m": 8.899999618530273,
+        "strikes_unobserved": 0.0,
+        "opp_survivors": 3.0,
+        "opp_kills": 0.0,
+        "opp_hp_lost": 124.0,
+        "highlight_score": 2.5,
+        "round_seed": 232260523,
+        "round_index": 1.0,
+        "contact": true,
+        "end_reason": "time_limit",
+        "role": "defender",
+        "objective_win": 0.0,
+        "scenario": "blizzard",
+        "behaviour": {
+          "time_in_contact_s": 2.799999952316284,
+          "flanks_completed": 0.0,
+          "moves": 0.0,
+          "suppress_then_move": 0.0,
+          "ambush_success": 0.0,
+          "overwatch_kills": 0.0,
+          "time_in_chokepoint_s": 1.7000000476837158,
+          "window_positions_used": 0.0,
+          "quiet_spells": 0.0,
+          "order_churn": 3.0,
+          "stalemate_share": 1.0
+        },
+        "behaviour_observed": [
+          "time_in_contact_s",
+          "flanks_completed",
+          "moves",
+          "suppress_then_move",
+          "ambush_success",
+          "overwatch_kills",
+          "time_in_chokepoint_s",
+          "window_positions_used",
+          "quiet_spells",
+          "order_churn",
+          "stalemate_share"
+        ],
+        "track": "C:\\Work\\Lanes\\CodexTactics-149\\Saved\\Trainer\\task149-real-trial-fixed\\jobs\\p0001_baseline.arena\\round_1.track.json",
+        "close_shot_ratio": 0.4827586206896552,
+        "close_hits_taken": 0.0,
+        "arm": "baseline",
+        "pair": 1,
+        "sector": 2,
+        "seed": 232260523,
+        "result_file": "Saved/Trainer/task149-real-trial-fixed/jobs/p0001_baseline.rounds.json"
+      },
+      "doctrine": {
+        "bonus": 0.0,
+        "measured": {
+          "retreats_survived": 0.0,
+          "behaviour.suppress_then_move": 0.0
+        },
+        "missing": []
+      }
+    },
+    {
+      "job": "p0002_baseline",
+      "sector": 3,
+      "seed": 1927705920,
+      "weights": {
+        "A": {
+          "file": "C:/Work/Lanes/CodexTactics-149/Saved/Trainer/task149-real-trial-fixed/champion.json",
+          "name": "champion",
+          "loaded": true
+        },
+        "B": {
+          "file": "C:/Work/Lanes/CodexTactics-149/Saved/Trainer/task149-real-trial-fixed/champion.json",
+          "name": "champion",
+          "loaded": true
+        }
+      },
+      "arena_result_sha256": "1f8d5960480a54d359b11f82f9941735067c3d3d5f6a8a694c12f9dcab03dd34",
+      "row": {
+        "won": 0.0,
+        "crashed": false,
+        "duration_s": 20.0,
+        "time_limit_s": 20.0,
+        "survivors": 1.0,
+        "squad_size": 3.0,
+        "hp_lost": 352.0,
+        "hp_max": 450.0,
+        "kills": 1.0,
+        "flanks_attempted": 0.0,
+        "flanks_succeeded": 0.0,
+        "suppression_s": 1.7000000476837158,
+        "ambushes": 0.0,
+        "retreats": 2.0,
+        "retreats_survived": 1.0,
+        "heals": 0.0,
+        "friendly_fire": 0.0,
+        "stuck_events": 0.0,
+        "damage_from_concealment": 0.0,
+        "first_strike": 0.0,
+        "objective_hold_s": 0.0,
+        "median_engagement_m": 3.5999999046325684,
+        "strikes_unobserved": 0.0,
+        "opp_survivors": 2.0,
+        "opp_kills": 2.0,
+        "opp_hp_lost": 340.0,
+        "highlight_score": 6.5,
+        "round_seed": 1927705920,
+        "round_index": 1.0,
+        "contact": true,
+        "end_reason": "time_limit",
+        "role": "attacker",
+        "objective_win": 0.0,
+        "scenario": "blizzard",
+        "behaviour": {
+          "time_in_contact_s": 11.300000190734863,
+          "flanks_completed": 0.0,
+          "moves": 6.0,
+          "suppress_then_move": 0.0,
+          "ambush_success": 0.0,
+          "overwatch_kills": 0.0,
+          "time_in_chokepoint_s": 0.0,
+          "window_positions_used": 1.0,
+          "quiet_spells": 0.0,
+          "order_churn": 9.0,
+          "stalemate_share": 0.0
+        },
+        "behaviour_observed": [
+          "time_in_contact_s",
+          "flanks_completed",
+          "moves",
+          "suppress_then_move",
+          "ambush_success",
+          "overwatch_kills",
+          "time_in_chokepoint_s",
+          "window_positions_used",
+          "quiet_spells",
+          "order_churn",
+          "stalemate_share"
+        ],
+        "track": "C:\\Work\\Lanes\\CodexTactics-149\\Saved\\Trainer\\task149-real-trial-fixed\\jobs\\p0002_baseline.arena\\round_1.track.json",
+        "close_shot_ratio": 1.0,
+        "close_hits_taken": 7.0,
+        "arm": "baseline",
+        "pair": 2,
+        "sector": 3,
+        "seed": 1927705920,
+        "result_file": "Saved/Trainer/task149-real-trial-fixed/jobs/p0002_baseline.rounds.json"
+      },
+      "doctrine": {
+        "bonus": 0.34375,
+        "measured": {
+          "retreats_survived": 1.0,
+          "behaviour.suppress_then_move": 0.0
+        },
+        "missing": []
+      }
+    },
+    {
+      "job": "p0002_candidate",
+      "sector": 3,
+      "seed": 1927705920,
+      "weights": {
+        "A": {
+          "file": "C:/Work/Lanes/CodexTactics-149/Saved/Trainer/task149-real-trial-fixed/candidate.json",
+          "name": "candidate",
+          "loaded": true
+        },
+        "B": {
+          "file": "C:/Work/Lanes/CodexTactics-149/Saved/Trainer/task149-real-trial-fixed/champion.json",
+          "name": "champion",
+          "loaded": true
+        }
+      },
+      "arena_result_sha256": "0328a8c31f62354e4176dab7c9db527d125f922a59d98c2c68ea56a0d8aa71b2",
+      "row": {
+        "won": 0.0,
+        "crashed": false,
+        "duration_s": 20.0,
+        "time_limit_s": 20.0,
+        "survivors": 1.0,
+        "squad_size": 3.0,
+        "hp_lost": 352.0,
+        "hp_max": 450.0,
+        "kills": 1.0,
+        "flanks_attempted": 0.0,
+        "flanks_succeeded": 0.0,
+        "suppression_s": 1.7000000476837158,
+        "ambushes": 0.0,
+        "retreats": 2.0,
+        "retreats_survived": 1.0,
+        "heals": 0.0,
+        "friendly_fire": 0.0,
+        "stuck_events": 0.0,
+        "damage_from_concealment": 0.0,
+        "first_strike": 0.0,
+        "objective_hold_s": 0.0,
+        "median_engagement_m": 3.5999999046325684,
+        "strikes_unobserved": 0.0,
+        "opp_survivors": 2.0,
+        "opp_kills": 2.0,
+        "opp_hp_lost": 340.0,
+        "highlight_score": 6.5,
+        "round_seed": 1927705920,
+        "round_index": 1.0,
+        "contact": true,
+        "end_reason": "time_limit",
+        "role": "attacker",
+        "objective_win": 0.0,
+        "scenario": "blizzard",
+        "behaviour": {
+          "time_in_contact_s": 11.300000190734863,
+          "flanks_completed": 0.0,
+          "moves": 6.0,
+          "suppress_then_move": 0.0,
+          "ambush_success": 0.0,
+          "overwatch_kills": 0.0,
+          "time_in_chokepoint_s": 0.0,
+          "window_positions_used": 1.0,
+          "quiet_spells": 0.0,
+          "order_churn": 9.0,
+          "stalemate_share": 0.0
+        },
+        "behaviour_observed": [
+          "time_in_contact_s",
+          "flanks_completed",
+          "moves",
+          "suppress_then_move",
+          "ambush_success",
+          "overwatch_kills",
+          "time_in_chokepoint_s",
+          "window_positions_used",
+          "quiet_spells",
+          "order_churn",
+          "stalemate_share"
+        ],
+        "track": "C:\\Work\\Lanes\\CodexTactics-149\\Saved\\Trainer\\task149-real-trial-fixed\\jobs\\p0002_candidate.arena\\round_1.track.json",
+        "close_shot_ratio": 1.0,
+        "close_hits_taken": 7.0,
+        "arm": "candidate",
+        "pair": 2,
+        "sector": 3,
+        "seed": 1927705920,
+        "result_file": "Saved/Trainer/task149-real-trial-fixed/jobs/p0002_candidate.rounds.json"
+      },
+      "doctrine": {
+        "bonus": 0.34375,
+        "measured": {
+          "retreats_survived": 1.0,
+          "behaviour.suppress_then_move": 0.0
+        },
+        "missing": []
+      }
+    }
+  ],
+  "binaries": {
+    "UnrealEditor-CodexTactics.dll": {
+      "sha256": "840084c1ecdf405d5be425dafc0c1342eae05bb2c2e64699876692578b61ecc7",
+      "bytes": 16340992
+    },
+    "UnrealEditor-CodexTacticsDev.dll": {
+      "sha256": "43f9f2949e397a613532a16ae2e9427905308a97b22a25e6dae8d5491d3aeec6",
+      "bytes": 10263552
+    },
+    "UnrealEditor-CodexTacticsEditor.dll": {
+      "sha256": "93c4a5113ce03187447c96a43aa34a60df8d9faa38e593b68e68e9d7e5ab72a3",
+      "bytes": 524288
+    },
+    "UnrealEditor-CodexTacticsTests.dll": {
+      "sha256": "2a0a55b87fde849be3c016ee46767b38f149fbca645b96c43f0f391b881fae18",
+      "bytes": 8777728
+    }
+  }
+}

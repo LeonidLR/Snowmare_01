@@ -13,15 +13,16 @@
   },
   "smokeRegistry": [
     "RoofLadderSmoke", "RoofLadderRepairProbe",
+    "UnderFireManoeuvreSmoke",
     "VehicleCombatSmoke", "VehicleDamageSmoke", "GeneratedPropsX6Smoke", "MainMenuSmoke", "FrontendSmoke", "TutorialSaveSmoke", "InteriorExitSmoke",
     "PeekMinesSmoke", "CoverSwitchLakeSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke",
     "TutorialAmbushLakeMineSmoke", "LowCoverMoveLakeSmoke", "LakeQuestSmoke", "LakePauseOrdersSmoke", "HordeArrowsSmoke", "TurnArenaLakeSmoke", "TurnArenaYardSmoke",
     "EnvironmentLakeSmoke", "GateExitLakeSmoke", "GateExitLakeNoPointsSmoke", "WeatherLakeSmoke", "GateExitLakeKiaSmoke", "GateExitLakeKiaNoPointsSmoke", "SnowIndoorSmoke",
     "StartLightingSmoke", "StartSnowSmoke", "FormationWallHugSmoke", "FormationFenceCrossSmoke", "StartFlickerSmoke", "LevelGenBuildingsSmoke", "RoofCutawayStoreySmoke", "CutawayClickSmoke",
-    "SectorBoundarySmoke", "SectorRoundsSmoke", "RoofFightSmoke", "CorpseSearchSmoke",
+    "SectorBoundarySmoke", "SectorRoundsSmoke", "RoofFightSmoke", "CorpseSearchSmoke", "RoofAccessAuditSmoke", "LevelGenRampSmoke",
     "DropLinkReachSmoke", "ColdIndoorsSmoke", "WindowStairHoverSmoke", "FormationStairSmoke", "FormationWindowSmoke", "CoverIndoorSmoke",
     "DoorsSmoke", "DoorBreachSmoke", "WindowCoverFireSmoke", "WindowDetourSmoke", "CornerSlotSmoke",
-    "TorsoDriftSmoke", "FormationScanPitchSmoke"
+    "TorsoDriftSmoke", "FormationScanPitchSmoke", "LookDirectionSmoke", "FormationRunStanceSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -34,8 +35,9 @@
     "_comment": "Smokes known to pass only on a re-run, name -> reason (smoke_parallel prints them apart from NEW flaky ones). Goal: empty. Cleanup day 2026-10-15 fixed CornerHold, TurnBasedAim, Knockdown, Cover, LevelWave, GroupSelect, TurnBlastDeath, EnemyTactics (+ Panic, SquadControl, VisionCone failing) - see docs/port/KNOWN_GAPS.md (the old HANDOFF section 9)."
   },
   "smokeOptions": {
-    "RoofLadderSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json -Sector=0", "timeout": 300, "_why": "139: gallery roof click via actual ladder, link projections and partial-path diagnosis"},
+    "RoofLadderSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json -Sector=0", "timeout": 300, "knownFail": true, "_why": "designer 2026-11-28: building replaced by Soviet buildings, no map fix"},
     "RoofLadderRepairProbe": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json -Sector=0", "timeout": 300, "_why": "139 explicit diagnostic: transient inset125 proof only; ordinary RoofLadderSmoke retains the saved-map assertion"},
+    "UnderFireManoeuvreSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 400, "_why": "156: runtime arena retargeted from archived Depot; includes continuous five-second player cover hold against oblique enemy."},
     "CorpseSearchSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "timeout": 300, "_why": "Task 130: hover Fresnel + walk-to-body search + once-only hostile PMC loot + sector fallen squad member remains"},
     "CoverIndoorSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 420, "_why": "Indoor cover animation sets and outdoor M4 control, plus G025 corner looks (both hands, up and down, stand and crouch). Generated Riffle clips are needed. Requires the untracked Kit map, provided in the main checkout and both worker roots. The smoke runner reports map missing elsewhere."},
     "DoorsSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 600, "_why": "G018: openable doors on the kept kit showcase. The grey L_Gen_StoryShowcase was archived in 061."},
@@ -70,7 +72,9 @@
     "WindowDetourSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 600, "_why": "G024: a sector-building window on X6, the operative 6 m outside, one climb-in click. FAIL if he enters any other opening before that window or ends still outside."},
     "CornerSlotSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 400, "_why": "G025: corner slots on X6 blocks, both hands, stand and crouch. Shoulder <= 25 cm from the edge, penetration <= 2 cm."},
     "TorsoDriftSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 400, "_why": "G025: cover, climb, look left, look right, neutral, walk 10 m. Mesh forward versus velocity <= 10 deg after 0.5 s."},
+    "LookDirectionSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 300, "_why": "145: Shift+click world yaw+pitch lock (multi-select shared yaw, L-shaped walk, roof downward AO pose/bone check, Part B sprint arrival travel yaw)."},
     "FormationScanPitchSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 400, "_why": "G025: formation scan pitch. Open ground spans >= 20 deg. A walk toward an X6 building records aim pitch > +10 deg."},
+    "FormationRunStanceSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 400, "_why": "Task 150: formation crouched/prone followers stand up and run within 1 s on double-click, walk on single-click, crouch on C; Solo untouched."},
     "FormationStairSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json -DPCVars=Codex.Doors.InnerLockedShare=0", "timeout": 900, "_why": "designer 2026-11-22: the squad stuck on the stairwell - the formation climbs every showcase building storey by storey on the player's click Requires the untracked Kit map, provided in the main checkout and both worker roots. The smoke runner reports map missing elsewhere."},
     "WindowStairHoverSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 400, "_why": "designer test 2026-11-22: the window silhouette + window click (through it, breaks it) and the stair-up silhouette + click (up a storey), real cursor rays and the real click on the dressed showcase Requires the untracked Kit map, provided in the main checkout and both worker roots. The smoke runner reports map missing elsewhere."},
     "LevelGenBuildingsSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelGenBuildingsSmokeMaxFail=10", "timeout": 180, "_why": "048: report complete operative nav paths from every exterior door to every room, landing and walkable roof on the old X6 layout" },
@@ -88,6 +92,8 @@
     "TutorialAmbushLakeEarlyKillSmoke": { "map": "/Game/Maps/L_Demo01_A_FrozenLake", "extra": "-LevelJson=L_Demo01_A_FrozenLake.json", "timeout": 600, "_why": "2026-10-22: the first PMC wire -> the tripwire card; both A4 zombies killed early -> every bound step closes (no stale target); A7 -> PREPARE THE GROUND" },
     "SectorBoundarySmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-Sector=1 -SectorSeed=91", "timeout": 300, "_why": "Task 106: one active training sector constrains a squad move and its PMC squad"},
     "SectorRoundsSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-Sector=5 -SectorSeed=91", "timeout": 300, "_why": "G019: a wiped side starts the next round on a different start and post; an empty reserve refills only after the quiet delay"},
+    "RoofAccessAuditSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 300, "_why": "155 read-only placed access audit; PASS proves execution, review findings are reported separately"},
+    "LevelGenRampSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "args": "designer155 trace", "timeout": 600, "_why": "155 exact round4 first roof order: cover at (-7398,-12825), goal (-9111,-11096,900), select another man after10s; no second roof order"},
     "RoofFightSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 300, "_why": "G023: X6 walkable roof LowCover shooting at ground PMC 20-40 m below + full-wall block + grenade throw yaw <= 20 deg (op & PMC) + first-aid chest yaw <= 30 deg behind/beside"},
     "FrontendSmoke": { "map": "/Game/Maps/L_MainMenu" }
   },
@@ -101,10 +107,10 @@
     "/Game/Maps/Generated/L_Gen_Depot_1": [
       "CameraMinZoomDepotSmoke", "ClickPreviewSmoke", "ConePerfSmoke", "CorpseCostSmoke", "CorpsePersistSmoke", "DepotCampaignStartSmoke",
       "DepotVaultSmoke", "DropSoftlockSmoke", "FallDropSmoke", "FormationMantleSmoke", "HitchProbeSmoke",
-      "HordeFirefightsSmoke", "InjuredLocomotionDepotSmoke", "LevelGenLaddersSmoke", "LevelGenRampSmoke", "LevelGenRouteSmoke", "MantleAlignSmoke",
+      "HordeFirefightsSmoke", "InjuredLocomotionDepotSmoke", "LevelGenLaddersSmoke", "LevelGenRouteSmoke", "MantleAlignSmoke",
       "MantleClickSmoke", "MantleDescentSmoke", "MantleFenceRouteSmoke", "MantleSmoke", "PmcAlleySmoke", "PmcCrossroadsSmoke",
       "PmcEncounterHuntSmoke", "PmcEncounterSmoke", "PmcOwnedChargesSmoke", "PmcPostsSmoke", "PmcRoofDefenceSmoke", "PmcStalemateSmoke",
-      "ProneCrawlSmoke", "RampFightSmoke", "RoofCutawayFocusSmoke", "SightConditionsSmoke", "UnderFireManoeuvreSmoke", "VisionHeightSmoke",
+      "ProneCrawlSmoke", "RampFightSmoke", "RoofCutawayFocusSmoke", "SightConditionsSmoke", "VisionHeightSmoke",
       "WeaponReachSmoke"
     ],
     "/Game/Maps/Generated/L_Gen_Depot_X4": [
@@ -179,6 +185,18 @@
   "rules": [
     {"name": "roof-ladder-139", "globs": ["Source/**/Debug/RoofLadderSmoke*"], "tests": ["CodexTactics.Movement.NoWayUp"], "smokes": ["RoofLadderSmoke", "RoofLadderRepairProbe"]},
     {
+      "name": "roof-access-155",
+      "globs": ["Source/**/Debug/RoofAccessAuditSmoke*", "Source/**/Characters/OperativeCharacterMovement.cpp", "Source/**/Core/CodexTacticsPlayerControllerClickPreview.cpp", "Source/**/Core/CodexTacticsPlayerControllerOrders.cpp", "Source/**/Interactables/WindowBreakage*"],
+      "tests": ["CodexTactics.Tactics.ClickPreview", "CodexTactics.Interactables.WindowBreakage"],
+      "smokes": ["RoofAccessAuditSmoke", "LevelGenRampSmoke"]
+    },
+    {
+      "name": "cover-open-shot-loop-156",
+      "globs": ["Source/**/Tactics/CoverThreatRules*", "Source/**/Characters/OperativeCharacterUnderFire*", "Source/**/Debug/UnderFireManoeuvreSmokeCommand.cpp"],
+      "tests": ["CodexTactics.Tactics.Cover.Threat", "CodexTactics.Combat.UnderFire"],
+      "smokes": ["UnderFireManoeuvreSmoke"]
+    },
+    {
       "name": "roof-fight-g023",
       "globs": ["Source/**/Tactics/CoverFacingRules*", "Source/**/Combat/Grenade*", "Source/**/Survival/FirstAid*", "Source/**/Characters/OperativeCharacterAim.cpp", "Source/**/Characters/OperativeCharacterCover.cpp", "Source/**/Characters/OperativeCharacterCornerAim.cpp", "Source/**/Characters/OperativeCharacterCombat.cpp", "Source/**/Characters/OperativeCharacterWeapons.cpp", "Source/**/Characters/SquadAutonomySubsystem*", "Source/**/Debug/RoofFightSmokeCommand.cpp"],
       "tests": ["CodexTactics.Tactics.Cover", "CodexTactics.Combat.Grenade", "CodexTactics.Survival.FirstAid"],
@@ -225,12 +243,13 @@
       "name": "look-hold-solo-2026-11-15",
       "globs": [
         "Source/**/Tactics/LookHoldRules*",
-        "Source/**/Debug/LookHoldSmoke*"
+        "Source/**/Debug/LookHoldSmoke*",
+        "Source/**/Debug/LookDirectionSmoke*"
       ],
       "tests": [
         "CodexTactics.Tactics.LookHold"
       ],
-      "smokes": ["CoverIndoorSmoke", "LowCoverMoveLakeSmoke"]
+      "smokes": ["LookDirectionSmoke", "CoverIndoorSmoke"]
     },
     {
       "globs": [
@@ -250,6 +269,13 @@
         "CodexTactics.Combat.Sight"
       ],
       "smokes": []
+    },
+    {
+      "name": "formation-run-stance-150",
+      "_comment": "Task 150: formation run order stands crouched and prone followers up and sprints them; walk/crouch returns stance and gait; Solo untouched.",
+      "globs": ["Source/**/Characters/SquadOrderRules*", "Source/**/Characters/SquadSubsystem.*", "Source/**/Characters/OperativeCharacterMovement*", "Source/**/Debug/FormationRunStanceSmoke*"],
+      "tests": ["CodexTactics.Squad.Orders", "CodexTactics.Movement", "CodexTactics.Formation"],
+      "smokes": ["FormationRunStanceSmoke"]
     },
     {
       "name": "wound-pace-2026-11-11",

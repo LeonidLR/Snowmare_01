@@ -553,7 +553,7 @@ namespace StealthModeSmoke
 					++State.AnchorLostSightFrames;
 				}
 			}
-			const float ExpectedYaw = static_cast<float>((State.AnchorPoint - Op->GetActorLocation()).Rotation().Yaw);
+			const float ExpectedYaw = Op->GetManualLookYawDeg();
 			if (FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), ExpectedYaw)) > 10.f)
 			{
 				++State.AnchorWrongYawFrames;
@@ -1156,8 +1156,10 @@ namespace StealthModeSmoke
 			AnchorHit.bBlockingHit = true;
 			PC->HandleWorldHit(AnchorHit);
 			PC->SetSimulatedShiftModifier(false);
-			Check(State, Op->HasStealthManualLookTarget() && FVector::Dist2D(Op->GetStealthManualLookTarget(), State.AnchorPoint) < 5.f,
-				TEXT("section 5: Shift + LMB on ground fixes manual stealth look anchor"));
+			const float ExpectedAnchorYaw = static_cast<float>((State.AnchorPoint - Op->GetActorLocation()).Rotation().Yaw);
+			const float GotAnchorYaw = static_cast<float>((Op->GetStealthManualLookTarget() - Op->GetActorLocation()).Rotation().Yaw);
+			Check(State, Op->HasStealthManualLookTarget() && FMath::Abs(FMath::FindDeltaAngleDegrees(GotAnchorYaw, ExpectedAnchorYaw)) < 2.f,
+				TEXT("section 5: Shift + LMB on ground fixes manual stealth look direction"));
 			Next(State, 611);
 			break;
 		}
@@ -1292,9 +1294,12 @@ namespace StealthModeSmoke
 				PC->HandleWorldHit(ManualHit);
 				PC->SetSimulatedShiftModifier(false);
 				FVector ActiveLook = FVector::ZeroVector;
+				const float ExpectedManualYaw = static_cast<float>((ManualTarget - Op->GetActorLocation()).Rotation().Yaw);
+				const float GotManualYaw = Op->GetStealthLookPoint(ActiveLook)
+					? static_cast<float>((ActiveLook - Op->GetActorLocation()).Rotation().Yaw) : 0.f;
 				Check(State, Op->HasStealthAutoLookTarget() && Op->HasStealthManualLookTarget() && Op->GetStealthLookPoint(ActiveLook)
-					&& FVector::Dist2D(ActiveLook, ManualTarget) < 5.f,
-					TEXT("section 1/5: manual Shift+LMB look anchor beats automatic threat lock"));
+					&& FMath::Abs(FMath::FindDeltaAngleDegrees(GotManualYaw, ExpectedManualYaw)) < 2.f,
+					TEXT("section 1/5: manual Shift+LMB look direction beats automatic threat lock"));
 				PC->SetSimulatedShiftModifier(true);
 				FHitResult SelfHitAgain(Op, nullptr, Op->GetActorLocation(), FVector::UpVector);
 				SelfHitAgain.bBlockingHit = true;

@@ -1139,6 +1139,8 @@ private:
 		TOptional<ESquadRegroupPace> LoggedPace;
 	};
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FFastRegroupState> FastRegroups;
+	/** Task 150: operatives stood up from crouch/prone to sprint with the leader; survives RebuildFollowers(). */
+	TSet<TWeakObjectPtr<AOperativeCharacter>> StoodUpForSprint;
 	/** This frame's combat facts for the regroup pace (a fight, an enemy known to the squad, a member under fire / suppressed). */
 	bool bFrameRegroupCombat = false;
 	/**

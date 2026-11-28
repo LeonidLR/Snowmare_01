@@ -27,6 +27,7 @@
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WeaponBallisticsRules.h"
 #include "Combat/UnderFireRules.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 #include "AI/PmcSquadSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
@@ -1328,6 +1329,11 @@ void AOperativeCharacter::ApplyRangedHit(AActor* Target, float Cover, int32 Dist
 
 	if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
 	{
+		if (USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(this))
+		{
+			Recorder->RecordShotHit(this, Target, CurrentWeapon ? FName(*CurrentWeapon->WeaponId) : FName(TEXT("m16")),
+				Spec.Amount, static_cast<float>(FVector::Dist2D(GetActorLocation(), Target->GetActorLocation())));
+		}
 		TargetHealth->TakeDamage(Spec);
 	}
 	// Run telemetry (Godot _record_weapon_shot: hits with their damage, per wave and weapon).

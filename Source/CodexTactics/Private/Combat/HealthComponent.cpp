@@ -1,4 +1,7 @@
 #include "Combat/HealthComponent.h"
+#include "Characters/OperativeCharacter.h"
+#include "Characters/CriticalWoundRules.h"
+#include "Telemetry/SessionRecordingSubsystem.h"
 
 #include "Combat/ArmorRules.h"
 #include "Combat/CombatCheats.h"
@@ -10,6 +13,22 @@
 
 namespace
 {
+	// Observe every actual health decrease, including direct melee/cold and status ticks.
+	// No damage, health-change or death ordering is changed by recording.
+	void RecordHealthLoss(UHealthComponent& Health, float Before, const FString& Source, const FVector& Origin = FVector::ZeroVector)
+	{
+		USessionRecordingSubsystem* Recorder = USessionRecordingSubsystem::GetIfRecording(&Health);
+		const float Loss = Before - Health.GetCurrentHealth();
+		if (!Recorder || Loss <= 0.f) { return; }
+		Recorder->RecordDamage(Source, Health.GetOwner(), Loss, Origin);
+		const AOperativeCharacter* Op = Cast<AOperativeCharacter>(Health.GetOwner());
+		if (Op && Op->IsCriticallyWounded()
+			&& !CriticalWoundRules::IsCritical(CriticalWoundRules::GetWoundConfig(), Before, Health.GetMaxHealth()))
+		{
+			Recorder->RecordKillOrDown(Op, Source, true);
+		}
+	}
+
 	/** Godot enemy_base.gd floats its own numbers; operatives (UOperativeCharacter::TakeHit) and objects do not use these. */
 	bool FloatsEnemyNumbers(const AActor* Owner)
 	{
@@ -59,6 +78,7 @@ void UHealthComponent::ApplyDirectHealthLoss(float Amount, const FString& Source
 	}
 	const float OldHealth = CurrentHealth;
 	CurrentHealth = FMath::Max(0.0f, CurrentHealth - Amount);
+	RecordHealthLoss(*this, OldHealth, Source);
 	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, CurrentHealth - OldHealth);
 	if (CurrentHealth <= 0.0f)
 	{
@@ -101,6 +121,7 @@ float UHealthComponent::TakeDamage(const FDamageSpec& Spec)
 
 	const float OldHealth = CurrentHealth;
 	CurrentHealth = FMath::Max(0.0f, CurrentHealth - FinalDamage);
+	RecordHealthLoss(*this, OldHealth, Spec.AttackerSource, Spec.DamageOrigin);
 
 	// Godot enemy_base.gd take_damage: the number with the damage type's prefix / colour.
 	if (FloatsEnemyNumbers(GetOwner()))
@@ -238,7 +259,9 @@ void UHealthComponent::ProcessStatusEffects(float DeltaSeconds)
 		{
 			BurningTickAccum = 0.0f;
 			// Combat lab cheat (CombatCheats): no tick damage on an immortal operative.
+			const float RecordingOldHealth = CurrentHealth;
 			CurrentHealth = AbsorbByImmortalCheat(BurningTickDamage) ? CurrentHealth : FMath::Max(0.0f, CurrentHealth - BurningTickDamage);
+			RecordHealthLoss(*this, RecordingOldHealth, TEXT("Burning"));
 			if (FloatsEnemyNumbers(GetOwner()))
 			{
 				UFloatingTextSubsystem::SpawnAboveEnemy(GetOwner(), FString::Printf(TEXT("🔥 -%d"), FMath::FloorToInt(BurningTickDamage)), FLinearColor(1.f, 0.45f, 0.1f));
@@ -260,7 +283,9 @@ void UHealthComponent::ProcessStatusEffects(float DeltaSeconds)
 		{
 			BleedingTickAccum = 0.0f;
 			// Combat lab cheat (CombatCheats): no tick damage on an immortal operative.
+			const float RecordingOldHealth = CurrentHealth;
 			CurrentHealth = AbsorbByImmortalCheat(BleedingTickDamage) ? CurrentHealth : FMath::Max(0.0f, CurrentHealth - BleedingTickDamage);
+			RecordHealthLoss(*this, RecordingOldHealth, TEXT("Bleeding"));
 			if (FloatsEnemyNumbers(GetOwner()))
 			{
 				UFloatingTextSubsystem::SpawnAboveEnemy(GetOwner(), FString::Printf(TEXT("🩸 -%d"), FMath::FloorToInt(BleedingTickDamage)), FLinearColor(0.9f, 0.1f, 0.1f));

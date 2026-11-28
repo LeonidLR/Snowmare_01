@@ -213,7 +213,7 @@ class AdapterTests(unittest.TestCase):
         execs = [a for a in cmd if a.startswith("-ExecCmds=")][0]
         self.assertIn("CodexTactics.PmcArena Map=/Game/Maps/Generated/L_Gen_Depot_1 Rounds=4 Seed=7", execs)
         self.assertIn("Spawns=Random", execs)
-        self.assertIn("WeightsA=Saved/Trainer/r/gen_0001/candidates/g0001_c00.json", execs)
+        self.assertIn("WeightsA=C:/Repo/Saved/Trainer/r/gen_0001/candidates/g0001_c00.json", execs)
         self.assertIn("Opponent=Pmc", execs)
         self.assertNotIn(",", execs)
         bot = dict(job, opponent="bot", weights_b=None)

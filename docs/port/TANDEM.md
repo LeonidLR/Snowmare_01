@@ -14,6 +14,11 @@ Who: **Lead (Claude)** routes, reviews diffs by hand, merges, builds, pushes. **
 6. Build only when `Source/` or `*.uproject` changed.
 7. Economy: keep chat lines short; stop at 10 % of your limit, commit, report, wait.
 8. Never touch the designer's uncommitted main files (X6), maps, `.uasset`, Config, VFX unless the task says so.
+9. Headless runs (designer 2026-11-27: app windows closed, the Lead starts agents itself, full access): Codex via
+   `Scripts/Tools/codex_task.ps1 -Lane <lane> -PromptFile <task.md> -Label <id>`, Gemini via the Antigravity CLI
+   `Scripts/Tools/agy_task.ps1 ...` (phone proxy 127.0.0.1:8899, auto-started). The wrappers post `<id> START`, a heartbeat
+   status every 30 min and `<id> ENDED`, so the chat task board shows the run in progress. The task text lives in
+   `docs/port/<agent>/inbox/<id>-<slug>.md` (the board only lists inbox tasks); logs in `Saved/Orchestrator/{codex,agy}_runs/`.
 
 ## Roles (user decision 2026-10-01 — replaces the 2026-09-28 architect / implementer split)
 
@@ -1491,3 +1496,24 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 **139 crouch compatibility checkpoint (2026-11-27).** Complete ground paths with legacy standing-centre goals remain valid while crouched: no-way-up allowance now includes the class default standing capsule. Worker build PASS406.18s; final Smart/nine-smoke recheck pending. Saved-map LadderActor_22 inset125 fix remains with Lead. Report: `docs/port/codex/outbox/139-roof-ladder-no-path.report.md`.
 
 **139 MERGE-READY (map fix pending), 2026-11-27.** Code f4d0c498: worker build PASS406.18s; Smart927/927 PASS; exact nine mapped smokes8 PASS, only saved-map RoofLadderSmoke FAIL expected (strict retry too). Crouched LowCoverMoveLake and FormationStair PASS; repair probe climbs at feet302.2. Lead still applies LadderActor_22 inset125/125 and saves navmesh. Final artifacts/report: `docs/port/codex/outbox/139-roof-ladder-no-path.report.md`, `Saved/Logs/Worker/139-final/`.
+## Task148 checkpoint ? 2026-11-27
+Codex lane148 delivered TG replay/annotations, demo_notes decoder and new X6 building index. No runtime/content edits beyond the authorized new index. Code checks pass; Lead must capture drawn-route screenshots in a supported browser. See task148 outbox report.
+
+**121 checkpoint (2026-11-27, gemini/121-recording-tactics).** Reviewed Gemini telemetry; corrected attribution, optical observer/support facts, ground and look measurements, death/down semantics, and conservative round-scoped tactic tagging. Python18/18 PASS; final worker build/Smart/smokes and new PIE acceptance recording pending. Report: `docs/port/codex/outbox/121-recording-tactics.report.md`. Not merge-ready.
+
+- 121 offline edge correction (2026-11-27): round_end sorts after same-timestamp kills, preserving the final kill and completed flank; Python19/19 PASS. Final runtime/PIE validation remains pending (task121 report).
+
+- 121 direct-loss completeness checkpoint (2026-11-27): health recording now observes actual common health decreases (normal/direct/cold/burning/bleeding) exactly once, removing actor callback duplication. Known TakeHit attackers arm a synchronous context; critical down is recorded across the same paths. Added C++ AllHealthLossPaths coverage; final worker checks pending.
+
+**121 BLOCKER (2026-11-27): real PIE acceptance evidence still needed.** C++8de50957: worker build PASS410.31s; Smart848/848 PASS including HitAttribution/AllHealthLossPaths; all16 mapped smokes PASS first try; Python20/20 PASS including actual null-target schema and round-end ties. Recording facts/tagger finished and reviewed, but no real new PIE fight showing all3 core tactics was captured in this headless run. Synthetic fixture is not acceptance evidence. See `docs/port/codex/outbox/121-recording-tactics.report.md`. Stop here; Lead owns the next task.
+
+
+## Task149 checkpoint - 2026-11-27
+
+Codex lane `codex/149-demos-to-trainer`: dataset from 17 recordings (65 fights/tails, 48 completed), tested opt-in PMC doctrine proxies, dedicated weekend learning + 204 paired rounds/arm on X6 sector spawn/objective boxes, morning metrics/examples. Fixed absolute arena weight paths after a short trial exposed silent default-weight fallback; weekend adapter requires both loaded flags. No C++, asset/config edits, shared worker-loop changes, scheduling or champion application. Report: `docs/port/codex/outbox/149-demos-to-trainer.report.md`. Lead owns review/merge, a fresh full-night gate and scheduling outside the existing short A/B queue window.
+
+149 finish: final report + frozen real trial and offline metric diagnostics committed after resume from `ca5ea241`. Demo43/trainer134 checks and 3 real A/A pairs were retained without rerunning. Both doctrine proxies are measured and varying; full-night G2 still fails on dead reward/descriptor signals and the damage key mismatch; G3 has no freeze baseline. MERGE-READY applies to tooling, not permission to launch through a blocked gate. No long runs or champion application; task stopped after delivery.
+
+149b (2026-11-27, Codex): trainer damage key + config/freeze gate binding, Python142 PASS; real sector12/auxiliary tactical2 rounds. G1/G2 BLOCKED; remaining ambush/flank liveness and sector route coverage not solved. Baseline task verified Ready 16:30, pinned worker lane77f2e9f5, >=30 actual healthy rounds/scenario, stop07:45. Shared night-loop resolver + optional QueueOnly only; no champion. Report: `docs/port/codex/outbox/149b-trainer-metrics.report.md`.
+
+- 2026-11-28 Codex 139: merged main 351e114b in lane, unified 139/155 guard; infrastructure restored equal to main. Designer cancels saved LadderActor_22 inset fix: Soviet replacement buildings planned. Local build PASS, Smart332/332 PASS;12 mapped smokes11 PASS +1 designer KNOWN-FAIL,0 unexpected failures/retries. Report records actual outcomes.

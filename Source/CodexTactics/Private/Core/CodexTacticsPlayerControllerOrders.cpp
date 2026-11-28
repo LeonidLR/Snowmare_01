@@ -465,11 +465,29 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 				}
 				else if (!ClickedMember && StealthedSelected.Num() == SelectedGroup.Num() && Hit.bBlockingHit)
 				{
+					AOperativeCharacter* StealthRef = nullptr;
 					for (AOperativeCharacter* Member : StealthedSelected)
 					{
-						Member->SetStealthManualLookTarget(Hit.ImpactPoint);
+						if (Member && LookHoldRules::IsValidLookPoint(Hit.ImpactPoint, Member->GetActorLocation()))
+						{
+							StealthRef = Member;
+							break;
+						}
 					}
-					UFloatingTextSubsystem::SpawnAboveOperative(StealthedSelected[0], TEXT("LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
+					if (StealthRef)
+					{
+						const FVector AdjustedStealthClick = LookHoldRules::AdjustClickForFlatGround(
+							StealthRef->GetActorLocation(), StealthRef->GetSimpleCollisionHalfHeight(), Hit.ImpactPoint);
+						const LookHoldRules::FLookDirection SharedDir = LookHoldRules::DirectionFromClick(StealthRef->GetActorLocation(), AdjustedStealthClick);
+						for (AOperativeCharacter* Member : StealthedSelected)
+						{
+							if (Member && LookHoldRules::IsValidLookPoint(Hit.ImpactPoint, Member->GetActorLocation()))
+							{
+								Member->SetManualLookDirection(SharedDir.YawDeg, SharedDir.PitchDeg);
+							}
+						}
+						UFloatingTextSubsystem::SpawnAboveOperative(StealthRef, TEXT("LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
+					}
 					HideCoverPreview();
 					return;
 				}
@@ -547,6 +565,17 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		}
 	}
 	FVector WindowFeet;
+	// 155: a parapet viewed from below is the roof destination. Keep the requested floor
+	// through window / cover dispatch; a broken route is refused by OrderMoveTo on that floor.
+	if (const AActor* Edge = Hit.GetActor(); Edge && Edge->ActorHasTag(TEXT("parapet"))
+		&& Edge->GetComponentsBoundingBox(true).Min.Z > Leader->GetFloorReferenceLocation().Z + 150.f)
+	{
+		const FVector RoofFeet(Hit.ImpactPoint.X - Hit.ImpactNormal.X * 100.f,
+			Hit.ImpactPoint.Y - Hit.ImpactNormal.Y * 100.f, Edge->GetComponentsBoundingBox(true).Min.Z);
+		UE_LOG(LogCodexTactics, Display, TEXT("[RoofOrder] edge %s hit %s -> roof %s"), *Edge->GetName(), *Hit.ImpactPoint.ToCompactString(), *RoofFeet.ToCompactString());
+		Hit = FHitResult(nullptr, nullptr, RoofFeet, FVector::UpVector);
+		Hit.bBlockingHit = true;
+	}
 	float WindowYaw = 0.f;
 	FVector WindowApproach = FVector::ZeroVector;
 	bool bWindowApproachOnNav = false;
@@ -804,24 +833,39 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		}
 		bool bSetAny = false;
 		bool bNewlyLocked = false;
+		AOperativeCharacter* RefOp = nullptr;
+		for (AOperativeCharacter* Op : Targets)
+		{
+			if (Op && LookHoldRules::IsValidLookPoint(Hit.ImpactPoint, Op->GetActorLocation()))
+			{
+				RefOp = Op;
+				break;
+			}
+		}
+		const FVector AdjustedClick = RefOp
+			? LookHoldRules::AdjustClickForFlatGround(RefOp->GetActorLocation(), RefOp->GetSimpleCollisionHalfHeight(), Hit.ImpactPoint)
+			: Hit.ImpactPoint;
+		const LookHoldRules::FLookDirection SharedDir = RefOp
+			? LookHoldRules::DirectionFromClick(RefOp->GetActorLocation(), AdjustedClick)
+			: LookHoldRules::FLookDirection{};
 		for (AOperativeCharacter* Op : Targets)
 		{
 			if (Op && LookHoldRules::IsValidLookPoint(Hit.ImpactPoint, Op->GetActorLocation()))
 			{
 				bNewlyLocked |= !Op->HasManualLookPoint();
-				Op->SetManualLookPoint(Hit.ImpactPoint);
+				Op->SetManualLookDirection(SharedDir.YawDeg, SharedDir.PitchDeg);
 				bSetAny = true;
 			}
 		}
-		if (bSetAny && !Targets.IsEmpty())
+		if (bSetAny && RefOp)
 		{
-			ControllerCommands::Report(this, PlayerCommands::WatchSector, nullptr, false, false, Targets[0], Hit.ImpactPoint);
-			UFloatingTextSubsystem::SpawnAboveOperative(Targets[0], TEXT("LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
+			ControllerCommands::Report(this, PlayerCommands::WatchSector, nullptr, false, false, RefOp, Hit.ImpactPoint);
+			UFloatingTextSubsystem::SpawnAboveOperative(RefOp, TEXT("LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
 			if (bNewlyLocked)
 			{
 				if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 				{
-					Messages->PostMessage(Targets[0]->DisplayName, FText::Format(LOCTEXT("Sector", "👁️ [{0}]: Watch sector locked!"), Targets[0]->DisplayName));
+					Messages->PostMessage(RefOp->DisplayName, FText::Format(LOCTEXT("Sector", "👁️ [{0}]: Watch sector locked!"), RefOp->DisplayName));
 				}
 			}
 		}
@@ -950,6 +994,11 @@ bool ACodexTacticsPlayerController::FindWindowSillTarget(const AActor& Sill, con
 	const FVector Size = Local.GetSize() * Sill.GetActorScale3D().GetAbs();
 	const FVector Center = Sill.GetActorTransform().TransformPosition(Local.GetCenter());
 	const float FeetZ = static_cast<float>(Operative.GetActorLocation().Z - Operative.GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	// A window on another storey must never produce a crossing on the operative's floor.
+	if (FMath::Abs(Sill.GetComponentsBoundingBox(true).Min.Z - FeetZ) > 120.f)
+	{
+		return false;
+	}
 	const FVector Feet(Operative.GetActorLocation().X, Operative.GetActorLocation().Y, FeetZ);
 	const FWindowOrderTuning& Tuning = WindowOrderRules::Get();
 	const FWindowSideChoice Choice = WindowOrderRules::ChooseSide(Feet, Center, Sill.GetActorForwardVector(), Sill.GetActorRightVector(),

@@ -1,0 +1,131 @@
+[2026.11.27-07.12.24:909][439]LogCodexTactics: Display: [ClickPreview] first click on StaticMeshActor_2409 at V(X=-3683.58, Y=-8701.38, Z=26.25) (normal z 0.00): the cover ghost (1 silhouettes) - a second click on it carries it out
+[2026.11.27-07.12.25:103][452]LogCodexTactics: Display: [ClickPreview] second click on StaticMeshActor_2409 at V(X=-3683.58, Y=-8701.38, Z=26.25) (double click): carries out the cover ghost
+[2026.11.27-07.12.25:914][513]LogCodexTactics: Display: [Engineer] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-07.12.25:915][513]LogCodexTactics: Display: [ClickPreview] first click on StaticMeshActor_2409 at V(X=-3683.58, Y=-8701.38, Z=26.25) (normal z 0.00): the cover ghost (1 silhouettes) - a second click on it carries it out
+[2026.11.27-07.12.26:089][524]LogCodexTactics: Display: [ClickPreview] second click on StaticMeshActor_2409 at V(X=-3683.58, Y=-8701.38, Z=26.25) (double click): carries out the cover ghost
+[2026.11.27-07.12.26:478][550]LogCodexTactics: Display: Engineer: move to (-3723, -8799) -> accepted
+[2026.11.27-07.12.26:677][561]LogCodexTactics: Display: Move order in a fight (Solo, 1 of 2 selected, run): windows open for this order
+[2026.11.27-07.12.26:677][561]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.27-07.12.26:677][561]LogCodexTactics: Display: Engineer: move to (-3723, -8799) sprint -> accepted
+[2026.11.27-07.12.27:321][603]LogCodexTactics: Display: [Engineer] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-07.12.27:321][603]LogCodexTactics: Display: [ClickPreview] first click on StaticMeshActor_2409 at V(X=-3703.08, Y=-8691.87, Z=43.93) (normal z 0.00): the cover ghost (1 silhouettes) - a second click on it carries it out
+[2026.11.27-07.12.27:618][625]LogCodexTactics: Display: [ArrivalFacing] Engineer: rule=travel yaw=-171.3 actor=-171.3 travel=-171.3 (manualLook=0 explicit=0 idle=0 formation=0 fought=0 cover=0 stealth=0)
+[2026.11.27-07.12.27:742][634]LogCodexTactics: Display: [ClickPreview] second click on StaticMeshActor_2409 at V(X=-3703.00, Y=-8691.91, Z=49.55): carries out the cover ghost
+[2026.11.27-07.12.27:743][634]LogCodexTactics: Display: Engineer: move to (-3730, -8748) sprint -> accepted
+[2026.11.27-07.12.27:743][634]LogCodexTactics: Display: [Cover] Engineer: to the low cover at (-3730, -8748) at a sprint
+[2026.11.27-07.12.27:743][634]LogCodexTactics: Display: [Engineer] 🏃 Take cover!
+[2026.11.27-07.12.28:000][652]LogCodexTactics: Display: Engineer: stance STANDING -> CROUCHED
+[2026.11.27-07.12.28:001][652]LogCodexTactics: Display: [Cover] Engineer: entered the low cover at (-3730, -8748), facing right, corners L 0 R 1
+[2026.11.27-07.12.28:001][652]LogCodexTactics: Display: [Engineer] 🧱 Behind cover!
+[2026.11.27-07.12.28:001][652]LogCodexTactics: Display: [Cover] Engineer: runs into the cover (24 cm out, speed 189, clip lead 98, glide 77)
+[2026.11.27-07.12.28:028][653]LogCodexTactics: Display: [CoverSet] Engineer: cover at V(X=-3703.00, Y=-8691.91, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-07.12.28:410][681]LogCodexTactics: Display: [Cover] Engineer: settled in the cover after 0.42 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.27-07.12.29:844][776]LogCodexTactics: Display: [Engineer] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-07.12.29:846][776]LogCodexTactics: Display: [ClickPreview] first click on StaticMeshActor_2410 at V(X=-2383.89, Y=-8557.82, Z=85.75) (normal z 0.00): the cover ghost (1 silhouettes) - a second click on it carries it out
+[2026.11.27-07.12.31:235][877]LogCodexTactics: Display: [ClickPreview] second click on StaticMeshActor_2410 at V(X=-2361.80, Y=-8551.07, Z=64.68): carries out the cover ghost
+[2026.11.27-07.12.32:250][946]LogCodexTactics: Display: [Engineer] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-07.12.32:250][946]LogCodexTactics: Display: [ClickPreview] first click on StaticMeshActor_2410 at V(X=-2361.80, Y=-8551.07, Z=64.68) (normal z 0.00): the cover ghost (1 silhouettes) - a second click on it carries it out
+[2026.11.27-07.13.00:988][205]LogCodexTactics: Display: [ClickPreview] the ghost goes (a click elsewhere)
+[2026.11.27-07.13.00:989][205]LogCodexTactics: Display: [Cover] Engineer: left the cover (move order)
+[2026.11.27-07.13.00:989][205]LogCodexTactics: Display: Engineer: move to (-3738, -8933) -> accepted
+[2026.11.27-07.13.02:746][335]LogCodexTactics: Display: [ArrivalFacing] Engineer: rule=travel yaw=-92.5 actor=-92.7 travel=-92.5 (manualLook=0 explicit=0 idle=0 formation=0 fought=0 cover=0 stealth=0)
+[2026.11.27-07.13.03:392][382]LogCodexTactics: Display: [Engineer] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-07.13.03:393][382]LogCodexTactics: Display: [ClickPreview] first click on StaticMeshActor_2409 at V(X=-3679.41, Y=-8703.41, Z=49.18) (normal z 0.00): the cover ghost (1 silhouettes) - a second click on it carries it out
+[2026.11.27-07.13.03:626][399]LogCodexTactics: Display: [ClickPreview] second click on StaticMeshActor_2409 at V(X=-3679.41, Y=-8703.41, Z=49.18) (double click): carries out the cover ghost
+[2026.11.27-07.13.03:626][399]LogCodexTactics: Display: [Cover] Engineer: double-click on another cover - not in cover -> the ordinary cover order
+[2026.11.27-07.13.03:627][399]LogCodexTactics: Display: Engineer: move to (-3699, -8759) sprint -> accepted
+[2026.11.27-07.13.03:627][399]LogCodexTactics: Display: [Cover] Engineer: to the low cover at (-3699, -8759) at a sprint
+[2026.11.27-07.13.03:627][399]LogCodexTactics: Display: [Engineer] 🏃 Take cover!
+[2026.11.27-07.13.03:779][410]LogCodexTactics: Display: Engineer: stance STANDING -> CROUCHED
+[2026.11.27-07.13.03:779][410]LogCodexTactics: Display: [Cover] Engineer: entered the low cover at (-3699, -8759), facing right, corners L 0 R 1
+[2026.11.27-07.13.03:779][410]LogCodexTactics: Display: [Engineer] 🧱 Behind cover!
+[2026.11.27-07.13.03:780][410]LogCodexTactics: Display: [Cover] Engineer: runs into the cover (136 cm out, speed 215, clip lead 98, glide 45)
+[2026.11.27-07.13.03:792][411]LogCodexTactics: Display: [CoverSet] Engineer: cover at V(X=-3679.41, Y=-8703.41, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-07.13.04:186][441]LogCodexTactics: Display: [Cover] Engineer: settled in the cover after 0.42 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.27-07.13.06:506][609]LogCodexTactics: Display: [Cover] Engineer: left the cover (move order)
+[2026.11.27-07.13.06:506][609]LogCodexTactics: Display: Engineer: move to (-2358, -8586) -> accepted
+[2026.11.27-07.13.07:977][719]LogCodexTactics: Display: [Engineer] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-07.13.07:977][719]LogCodexTactics: Display: [ClickPreview] first click on StaticMeshActor_2409 at V(X=-3681.32, Y=-8702.48, Z=54.58) (normal z 0.00): the cover ghost (1 silhouettes) - a second click on it carries it out
+[2026.11.27-07.13.08:164][733]LogCodexTactics: Display: [ClickPreview] second click on StaticMeshActor_2409 at V(X=-3681.32, Y=-8702.48, Z=54.58) (double click): carries out the cover ghost
+[2026.11.27-07.13.10:051][871]LogCodexTactics: Display: Engineer: move to (-3749, -8933) -> accepted
+[2026.11.27-07.13.10:239][884]LogCodexTactics: Display: Move order in a fight (Solo, 1 of 2 selected, run): windows open for this order
+[2026.11.27-07.13.10:240][884]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.27-07.13.10:241][884]LogCodexTactics: Display: Engineer: move to (-3749, -8933) sprint -> accepted
+[2026.11.27-07.13.10:964][931]LogCodexTactics: Display: [Engineer] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-07.13.10:964][931]LogCodexTactics: Display: [ClickPreview] first click on StaticMeshActor_2409 at V(X=-3689.38, Y=-8698.55, Z=36.92) (normal z 0.00): the cover ghost (1 silhouettes) - a second click on it carries it out
+[2026.11.27-07.13.11:138][942]LogCodexTactics: Display: [ClickPreview] second click on StaticMeshActor_2409 at V(X=-3689.38, Y=-8698.55, Z=36.92) (double click): carries out the cover ghost
+[2026.11.27-07.13.11:139][942]LogCodexTactics: Display: [Cover] Engineer: double-click on another cover - not in cover -> the ordinary cover order
+[2026.11.27-07.13.11:139][942]LogCodexTactics: Display: Engineer: move to (-3716, -8754) sprint -> accepted
+[2026.11.27-07.13.11:139][942]LogCodexTactics: Display: [Cover] Engineer: to the low cover at (-3716, -8754) at a sprint
+[2026.11.27-07.13.11:140][942]LogCodexTactics: Display: [Engineer] 🏃 Take cover!
+[2026.11.27-07.13.11:319][955]LogCodexTactics: Display: Engineer: stance STANDING -> CROUCHED
+[2026.11.27-07.13.11:319][955]LogCodexTactics: Display: [Cover] Engineer: entered the low cover at (-3716, -8754), facing right, corners L 0 R 1
+[2026.11.27-07.13.11:319][955]LogCodexTactics: Display: [Engineer] 🧱 Behind cover!
+[2026.11.27-07.13.11:319][955]LogCodexTactics: Display: [Cover] Engineer: runs into the cover (146 cm out, speed 274, clip lead 98, glide 57)
+[2026.11.27-07.13.11:332][956]LogCodexTactics: Display: [CoverSet] Engineer: cover at V(X=-3689.38, Y=-8698.55, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-07.13.11:721][987]LogCodexTactics: Display: [Cover] Engineer: settled in the cover after 0.42 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.27-07.13.22:525][766]LogCodexTactics: Display: [Cover] Operator Roux: left the cover (sector no-contact relocate)
+[2026.11.27-07.13.22:525][766]LogCodexTactics: Warning: Operator Roux: mesh 40 cm / 0.0 deg off its place on the capsule (untracked) - put back
+[2026.11.27-07.13.22:526][766]LogCodexTactics: Display: [TrainingSector] Round 4 pmc_relocated #2/3: 44.0 m from squad (LOS no, cover no, fallback no) to V(X=-6258.80, Y=-12049.26, Z=10.00)
+[2026.11.27-07.13.38:970][174]LogCodexTactics: Display: [Engineer] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-07.13.38:971][174]LogCodexTactics: Display: [ClickPreview] first click on StaticMeshActor_2410 at V(X=-2350.52, Y=-8547.62, Z=30.19) (normal z 0.00): the cover ghost (1 silhouettes) - a second click on it carries it out
+[2026.11.27-07.13.40:738][307]LogCodexTactics: Display: [ClickPreview] the ghost goes (RMB / Esc)
+[2026.11.27-07.13.44:320][573]LogCodexTactics: Display: [Cover] Engineer: left the cover (move order)
+[2026.11.27-07.13.44:320][573]LogCodexTactics: Display: Engineer: move to (-2343, -8586) -> accepted
+[2026.11.27-07.13.55:887][473]LogCodexTactics: Display: [ArrivalFacing] Engineer: rule=travel yaw=15.0 actor=15.3 travel=15.0 (manualLook=0 explicit=0 idle=0 formation=0 fought=0 cover=0 stealth=0)
+[2026.11.27-07.13.56:072][486]LogCodexTactics: Display: Engineer: move to (-3600, -8970) -> accepted
+[2026.11.27-07.13.56:235][498]LogCodexTactics: Display: Move order in a fight (Solo, 1 of 2 selected, run): windows open for this order
+[2026.11.27-07.13.56:235][498]LogCodexTactics: Display: [Engineer] 🏃 Run to position!
+[2026.11.27-07.13.56:236][498]LogCodexTactics: Display: Engineer: move to (-3600, -8970) sprint -> accepted
+[2026.11.27-07.13.56:813][541]LogCodexTactics: Display: [Engineer] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-07.13.56:813][541]LogCodexTactics: Display: [ClickPreview] first click on StaticMeshActor_2409 at V(X=-3694.88, Y=-8695.87, Z=27.19) (normal z 0.00): the cover ghost (1 silhouettes) - a second click on it carries it out
+[2026.11.27-07.13.56:988][554]LogCodexTactics: Display: [ClickPreview] second click on StaticMeshActor_2409 at V(X=-3694.88, Y=-8695.87, Z=27.19) (double click): carries out the cover ghost
+[2026.11.27-07.13.58:451][670]LogCodexTactics: Display: [ArrivalFacing] Engineer: rule=travel yaw=-163.8 actor=-163.8 travel=-163.8 (manualLook=0 explicit=0 idle=0 formation=0 fought=0 cover=0 stealth=0)
+[2026.11.27-07.13.58:917][707]LogCodexTactics: Display: [Engineer] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-07.13.58:917][707]LogCodexTactics: Display: [ClickPreview] first click on StaticMeshActor_2409 at V(X=-3669.28, Y=-8708.35, Z=40.33) (normal z 0.00): the cover ghost (1 silhouettes) - a second click on it carries it out
+[2026.11.27-07.13.59:111][722]LogCodexTactics: Display: [ClickPreview] second click on StaticMeshActor_2409 at V(X=-3669.28, Y=-8708.35, Z=40.33) (double click): carries out the cover ghost
+[2026.11.27-07.13.59:112][722]LogCodexTactics: Display: [Cover] Engineer: double-click on another cover - not in cover -> the ordinary cover order
+[2026.11.27-07.13.59:113][722]LogCodexTactics: Display: Engineer: move to (-3689, -8759) sprint -> accepted
+[2026.11.27-07.13.59:113][722]LogCodexTactics: Display: [Cover] Engineer: to the low cover at (-3689, -8759) at a sprint
+[2026.11.27-07.13.59:114][722]LogCodexTactics: Display: [Engineer] 🏃 Take cover!
+[2026.11.27-07.13.59:393][744]LogCodexTactics: Display: Engineer: stance STANDING -> CROUCHED
+[2026.11.27-07.13.59:393][744]LogCodexTactics: Display: [Cover] Engineer: entered the low cover at (-3689, -8759), facing right, corners L 0 R 1
+[2026.11.27-07.13.59:393][744]LogCodexTactics: Display: [Engineer] 🧱 Behind cover!
+[2026.11.27-07.13.59:393][744]LogCodexTactics: Display: [Cover] Engineer: runs into the cover (175 cm out, speed 392, clip lead 98, glide 142)
+[2026.11.27-07.13.59:405][745]LogCodexTactics: Display: [CoverSet] Engineer: cover at V(X=-3669.28, Y=-8708.35, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-07.13.59:799][774]LogCodexTactics: Display: [Cover] Engineer: settled in the cover after 0.42 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.27-07.14.00:511][829]LogCodexTactics: Display: [Cover] Engineer: left the cover (move order)
+[2026.11.27-07.14.00:511][829]LogCodexTactics: Display: Engineer: move to (-2996, -8883) -> accepted
+[2026.11.27-07.14.03:522][ 73]LogCodexTactics: Display: [Engineer] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-07.14.03:522][ 73]LogCodexTactics: Display: [ClickPreview] first click on StaticMeshActor_2409 at V(X=-3690.61, Y=-8697.95, Z=63.96) (normal z 0.00): the cover ghost (1 silhouettes) - a second click on it carries it out
+[2026.11.27-07.14.06:464][421]LogCodexTactics: Display: [ArrivalFacing] Engineer: rule=travel yaw=-10.3 actor=-9.9 travel=-10.3 (manualLook=0 explicit=0 idle=0 formation=0 fought=0 cover=0 stealth=0)
+[2026.11.27-07.14.52:436][138]LogCodexTactics: Display: [ClickPreview] the ghost goes (a click elsewhere)
+[2026.11.27-07.14.52:437][138]LogCodexTactics: Display: Engineer: move to (-2871, -9003) -> accepted
+[2026.11.27-07.14.52:537][143]LogCodexTactics: Display: [TrainingSector] Round 4 pmc_relocated #3/3: 42.0 m from squad (LOS no, cover yes, fallback no) to V(X=-5831.40, Y=-11927.51, Z=10.00)
+[2026.11.27-07.14.52:555][144]LogCodexTactics: Display: Operator Roux: move to (-5831, -11691) sprint -> accepted
+[2026.11.27-07.14.52:555][144]LogCodexTactics: Display: [Cover] Operator Roux: to the low cover at (-5831, -11691) at a sprint
+[2026.11.27-07.14.52:555][144]LogCodexTactics: Display: [PmcAI] team 4: Operator Roux -> TakeCover (score 0.18; threat remembered at 2442 cm, hp 92%, cover 0.00)
+[2026.11.27-07.14.52:980][173]LogCodexTactics: Display: Operator Roux: stance STANDING -> CROUCHED
+[2026.11.27-07.14.52:980][173]LogCodexTactics: Display: [Cover] Operator Roux: entered the low cover at (-5831, -11691), facing right, corners L 1 R 1
+[2026.11.27-07.14.52:980][173]LogCodexTactics: Display: [Operator Roux] 🧱 Behind cover!
+[2026.11.27-07.14.52:981][173]LogCodexTactics: Display: [Cover] Operator Roux: runs into the cover (172 cm out, speed 412, clip lead 98, glide 75)
+[2026.11.27-07.14.52:984][173]LogCodexTactics: Display: [PmcAI] team 4: Operator Roux completed TakeCover in cover -> Hold
+[2026.11.27-07.14.52:997][174]LogCodexTactics: Display: [CoverSet] Operator Roux: cover at V(X=-5831.40, Y=-11646.00, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-07.14.53:362][196]LogCodexTactics: Display: [Engineer] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-07.14.53:362][196]LogCodexTactics: Display: [ClickPreview] first click on StaticMeshActor_2409 at V(X=-3710.13, Y=-8688.43, Z=65.33) (normal z 0.00): the cover ghost (1 silhouettes) - a second click on it carries it out
+[2026.11.27-07.14.53:401][198]LogCodexTactics: Display: [Cover] Operator Roux: settled in the cover after 0.44 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered
+[2026.11.27-07.14.53:548][208]LogCodexTactics: Display: [ClickPreview] second click on StaticMeshActor_2409 at V(X=-3710.13, Y=-8688.43, Z=65.33) (double click): carries out the cover ghost
+[2026.11.27-07.14.54:211][252]LogCodexTactics: Display: [ArrivalFacing] Engineer: rule=travel yaw=-44.2 actor=-44.0 travel=-44.2 (manualLook=0 explicit=0 idle=0 formation=0 fought=0 cover=0 stealth=0)
+[2026.11.27-07.14.55:010][312]LogCodexTactics: Display: [Engineer] 🧱 Cover: low cover, corner to fire from. Click again to take it.
+[2026.11.27-07.14.55:010][312]LogCodexTactics: Display: [ClickPreview] first click on StaticMeshActor_2410 at V(X=-2388.96, Y=-8559.37, Z=63.44) (normal z 0.00): the cover ghost (1 silhouettes) - a second click on it carries it out
+[2026.11.27-07.14.55:214][326]LogCodexTactics: Display: [ClickPreview] second click on StaticMeshActor_2410 at V(X=-2388.96, Y=-8559.37, Z=63.44) (double click): carries out the cover ghost
+[2026.11.27-07.14.55:214][326]LogCodexTactics: Display: [Cover] Engineer: double-click on another cover - not in cover -> the ordinary cover order
+[2026.11.27-07.14.55:214][326]LogCodexTactics: Display: Engineer: move to (-2373, -8610) sprint -> accepted
+[2026.11.27-07.14.55:214][326]LogCodexTactics: Display: [Cover] Engineer: to the low cover at (-2373, -8610) at a sprint
+[2026.11.27-07.14.55:215][326]LogCodexTactics: Display: [Engineer] 🏃 Take cover!
+[2026.11.27-07.14.56:360][403]LogCodexTactics: Display: Engineer: stance STANDING -> CROUCHED
+[2026.11.27-07.14.56:360][403]LogCodexTactics: Display: [Cover] Engineer: entered the low cover at (-2373, -8610), facing right, corners L 1 R 1
+[2026.11.27-07.14.56:360][403]LogCodexTactics: Display: [Engineer] 🧱 Behind cover!
+[2026.11.27-07.14.56:361][403]LogCodexTactics: Display: [Cover] Engineer: runs into the cover (51 cm out, speed 532, clip lead 98, glide 78)
+[2026.11.27-07.14.56:374][404]LogCodexTactics: Display: [CoverSet] Engineer: cover at V(X=-2388.96, Y=-8559.37, Z=90.00) judged outdoor -> set 'm4'
+[2026.11.27-07.14.56:758][432]LogCodexTactics: Display: [Cover] Engineer: settled in the cover after 0.42 s (0 cm off the slot, shimmying 0, speed 0) -> CoverEntered

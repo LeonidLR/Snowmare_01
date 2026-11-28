@@ -162,6 +162,7 @@ void UMissionSubsystem::StartCombatMode()
 			if (CombatStart)
 			{
 				const FRotator Facing(0.f, CombatStart->GetActorRotation().Yaw, 0.f);
+				Member->ClearLookAndFacingState();
 				Member->StopOperative();
 				Member->TeleportTo(CombatStart->GetActorLocation() + Facing.RotateVector(Offsets[Index % 3]) + FVector(0.f, 0.f, Member->GetSimpleCollisionHalfHeight()),
 					Facing);
@@ -212,6 +213,7 @@ void UMissionSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexComba
 		{
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
+				Member->ClearLookAndFacingState();
 				Member->StopOperative();
 				Member->ColdLevel = 0.f;
 				Member->HealthComponent->Heal(Member->HealthComponent->GetMaxHealth());

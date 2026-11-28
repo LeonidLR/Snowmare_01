@@ -4,6 +4,7 @@
 // Tactics/CoverDecisionRules (DecideCornerAim), CoverFacingRules.
 
 #include "Characters/OperativeCharacter.h"
+#include "Tactics/CoverThreatRules.h"
 
 #include "CodexTactics.h"
 #include "Characters/EnemyCharacter.h"
@@ -321,8 +322,12 @@ CoverFacingRules::ECoverFireAt AOperativeCharacter::DecideCoverFireAtPoint(const
 	}
 	// Over the top: the same condition as GetCoverFireOrigin (a low cover, not the manual low-cover corner peek that fires round its end).
 	const bool bOverTheTop = CurrentCoverHeight != ECoverHeight::HighCover && !(bCornerAimActive && IsManualCornerPeekSpot());
-	return CoverFacingRules::DecideCoverFireAt(CoverSlot, TargetLocation, IsCornerShotTarget(TargetLocation), bOverTheTop,
-		CoverRules::GetConfig().FrontalArcDeg, bMayExpose);
+	const CoverFacingRules::ECoverFireAt Decision = CoverFacingRules::DecideCoverFireAt(CoverSlot, TargetLocation,
+		IsCornerShotTarget(TargetLocation), bOverTheTop, CoverRules::GetConfig().FrontalArcDeg, bMayExpose);
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	return Decision == CoverFacingRules::ECoverFireAt::StepOut
+		&& !CoverThreatRules::MayOpenShot(bPlayerCoverOrderActive, Now, LastCoverOpenShotTransition)
+		? CoverFacingRules::ECoverFireAt::Refuse : Decision;
 }
 
 bool AOperativeCharacter::IsCornerHoldSpot() const
@@ -753,10 +758,13 @@ bool AOperativeCharacter::WantsCornerHold() const
 
 bool AOperativeCharacter::BeginOpenShotFromCover(const AActor* Target)
 {
-	if (!bInCover || bShimmying)
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	if (!bInCover || bShimmying || !CoverThreatRules::MayOpenShot(bPlayerCoverOrderActive, Now, LastCoverOpenShotTransition)
+		|| (Target && CoverThreatRules::BlocksLine(CoverSlot, Target->GetActorLocation())))
 	{
 		return false;
 	}
+	LastCoverOpenShotTransition = Now;
 	const FCoverSlot Slot = CoverSlot;
 	bOpenShotReturnToCornerHold = IsCornerHoldSpot();
 	OpenShotReturnFacing = CoverFacing;
@@ -836,7 +844,8 @@ void AOperativeCharacter::UpdateOpenShotReturn()
 	{
 		OpenShotLastTime = World->GetTimeSeconds();
 	}
-	if (World->GetTimeSeconds() - OpenShotLastTime < OpenShotReturnDelaySeconds || World->GetTimeSeconds() - OpenShotStartTime < OpenShotCommitSeconds
+	if (!CoverThreatRules::MayTransition(World->GetTimeSeconds(), LastCoverOpenShotTransition)
+		|| World->GetTimeSeconds() - OpenShotLastTime < OpenShotReturnDelaySeconds || World->GetTimeSeconds() - OpenShotStartTime < OpenShotCommitSeconds
 		|| GetVelocity().SizeSquared2D() > 4.f || bIsReloading)
 	{
 		return; // still firing / enemies in sight / settling
@@ -863,6 +872,24 @@ bool AOperativeCharacter::IsAtPeekableCorner() const
 		return true;
 	}
 	return bAtCoverCorner && CoverSlot.IsEdgeExposed(CoverFacing);
+}
+
+bool AOperativeCharacter::CanReachCornerLookInCover(const FVector& LookPoint, float* OutOffDeg) const
+{
+	if (!bInCover || !CoverSlot.IsValid())
+	{
+		if (OutOffDeg) { *OutOffDeg = 0.f; }
+		return false;
+	}
+	const FVector LookDir = LookPoint - GetActorLocation();
+	const float SignedAbs = FMath::Abs(CoverLookAoRules::SignedYawFromNormal(CoverSlot.WallNormal, LookDir));
+	// Cover corner side aim poses face round the edge (~85..145 deg off the wall normal);
+	// front-facing looks (< min) or rear looks (> max) step out of cover to turn.
+	if (OutOffDeg)
+	{
+		*OutOffDeg = SignedAbs;
+	}
+	return SignedAbs >= CornerLookMinSideYawDeg && SignedAbs <= CornerLookMaxSideYawDeg;
 }
 
 bool AOperativeCharacter::WantsCornerLookPose() const

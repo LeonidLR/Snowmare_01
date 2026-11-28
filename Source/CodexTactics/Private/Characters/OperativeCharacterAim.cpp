@@ -4,6 +4,7 @@
 // (2026-10-07).
 
 #include "Characters/OperativeCharacter.h"
+#include "CodexTactics.h"
 
 #include "Characters/AimOffsetRules.h"
 #include "Characters/FacingRules.h"
@@ -106,11 +107,33 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	bFacingCombatTarget = false;
 	bFacingFormationSector = false;
 	UpdateStealthLookLock(DeltaTime);
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	const bool bRealTimeFight = !Flow || (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime);
+	// User request 2026-10-22: the fight's memory of whom he fought lasts for the wave fight only — clear before early cover/interaction returns.
+	if (!Flow || Flow->GetPhase() != ECodexGamePhase::WaveCombat)
+	{
+		bFoughtThisFight = false;
+		LastThreat.Reset();
+		LastThreatContactTime = -1000.0;
+	}
+	auto EmitArrivalFacing = [this](const TCHAR* Rule, float TargetYaw)
+	{
+		if (!bPendingArrivalFacingLog)
+		{
+			return;
+		}
+		bPendingArrivalFacingLog = false;
+		UE_LOG(LogCodexTactics, Display, TEXT("[ArrivalFacing] %s: rule=%s yaw=%.1f actor=%.1f travel=%.1f (manualLook=%d explicit=%d idle=%d formation=%d fought=%d cover=%d stealth=%d)"),
+			*DisplayName.ToString(), Rule, TargetYaw, static_cast<float>(GetActorRotation().Yaw), ArrivalTravelYaw,
+			HasManualLookPoint() ? 1 : 0, bExplicitFacing ? 1 : 0, bHasIdleFacing ? 1 : 0,
+			FormationLookYaw.IsSet() ? 1 : 0, bFoughtThisFight ? 1 : 0, bInCover ? 1 : 0, IsInStealthMode() ? 1 : 0);
+	};
 	if (DoorFacingYaw.IsSet() && !bInCover)
 	{
 		// Doors R2: the door work holds his facing (square to the leaf) - nothing else turns him until it is released.
 		SetActorRotation(FRotator(0.f, *DoorFacingYaw, 0.f));
 		BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, 0.f, DeltaTime, 6.f);
+		EmitArrivalFacing(TEXT("door lock"), *DoorFacingYaw);
 		return;
 	}
 	if (GrenadeFacingYaw.IsSet())
@@ -120,6 +143,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		const float NextYaw = GrenadeRules::StepThrowYaw(CurrentYaw, *GrenadeFacingYaw, GrenadeRules::TurnRateDegPerSec, DeltaTime);
 		SetActorRotation(FRotator(0.f, NextYaw, 0.f));
 		BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, 0.f, DeltaTime, 6.f);
+		EmitArrivalFacing(TEXT("grenade lock"), *GrenadeFacingYaw);
 		return;
 	}
 	if (const UFirstAidSubsystem* FirstAid = GetWorld() ? GetWorld()->GetSubsystem<UFirstAidSubsystem>() : nullptr)
@@ -128,6 +152,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		{
 			// G023: FirstAidSubsystem keeps the medic facing the patient's chest throughout the treatment montage.
 			BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, 0.f, DeltaTime, 6.f);
+			EmitArrivalFacing(TEXT("first aid"), static_cast<float>(GetActorRotation().Yaw));
 			return;
 		}
 	}
@@ -135,20 +160,21 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	{
 		// User design rule 2026-10-06: the back stays against the wall (actor yaw = wall normal); the threat side only picks the _L/_R clip
 		// (CoverFacingRules); no turn to a target or to the movement (a shimmy away from the threat walks backwards).
-		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, GetCoverFacingYaw(), 0.f), DeltaTime, 10.f));
+		AOperativeCharacter* CoverFireShooter = nullptr;
+		FVector CoverFlashPoint = FVector::ZeroVector;
+		if (bFoughtThisFight && ((CurrentCombatTarget.IsValid() && OperativeCharacterInternal::IsLiveEnemy(CurrentCombatTarget.Get()))
+			|| GetUnderFireThreat(CoverFireShooter, CoverFlashPoint)))
+		{
+			LastThreatContactTime = GetWorld() ? GetWorld()->GetTimeSeconds() : LastThreatContactTime;
+		}
+		const float CoverYaw = GetCoverFacingYaw();
+		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, CoverYaw, 0.f), DeltaTime, 10.f));
 		BarrelYawOffset = FMath::FInterpTo(BarrelYawOffset, 0.f, DeltaTime, 6.f);
+		EmitArrivalFacing(TEXT("cover facing"), CoverYaw);
 		return;
 	}
-	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
-	const bool bRealTimeFight = !Flow || (Flow->GetPhase() == ECodexGamePhase::WaveCombat && Flow->GetCombatMode() == ECodexCombatMode::RealTime);
 	AActor* Target = CurrentCombatTarget.Get();
 	// A quick fire order (Ctrl + click on a point) turns him to its point itself (RunQuickFire): no pull back to the combat target meanwhile.
-	// User request 2026-10-22: the fight's memory of whom he fought (ThreatFacingRules) lasts for the wave fight (pause / turn-based included).
-	if (!Flow || Flow->GetPhase() != ECodexGamePhase::WaveCombat)
-	{
-		bFoughtThisFight = false;
-		LastThreat.Reset();
-	}
 	bTurningToThreat = false;
 	// Run-and-peek (#55 fix, the game designer's video 2026-11-08): the run's last metres turn him to the peek facing - he arrives looking
 	// where the peek looks and the run blends straight into the peek stance (no turn to the wall, no wall hug, no turn back out). It wins over
@@ -169,6 +195,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		LastThreat = Target;
 		LastThreatLocation = Target->GetActorLocation();
 		bFoughtThisFight = true;
+		LastThreatContactTime = GetWorld() ? GetWorld()->GetTimeSeconds() : LastThreatContactTime;
 		const float Yaw = (Target->GetActorLocation() - GetActorLocation()).Rotation().Yaw - BarrelYawOffset;
 		if (Stance == EOperativeStance::Prone)
 		{
@@ -204,6 +231,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 			LastThreat = FireShooter;
 			LastThreatLocation = FlashPoint;
 			bFoughtThisFight = true;
+			LastThreatContactTime = GetWorld() ? GetWorld()->GetTimeSeconds() : LastThreatContactTime;
 			TurnAimTowards(FlashPoint, DeltaTime);
 		}
 	}
@@ -279,6 +307,11 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	// look sector of a standing member (a formation member who fought keeps facing the threat, not his sector).
 	bool bTurnToThreat = false;
 	FVector Threat = FVector::ZeroVector;
+	if (bFoughtThisFight && GetWorld() && GetWorld()->GetTimeSeconds() - LastThreatContactTime > 20.0 && !bFacingCombatTarget)
+	{
+		bFoughtThisFight = false;
+		LastThreat.Reset();
+	}
 	if (!bFacingCombatTarget && !bFacingWall && !bLookHold)
 	{
 		ThreatFacingRules::FFacts Facts;
@@ -299,10 +332,11 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	bReturningToOrderedFacing = !bTurnToThreat && !bLookHold && !bFacingWall && !bGridOwnsFacing && !bIncapacitated
 		&& ThreatFacingRules::ShouldReturnToOrderedFacing(bExplicitFacing, GetVelocity().SizeSquared2D() < 10.f * 10.f && !bHasMoveOrder,
 			bInCover || bHasPendingCover, bTurnedToFight, FightTurnQuietSeconds);
+	float ManualLookYawChosen = 0.f;
 	if (bLookHold)
 	{
-		const float LookYaw = (ActiveLookPoint - GetActorLocation()).Rotation().Yaw;
-		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, LookYaw, TurnSpeed, DeltaTime), 0.f));
+		ManualLookYawChosen = static_cast<float>((ActiveLookPoint - GetActorLocation()).Rotation().Yaw);
+		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, ManualLookYawChosen, TurnSpeed, DeltaTime), 0.f));
 	}
 	// Formation look sectors (Codex.Formation.Sectors; USquadSubsystem sets the yaw only with the console on): below the combat target, a
 	// facing order, the cover (returned above / the approach to a pending slot), an order's idle facing and (2026-10-26) the threat turn
@@ -314,32 +348,45 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	if (bLookHold)
 	{
 		// Already rotated toward ActiveLookPoint above; keep lower priority facing branches from overriding it.
+		EmitArrivalFacing(TEXT("manual look"), ManualLookYawChosen);
 	}
 	else if (bFacingFormationSector)
 	{
 		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, FormationLookYaw.GetValue(), TurnSpeed, DeltaTime), 0.f));
+		EmitArrivalFacing(TEXT("watch sector"), FormationLookYaw.GetValue());
 	}
 	else if (!bFacingCombatTarget && !bFacingWall && SmoothedVelocity.SizeSquared2D() > 35.f * 35.f)
 	{
 		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, SmoothedVelocity.Rotation().Yaw, MoveTurnSpeed, DeltaTime), 0.f));
 	}
-	else if (!bFacingCombatTarget && bHasIdleFacing && GetVelocity().SizeSquared2D() < 10.f * 10.f && !bGridOwnsFacing && !IsInStealthMode())
+	else if (!bFacingCombatTarget && !bFacingWall && bHasIdleFacing && GetVelocity().SizeSquared2D() < 10.f * 10.f && !bGridOwnsFacing && !IsInStealthMode())
 	{
 		// Every frame (it used to step only with the formation repath, every 0.2 s, and looked jerky).
 		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, IdleFacingYaw, TurnSpeed, DeltaTime), 0.f));
+		EmitArrivalFacing(TEXT("idle facing"), IdleFacingYaw);
 	}
 	else if (!bFacingCombatTarget && !bFacingWall)
 	{
 		if (bTurnToThreat)
 		{
 			bTurningToThreat = true;
-			const float ThreatYaw = (Threat - GetActorLocation()).Rotation().Yaw;
+			const float ThreatYaw = static_cast<float>((Threat - GetActorLocation()).Rotation().Yaw);
 			SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, ThreatYaw, TurnSpeed, DeltaTime), 0.f));
+			EmitArrivalFacing(TEXT("threat turn"), ThreatYaw);
 		}
 		else if (bReturningToOrderedFacing)
 		{
 			SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, OrderedFacingYaw, TurnSpeed, DeltaTime), 0.f));
+			EmitArrivalFacing(TEXT("F-1 return"), OrderedFacingYaw);
 		}
+		else if (GetVelocity().SizeSquared2D() < 10.f * 10.f)
+		{
+			EmitArrivalFacing(TEXT("travel"), ArrivalTravelYaw);
+		}
+	}
+	else if (bFacingCombatTarget)
+	{
+		EmitArrivalFacing(TEXT("combat target"), static_cast<float>(GetActorRotation().Yaw));
 	}
 
 	// Barrel vs body yaw in the current aim pose (the rifle is held across the chest); 0 when not aiming.
