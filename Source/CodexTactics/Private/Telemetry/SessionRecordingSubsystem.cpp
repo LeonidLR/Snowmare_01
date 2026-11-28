@@ -311,7 +311,7 @@ void USessionRecordingSubsystem::MarkSession(const FString& Command)
  if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
  {
   UFloatingTextSubsystem::SpawnAboveOperative(Squad->GetLeader(),
-   FString::Printf(TEXT("Раунд %d помечен: %s"), Round, *Args[0]), FLinearColor::White);
+   FString::Printf(TEXT("Round %d marked: %s"), Round, *Args[0]), FLinearColor::White);
  }
  UE_LOG(LogCodexTactics, Display, TEXT("[DemoRecord] round %d marked: %s"), Round, *Args[0]);
 }
