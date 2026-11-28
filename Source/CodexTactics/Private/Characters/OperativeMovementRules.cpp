@@ -2,6 +2,14 @@
 
 namespace OperativeMovementRules
 {
+	bool HasNoWayUp(float FeetZ, float GoalZ, float CapsuleHalfHeightCm, bool bHasPath, bool bPartial, float EndZ)
+	{
+		constexpr float LevelSlackCm = 80.f; // stairs / navmesh height noise are not a different roof
+		// Some existing move APIs supply the capsule centre (LowCoverMoveSmoke), not feet.
+		const float UpperGoalCm = FMath::Max(LevelSlackCm, CapsuleHalfHeightCm + 20.f);
+		return GoalZ > FeetZ + UpperGoalCm && (!bHasPath || bPartial || EndZ < GoalZ - UpperGoalCm);
+	}
+
 	float GetStanceSpeedMultiplier(const FOperativeMovementConfig& Config, EOperativeStance Stance)
 	{
 		switch (Stance)

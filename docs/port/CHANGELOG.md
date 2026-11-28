@@ -580,6 +580,10 @@ Last update: 2026-09-29 by Claude, after commit `2ca14b0`.
 
 2026-11-11 Codex: 003 final report/handback finalized with source hashes 90a6bf64, 4d15a54f, 561a29ed and verified game-camera evidence. Doc routing level1/gpt-6-luna required primary corrections (date/stale queue); current queue 004,005,C5,C6.
 
+
+**139 crouch compatibility checkpoint (2026-11-27).** Complete ground paths with legacy standing-centre goals remain valid while crouched: no-way-up allowance now includes the class default standing capsule. Worker build PASS406.18s; final Smart/nine-smoke recheck pending. Saved-map LadderActor_22 inset125 fix remains with Lead. Report: `docs/port/codex/outbox/139-roof-ladder-no-path.report.md`.
+
+**139 MERGE-READY (map fix pending), 2026-11-27.** Code f4d0c498: worker build PASS406.18s; Smart927/927 PASS; exact nine mapped smokes8 PASS, only saved-map RoofLadderSmoke FAIL expected (strict retry too). Crouched LowCoverMoveLake and FormationStair PASS; repair probe climbs at feet302.2. Lead still applies LadderActor_22 inset125/125 and saves navmesh. Final artifacts/report: `docs/port/codex/outbox/139-roof-ladder-no-path.report.md`, `Saved/Logs/Worker/139-final/`.
 ## 2026-11-27 ? Codex task148
 Training Ground fight chronicle, legacy/121 event playback, world-cm route/comment/zone sidecars, decoder with rotated-geometry passing facts, frozen X6 building numbers. Node7/7 + Python14/14, typecheck/build PASS. Drawn-route screenshot acceptance blocked by browser tool policy support; task report records evidence gap.
 
@@ -590,3 +594,7 @@ Training Ground fight chronicle, legacy/121 event playback, world-cm route/comme
 - 121 direct-loss completeness checkpoint (2026-11-27): health recording now observes actual common health decreases (normal/direct/cold/burning/bleeding) exactly once, removing actor callback duplication. Known TakeHit attackers arm a synchronous context; critical down is recorded across the same paths. Added C++ AllHealthLossPaths coverage; final worker checks pending.
 
 **121 BLOCKER (2026-11-27): real PIE acceptance evidence still needed.** C++8de50957: worker build PASS410.31s; Smart848/848 PASS including HitAttribution/AllHealthLossPaths; all16 mapped smokes PASS first try; Python20/20 PASS including actual null-target schema and round-end ties. Recording facts/tagger finished and reviewed, but no real new PIE fight showing all3 core tactics was captured in this headless run. Synthetic fixture is not acceptance evidence. See `docs/port/codex/outbox/121-recording-tactics.report.md`. Stop here; Lead owns the next task.
+
+- 2026-11-28 Codex 139: integrate main 155 roof guard into one RequestMove refusal/message, preserve authored standing-capsule allowance and both regression tests. RoofLadderSmoke knownFail per designer replacement decision; strict climb unchanged. Local validation: see 139 report.
+
+- 2026-11-28 Codex 139 final gate: local builds443.41s/full +21.24s/correction PASS; final Smart332/332 PASS; mapped smokes11 PASS,1 designer KNOWN-FAIL,0 unexpected failures or retries. Merge tooling-only9e83c22e; infrastructure equal main, no144 gameplay included.

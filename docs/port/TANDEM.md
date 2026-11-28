@@ -1492,6 +1492,10 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 2026-11-11 Codex: stealth 003 final verification report complete, designer notified to test interim L_MovementTest / STEALTH or7. Source remains interim-only. New designer priority via Claude: 004 hitch then005 ragdoll beforeC5/C6.
 
+
+**139 crouch compatibility checkpoint (2026-11-27).** Complete ground paths with legacy standing-centre goals remain valid while crouched: no-way-up allowance now includes the class default standing capsule. Worker build PASS406.18s; final Smart/nine-smoke recheck pending. Saved-map LadderActor_22 inset125 fix remains with Lead. Report: `docs/port/codex/outbox/139-roof-ladder-no-path.report.md`.
+
+**139 MERGE-READY (map fix pending), 2026-11-27.** Code f4d0c498: worker build PASS406.18s; Smart927/927 PASS; exact nine mapped smokes8 PASS, only saved-map RoofLadderSmoke FAIL expected (strict retry too). Crouched LowCoverMoveLake and FormationStair PASS; repair probe climbs at feet302.2. Lead still applies LadderActor_22 inset125/125 and saves navmesh. Final artifacts/report: `docs/port/codex/outbox/139-roof-ladder-no-path.report.md`, `Saved/Logs/Worker/139-final/`.
 ## Task148 checkpoint ? 2026-11-27
 Codex lane148 delivered TG replay/annotations, demo_notes decoder and new X6 building index. No runtime/content edits beyond the authorized new index. Code checks pass; Lead must capture drawn-route screenshots in a supported browser. See task148 outbox report.
 
@@ -1511,3 +1515,5 @@ Codex lane `codex/149-demos-to-trainer`: dataset from 17 recordings (65 fights/t
 149 finish: final report + frozen real trial and offline metric diagnostics committed after resume from `ca5ea241`. Demo43/trainer134 checks and 3 real A/A pairs were retained without rerunning. Both doctrine proxies are measured and varying; full-night G2 still fails on dead reward/descriptor signals and the damage key mismatch; G3 has no freeze baseline. MERGE-READY applies to tooling, not permission to launch through a blocked gate. No long runs or champion application; task stopped after delivery.
 
 149b (2026-11-27, Codex): trainer damage key + config/freeze gate binding, Python142 PASS; real sector12/auxiliary tactical2 rounds. G1/G2 BLOCKED; remaining ambush/flank liveness and sector route coverage not solved. Baseline task verified Ready 16:30, pinned worker lane77f2e9f5, >=30 actual healthy rounds/scenario, stop07:45. Shared night-loop resolver + optional QueueOnly only; no champion. Report: `docs/port/codex/outbox/149b-trainer-metrics.report.md`.
+
+- 2026-11-28 Codex 139: merged main 351e114b in lane, unified 139/155 guard; infrastructure restored equal to main. Designer cancels saved LadderActor_22 inset fix: Soviet replacement buildings planned. Local build PASS, Smart332/332 PASS;12 mapped smokes11 PASS +1 designer KNOWN-FAIL,0 unexpected failures/retries. Report records actual outcomes.

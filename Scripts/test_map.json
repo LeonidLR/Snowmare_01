@@ -12,6 +12,7 @@
     "smokes": ["TurnArenaLakeSmoke", "LowCoverMoveLakeSmoke"]
   },
   "smokeRegistry": [
+    "RoofLadderSmoke", "RoofLadderRepairProbe",
     "UnderFireManoeuvreSmoke",
     "VehicleCombatSmoke", "VehicleDamageSmoke", "GeneratedPropsX6Smoke", "MainMenuSmoke", "FrontendSmoke", "TutorialSaveSmoke", "InteriorExitSmoke",
     "PeekMinesSmoke", "CoverSwitchLakeSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke",
@@ -34,6 +35,8 @@
     "_comment": "Smokes known to pass only on a re-run, name -> reason (smoke_parallel prints them apart from NEW flaky ones). Goal: empty. Cleanup day 2026-10-15 fixed CornerHold, TurnBasedAim, Knockdown, Cover, LevelWave, GroupSelect, TurnBlastDeath, EnemyTactics (+ Panic, SquadControl, VisionCone failing) - see docs/port/KNOWN_GAPS.md (the old HANDOFF section 9)."
   },
   "smokeOptions": {
+    "RoofLadderSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json -Sector=0", "timeout": 300, "knownFail": true, "_why": "designer 2026-11-28: building replaced by Soviet buildings, no map fix"},
+    "RoofLadderRepairProbe": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json -Sector=0", "timeout": 300, "_why": "139 explicit diagnostic: transient inset125 proof only; ordinary RoofLadderSmoke retains the saved-map assertion"},
     "UnderFireManoeuvreSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 400, "_why": "156: runtime arena retargeted from archived Depot; includes continuous five-second player cover hold against oblique enemy."},
     "CorpseSearchSmoke": {"map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "timeout": 300, "_why": "Task 130: hover Fresnel + walk-to-body search + once-only hostile PMC loot + sector fallen squad member remains"},
     "CoverIndoorSmoke": {"map": "/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit", "extra": "-LevelJson=L_Gen_StoryShowcase_Kit.json", "timeout": 420, "_why": "Indoor cover animation sets and outdoor M4 control, plus G025 corner looks (both hands, up and down, stand and crouch). Generated Riffle clips are needed. Requires the untracked Kit map, provided in the main checkout and both worker roots. The smoke runner reports map missing elsewhere."},
@@ -181,6 +184,7 @@
   },
   "nonSmokeDebugCommands": ["PmcArena", "LevelGenIslandsProbe", "GiveWeapon", "MortarList", "MortarMan", "MortarFire", "MortarCease", "MortarCrewPmc", "ShotgunD1Shots", "ShotgunLoopShots", "RpgShots", "RecoilProbe", "CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots", "StoryShowcaseFixShots"],
   "rules": [
+    {"name": "roof-ladder-139", "globs": ["Source/**/Debug/RoofLadderSmoke*"], "tests": ["CodexTactics.Movement.NoWayUp"], "smokes": ["RoofLadderSmoke", "RoofLadderRepairProbe"]},
     {
       "name": "roof-access-155",
       "globs": ["Source/**/Debug/RoofAccessAuditSmoke*", "Source/**/Characters/OperativeCharacterMovement.cpp", "Source/**/Core/CodexTacticsPlayerControllerClickPreview.cpp", "Source/**/Core/CodexTacticsPlayerControllerOrders.cpp", "Source/**/Interactables/WindowBreakage*"],

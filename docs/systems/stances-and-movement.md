@@ -262,3 +262,10 @@ carrying of the wounded (the designer: too complex).
   `CodexTactics.Ladder.Rules.Refusals` (the ladder refusal); smoke `InjuredLocomotionSmoke` stage 7 (HP 15 % -> down by himself, the stand
   orders refused with the feed line, no sprint, the injured crawl; healed to 40 % -> stands on the order, limps forward).
 
+
+
+## Upper-goal reachability (139 + 155, 2026-11-28)
+
+Explicit player moves to a higher floor require a complete route ending at that floor. The allowance for capsule-centre destinations includes the authored standing capsule even while crouched; existing same-floor low-cover moves keep their ground routes. Elevated goals use bounded landing projection and disallow partial paths. Both projection and path failures use one refusal handler in RequestMove and post one "No way up" floating notification and one feed entry; OrderMoveTo does not duplicate feedback. Formation/autonomous orders retain their own handling.
+
+RoofLadderSmoke keeps its strict saved-map climb assertion, marked knownFail by designer decision 2026-11-28: the gallery and old X6 blockout buildings will be replaced by Soviet buildings; no saved-map inset fix is planned. RoofLadderRepairProbe changes only runtime link targets and proves the code path. Neither saves the map. Current validation is recorded in `docs/port/codex/outbox/139-roof-ladder-no-path.report.md`.

@@ -264,16 +264,6 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		bWindowFileActive = false;
 	}
 	EOperativeOrderResult Result = RequestMove(Destination);
-	if (Result == EOperativeOrderResult::Unreachable && IsPlayerTeam() && !bAutonomousOrder
-		&& Destination.Z > GetFloorReferenceLocation().Z + 150.f)
-	{
-		const FText Reason = NSLOCTEXT("OperativeMovement", "NoWayUp", "No way up: no complete path to that roof or upper floor. Check the ramp or ladder landing.");
-		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("NO WAY UP - CHECK RAMP / LADDER"), FLinearColor(1.f, 0.4f, 0.1f));
-		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
-		{
-			Messages->PostMessage(DisplayName, Reason);
-		}
-	}
 	bOwnMoveOrder = bHasMoveOrder; // rev 5g: his own order (the formation leaves him alone until it is done)
 	if (bWindowApproachPending)
 	{
@@ -528,22 +518,33 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 	{
 		return EOperativeOrderResult::NoController;
 	}
-	// 155: a roof order must reach THAT level. The default broad projection and partial paths
-	// could accept a ground endpoint below an isolated roof as a successful move.
+	// 139 + 155: strict upper-floor routing, with legacy standing-centre goals allowed in every stance.
+	const float FeetZ = GetActorLocation().Z - GetSimpleCollisionHalfHeight();
+	const float GoalHalfHeight = FMath::Max(GetSimpleCollisionHalfHeight(),
+		GetClass()->GetDefaultObject<AOperativeCharacter>()->GetSimpleCollisionHalfHeight() * GetActorScale3D().Z);
 	const bool bElevatedOrder = IsPlayerTeam() && !bFormationMove && !bAutonomousOrder
-		&& Destination.Z > GetFloorReferenceLocation().Z + 150.f;
+		&& OperativeMovementRules::HasNoWayUp(FeetZ, Destination.Z, GoalHalfHeight, false, false, FeetZ);
+	const auto RefuseNoWayUp = [&]()
+	{
+		AIController->StopMovement();
+		bHasMoveOrder = false;
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("NO WAY UP - CHECK RAMP / LADDER"), FLinearColor(1.f, 0.4f, 0.1f));
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(DisplayName, NSLOCTEXT("OperativeMovement", "NoWayUp", "No way up: no complete path to that roof or upper floor. Check the ramp or ladder landing."));
+		}
+		return EOperativeOrderResult::Unreachable;
+	};
 	FVector PathGoal = Destination;
 	if (bElevatedOrder)
 	{
 		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 		const ANavigationData* NavData = Nav ? Nav->GetNavDataForProps(GetNavAgentPropertiesRef(), GetNavAgentLocation()) : nullptr;
 		FNavLocation OnNav;
-		if (!NavData || !Nav->ProjectPointToNavigation(Destination, OnNav, FVector(80.f, 80.f, 60.f), NavData))
+		if (!NavData || !Nav->ProjectPointToNavigation(Destination, OnNav, FVector(80.f, 80.f, FMath::Max(80.f, GoalHalfHeight + 20.f)), NavData))
 		{
-			UE_LOG(LogCodexTactics, Display, TEXT("[RoofOrder] %s refused %s: no landing navmesh within 60 cm of requested height"), *DisplayName.ToString(), *Destination.ToCompactString());
-			bHasMoveOrder = false;
-			AIController->StopMovement();
-			return EOperativeOrderResult::Unreachable;
+			UE_LOG(LogCodexTactics, Display, TEXT("[RoofOrder] %s refused %s: no landing navmesh within capsule allowance of requested height"), *DisplayName.ToString(), *Destination.ToCompactString());
+			return RefuseNoWayUp();
 		}
 		PathGoal = OnNav.Location;
 	}
@@ -588,6 +589,23 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& RequestedD
 	if (Result == EPathFollowingRequestResult::Failed && LedgeFall && LedgeFall->RescueIfOffNavmesh(TEXT("an order could not start"), /*bResumeOrder*/ false))
 	{
 		Result = AIController->MoveToLocation(PathGoal, MovementConfig.AcceptanceRadius, false, true, !bElevatedOrder, false, ChooseMoveFilter(), !bElevatedOrder);
+	}
+	// One refusal path also catches a complete path ending below the requested level.
+	if (bElevatedOrder)
+	{
+		const UPathFollowingComponent* Following = AIController->GetPathFollowingComponent();
+		const FNavPathSharedPtr Path = Following ? Following->GetPath() : nullptr;
+		const bool bHasPath = Result == EPathFollowingRequestResult::RequestSuccessful && Path.IsValid() && Path->IsValid()
+			&& !Path->GetPathPoints().IsEmpty();
+		const bool bAtGoal = Result == EPathFollowingRequestResult::AlreadyAtGoal;
+		if (OperativeMovementRules::HasNoWayUp(FeetZ, Destination.Z, GoalHalfHeight, bHasPath || bAtGoal,
+			bHasPath && Path->IsPartial(), bHasPath ? Path->GetEndLocation().Z : FeetZ))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Move] %s: no way up to %s (path=%d partial=%d end-z=%.1f)"),
+				*DisplayName.ToString(), *Destination.ToCompactString(), bHasPath, bHasPath && Path->IsPartial(),
+				bHasPath ? Path->GetEndLocation().Z : FeetZ);
+			return RefuseNoWayUp();
+		}
 	}
 	if (Result == EPathFollowingRequestResult::Failed)
 	{
